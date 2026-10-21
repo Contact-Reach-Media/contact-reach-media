@@ -1,0 +1,478 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Marketplace product item available for purchase in Rwanda (RWF)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "sku": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "price": { "type": "number" },
+        "discountPrice": { "type": "number" },
+        "category": { "type": "string", "maxLength": 64 },
+        "subcategory": { "type": "string", "maxLength": 64 },
+        "stock": { "type": "number" },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "images": { "type": "array" },
+        "shopName": { "type": "string", "maxLength": 128 },
+        "shopId": { "type": "string", "maxLength": 128 },
+        "receiverName": { "type": "string", "maxLength": 128 },
+        "receiverPhone": { "type": "string", "maxLength": 32 },
+        "merchantCode": { "type": "string", "maxLength": 32 },
+        "location": { "type": "string", "maxLength": 128 },
+        "deliveryInfo": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["Available", "Out of Stock", "Hidden"] },
+        "isFeatured": { "type": "boolean" },
+        "isNewArrival": { "type": "boolean" },
+        "isBestSeller": { "type": "boolean" },
+        "brand": { "type": "string", "maxLength": 100 },
+        "unit": { "type": "string", "maxLength": 32 },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "price", "category", "stock", "status"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product categories in the marketplace",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "nameEn": { "type": "string", "maxLength": 100 },
+        "nameRw": { "type": "string", "maxLength": 100 },
+        "icon": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 500 },
+        "subcategories": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "itemCount": { "type": "number" }
+      },
+      "required": ["id", "nameEn", "nameRw"]
+    },
+    "Shop": {
+      "title": "Shop",
+      "description": "Verified merchant and supplier store profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "location": { "type": "string", "maxLength": 128 },
+        "address": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "tinNumber": { "type": "string", "maxLength": 64 },
+        "logo": { "type": "string", "maxLength": 64 },
+        "bannerColor": { "type": "string", "maxLength": 64 },
+        "isVerified": { "type": "boolean" },
+        "followersCount": { "type": "number" },
+        "deliveryInfo": { "type": "string", "maxLength": 200 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "location"]
+    },
+    "SupplierApplication": {
+      "title": "SupplierApplication",
+      "description": "Supplier and merchant onboarding application",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "businessName": { "type": "string", "maxLength": 150 },
+        "ownerName": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "tinNumber": { "type": "string", "maxLength": 64 },
+        "location": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "businessName", "ownerName", "phone", "status"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order with immutable item snapshots and secure tracking token",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "trackingToken": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "customerName": { "type": "string", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 32 },
+        "customerEmail": { "type": "string", "maxLength": 128 },
+        "deliveryType": { "type": "string", "enum": ["delivery", "pickup"] },
+        "deliveryLocation": { "type": "string", "maxLength": 128 },
+        "deliveryAddress": { "type": "string", "maxLength": 300 },
+        "deliveryNotes": { "type": "string", "maxLength": 500 },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "couponCode": { "type": "string", "maxLength": 32 },
+        "deliveryFee": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "commissionRate": { "type": "number" },
+        "commissionEarned": { "type": "number" },
+        "supplierPayoutAmount": { "type": "number" },
+        "supplierPayoutStatus": { "type": "string", "maxLength": 32 },
+        "supplierFulfillmentStatus": { "type": "string", "maxLength": 32 },
+        "paymentMethod": { "type": "string", "maxLength": 64 },
+        "receiverName": { "type": "string", "maxLength": 128 },
+        "receiverDetails": { "type": "string", "maxLength": 64 },
+        "shopName": { "type": "string", "maxLength": 128 },
+        "paymentStatus": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "maxLength": 64 },
+        "stockDeducted": { "type": "boolean" },
+        "userId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "orderNumber", "customerName", "customerPhone", "items", "totalAmount", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Financial payment attempt and verification record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "paymentMethod": { "type": "string", "maxLength": 64 },
+        "payerPhone": { "type": "string", "maxLength": 32 },
+        "payerName": { "type": "string", "maxLength": 128 },
+        "amountPaid": { "type": "number" },
+        "transactionId": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["Pending Review", "Approved", "Rejected", "Refunded"] },
+        "screenshotUrl": { "type": "string", "maxLength": 1000 },
+        "confirmationMessage": { "type": "string", "maxLength": 3000 },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "verifiedBy": { "type": "string", "maxLength": 128 },
+        "adminNotes": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "orderNumber", "amountPaid", "transactionId", "status"]
+    },
+    "Refund": {
+      "title": "Refund",
+      "description": "Customer refund request and settlement record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "customerName": { "type": "string", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 32 },
+        "amount": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Completed", "Rejected"] },
+        "processedBy": { "type": "string", "maxLength": 128 },
+        "processedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderNumber", "amount", "reason", "status"]
+    },
+    "Delivery": {
+      "title": "Delivery",
+      "description": "Courier dispatch and order fulfillment record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "courierName": { "type": "string", "maxLength": 128 },
+        "courierPhone": { "type": "string", "maxLength": 32 },
+        "deliveryLocation": { "type": "string", "maxLength": 150 },
+        "deliveryAddress": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["Preparing", "Dispatched", "Out for Delivery", "Delivered", "Failed"] },
+        "proofOfDelivery": { "type": "string", "maxLength": 500 },
+        "assignedAt": { "type": "string", "format": "date-time" },
+        "deliveredAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderNumber", "deliveryAddress", "status"]
+    },
+    "SupplierPayout": {
+      "title": "SupplierPayout",
+      "description": "Supplier earnings and settlement disbursement record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "shopId": { "type": "string", "maxLength": 128 },
+        "shopName": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "orderTotal": { "type": "number" },
+        "commissionRate": { "type": "number" },
+        "commissionEarned": { "type": "number" },
+        "payoutAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Paid"] },
+        "paymentReference": { "type": "string", "maxLength": 64 },
+        "paidAt": { "type": "string", "format": "date-time" },
+        "approvedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "shopName", "orderNumber", "payoutAmount", "status"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Promotional discount coupon",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "code": { "type": "string", "maxLength": 32 },
+        "discountType": { "type": "string", "enum": ["fixed", "percentage"] },
+        "discountValue": { "type": "number" },
+        "minOrderAmount": { "type": "number" },
+        "maxDiscount": { "type": "number" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "usageLimit": { "type": "number" },
+        "timesUsed": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "code", "discountType", "discountValue", "isActive"]
+    },
+    "CouponRedemption": {
+      "title": "CouponRedemption",
+      "description": "Record of a used coupon redemption by order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "couponCode": { "type": "string", "maxLength": 32 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "customerPhone": { "type": "string", "maxLength": 32 },
+        "discountAmount": { "type": "number" },
+        "redeemedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "couponCode", "orderNumber", "discountAmount"]
+    },
+    "InventoryLog": {
+      "title": "InventoryLog",
+      "description": "Audit trail of product stock adjustments and sales deductions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "productName": { "type": "string", "maxLength": 200 },
+        "previousStock": { "type": "number" },
+        "newStock": { "type": "number" },
+        "changeAmount": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 500 },
+        "adminName": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "productId", "previousStock", "newStock", "reason"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Operational and security audit trail for administrative actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "adminName": { "type": "string", "maxLength": 128 },
+        "adminRole": { "type": "string", "maxLength": 64 },
+        "action": { "type": "string", "maxLength": 64 },
+        "details": { "type": "string", "maxLength": 2000 },
+        "entityType": { "type": "string", "maxLength": 64 },
+        "entityId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "timestamp", "adminName", "action", "details"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Customer account profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "deliveryAddress": { "type": "string", "maxLength": 300 },
+        "totalOrders": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Authorized marketplace administrator with trusted server-verified roles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "maxLength": 64 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "CustomerMessage": {
+      "title": "CustomerMessage",
+      "description": "Inbound inquiry or contact form message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 3000 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "maxLength": 32 },
+        "replyNote": { "type": "string", "maxLength": 2000 },
+        "repliedAt": { "type": "string", "format": "date-time" },
+        "repliedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "message"]
+    },
+    "CustomerProblemReport": {
+      "title": "CustomerProblemReport",
+      "description": "Customer complaint or support case",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "caseNumber": { "type": "string", "maxLength": 32 },
+        "customerName": { "type": "string", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 32 },
+        "customerEmail": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 32 },
+        "category": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "priority": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "maxLength": 32 },
+        "assignedTo": { "type": "string", "maxLength": 128 },
+        "resolution": { "type": "string", "maxLength": 2000 },
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "caseNumber", "customerName", "customerPhone", "category", "description"]
+    },
+    "ProductReview": {
+      "title": "ProductReview",
+      "description": "Customer review for a product",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 32 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 1000 },
+        "verifiedPurchase": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["approved", "pending", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "productId", "customerName", "rating", "comment"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Global marketplace branding and delivery configuration",
+      "type": "object",
+      "properties": {
+        "marketName": { "type": "string", "maxLength": 128 },
+        "companyName": { "type": "string", "maxLength": 128 },
+        "slogan": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "address": { "type": "string", "maxLength": 200 },
+        "pickupAddress": { "type": "string", "maxLength": 200 },
+        "receiverName": { "type": "string", "maxLength": 128 },
+        "paymentNumber": { "type": "string", "maxLength": 32 },
+        "merchantCode": { "type": "string", "maxLength": 32 },
+        "deliveryFeeKigali": { "type": "number" },
+        "deliveryFeeUpcountry": { "type": "number" },
+        "freeDeliveryThreshold": { "type": "number" }
+      },
+      "required": ["marketName", "companyName", "phone", "email"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Marketplace products catalog with stock and pricing in RWF"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Marketplace categories and subcategories"
+    },
+    "/shops/{shopId}": {
+      "schema": "Shop",
+      "description": "Verified merchant shops and store hubs"
+    },
+    "/supplierApplications/{applicationId}": {
+      "schema": "SupplierApplication",
+      "description": "Prospective supplier and shop vendor applications"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders with items snapshots and status tracking"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Customer mobile money payment confirmations and administrative audits"
+    },
+    "/refunds/{refundId}": {
+      "schema": "Refund",
+      "description": "Order refund records and reconciliation"
+    },
+    "/deliveries/{deliveryId}": {
+      "schema": "Delivery",
+      "description": "Courier fulfillment tracking and dispatch logs"
+    },
+    "/supplierPayouts/{payoutId}": {
+      "schema": "SupplierPayout",
+      "description": "Supplier earnings, commission calculations, and payout records"
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Promotional discount codes"
+    },
+    "/couponRedemptions/{redemptionId}": {
+      "schema": "CouponRedemption",
+      "description": "Order redemption records for promo codes"
+    },
+    "/inventoryLogs/{logId}": {
+      "schema": "InventoryLog",
+      "description": "Historical audit of inventory changes and stock deductions"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Administrative actions audit trail"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Customer account records"
+    },
+    "/admins/{adminUid}": {
+      "schema": "AdminProfile",
+      "description": "Administrator access control and role assignments"
+    },
+    "/messages/{messageId}": {
+      "schema": "CustomerMessage",
+      "description": "Contact form submissions and customer inquiries"
+    },
+    "/customerProblems/{problemId}": {
+      "schema": "CustomerProblemReport",
+      "description": "Customer support complaints and issue tickets"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "ProductReview",
+      "description": "Product ratings and customer reviews"
+    },
+    "/settings/{settingId}": {
+      "schema": "AppSettings",
+      "description": "Marketplace settings, delivery rates, and public branding"
+    }
+  }
+}

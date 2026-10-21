@@ -1,0 +1,235 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAdmin() {
+      return isSignedIn() && (
+        (
+          (
+            request.auth.token.email == 'manirihothierry36@gmail.com' ||
+            request.auth.token.email == 'manirihothierry6@gmail.com' ||
+            request.auth.token.email == 'contactreachmedialimited@gmail.com' ||
+            request.auth.token.email == 'inzozilink@gmail.com' ||
+            request.auth.token.email == 'manirihothierry11@gmail.com' ||
+            request.auth.token.email == 'admin@contactreachmedia.rw' ||
+            request.auth.token.email.matches('.*@contactreachmedia\\.rw$')
+          ) && request.auth.token.email_verified == true
+        ) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidProduct(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.price is number && data.price >= 0 &&
+             data.category is string && data.category.size() <= 64 &&
+             data.stock is number && data.stock >= 0 &&
+             data.status in ['Available', 'Out of Stock', 'Hidden'];
+    }
+
+    function isValidOrder(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.orderNumber is string && data.orderNumber.size() > 0 && data.orderNumber.size() <= 32 &&
+             data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 128 &&
+             data.customerPhone is string && data.customerPhone.size() > 0 && data.customerPhone.size() <= 32 &&
+             data.items is list && data.items.size() > 0 && data.items.size() <= 100 &&
+             data.totalAmount is number && data.totalAmount >= 0;
+    }
+
+    function isValidPayment(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.orderNumber is string && data.orderNumber.size() > 0 && data.orderNumber.size() <= 32 &&
+             data.amountPaid is number && data.amountPaid > 0 &&
+             data.transactionId is string && data.transactionId.size() > 0 && data.transactionId.size() <= 64;
+    }
+
+    function isValidMessage(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 128 &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 128 &&
+             data.message is string && data.message.size() > 0 && data.message.size() <= 3000;
+    }
+
+    function isValidProblemReport(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.caseNumber is string && data.caseNumber.size() > 0 && data.caseNumber.size() <= 32 &&
+             data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 128 &&
+             data.customerPhone is string && data.customerPhone.size() > 0 && data.customerPhone.size() <= 32 &&
+             data.category is string && data.category.size() <= 64 &&
+             data.description is string && data.description.size() > 0 && data.description.size() <= 3000;
+    }
+
+    function isValidReview(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.productId is string && data.productId.size() <= 128 &&
+             data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 128 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() > 0 && data.comment.size() <= 1000;
+    }
+
+    // Products collection
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isVerifiedAdmin() && isValidId(productId) && isValidProduct(incoming());
+      allow update: if isVerifiedAdmin() && isValidId(productId) && isValidProduct(incoming());
+      allow delete: if isVerifiedAdmin() && isValidId(productId);
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isVerifiedAdmin() && isValidId(categoryId);
+    }
+
+    // Shops collection
+    match /shops/{shopId} {
+      allow read: if true;
+      allow create, update, delete: if isVerifiedAdmin() && isValidId(shopId);
+    }
+
+    // Supplier Applications
+    match /supplierApplications/{applicationId} {
+      allow get, list: if isVerifiedAdmin();
+      allow create: if isValidId(applicationId) && incoming().status == 'Pending';
+      allow update, delete: if isVerifiedAdmin() && isValidId(applicationId);
+    }
+
+    // Orders collection
+    match /orders/{orderId} {
+      allow get: if true;
+      allow list: if isVerifiedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(orderId) && isValidOrder(incoming()) && incoming().status == 'New' && incoming().paymentStatus == 'Pending Payment';
+      allow update: if isVerifiedAdmin() && isValidId(orderId) && isValidOrder(incoming());
+      allow delete: if isVerifiedAdmin() && isValidId(orderId);
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      allow get, list: if isVerifiedAdmin();
+      allow create: if isValidId(paymentId) && isValidPayment(incoming()) && incoming().status == 'Pending Review';
+      allow update, delete: if isVerifiedAdmin() && isValidId(paymentId);
+    }
+
+    // Payment Confirmations
+    match /paymentConfirmations/{confirmationId} {
+      allow get, list: if isVerifiedAdmin();
+      allow create: if isValidId(confirmationId) && isValidPayment(incoming()) && (incoming().verificationStatus in ['Pending Review', 'Pending Verification', 'Payment Submitted', 'Under Verification'] || incoming().status in ['Pending Review', 'Pending Verification', 'Payment Submitted', 'Under Verification']);
+      allow update, delete: if isVerifiedAdmin() && isValidId(confirmationId);
+    }
+
+    // Refunds
+    match /refunds/{refundId} {
+      allow read, write: if isVerifiedAdmin() && isValidId(refundId);
+    }
+
+    // Deliveries
+    match /deliveries/{deliveryId} {
+      allow read, write: if isVerifiedAdmin() && isValidId(deliveryId);
+    }
+
+    // Supplier Payouts
+    match /supplierPayouts/{payoutId} {
+      allow read, write: if isVerifiedAdmin() && isValidId(payoutId);
+    }
+
+    // Coupons
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create, update, delete: if isVerifiedAdmin() && isValidId(couponId);
+    }
+
+    // Coupon Redemptions
+    match /couponRedemptions/{redemptionId} {
+      allow read: if isVerifiedAdmin();
+      allow create: if isValidId(redemptionId);
+      allow update, delete: if isVerifiedAdmin() && isValidId(redemptionId);
+    }
+
+    // Inventory Logs
+    match /inventoryLogs/{logId} {
+      allow read, write: if isVerifiedAdmin() && isValidId(logId);
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow read, write: if isVerifiedAdmin() && isValidId(logId);
+    }
+
+    // Customers / Buyers
+    match /customers/{customerId} {
+      allow get: if true;
+      allow list: if isVerifiedAdmin();
+      allow create, update: if isValidId(customerId);
+      allow delete: if isVerifiedAdmin() && isValidId(customerId);
+    }
+
+    // Users
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isVerifiedAdmin());
+      allow list: if isVerifiedAdmin();
+      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
+      allow delete: if isVerifiedAdmin() && isValidId(userId);
+    }
+
+    // Contact messages
+    match /messages/{messageId} {
+      allow get, list: if isVerifiedAdmin();
+      allow create: if isValidId(messageId) && isValidMessage(incoming()) && incoming().status == 'unread';
+      allow update, delete: if isVerifiedAdmin() && isValidId(messageId);
+    }
+
+    // Customer Problem Reports
+    match /customerProblems/{problemId} {
+      allow get: if true;
+      allow list: if isVerifiedAdmin();
+      allow create: if isValidId(problemId) && isValidProblemReport(incoming()) && incoming().status == 'New';
+      allow update, delete: if isVerifiedAdmin() && isValidId(problemId);
+    }
+
+    // Reviews
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isValidId(reviewId) && isValidReview(incoming());
+      allow update, delete: if isVerifiedAdmin() && isValidId(reviewId);
+    }
+
+    // Admin profiles & access control
+    match /admins/{adminUid} {
+      allow read, write: if isVerifiedAdmin() && isValidId(adminUid);
+    }
+
+    // App settings
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isVerifiedAdmin() && isValidId(settingId);
+    }
+
+    // Test connection probe document
+    match /test/{docId} {
+      allow read: if true;
+    }
+  }
+}

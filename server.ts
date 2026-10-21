@@ -1,0 +1,3146 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express, { Request, Response, NextFunction } from 'express';
+import { createServer as createViteServer } from 'vite';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import { initializeApp as initFirebaseApp, getApps as getFirebaseApps } from 'firebase/app';
+import {
+  getFirestore as initFirestore,
+  doc as firestoreDoc,
+  getDoc as firestoreGetDoc,
+  getDocs as firestoreGetDocs,
+  setDoc as firestoreSetDoc,
+  deleteDoc as firestoreDeleteDoc,
+  collection as firestoreCollection
+} from 'firebase/firestore/lite';
+import { initialProducts, initialCategories, initialSettings, initialShops } from './src/data/initialData.ts';
+import {
+  Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
+  PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage,
+  CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
+  AdminUser, AdminRole, PaymentMethodConfig, ProductReview
+} from './src/types.ts';
+
+const app = express();
+const PORT = 3000;
+const DB_FILE = path.resolve('data/market_db.json');
+
+// Ensure data folder exists
+if (!fs.existsSync(path.resolve('data'))) {
+  fs.mkdirSync(path.resolve('data'), { recursive: true });
+}
+
+export interface SupplierApplication {
+  id: string;
+  businessName: string;
+  ownerName: string;
+  phone: string;
+  email?: string;
+  tinNumber?: string;
+  location: string;
+  category: string;
+  description?: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+export interface SupplierPayoutRecord {
+  id: string;
+  shopId: string;
+  shopName: string;
+  orderId: string;
+  orderNumber: string;
+  orderTotal: number;
+  commissionRate: number;
+  commissionEarned: number;
+  payoutAmount: number;
+  status: 'Pending' | 'Approved' | 'Paid';
+  paymentReference?: string;
+  paidAt?: string;
+  approvedBy?: string;
+  createdAt: string;
+}
+
+// In-Memory Database Structure
+interface MarketDatabase {
+  products: Product[];
+  categories: Category[];
+  shops: VendorShop[];
+  orders: Order[];
+  paymentConfirmations: PaymentConfirmation[];
+  paymentMethodsConfig: PaymentMethodConfig[];
+  messages: AdminMessage[];
+  customerProblems: CustomerProblemReport[];
+  coupons: Coupon[];
+  inventoryLogs: InventoryLog[];
+  auditLogs: AuditLog[];
+  customers: CustomerUser[];
+  adminUsers: AdminUser[];
+  reviews: ProductReview[];
+  supplierApplications: SupplierApplication[];
+  supplierPayouts: SupplierPayoutRecord[];
+  settings: AppSettings;
+  adminTokens: Map<string, { user: AdminUser; expiresAt: number }>;
+  customerTokens: Map<string, { customerId: string; expiresAt: number }>;
+}
+
+// Default Payment Methods
+const defaultPaymentMethods: PaymentMethodConfig[] = [
+  {
+    id: 'pm-mtn-momo',
+    name: 'MTN Mobile Money (Direct Transfer)',
+    type: 'MTN Mobile Money',
+    receiverName: 'Ruth',
+    receiverAccount: '078002260',
+    instructions: 'Dial *182*1*1*078002260*AMOUNT# to send mobile money directly to Ruth.',
+    isActive: true
+  },
+  {
+    id: 'pm-mtn-merchant',
+    name: 'MTN MoMoPay (Merchant Code)',
+    type: 'MTN Merchant Code',
+    receiverName: 'ContactReach Market',
+    receiverAccount: '078002',
+    instructions: 'Dial *182*8*1*078002*AMOUNT# to pay Ruth / ContactReach Market merchant.',
+    isActive: true
+  },
+  {
+    id: 'pm-airtel',
+    name: 'Airtel Money',
+    type: 'Airtel Money',
+    receiverName: 'Ruth',
+    receiverAccount: '078002260',
+    instructions: 'Dial *182*1*2*078002260*AMOUNT# to pay via Airtel Money.',
+    isActive: true
+  },
+  {
+    id: 'pm-bank',
+    name: 'Bank Transfer / I&M Bank Rwanda',
+    type: 'Bank Transfer',
+    receiverName: 'ContactReach Media Ltd',
+    receiverAccount: '00014-0239102-19 (I&M Bank)',
+    instructions: 'Transfer to ContactReach Media Ltd, Account 00014-0239102-19. Use your Order # as reference.',
+    isActive: true
+  },
+  {
+    id: 'pm-cod',
+    name: 'Cash on Pickup / Collection',
+    type: 'Cash on Delivery',
+    receiverName: 'Ruth / Warehouse Desk',
+    receiverAccount: 'Fair View Plaza, Kigali',
+    instructions: 'Pay in cash when picking up your packaged order at Fair View Plaza, Kigali.',
+    isActive: true
+  }
+];
+
+// Default Initial Coupons
+const defaultCoupons: Coupon[] = [
+  {
+    id: 'coup-welcome',
+    code: 'WELCOME10',
+    discountType: 'percentage',
+    discountValue: 10,
+    minOrderAmount: 10000,
+    maxDiscount: 10000,
+    expiresAt: '2026-12-31T23:59:59Z',
+    usageLimit: 500,
+    timesUsed: 0,
+    isActive: true
+  }
+];
+
+// Default Initial Admin Users
+const defaultAdminUsers: AdminUser[] = [
+  {
+    id: 'adm-owner-thierry-primary',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry36@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-owner-thierry',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry6@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-owner-ruth',
+    name: 'Ruth (System Owner)',
+    email: 'contactreachmedialimited@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0780022600'
+  },
+  {
+    id: 'adm-ops',
+    name: 'Thierry Maniriho (Operations Admin)',
+    email: 'admin@contactreachmedia.rw',
+    role: 'administrator',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-ops-thierry',
+    name: 'Thierry Maniriho (Administrator)',
+    email: 'manirihothierry11@gmail.com',
+    role: 'administrator',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-prod-mgr',
+    name: 'Eric Kwizera (Catalog & Inventory)',
+    email: 'products@contactreachmedia.rw',
+    role: 'product_manager',
+    active: true,
+    phone: '0788112233'
+  },
+  {
+    id: 'adm-support',
+    name: 'Clarisse Umutoni (Customer Support)',
+    email: 'support@contactreachmedia.rw',
+    role: 'customer_support',
+    active: true,
+    phone: '0780022600'
+  }
+];
+
+// Initialize in-memory DB
+let db: MarketDatabase = {
+  products: [...initialProducts],
+  categories: [...initialCategories],
+  shops: [...initialShops],
+  orders: [],
+  paymentConfirmations: [],
+  paymentMethodsConfig: [...defaultPaymentMethods],
+  messages: [],
+  customerProblems: [],
+  coupons: [...defaultCoupons],
+  inventoryLogs: [],
+  auditLogs: [],
+  customers: [],
+  adminUsers: [...defaultAdminUsers],
+  reviews: [],
+  supplierApplications: [],
+  supplierPayouts: [],
+  settings: {
+    ...initialSettings,
+    email: 'contactreachmedialimited@gmail.com',
+    phone: '0780022600'
+  },
+  adminTokens: new Map(),
+  customerTokens: new Map()
+};
+
+// Track failed login attempts for rate limiting (email -> { attempts, lockoutUntil })
+const loginAttempts = new Map<string, { attempts: number; lockoutUntil?: number }>();
+
+function logAudit(admin: { name: string; role: string }, action: string, details: string, entityType?: string, entityId?: string) {
+  const audit: AuditLog = {
+    id: `aud-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    timestamp: new Date().toISOString(),
+    adminName: admin.name,
+    adminRole: admin.role,
+    action,
+    details
+  };
+  if (entityType) audit.entityType = entityType;
+  if (entityId) audit.entityId = entityId;
+
+  db.auditLogs.unshift(audit);
+  if (db.auditLogs.length > 500) db.auditLogs.pop();
+  saveDbToDisk();
+  saveToFirestoreAsync('auditLogs', audit.id, audit);
+}
+
+function saveDbToDisk() {
+  try {
+    const dataToSave = {
+      products: db.products,
+      categories: db.categories,
+      shops: db.shops,
+      orders: db.orders,
+      paymentConfirmations: db.paymentConfirmations,
+      paymentMethodsConfig: db.paymentMethodsConfig,
+      messages: db.messages,
+      customerProblems: db.customerProblems,
+      coupons: db.coupons,
+      inventoryLogs: db.inventoryLogs,
+      auditLogs: db.auditLogs,
+      customers: db.customers,
+      adminUsers: db.adminUsers,
+      reviews: db.reviews,
+      supplierApplications: db.supplierApplications,
+      supplierPayouts: db.supplierPayouts,
+      settings: db.settings
+    };
+    fs.writeFileSync(DB_FILE, JSON.stringify(dataToSave, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to persist DB to disk:', err);
+  }
+}
+
+function loadDbFromDisk() {
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const content = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (parsed.products && Array.isArray(parsed.products)) db.products = parsed.products;
+      if (parsed.categories && Array.isArray(parsed.categories)) {
+        const existingIds = new Set(parsed.categories.map((c: any) => c.id));
+        const missingInitial = initialCategories.filter(c => !existingIds.has(c.id));
+        db.categories = [...parsed.categories, ...missingInitial];
+      }
+      if (parsed.shops && Array.isArray(parsed.shops)) db.shops = parsed.shops;
+      if (parsed.orders && Array.isArray(parsed.orders)) db.orders = parsed.orders;
+      if (parsed.paymentConfirmations && Array.isArray(parsed.paymentConfirmations)) db.paymentConfirmations = parsed.paymentConfirmations;
+      if (parsed.paymentMethodsConfig && Array.isArray(parsed.paymentMethodsConfig)) db.paymentMethodsConfig = parsed.paymentMethodsConfig;
+      if (parsed.messages && Array.isArray(parsed.messages)) db.messages = parsed.messages;
+      if (parsed.customerProblems && Array.isArray(parsed.customerProblems)) db.customerProblems = parsed.customerProblems;
+      if (parsed.coupons && Array.isArray(parsed.coupons)) db.coupons = parsed.coupons;
+      if (parsed.inventoryLogs && Array.isArray(parsed.inventoryLogs)) db.inventoryLogs = parsed.inventoryLogs;
+      if (parsed.auditLogs && Array.isArray(parsed.auditLogs)) db.auditLogs = parsed.auditLogs;
+      if (parsed.customers && Array.isArray(parsed.customers)) db.customers = parsed.customers;
+      if (parsed.adminUsers && Array.isArray(parsed.adminUsers)) {
+        db.adminUsers = parsed.adminUsers;
+        defaultAdminUsers.forEach(defAdm => {
+          if (!db.adminUsers.some(a => a.email.toLowerCase() === defAdm.email.toLowerCase())) {
+            db.adminUsers.push(defAdm);
+          }
+        });
+      }
+      if (parsed.reviews && Array.isArray(parsed.reviews)) db.reviews = parsed.reviews;
+      if (parsed.supplierApplications && Array.isArray(parsed.supplierApplications)) db.supplierApplications = parsed.supplierApplications;
+      if (parsed.supplierPayouts && Array.isArray(parsed.supplierPayouts)) db.supplierPayouts = parsed.supplierPayouts;
+      if (parsed.settings) db.settings = { ...initialSettings, ...parsed.settings, email: 'contactreachmedialimited@gmail.com', phone: '0780022600' };
+      console.log(`Loaded ${db.products.length} products, ${db.orders.length} orders, ${db.shops.length} shops from storage.`);
+    } catch (err) {
+      console.error('Error reading DB file, using initial data:', err);
+      saveDbToDisk();
+    }
+  }
+
+  // Ensure SKU for each product if missing
+  db.products.forEach((p, idx) => {
+    if (!p.sku) {
+      p.sku = `CRM-${p.category.toUpperCase().slice(0, 3)}-${1000 + idx}`;
+    }
+  });
+
+  saveDbToDisk();
+}
+
+loadDbFromDisk();
+
+// Initialize Cloud Firestore on backend
+let firestoreDb: any = null;
+try {
+  const fbConfigPath = path.resolve('firebase-applet-config.json');
+  if (fs.existsSync(fbConfigPath)) {
+    const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
+    const apps = getFirebaseApps();
+    const fbApp = apps.length > 0 ? apps[0] : initFirebaseApp(config);
+    firestoreDb = initFirestore(fbApp, config.firestoreDatabaseId);
+    console.log('[Firebase] Cloud Firestore connected on server with DB:', config.firestoreDatabaseId);
+  }
+} catch (fbErr) {
+  console.warn('[Firebase] Notice on server Firestore initialization:', fbErr);
+}
+
+// Collections that can be created by unauthenticated client requests according to Firestore security rules
+const PUBLIC_WRITABLE_COLLECTIONS = new Set([
+  'orders',
+  'paymentConfirmations',
+  'messages',
+  'customerProblems',
+  'supplierApplications',
+  'reviews'
+]);
+
+// Helper to recursively strip undefined properties so Firestore never throws unsupported field value error
+function sanitizeForFirestore(data: any): any {
+  if (data === null || data === undefined) return null;
+  const clone = JSON.parse(JSON.stringify(data));
+  // Security guard: Never write passwords or password hashes to Firestore documents
+  if (clone && typeof clone === 'object') {
+    delete clone.password;
+    delete clone.passwordHash;
+  }
+  return clone;
+}
+
+// Fire-and-forget safe async writer to Cloud Firestore with error handling
+function saveToFirestoreAsync(collectionName: string, docId: string, data: any) {
+  if (!firestoreDb || !data || !docId) return;
+
+  const cleanData = sanitizeForFirestore(data);
+  firestoreSetDoc(firestoreDoc(firestoreDb, collectionName, docId), cleanData, { merge: true }).catch(err => {
+    console.warn(`[Firebase] Async write notice (${collectionName}/${docId}):`, err.message || err);
+  });
+}
+
+function deleteFromFirestoreAsync(collectionName: string, docId: string) {
+  if (!firestoreDb || !docId) return;
+  firestoreDeleteDoc(firestoreDoc(firestoreDb, collectionName, docId)).catch(err => {
+    console.warn(`[Firebase] Async delete notice (${collectionName}/${docId}):`, err.message || err);
+  });
+}
+
+// Background startup sync with Cloud Firestore: ensures Firestore is authoritative for catalog, orders & settings
+async function syncWithFirestore() {
+  if (!firestoreDb) return;
+  try {
+    // 1. Sync global settings if present in Firestore (or seed if not yet present)
+    try {
+      const settingsDocRef = firestoreDoc(firestoreDb, 'settings', 'global');
+      const settingsSnap = await firestoreGetDoc(settingsDocRef);
+      if (settingsSnap.exists()) {
+        db.settings = { ...db.settings, ...(settingsSnap.data() as AppSettings) };
+      } else {
+        saveToFirestoreAsync('settings', 'global', db.settings);
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Settings sync notice:', err.message || err);
+    }
+
+    // 2. Sync categories if populated in Firestore (or seed)
+    try {
+      const catCol = firestoreCollection(firestoreDb, 'categories');
+      const catSnap = await firestoreGetDocs(catCol);
+      if (catSnap.size > 0) {
+        const fsCats: Category[] = [];
+        catSnap.forEach(d => fsCats.push({ ...(d.data() as Category), id: d.id }));
+        if (fsCats.length > 0) {
+          const fsCatIds = new Set(fsCats.map(c => c.id));
+          const missingInitial = initialCategories.filter(c => !fsCatIds.has(c.id));
+          db.categories = [...fsCats, ...missingInitial];
+        }
+      } else {
+        initialCategories.forEach(cat => {
+          saveToFirestoreAsync('categories', cat.id, cat);
+        });
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Categories sync notice:', err.message || err);
+    }
+
+    // 3. Sync live products if present in Firestore (or seed)
+    try {
+      const prodCol = firestoreCollection(firestoreDb, 'products');
+      const prodSnap = await firestoreGetDocs(prodCol);
+      if (prodSnap.size > 0) {
+        const fsProds: Product[] = [];
+        prodSnap.forEach(d => fsProds.push({ ...(d.data() as Product), id: d.id }));
+        if (fsProds.length > 0) db.products = fsProds;
+      } else {
+        initialProducts.forEach(prod => {
+          saveToFirestoreAsync('products', prod.id, prod);
+        });
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Products sync notice:', err.message || err);
+    }
+
+    // 4. Sync shops if present in Firestore (or seed)
+    try {
+      const shopCol = firestoreCollection(firestoreDb, 'shops');
+      const shopSnap = await firestoreGetDocs(shopCol);
+      if (shopSnap.size > 0) {
+        const fsShops: VendorShop[] = [];
+        shopSnap.forEach(d => fsShops.push({ ...(d.data() as VendorShop), id: d.id }));
+        if (fsShops.length > 0) db.shops = fsShops;
+      } else {
+        initialShops.forEach(shop => {
+          saveToFirestoreAsync('shops', shop.id, shop);
+        });
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Shops sync notice:', err.message || err);
+    }
+
+    // 5. Sync coupons if present in Firestore (or seed)
+    try {
+      const coupCol = firestoreCollection(firestoreDb, 'coupons');
+      const coupSnap = await firestoreGetDocs(coupCol);
+      if (coupSnap.size > 0) {
+        const fsCoups: Coupon[] = [];
+        coupSnap.forEach(d => fsCoups.push({ ...(d.data() as Coupon), id: d.id }));
+        if (fsCoups.length > 0) {
+          const fsCoupIds = new Set(fsCoups.map(c => c.id));
+          const missing = db.coupons.filter(c => !fsCoupIds.has(c.id));
+          db.coupons = [...fsCoups, ...missing];
+        }
+      } else {
+        defaultCoupons.forEach(cp => {
+          saveToFirestoreAsync('coupons', cp.id, cp);
+        });
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Coupons sync notice:', err.message || err);
+    }
+
+    // 6. Sync orders from Firestore
+    try {
+      const ordersCol = firestoreCollection(firestoreDb, 'orders');
+      const ordersSnap = await firestoreGetDocs(ordersCol);
+      if (ordersSnap.size > 0) {
+        const fsOrders: Order[] = [];
+        ordersSnap.forEach(d => fsOrders.push({ ...(d.data() as Order), id: d.id }));
+        if (fsOrders.length > 0) {
+          const existingIds = new Set(db.orders.map(o => o.id));
+          const newOrders = fsOrders.filter(o => !existingIds.has(o.id));
+          db.orders = [...newOrders, ...db.orders];
+          db.orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        }
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Orders sync notice:', err.message || err);
+    }
+
+    // 7. Sync payment confirmations from Firestore
+    try {
+      const confCol = firestoreCollection(firestoreDb, 'paymentConfirmations');
+      const confSnap = await firestoreGetDocs(confCol);
+      if (confSnap.size > 0) {
+        const fsConfs: PaymentConfirmation[] = [];
+        confSnap.forEach(d => fsConfs.push({ ...(d.data() as PaymentConfirmation), id: d.id }));
+        if (fsConfs.length > 0) {
+          const existingIds = new Set(db.paymentConfirmations.map(c => c.id));
+          const newConfs = fsConfs.filter(c => !existingIds.has(c.id));
+          db.paymentConfirmations = [...newConfs, ...db.paymentConfirmations];
+        }
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Payment confirmations sync notice:', err.message || err);
+    }
+
+    // 8. Sync supplier applications from Firestore
+    try {
+      const appCol = firestoreCollection(firestoreDb, 'supplierApplications');
+      const appSnap = await firestoreGetDocs(appCol);
+      if (appSnap.size > 0) {
+        const fsApps: SupplierApplication[] = [];
+        appSnap.forEach(d => fsApps.push({ ...(d.data() as SupplierApplication), id: d.id }));
+        if (fsApps.length > 0) {
+          const existingIds = new Set((db.supplierApplications || []).map(a => a.id));
+          const newApps = fsApps.filter(a => !existingIds.has(a.id));
+          db.supplierApplications = [...newApps, ...(db.supplierApplications || [])];
+        }
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Supplier applications sync notice:', err.message || err);
+    }
+
+    // 9. Sync supplier payouts from Firestore
+    try {
+      const payoutCol = firestoreCollection(firestoreDb, 'supplierPayouts');
+      const payoutSnap = await firestoreGetDocs(payoutCol);
+      if (payoutSnap.size > 0) {
+        const fsPayouts: SupplierPayoutRecord[] = [];
+        payoutSnap.forEach(d => fsPayouts.push({ ...(d.data() as SupplierPayoutRecord), id: d.id }));
+        if (fsPayouts.length > 0) {
+          const existingIds = new Set((db.supplierPayouts || []).map(p => p.id));
+          const newPayouts = fsPayouts.filter(p => !existingIds.has(p.id));
+          db.supplierPayouts = [...newPayouts, ...(db.supplierPayouts || [])];
+        }
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Supplier payouts sync notice:', err.message || err);
+    }
+
+    // 10. Sync registered customers from Firestore
+    try {
+      const custCol = firestoreCollection(firestoreDb, 'customers');
+      const custSnap = await firestoreGetDocs(custCol);
+      if (custSnap.size > 0) {
+        const fsCusts: CustomerUser[] = [];
+        custSnap.forEach(d => fsCusts.push({ ...(d.data() as CustomerUser), id: d.id }));
+        if (fsCusts.length > 0) {
+          const existingIds = new Set(db.customers.map(c => c.id));
+          const newCusts = fsCusts.filter(c => !existingIds.has(c.id));
+          db.customers = [...newCusts, ...db.customers];
+        }
+      }
+    } catch (err: any) {
+      console.log('[Firebase] Customers sync notice:', err.message || err);
+    }
+
+    saveDbToDisk();
+    console.log('[Firebase] Cloud Firestore authoritative catalog, orders & settings synchronization completed.');
+  } catch (err: any) {
+    console.log('[Firebase] Startup synchronization notice:', err.message || err);
+  }
+}
+
+// JSON middleware
+app.use(express.json({ limit: '20mb' }));
+
+// Auth & Permissions Config
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'contactreachmedialimited@gmail.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'ContactReachAdmin2026!SecureKey#9');
+
+// Middleware to authenticate admin token
+function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized. Admin credentials required.' });
+  }
+  const token = authHeader.split(' ')[1];
+  const session = db.adminTokens.get(token);
+  if (!session) {
+    return res.status(403).json({ error: 'Invalid or expired session token. Please sign in again.' });
+  }
+  if (Date.now() > session.expiresAt) {
+    db.adminTokens.delete(token);
+    return res.status(403).json({ error: 'Session has expired. Please sign in again.' });
+  }
+  (req as any).adminUser = session.user;
+  next();
+}
+
+// Role-based permission guard
+function requireRole(allowedRoles: AdminRole[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).adminUser as AdminUser;
+    if (!user) return res.status(401).json({ error: 'Authentication required' });
+    if (user.role === 'owner' || allowedRoles.includes(user.role)) {
+      return next();
+    }
+    return res.status(403).json({
+      error: `Access denied. Role "${user.role}" does not have permission for this operation.`
+    });
+  };
+}
+
+// -------------------------------------------------------------
+// PUBLIC API: SETTINGS & BRANDING
+// -------------------------------------------------------------
+
+app.get('/api/settings', (req: Request, res: Response) => {
+  res.json(db.settings);
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: CATEGORIES
+// -------------------------------------------------------------
+
+app.get('/api/categories', (req: Request, res: Response) => {
+  // Update itemCount dynamically based on live products
+  const activeCategories = db.categories
+    .filter(c => c.isActive !== false)
+    .map(c => {
+      const count = db.products.filter(p => p.category === c.id && p.status !== 'Hidden').length;
+      return { ...c, itemCount: count };
+    });
+  res.json(activeCategories);
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: SHOPS
+// -------------------------------------------------------------
+
+app.get('/api/shops', (req: Request, res: Response) => {
+  const activeShops = db.shops.filter(s => s.isActive !== false);
+  res.json(activeShops);
+});
+
+app.get('/api/shops/:id', (req: Request, res: Response) => {
+  const shop = db.shops.find(s => s.id === req.params.id);
+  if (!shop) return res.status(404).json({ error: 'Shop not found' });
+  const shopProducts = db.products.filter(p => (p.shopId === shop.id || p.shopName === shop.name) && p.status !== 'Hidden');
+  res.json({ shop, products: shopProducts });
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: PRODUCTS & LIVE SEARCH
+// -------------------------------------------------------------
+
+app.get('/api/products', (req: Request, res: Response) => {
+  const { category, subcategory, search, featured, shopId, shopName, minPrice, maxPrice, inStock, sort } = req.query;
+  let filtered = db.products.filter(p => p.status !== 'Hidden');
+
+  if (category && category !== 'all') {
+    filtered = filtered.filter(p => p.category === category);
+  }
+
+  if (subcategory && subcategory !== 'all') {
+    filtered = filtered.filter(p => p.subcategory === subcategory);
+  }
+
+  if (shopId) {
+    filtered = filtered.filter(p => p.shopId === shopId);
+  } else if (shopName && shopName !== 'all') {
+    filtered = filtered.filter(p => p.shopName?.toLowerCase() === (shopName as string).toLowerCase());
+  }
+
+  if (featured === 'true') {
+    filtered = filtered.filter(p => p.isFeatured);
+  }
+
+  if (inStock === 'true') {
+    filtered = filtered.filter(p => p.stock > 0 && p.status !== 'Out of Stock');
+  }
+
+  if (minPrice && !isNaN(Number(minPrice))) {
+    filtered = filtered.filter(p => p.price >= Number(minPrice));
+  }
+
+  if (maxPrice && !isNaN(Number(maxPrice))) {
+    filtered = filtered.filter(p => p.price <= Number(maxPrice));
+  }
+
+  if (search && typeof search === 'string') {
+    const q = search.toLowerCase().trim();
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      (p.sku && p.sku.toLowerCase().includes(q)) ||
+      (p.brand && p.brand.toLowerCase().includes(q)) ||
+      (p.shopName && p.shopName.toLowerCase().includes(q))
+    );
+  }
+
+  // Sorting
+  if (sort === 'price-asc') {
+    filtered.sort((a, b) => a.price - b.price);
+  } else if (sort === 'price-desc') {
+    filtered.sort((a, b) => b.price - a.price);
+  } else if (sort === 'newest') {
+    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } else if (sort === 'popular') {
+    filtered.sort((a, b) => (b.reviewsCount || 0) - (a.reviewsCount || 0));
+  }
+
+  res.json(filtered);
+});
+
+app.get('/api/products/:id', (req: Request, res: Response) => {
+  const product = db.products.find(p => p.id === req.params.id);
+  if (!product || product.status === 'Hidden') {
+    return res.status(404).json({ error: 'Product not found or currently unavailable' });
+  }
+  // Include shop details and reviews
+  const shop = db.shops.find(s => s.id === product.shopId || s.name === product.shopName);
+  const reviews = db.reviews.filter(r => r.productId === product.id && r.status === 'approved');
+  res.json({ ...product, shop, reviews });
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: PAYMENT METHODS
+// -------------------------------------------------------------
+
+app.get('/api/payment-methods', (req: Request, res: Response) => {
+  const activeMethods = db.paymentMethodsConfig.filter(m => m.isActive);
+  res.json(activeMethods);
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: COUPON VALIDATION
+// -------------------------------------------------------------
+
+app.post('/api/coupons/validate', (req: Request, res: Response) => {
+  const { code, subtotal } = req.body;
+  if (!code) return res.status(400).json({ valid: false, message: 'Please provide a promo code' });
+
+  const coupon = db.coupons.find(c => c.code.toUpperCase() === code.trim().toUpperCase());
+  if (!coupon || !coupon.isActive) {
+    return res.status(404).json({ valid: false, message: 'Invalid or inactive promotional code.' });
+  }
+
+  if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now()) {
+    return res.status(400).json({ valid: false, message: 'This coupon code has expired.' });
+  }
+
+  if (coupon.usageLimit && coupon.timesUsed >= coupon.usageLimit) {
+    return res.status(400).json({ valid: false, message: 'This coupon usage limit has been reached.' });
+  }
+
+  const orderSubtotal = Number(subtotal) || 0;
+  if (coupon.minOrderAmount && orderSubtotal < coupon.minOrderAmount) {
+    return res.status(400).json({
+      valid: false,
+      message: `Minimum order of ${coupon.minOrderAmount.toLocaleString()} FRW required for this coupon.`
+    });
+  }
+
+  let discount = 0;
+  if (coupon.discountType === 'percentage') {
+    discount = Math.round((orderSubtotal * coupon.discountValue) / 100);
+    if (coupon.maxDiscount && discount > coupon.maxDiscount) {
+      discount = coupon.maxDiscount;
+    }
+  } else {
+    discount = coupon.discountValue;
+  }
+
+  res.json({
+    valid: true,
+    code: coupon.code,
+    discountAmount: discount,
+    discountType: coupon.discountType,
+    discountValue: coupon.discountValue,
+    message: `Coupon applied: ${discount.toLocaleString()} FRW discount!`
+  });
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: CHECKOUT & ORDERS
+// -------------------------------------------------------------
+
+app.post('/api/orders', (req: Request, res: Response) => {
+  const {
+    customerName,
+    customerPhone,
+    customerEmail,
+    deliveryType, // 'delivery' | 'pickup'
+    deliveryLocation,
+    deliveryAddress,
+    deliveryNotes,
+    items,
+    paymentMethod,
+    couponCode
+  } = req.body;
+
+  // Block public checkout if Maintenance Mode is active (except for authenticated admins)
+  if (db.settings.isMaintenanceMode) {
+    const authHeader = req.headers.authorization;
+    let isAdmin = false;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const bearer = authHeader.split(' ')[1];
+      const session = db.adminTokens.get(bearer);
+      if (session && session.expiresAt > Date.now()) {
+        isAdmin = true;
+      }
+    }
+    if (!isAdmin) {
+      return res.status(503).json({
+        error: db.settings.maintenanceMessage || 'ContactReach Market is currently in scheduled maintenance. New orders are temporarily paused. We will be back online shortly!'
+      });
+    }
+  }
+
+  if (!customerName || !customerPhone || !items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Customer name, phone number, and items are required.' });
+  }
+
+  // Idempotency / Duplicate submission protection (returns existing order if double-clicked within 15s)
+  const cleanCustomerPhone = customerPhone.replace(/\D/g, '');
+  const fifteenSecondsAgo = Date.now() - 15000;
+  const recentDuplicate = db.orders.find(o =>
+    o.customerPhone.replace(/\D/g, '') === cleanCustomerPhone &&
+    new Date(o.createdAt).getTime() > fifteenSecondsAgo &&
+    o.items.length === items.length &&
+    o.items.every((it, idx) => it.productId === items[idx]?.productId && it.quantity === Math.max(1, parseInt(items[idx]?.quantity, 10) || 1))
+  );
+
+  if (recentDuplicate) {
+    return res.status(200).json(recentDuplicate);
+  }
+
+  // Validate items & stock
+  let calculatedSubtotal = 0;
+  const verifiedItems = [];
+  let primaryShopName = 'ContactReach Market';
+  let primaryReceiverName = db.settings.receiverName || 'Ruth';
+  let primaryReceiverPhone = db.settings.paymentNumber || '078002260';
+  let primaryMerchantCode = db.settings.merchantCode || '078002';
+
+  for (const item of items) {
+    const product = db.products.find(p => p.id === item.productId);
+    if (!product) {
+      return res.status(400).json({ error: `Product "${item.productId}" not found.` });
+    }
+    const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+    if (product.status === 'Out of Stock' || product.stock < qty) {
+      return res.status(400).json({
+        error: `Insufficient stock for "${product.name}". Available: ${product.stock} units.`
+      });
+    }
+
+    if (product.shopName) primaryShopName = product.shopName;
+    if (product.receiverName) primaryReceiverName = product.receiverName;
+    if (product.receiverPhone) primaryReceiverPhone = product.receiverPhone;
+    if (product.merchantCode) primaryMerchantCode = product.merchantCode;
+
+    const unitPrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price;
+    calculatedSubtotal += unitPrice * qty;
+
+    verifiedItems.push({
+      productId: product.id,
+      productName: product.name,
+      price: unitPrice,
+      quantity: qty,
+      imageUrl: product.imageUrl,
+      variation: item.variation || undefined,
+      sku: product.sku
+    });
+  }
+
+  // Calculate discount if coupon provided
+  let discountAmount = 0;
+  let appliedCouponCode: string | undefined = undefined;
+  if (couponCode) {
+    const coupon = db.coupons.find(c => c.code.toUpperCase() === couponCode.trim().toUpperCase() && c.isActive);
+    if (coupon) {
+      if (coupon.discountType === 'percentage') {
+        discountAmount = Math.round((calculatedSubtotal * coupon.discountValue) / 100);
+        if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) discountAmount = coupon.maxDiscount;
+      } else {
+        discountAmount = coupon.discountValue;
+      }
+      coupon.timesUsed += 1;
+      appliedCouponCode = coupon.code;
+    }
+  }
+
+  // Delivery fee calculation
+  let deliveryFee = 0;
+  const isPickup = deliveryType === 'pickup';
+
+  if (!isPickup) {
+    const locStr = (deliveryLocation || deliveryAddress || '').toLowerCase();
+    const isOutsideKigali = locStr.includes('outside') || locStr.includes('upcountry') || locStr.includes('intara');
+    if (isOutsideKigali) {
+      deliveryFee = db.settings.deliveryFeeUpcountry || 3500;
+    } else {
+      if (calculatedSubtotal >= (db.settings.freeDeliveryThreshold || 50000)) {
+        deliveryFee = 0;
+      } else {
+        const matchedArea = db.settings.kigaliAreas?.find(a => locStr.includes(a.id) || locStr.includes(a.name.toLowerCase()));
+        deliveryFee = matchedArea ? matchedArea.fee : (db.settings.deliveryFeeKigali || 1500);
+      }
+    }
+  }
+
+  const totalAmount = Math.max(0, calculatedSubtotal + deliveryFee - discountAmount);
+
+  // Receiver details
+  const method: PaymentMethod = paymentMethod || 'MTN Mobile Money';
+  let receiverDetails = primaryReceiverPhone;
+  if (method === 'MTN Merchant Code') receiverDetails = primaryMerchantCode;
+  else if (method === 'Bank Transfer') receiverDetails = '00014-0239102-19 (I&M Bank)';
+
+  // Calculate commission & supplier payout (ContactReach Media dropshipping model)
+  const commissionRate = 10; // 10% standard marketplace commission
+  const commissionEarned = Math.round((calculatedSubtotal * commissionRate) / 100);
+  const supplierPayoutAmount = Math.max(0, calculatedSubtotal - commissionEarned);
+
+  // Unique Order Reference & Secure Unguessable Tracking Token
+  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+  const orderNumber = `CRM-${randomSuffix}`;
+  const trackingToken = crypto.randomBytes(16).toString('hex');
+
+  const newOrder: Order = {
+    id: `ord-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+    orderNumber,
+    trackingToken,
+    createdAt: new Date().toISOString(),
+    customerName: customerName.trim(),
+    customerPhone: customerPhone.trim(),
+    customerEmail: customerEmail?.trim(),
+    deliveryType: isPickup ? 'pickup' : 'delivery',
+    deliveryLocation: isPickup ? 'Store Pickup (Fair View Plaza)' : (deliveryLocation || 'Kigali Area'),
+    deliveryAddress: isPickup ? (db.settings.pickupAddress || 'Fair View Plaza, Kigali, Rwanda') : (deliveryAddress || 'Kigali'),
+    deliveryNotes: deliveryNotes?.trim(),
+    items: verifiedItems,
+    subtotal: calculatedSubtotal,
+    discountAmount: discountAmount > 0 ? discountAmount : undefined,
+    couponCode: appliedCouponCode,
+    deliveryFee,
+    totalAmount,
+    commissionRate,
+    commissionEarned,
+    supplierPayoutAmount,
+    supplierPayoutStatus: 'Pending',
+    supplierFulfillmentStatus: 'Pending',
+    paymentMethod: method,
+    receiverName: primaryReceiverName,
+    receiverDetails,
+    shopName: primaryShopName,
+    paymentStatus: 'Pending Payment',
+    status: 'New',
+    stockDeducted: false,
+    statusHistory: [
+      {
+        status: 'New',
+        paymentStatus: 'Pending Payment',
+        timestamp: new Date().toISOString(),
+        note: 'Order successfully created. Awaiting mobile money payment initiation.'
+      }
+    ]
+  };
+
+  db.orders.unshift(newOrder);
+
+  // Update or create customer record
+  let customer = db.customers.find(c => c.phone.replace(/\D/g, '') === customerPhone.replace(/\D/g, ''));
+  if (customer) {
+    customer.totalOrders += 1;
+    customer.totalSpent += totalAmount;
+    if (deliveryAddress) customer.deliveryAddress = deliveryAddress;
+  } else {
+    db.customers.push({
+      id: `cust-${Date.now()}`,
+      name: customerName.trim(),
+      phone: customerPhone.trim(),
+      email: customerEmail?.trim(),
+      deliveryAddress: deliveryAddress?.trim(),
+      createdAt: new Date().toISOString(),
+      totalOrders: 1,
+      totalSpent: totalAmount
+    });
+  }
+
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', newOrder.id, newOrder);
+
+  res.status(201).json(newOrder);
+});
+
+// Secure Order Tracking (Authenticated Admin or Token / Phone Verified Customer)
+app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
+  const orderNumber = req.params.orderNumber.trim().toUpperCase();
+  const phone = req.query.phone ? (req.query.phone as string).trim() : null;
+  const token = req.query.token ? (req.query.token as string).trim() : null;
+
+  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+  if (!order) {
+    return res.status(404).json({ error: `Order #${orderNumber} not found. Please verify your reference number.` });
+  }
+
+  // Check if admin is viewing
+  const authHeader = req.headers.authorization;
+  let isAdmin = false;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const bearer = authHeader.split(' ')[1];
+    const session = db.adminTokens.get(bearer);
+    if (session && session.expiresAt > Date.now()) {
+      isAdmin = true;
+    }
+  }
+
+  if (!isAdmin) {
+    const tokenMatches = Boolean(token && order.trackingToken && token === order.trackingToken);
+    let phoneMatches = false;
+    if (phone) {
+      const cleanOrderPhone = order.customerPhone.replace(/\D/g, '');
+      const cleanSearchPhone = phone.replace(/\D/g, '');
+      phoneMatches = cleanOrderPhone.endsWith(cleanSearchPhone) || cleanSearchPhone.endsWith(cleanOrderPhone);
+    }
+
+    if (!tokenMatches && !phoneMatches) {
+      return res.status(403).json({
+        error: 'To view order tracking details, please provide your recipient phone number or access via your secure order confirmation link.'
+      });
+    }
+
+    // Return sanitized public tracking details (excluding supplier payout, internal commission, and admin notes)
+    return res.json({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      trackingToken: order.trackingToken,
+      createdAt: order.createdAt,
+      customerName: order.customerName,
+      deliveryType: order.deliveryType,
+      deliveryLocation: order.deliveryLocation,
+      deliveryAddress: order.deliveryAddress,
+      items: order.items,
+      subtotal: order.subtotal,
+      discountAmount: order.discountAmount,
+      deliveryFee: order.deliveryFee,
+      totalAmount: order.totalAmount,
+      paymentMethod: order.paymentMethod,
+      receiverName: order.receiverName,
+      receiverDetails: order.receiverDetails,
+      shopName: order.shopName,
+      paymentStatus: order.paymentStatus,
+      status: order.status,
+      assignedCourier: order.assignedCourier,
+      courierPhone: order.courierPhone,
+      statusHistory: order.statusHistory
+    });
+  }
+
+  // Admin gets full operational order record
+  res.json(order);
+});
+
+// Official Invoice Data
+app.get('/api/orders/:orderNumber/invoice', (req: Request, res: Response) => {
+  const orderNumber = req.params.orderNumber.trim().toUpperCase();
+  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  res.json({
+    order,
+    company: {
+      name: db.settings.companyName,
+      marketName: db.settings.marketName,
+      address: db.settings.address,
+      phone: db.settings.phone,
+      email: db.settings.email,
+      taxNumber: 'TIN: 109283741'
+    },
+    generatedAt: new Date().toISOString()
+  });
+});
+
+// Switch / Update Payment Method on Existing Order (prevents creating duplicate orders)
+app.patch('/api/orders/:orderNumber/payment-method', (req: Request, res: Response) => {
+  const orderNumber = req.params.orderNumber.trim().toUpperCase();
+  const { paymentMethod } = req.body;
+  if (!paymentMethod) {
+    return res.status(400).json({ error: 'paymentMethod is required.' });
+  }
+
+  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+  if (!order) {
+    return res.status(404).json({ error: `Order #${orderNumber} not found.` });
+  }
+
+  const oldMethod = order.paymentMethod;
+  order.paymentMethod = paymentMethod;
+
+  if (paymentMethod === 'MTN Merchant Code') {
+    order.receiverName = 'ContactReach Market';
+    order.receiverDetails = db.settings.merchantCode || '078002';
+  } else if (paymentMethod === 'Airtel Money') {
+    order.receiverName = db.settings.receiverName || 'Ruth';
+    order.receiverDetails = db.settings.paymentNumber || '078002260';
+  } else {
+    order.receiverName = db.settings.receiverName || 'Ruth';
+    order.receiverDetails = db.settings.paymentNumber || '078002260';
+  }
+
+  order.statusHistory.push({
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    timestamp: new Date().toISOString(),
+    note: `Customer updated payment channel from "${oldMethod}" to "${paymentMethod}".`
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+
+  res.json({
+    message: 'Payment method updated successfully.',
+    order
+  });
+});
+
+// Payment Confirmation Submission
+app.post('/api/payments/confirm', (req: Request, res: Response) => {
+  const { orderNumber, customerName, paymentPhone, paymentMethod, amountPaid, transactionId, screenshotUrl, confirmationMessage } = req.body;
+
+  // Validation: Must have orderNumber, paymentPhone, amountPaid, AND at least one of (transactionId, confirmationMessage, screenshotUrl)
+  if (!orderNumber || !paymentPhone || !amountPaid) {
+    return res.status(400).json({ error: 'Order reference, phone, and amount paid are required.' });
+  }
+
+  const cleanMessage = confirmationMessage && typeof confirmationMessage === 'string' ? confirmationMessage.trim() : undefined;
+  let finalTxnId = transactionId && typeof transactionId === 'string' ? transactionId.trim() : '';
+
+  // If transactionId wasn't manually typed, try extracting from confirmationMessage or generate valid ID
+  if (!finalTxnId && cleanMessage) {
+    const txnMatch = cleanMessage.match(/(?:TxId|Transaction ID|Txn ID|Ref|Reference|ID|Id)[:\s]*([A-Za-z0-9_-]+)/i);
+    if (txnMatch && txnMatch[1]) {
+      finalTxnId = txnMatch[1].slice(0, 64);
+    } else {
+      finalTxnId = `SMS-${Date.now().toString().slice(-6)}`;
+    }
+  } else if (!finalTxnId && screenshotUrl) {
+    finalTxnId = `IMG-${Date.now().toString().slice(-6)}`;
+  }
+
+  if (!finalTxnId && !screenshotUrl && !cleanMessage) {
+    return res.status(400).json({
+      error: 'Please provide either your Transaction ID, upload a payment screenshot, or paste the payment confirmation message.'
+    });
+  }
+
+  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase());
+  if (!order) {
+    return res.status(404).json({ error: `Order reference ${orderNumber} not found.` });
+  }
+
+  // Duplicate Transaction ID Detection: Check if transactionId exists on ANY other order
+  const duplicateOnOther = db.paymentConfirmations.filter(
+    c => finalTxnId && c.transactionId && c.transactionId.trim().toUpperCase() === finalTxnId.toUpperCase() &&
+         c.orderNumber.trim().toUpperCase() !== order.orderNumber.trim().toUpperCase()
+  );
+  const isDuplicateTxn = duplicateOnOther.length > 0;
+  const duplicateOrderNumbers = isDuplicateTxn ? duplicateOnOther.map(c => c.orderNumber) : undefined;
+  const flaggedSuspicious = isDuplicateTxn;
+  const suspiciousReason = isDuplicateTxn
+    ? `Duplicate Transaction ID: "${finalTxnId}" was already submitted for Order #${duplicateOrderNumbers?.join(', #')}`
+    : undefined;
+
+  // Check if confirmation already exists for this order to prevent duplicates upon resubmission
+  let confirmation = db.paymentConfirmations.find(c => c.orderNumber.toUpperCase() === order.orderNumber.toUpperCase());
+
+  if (confirmation) {
+    confirmation.customerName = customerName || confirmation.customerName || order.customerName;
+    confirmation.paymentPhone = paymentPhone.trim();
+    confirmation.paymentMethod = paymentMethod || confirmation.paymentMethod || order.paymentMethod;
+    confirmation.amountPaid = Number(amountPaid);
+    confirmation.transactionId = finalTxnId || confirmation.transactionId;
+    if (screenshotUrl) confirmation.screenshotUrl = screenshotUrl;
+    if (cleanMessage) confirmation.confirmationMessage = cleanMessage;
+    confirmation.submittedAt = new Date().toISOString();
+    confirmation.verificationStatus = 'Pending Verification';
+    confirmation.isDuplicateTxn = isDuplicateTxn;
+    confirmation.duplicateOrderNumbers = duplicateOrderNumbers;
+    confirmation.flaggedSuspicious = flaggedSuspicious;
+    confirmation.suspiciousReason = suspiciousReason;
+  } else {
+    confirmation = {
+      id: `conf-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      customerName: customerName || order.customerName,
+      paymentPhone: paymentPhone.trim(),
+      paymentMethod: paymentMethod || order.paymentMethod,
+      amountPaid: Number(amountPaid),
+      transactionId: finalTxnId || `TXN-${Date.now().toString().slice(-6)}`,
+      screenshotUrl: screenshotUrl || undefined,
+      confirmationMessage: cleanMessage || undefined,
+      submittedAt: new Date().toISOString(),
+      verificationStatus: 'Pending Verification',
+      isDuplicateTxn,
+      duplicateOrderNumbers,
+      flaggedSuspicious,
+      suspiciousReason
+    };
+    db.paymentConfirmations.unshift(confirmation);
+  }
+
+  order.paymentConfirmation = confirmation;
+  order.paymentStatus = 'Pending Verification';
+  order.statusHistory.push({
+    status: order.status,
+    paymentStatus: 'Pending Verification',
+    timestamp: new Date().toISOString(),
+    note: `Payment confirmation submitted. Txn ID: ${confirmation.transactionId}, Phone: ${paymentPhone}${cleanMessage ? ' (SMS pasted)' : ''}${screenshotUrl ? ' (Screenshot attached)' : ''}${isDuplicateTxn ? ' [WARNING: Duplicate Txn ID detected]' : ''}. Pending verification.`
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
+  saveToFirestoreAsync('orders', order.id, order);
+
+  res.json({
+    message: isDuplicateTxn
+      ? 'Payment submitted. Note: this transaction ID matches a previously submitted order and is flagged for manual audit.'
+      : 'Payment confirmation submitted successfully. Our team will verify and approve promptly.',
+    confirmation,
+    order
+  });
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: MESSAGES & CONTACT FORM
+// -------------------------------------------------------------
+
+app.post('/api/contact/messages', (req: Request, res: Response) => {
+  const { name, email, phone, subject, message, orderNumber } = req.body;
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: 'Name, email, and message are required.' });
+  }
+
+  const newMessage: AdminMessage = {
+    id: `msg-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    name: name.trim(),
+    email: email.trim(),
+    phone: phone?.trim(),
+    subject: subject?.trim() || 'General Inquiry',
+    message: message.trim(),
+    orderNumber: orderNumber?.trim(),
+    createdAt: new Date().toISOString(),
+    status: 'unread'
+  };
+
+  db.messages.unshift(newMessage);
+  saveDbToDisk();
+  saveToFirestoreAsync('messages', newMessage.id, newMessage);
+
+  res.status(201).json({
+    message: 'Message received successfully. Our team will respond shortly.',
+    id: newMessage.id
+  });
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: CUSTOMER PROBLEMS & COMPLAINTS
+// -------------------------------------------------------------
+
+app.post('/api/customer-reports', (req: Request, res: Response) => {
+  const { customerName, customerPhone, customerEmail, orderNumber, category, description, priority } = req.body;
+
+  if (!customerName || !customerPhone || !category || !description) {
+    return res.status(400).json({ error: 'Name, phone, issue category, and description are required.' });
+  }
+
+  const randomCaseNum = Math.floor(1000 + Math.random() * 9000);
+  const caseNumber = `CASE-${randomCaseNum}`;
+
+  const newReport: CustomerProblemReport = {
+    id: `prob-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    caseNumber,
+    customerName: customerName.trim(),
+    customerPhone: customerPhone.trim(),
+    customerEmail: customerEmail?.trim(),
+    orderNumber: orderNumber?.trim(),
+    category,
+    description: description.trim(),
+    priority: priority || 'medium',
+    status: 'New',
+    createdAt: new Date().toISOString()
+  };
+
+  db.customerProblems.unshift(newReport);
+  saveDbToDisk();
+  saveToFirestoreAsync('customerProblems', newReport.id, newReport);
+
+  res.status(201).json({
+    message: 'Problem report submitted successfully. Case number created.',
+    caseNumber,
+    report: newReport
+  });
+});
+
+app.get('/api/customer-reports/:caseNumber', (req: Request, res: Response) => {
+  const caseNumber = req.params.caseNumber.trim().toUpperCase();
+  const report = db.customerProblems.find(r => r.caseNumber.toUpperCase() === caseNumber);
+  if (!report) {
+    return res.status(404).json({ error: `Case #${caseNumber} not found.` });
+  }
+  // Return sanitized customer-facing view
+  res.json({
+    caseNumber: report.caseNumber,
+    customerName: report.customerName,
+    category: report.category,
+    status: report.status,
+    createdAt: report.createdAt,
+    resolution: report.resolution,
+    resolvedAt: report.resolvedAt
+  });
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: REVIEWS
+// -------------------------------------------------------------
+
+app.get('/api/products/:id/reviews', (req: Request, res: Response) => {
+  const reviews = db.reviews.filter(r => r.productId === req.params.id && r.status === 'approved');
+  res.json(reviews);
+});
+
+app.post('/api/products/:id/reviews', (req: Request, res: Response) => {
+  const { customerName, customerPhone, rating, comment, orderNumber } = req.body;
+  if (!customerName || !rating || !comment) {
+    return res.status(400).json({ error: 'Name, rating, and review comments are required.' });
+  }
+
+  // Check verified purchase
+  let verified = false;
+  if (orderNumber) {
+    const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase() && (o.status === 'Delivered' || o.paymentStatus === 'Paid'));
+    if (order && order.items.some(i => i.productId === req.params.id)) {
+      verified = true;
+    }
+  }
+
+  const review: ProductReview = {
+    id: `rev-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    productId: req.params.id,
+    customerName: customerName.trim(),
+    customerPhone: customerPhone?.trim(),
+    rating: Math.min(5, Math.max(1, Number(rating))),
+    comment: comment.trim(),
+    verifiedPurchase: verified,
+    status: 'approved',
+    createdAt: new Date().toISOString()
+  };
+
+  db.reviews.unshift(review);
+
+  // Update product rating and reviews count
+  const product = db.products.find(p => p.id === req.params.id);
+  if (product) {
+    const prodReviews = db.reviews.filter(r => r.productId === product.id && r.status === 'approved');
+    product.reviewsCount = prodReviews.length;
+    product.rating = Number((prodReviews.reduce((sum, r) => sum + r.rating, 0) / prodReviews.length).toFixed(1));
+    saveToFirestoreAsync('products', product.id, product);
+  }
+
+  saveDbToDisk();
+  saveToFirestoreAsync('reviews', review.id, review);
+  res.status(201).json(review);
+});
+
+// -------------------------------------------------------------
+// PUBLIC API: SUPPLIER ONBOARDING APPLICATIONS (PHASE 9)
+// -------------------------------------------------------------
+
+app.post('/api/supplier-applications', (req: Request, res: Response) => {
+  const { businessName, ownerName, phone, email, tinNumber, location, category, description } = req.body;
+  if (!businessName || !ownerName || !phone) {
+    return res.status(400).json({ error: 'Business name, owner name, and phone number are required.' });
+  }
+
+  const appRecord: SupplierApplication = {
+    id: `supp-app-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    businessName: businessName.trim(),
+    ownerName: ownerName.trim(),
+    phone: phone.trim(),
+    email: email?.trim(),
+    tinNumber: tinNumber?.trim(),
+    location: location?.trim() || 'Kigali, Rwanda',
+    category: category?.trim() || 'General Merchandise',
+    description: description?.trim(),
+    status: 'Pending',
+    createdAt: new Date().toISOString()
+  };
+
+  db.supplierApplications = db.supplierApplications || [];
+  db.supplierApplications.unshift(appRecord);
+  saveDbToDisk();
+  saveToFirestoreAsync('supplierApplications', appRecord.id, appRecord);
+
+  res.status(201).json({
+    message: 'Supplier application received successfully. ContactReach Media team will review your business details and inventory catalog.',
+    application: appRecord
+  });
+});
+
+// -------------------------------------------------------------
+// SEO & ROBOTS (PHASE 14)
+// -------------------------------------------------------------
+
+app.get('/googlea687c6ecf7209a4b.html', (req: Request, res: Response) => {
+  res.type('text/html');
+  res.send('google-site-verification: googlea687c6ecf7209a4b.html');
+});
+
+app.get('/robots.txt', (req: Request, res: Response) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://contactreachmarket.rw/sitemap.xml
+`);
+});
+
+app.get('/sitemap.xml', (req: Request, res: Response) => {
+  res.type('application/xml');
+  const baseUrl = 'https://contactreachmarket.rw';
+  const urls = [
+    { loc: `${baseUrl}/`, priority: '1.0', changefreq: 'daily' },
+    { loc: `${baseUrl}/shop`, priority: '0.9', changefreq: 'daily' },
+    { loc: `${baseUrl}/shops`, priority: '0.8', changefreq: 'weekly' },
+    { loc: `${baseUrl}/how-to-buy`, priority: '0.7', changefreq: 'monthly' },
+    { loc: `${baseUrl}/contact`, priority: '0.6', changefreq: 'monthly' },
+    { loc: `${baseUrl}/orders`, priority: '0.5', changefreq: 'always' }
+  ];
+
+  db.products.filter(p => p.status !== 'Hidden').forEach(p => {
+    urls.push({ loc: `${baseUrl}/product/${p.id}`, priority: '0.8', changefreq: 'weekly' });
+  });
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.map(u => `  <url>
+    <loc>${u.loc}</loc>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+  </url>`).join('\n')}
+</urlset>`;
+  res.send(xml);
+});
+
+// -------------------------------------------------------------
+// BUYER ACCOUNTS & AUTHENTICATION (GOOGLE SIGN-IN ONLY)
+// -------------------------------------------------------------
+
+function sanitizeBuyer(c: CustomerUser): Omit<CustomerUser, 'passwordHash'> {
+  const { passwordHash, ...safe } = c;
+  return safe;
+}
+
+function requireBuyerAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Please sign in with your Google account.' });
+  }
+  const token = authHeader.split(' ')[1];
+  const session = db.customerTokens.get(token);
+  if (!session || Date.now() > session.expiresAt) {
+    if (session) db.customerTokens.delete(token);
+    return res.status(401).json({ error: 'Session expired. Please sign in with Google again.' });
+  }
+  const buyer = db.customers.find(c => c.id === session.customerId);
+  if (!buyer) {
+    return res.status(404).json({ error: 'Buyer account not found.' });
+  }
+  if (buyer.status === 'Suspended') {
+    return res.status(403).json({ error: 'This account has been suspended. Please contact customer support.' });
+  }
+  (req as any).buyerUser = buyer;
+  next();
+}
+
+// 1. Exclusive Buyer Google Sign-In Endpoint
+app.post('/api/buyers/google-login', async (req: Request, res: Response) => {
+  const { email, displayName, uid, photoURL, phoneNumber, idToken } = req.body;
+  if (!email && !uid && !idToken) {
+    return res.status(400).json({ error: 'Google account details (email, UID, or ID token) are required.' });
+  }
+
+  let normalizedEmail = (email || '').trim().toLowerCase();
+  let verifiedUid = uid;
+  let verifiedName = displayName;
+  let verifiedPhoto = photoURL;
+
+  // Cryptographic Google ID Token Verification
+  if (idToken && typeof idToken === 'string') {
+    try {
+      const fbConfigPath = path.resolve('firebase-applet-config.json');
+      if (fs.existsSync(fbConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
+        const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${config.apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          if (verifyData.users && verifyData.users.length > 0) {
+            const gUser = verifyData.users[0];
+            if (gUser.email) normalizedEmail = gUser.email.toLowerCase().trim();
+            if (gUser.localId) verifiedUid = gUser.localId;
+            if (gUser.displayName) verifiedName = gUser.displayName;
+            if (gUser.photoUrl) verifiedPhoto = gUser.photoUrl;
+          }
+        }
+      }
+    } catch (tokenErr) {
+      console.warn('[Buyer Auth] Google ID token verification lookup notice:', tokenErr);
+    }
+  }
+
+  // Match buyer by email, googleUid, or id
+  let buyer = db.customers.find(c =>
+    (normalizedEmail && c.email && c.email.toLowerCase() === normalizedEmail) ||
+    (verifiedUid && c.googleUid && c.googleUid === verifiedUid) ||
+    (verifiedUid && c.id === `cust-g-${verifiedUid}`)
+  );
+
+  const buyerName = verifiedName?.trim() || (normalizedEmail ? normalizedEmail.split('@')[0] : 'Valued Buyer');
+
+  if (buyer) {
+    if (buyer.status === 'Suspended') {
+      return res.status(403).json({ error: 'Your account is currently suspended. Please contact customer support.' });
+    }
+    buyer.lastLogin = new Date().toISOString();
+    buyer.accountType = 'buyer';
+    buyer.authProvider = 'google';
+    buyer.isRegisteredBuyer = true;
+    if (displayName && (!buyer.name || buyer.name.startsWith('Buyer ('))) {
+      buyer.name = displayName.trim();
+    }
+    if (normalizedEmail && !buyer.email) {
+      buyer.email = normalizedEmail;
+    }
+    if (photoURL) {
+      buyer.photoURL = photoURL;
+    }
+    if (uid) {
+      buyer.googleUid = uid;
+    }
+    if (phoneNumber && !buyer.phone) {
+      buyer.phone = phoneNumber.trim();
+    }
+  } else {
+    buyer = {
+      id: `cust-g-${uid || Date.now()}`,
+      name: buyerName,
+      phone: phoneNumber?.trim() || '',
+      email: normalizedEmail || undefined,
+      deliveryAddress: undefined,
+      createdAt: new Date().toISOString(),
+      totalOrders: 0,
+      totalSpent: 0,
+      status: 'Active',
+      accountType: 'buyer',
+      lastLogin: new Date().toISOString(),
+      photoURL: photoURL || undefined,
+      googleUid: uid,
+      authProvider: 'google',
+      isRegisteredBuyer: true
+    };
+    db.customers.push(buyer);
+  }
+
+  const token = `buyer_g_${crypto.randomBytes(24).toString('hex')}`;
+  db.customerTokens.set(token, {
+    customerId: buyer.id,
+    expiresAt: Date.now() + 30 * 24 * 3600 * 1000 // 30 days
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', buyer.id, sanitizeBuyer(buyer));
+
+  res.json({
+    message: 'Welcome! Signed in with Google successfully.',
+    token,
+    user: sanitizeBuyer(buyer)
+  });
+});
+
+// Legacy password endpoints disabled in favor of exclusive Google authentication
+app.post('/api/buyers/register', (req: Request, res: Response) => {
+  return res.status(400).json({
+    error: 'ContactReach Market now exclusively uses Google Sign-In for all buyer accounts. Please sign in with Google.',
+    useGoogleSignIn: true
+  });
+});
+
+app.post('/api/buyers/login', (req: Request, res: Response) => {
+  return res.status(400).json({
+    error: 'ContactReach Market now exclusively uses Google Sign-In for all buyer accounts. Please sign in with Google.',
+    useGoogleSignIn: true
+  });
+});
+
+// 2. Current Buyer Profile
+app.get('/api/buyers/me', requireBuyerAuth, (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  res.json({ user: sanitizeBuyer(buyer) });
+});
+
+// 3. Update Buyer Profile (Name, Phone, Delivery Address)
+app.put('/api/buyers/profile', requireBuyerAuth, (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  const { name, email, phone, deliveryAddress } = req.body;
+
+  if (name && typeof name === 'string' && name.trim()) {
+    buyer.name = name.trim();
+  }
+  if (email !== undefined && typeof email === 'string') {
+    buyer.email = email.trim();
+  }
+  if (phone !== undefined && typeof phone === 'string') {
+    buyer.phone = phone.trim();
+  }
+  if (deliveryAddress !== undefined) {
+    buyer.deliveryAddress = typeof deliveryAddress === 'string' ? deliveryAddress.trim() : undefined;
+  }
+
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', buyer.id, sanitizeBuyer(buyer));
+
+  res.json({
+    message: 'Profile updated successfully',
+    user: sanitizeBuyer(buyer)
+  });
+});
+
+// 5. Buyer Order History
+app.get('/api/buyers/orders', requireBuyerAuth, (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  const cleanPhone = buyer.phone.replace(/\D/g, '');
+
+  const buyerOrders = db.orders.filter(o =>
+    (o.userId && o.userId === buyer.id) ||
+    (o.customerPhone && o.customerPhone.replace(/\D/g, '') === cleanPhone)
+  );
+
+  res.json(buyerOrders);
+});
+
+// 6. Buyer Logout
+app.post('/api/buyers/logout', (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    db.customerTokens.delete(token);
+  }
+  res.json({ message: 'Signed out successfully' });
+});
+
+// -------------------------------------------------------------
+// ADMIN AUTHENTICATION & SESSIONS
+// -------------------------------------------------------------
+
+app.post('/api/auth/login', (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Rate limiting check
+  const attemptInfo = loginAttempts.get(normalizedEmail);
+  if (attemptInfo && attemptInfo.lockoutUntil && Date.now() < attemptInfo.lockoutUntil) {
+    const remainingMins = Math.ceil((attemptInfo.lockoutUntil - Date.now()) / 60000);
+    return res.status(429).json({
+      error: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${remainingMins} minutes.`
+    });
+  }
+
+  // Strict credentials verification: Owner account with designated password
+  if (!ADMIN_PASSWORD) {
+    return res.status(403).json({
+      error: 'Password-based administrative login is disabled in production. Please sign in using verified Google Firebase Authentication.'
+    });
+  }
+
+  const isOwnerEmail = normalizedEmail === 'manirihothierry36@gmail.com' ||
+                       normalizedEmail === 'manirihothierry6@gmail.com' ||
+                       normalizedEmail === 'contactreachmedialimited@gmail.com' ||
+                       normalizedEmail === ADMIN_EMAIL.toLowerCase();
+
+  const user = db.adminUsers.find(u => u.email.toLowerCase() === normalizedEmail && u.active);
+  const passwordMatches = (isOwnerEmail || user) && password === ADMIN_PASSWORD;
+
+  if (passwordMatches) {
+    // Reset rate-limiting on success
+    loginAttempts.delete(normalizedEmail);
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const role: AdminRole = user ? user.role : 'owner';
+    const adminUser: AdminUser = user || {
+      id: 'adm-owner-thierry',
+      name: 'Thierry Maniriho (Platform Owner)',
+      email: normalizedEmail,
+      role: 'owner',
+      active: true,
+      lastLogin: new Date().toISOString()
+    };
+
+    adminUser.lastLogin = new Date().toISOString();
+
+    // 24-hour secure session
+    db.adminTokens.set(token, {
+      user: adminUser,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000
+    });
+
+    logAudit({ name: adminUser.name, role: adminUser.role }, 'ADMIN_LOGIN', `Admin signed in successfully from ${req.ip || 'remote'}`);
+
+    return res.json({
+      token,
+      admin: adminUser
+    });
+  }
+
+  // Record failed attempt
+  const currentAttempts = (attemptInfo?.attempts || 0) + 1;
+  if (currentAttempts >= 5) {
+    loginAttempts.set(normalizedEmail, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
+    return res.status(429).json({ error: 'Too many failed login attempts. Locked for 15 minutes.' });
+  } else {
+    loginAttempts.set(normalizedEmail, { attempts: currentAttempts });
+  }
+
+  return res.status(401).json({ error: 'Invalid administrator credentials.' });
+});
+
+// Firebase Authentication Login Endpoint (Strict ID Token & Email Verification)
+app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
+  const { email, displayName, uid, idToken } = req.body;
+  if (!email && !idToken) {
+    return res.status(400).json({ error: 'Email or ID token is required from Firebase authentication.' });
+  }
+
+  let verifiedEmail = (email || '').trim().toLowerCase();
+  let verifiedUid = uid;
+  let verifiedDisplayName = displayName;
+
+  // Cryptographic Google ID Token Verification via Identity Toolkit
+  if (idToken && typeof idToken === 'string') {
+    try {
+      const fbConfigPath = path.resolve('firebase-applet-config.json');
+      if (fs.existsSync(fbConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
+        const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${config.apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          if (verifyData.users && verifyData.users.length > 0) {
+            const googleUser = verifyData.users[0];
+            if (googleUser.email) verifiedEmail = googleUser.email.toLowerCase().trim();
+            if (googleUser.localId) verifiedUid = googleUser.localId;
+            if (googleUser.displayName) verifiedDisplayName = googleUser.displayName;
+          }
+        } else {
+          return res.status(401).json({ error: 'Invalid or expired Firebase ID token.' });
+        }
+      }
+    } catch (tokenErr) {
+      console.warn('[Firebase Auth] Verification lookup notice:', tokenErr);
+    }
+  }
+
+  const isOwner = verifiedEmail === 'manirihothierry36@gmail.com' ||
+                  verifiedEmail === 'manirihothierry6@gmail.com' ||
+                  verifiedEmail === 'contactreachmedialimited@gmail.com' ||
+                  verifiedEmail === 'inzozilink@gmail.com' ||
+                  verifiedEmail === 'manirihothierry11@gmail.com' ||
+                  verifiedEmail === ADMIN_EMAIL.toLowerCase();
+
+  const user = db.adminUsers.find(u => u.email.toLowerCase() === verifiedEmail && u.active);
+  const isDomainAdmin = verifiedEmail.endsWith('@contactreachmedia.rw');
+
+  if (isOwner || user || isDomainAdmin) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const role: AdminRole = isOwner ? 'owner' : (user ? user.role : 'administrator');
+    const adminUser: AdminUser = user || {
+      id: verifiedUid ? `adm-fb-${verifiedUid}` : 'adm-owner-thierry',
+      name: verifiedDisplayName || (isOwner ? 'Thierry Maniriho (Platform Owner)' : 'Authorized Administrator'),
+      email: verifiedEmail,
+      role,
+      active: true,
+      lastLogin: new Date().toISOString()
+    };
+
+    adminUser.lastLogin = new Date().toISOString();
+
+    db.adminTokens.set(token, {
+      user: adminUser,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000
+    });
+
+    logAudit({ name: adminUser.name, role: adminUser.role }, 'FIREBASE_GOOGLE_LOGIN', `Admin signed in with Google Firebase Auth (${verifiedEmail})`);
+
+    return res.json({
+      token,
+      admin: adminUser
+    });
+  }
+
+  return res.status(403).json({
+    error: `The Google account (${verifiedEmail}) is not authorized as an administrator for ContactReach Market.`
+  });
+});
+
+app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
+  const user = (req as any).adminUser;
+  res.json(user);
+});
+
+app.post('/api/auth/logout', requireAdminAuth, (req: Request, res: Response) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    db.adminTokens.delete(token);
+  }
+  res.json({ message: 'Logged out successfully.' });
+});
+
+app.post('/api/auth/reset-password-request', (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  // Audit the reset request
+  logAudit({ name: 'System', role: 'security' }, 'PASSWORD_RESET_REQUESTED', `Password reset instructions sent for ${email}`);
+  res.json({ message: 'If an authorized administrator account exists for this email, password reset instructions have been delivered.' });
+});
+
+// -------------------------------------------------------------
+// ADMIN STATS & ANALYTICS
+// -------------------------------------------------------------
+
+app.get('/api/admin/stats', requireAdminAuth, (req: Request, res: Response) => {
+  const confirmedOrDelivered = db.orders.filter(o =>
+    o.paymentStatus === 'Paid' ||
+    o.status === 'Confirmed' ||
+    o.status === 'Preparing' ||
+    o.status === 'Ready for Delivery' ||
+    o.status === 'Out for Delivery' ||
+    o.status === 'Delivered'
+  );
+
+  const totalSalesFrw = confirmedOrDelivered.reduce((sum, o) => sum + o.totalAmount, 0);
+  const totalCommissionsFrw = confirmedOrDelivered.reduce((sum, o) => sum + (o.commissionEarned || Math.round(o.subtotal * 0.1)), 0);
+  const totalSupplierPayoutsOwedFrw = confirmedOrDelivered
+    .filter(o => o.supplierPayoutStatus !== 'Paid')
+    .reduce((sum, o) => sum + (o.supplierPayoutAmount || Math.round(o.subtotal * 0.9)), 0);
+  const totalSupplierPayoutsPaidFrw = confirmedOrDelivered
+    .filter(o => o.supplierPayoutStatus === 'Paid')
+    .reduce((sum, o) => sum + (o.supplierPayoutAmount || Math.round(o.subtotal * 0.9)), 0);
+
+  const pendingPayments = db.orders.filter(o => o.paymentStatus === 'Pending Verification' || (o.paymentConfirmation && o.paymentConfirmation.verificationStatus === 'Pending Review')).length;
+  const awaitingPaymentOrders = db.orders.filter(o => o.paymentStatus === 'Pending Payment').length;
+  const confirmedOrders = db.orders.filter(o => o.status === 'Confirmed' || o.status === 'Payment Confirmed').length;
+  const preparingOrders = db.orders.filter(o => o.status === 'Preparing' || o.status === 'Processing').length;
+  const readyOrders = db.orders.filter(o => o.status === 'Ready for Delivery' || o.status === 'Out for Delivery').length;
+  const deliveredOrders = db.orders.filter(o => o.status === 'Delivered' || o.status === 'Completed').length;
+  const lowStockCount = db.products.filter(p => p.stock <= 5 || p.status === 'Out of Stock').length;
+  const unreadMessagesCount = db.messages.filter(m => m.status === 'unread').length;
+  const unresolvedProblemsCount = db.customerProblems.filter(p => p.status !== 'Resolved' && p.status !== 'Closed').length;
+
+  res.json({
+    totalSalesFrw,
+    totalCommissionsFrw,
+    totalSupplierPayoutsOwedFrw,
+    totalSupplierPayoutsPaidFrw,
+    totalOrders: db.orders.length,
+    pendingVerifications: pendingPayments,
+    awaitingPaymentOrders,
+    confirmedOrders,
+    preparingOrders,
+    readyOrders,
+    deliveredOrders,
+    totalProducts: db.products.length,
+    activeProducts: db.products.filter(p => p.status !== 'Hidden').length,
+    lowStockCount,
+    totalCategories: db.categories.length,
+    totalShops: db.shops.length,
+    totalCustomers: db.customers.length,
+    unreadMessagesCount,
+    unresolvedProblemsCount
+  });
+});
+
+// Admin Supplier Payouts Summary
+app.get('/api/admin/suppliers/payouts', requireAdminAuth, (req: Request, res: Response) => {
+  const summary: Record<string, {
+    shopName: string;
+    totalOrders: number;
+    totalSales: number;
+    totalCommission: number;
+    pendingPayout: number;
+    paidPayout: number;
+  }> = {};
+
+  db.orders.forEach(order => {
+    const shop = order.shopName || 'General Supplier';
+    if (!summary[shop]) {
+      summary[shop] = {
+        shopName: shop,
+        totalOrders: 0,
+        totalSales: 0,
+        totalCommission: 0,
+        pendingPayout: 0,
+        paidPayout: 0
+      };
+    }
+    if (order.paymentStatus === 'Paid' || order.status === 'Delivered' || order.status === 'Confirmed') {
+      summary[shop].totalOrders += 1;
+      summary[shop].totalSales += order.subtotal;
+      const comm = order.commissionEarned || Math.round(order.subtotal * 0.1);
+      const payout = order.supplierPayoutAmount || (order.subtotal - comm);
+      summary[shop].totalCommission += comm;
+      if (order.supplierPayoutStatus === 'Paid') {
+        summary[shop].paidPayout += payout;
+      } else {
+        summary[shop].pendingPayout += payout;
+      }
+    }
+  });
+
+  res.json(Object.values(summary));
+});
+
+// Admin Update Supplier Status on Order
+app.patch('/api/admin/orders/:id/supplier-status', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { supplierFulfillmentStatus, supplierPayoutStatus, supplierPayoutRef } = req.body;
+  const order = db.orders.find(o => o.id === req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  if (supplierFulfillmentStatus) order.supplierFulfillmentStatus = supplierFulfillmentStatus;
+  if (supplierPayoutStatus) order.supplierPayoutStatus = supplierPayoutStatus;
+  if (supplierPayoutRef) order.supplierPayoutRef = supplierPayoutRef;
+
+  logAudit(admin, 'SUPPLIER_STATUS_UPDATED', `Order #${order.orderNumber} supplier fulfillment: ${order.supplierFulfillmentStatus}, payout: ${order.supplierPayoutStatus}`, 'order', order.id);
+  saveDbToDisk();
+  res.json(order);
+});
+
+// -------------------------------------------------------------
+// ADMIN PRODUCT CRUD
+// -------------------------------------------------------------
+
+app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const {
+    name,
+    sku,
+    description,
+    price,
+    discountPercent,
+    discountPrice,
+    category,
+    subcategory,
+    stock,
+    imageUrl,
+    images,
+    isFeatured,
+    isNewArrival,
+    isBestSeller,
+    brand,
+    variations,
+    unit,
+    shopName,
+    shopId,
+    receiverName,
+    paymentMethods,
+    merchantCode,
+    receiverPhone,
+    location,
+    deliveryInfo,
+    status
+  } = req.body;
+
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Product name is required.' });
+  if (!category || !category.trim()) return res.status(400).json({ error: 'Product category is required.' });
+  if (price === undefined || isNaN(Number(price)) || Number(price) <= 0) {
+    return res.status(400).json({ error: 'A valid price in RWF is required.' });
+  }
+  if (!description || !description.trim()) return res.status(400).json({ error: 'Product description is required.' });
+
+  const finalPrice = Math.max(0, Number(price));
+  let finalDiscountPercent: number | undefined = undefined;
+  let finalDiscountPrice: number | undefined = undefined;
+
+  if (discountPercent !== undefined && discountPercent !== '' && !isNaN(Number(discountPercent)) && Number(discountPercent) > 0) {
+    const pct = Math.min(99, Math.max(1, Math.round(Number(discountPercent))));
+    finalDiscountPercent = pct;
+    finalDiscountPrice = Math.max(0, Math.round(finalPrice * (1 - pct / 100)));
+  } else if (discountPrice !== undefined && discountPrice !== '' && !isNaN(Number(discountPrice)) && Number(discountPrice) < finalPrice) {
+    finalDiscountPrice = Math.max(0, Number(discountPrice));
+    finalDiscountPercent = Math.round(((finalPrice - finalDiscountPrice) / finalPrice) * 100);
+  }
+
+  const stockNum = stock !== undefined ? Math.max(0, parseInt(stock, 10)) : 0;
+  const prodStatus: ProductStatus = status === 'Hidden' ? 'Hidden' : stockNum <= 0 ? 'Out of Stock' : (status || 'Available');
+
+  const newProduct: Product = {
+    id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+    name: name.trim(),
+    sku: sku ? sku.trim() : `CRM-${category.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+    description: description.trim(),
+    price: finalPrice,
+    discountPercent: finalDiscountPercent,
+    discountPrice: finalDiscountPrice,
+    category: category.trim(),
+    subcategory: subcategory?.trim(),
+    stock: stockNum,
+    imageUrl: imageUrl?.trim() || '/src/assets/images/product_street_sneakers_1791966366958.jpg',
+    images: Array.isArray(images) && images.length > 0 ? images : [imageUrl?.trim() || '/src/assets/images/product_street_sneakers_1791966366958.jpg'],
+    shopName: shopName ? shopName.trim() : (db.settings.companyName || 'ContactReach Market'),
+    shopId: shopId || undefined,
+    receiverName: receiverName ? receiverName.trim() : (db.settings.receiverName || 'Ruth'),
+    paymentMethods: Array.isArray(paymentMethods) && paymentMethods.length > 0
+      ? paymentMethods
+      : ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+    merchantCode: merchantCode ? merchantCode.trim() : (db.settings.merchantCode || '078002'),
+    receiverPhone: receiverPhone ? receiverPhone.trim() : (db.settings.paymentNumber || '078002260'),
+    location: location ? location.trim() : 'Kigali, Rwanda',
+    deliveryInfo: deliveryInfo ? deliveryInfo.trim() : 'Same-day Kigali express (2-4 hrs)',
+    status: prodStatus,
+    isFeatured: Boolean(isFeatured),
+    isNewArrival: Boolean(isNewArrival),
+    isBestSeller: Boolean(isBestSeller),
+    brand: brand?.trim(),
+    variations: Array.isArray(variations) ? variations : undefined,
+    unit: unit ? unit.trim() : 'Piece',
+    rating: 5.0,
+    reviewsCount: 0,
+    createdAt: new Date().toISOString(),
+    history: [{ timestamp: new Date().toISOString(), action: 'Created', user: admin.name }]
+  };
+
+  db.products.unshift(newProduct);
+
+  // Log stock intake
+  if (stockNum > 0) {
+    db.inventoryLogs.unshift({
+      id: `inv-${Date.now()}`,
+      productId: newProduct.id,
+      productName: newProduct.name,
+      previousStock: 0,
+      newStock: stockNum,
+      changeAmount: stockNum,
+      reason: 'Initial stock intake upon product creation',
+      adminName: admin.name,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  logAudit(admin, 'PRODUCT_CREATED', `Created product "${newProduct.name}" (SKU: ${newProduct.sku}) with stock ${stockNum}`, 'product', newProduct.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('products', newProduct.id, newProduct);
+  res.status(201).json(newProduct);
+});
+
+app.put('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const productIndex = db.products.findIndex(p => p.id === req.params.id);
+  if (productIndex === -1) return res.status(404).json({ error: 'Product not found' });
+
+  const existing = db.products[productIndex];
+  const oldStock = existing.stock;
+  const newStock = req.body.stock !== undefined ? Math.max(0, parseInt(req.body.stock, 10)) : existing.stock;
+
+  let prodStatus: ProductStatus = req.body.status !== undefined ? req.body.status : existing.status;
+  if (newStock === 0 && prodStatus === 'Available') prodStatus = 'Out of Stock';
+
+  const newPrice = req.body.price !== undefined ? Math.max(0, Number(req.body.price)) : existing.price;
+  let finalDiscountPercent: number | undefined = existing.discountPercent;
+  let finalDiscountPrice: number | undefined = existing.discountPrice;
+
+  if (req.body.discountPercent !== undefined) {
+    if (req.body.discountPercent === '' || req.body.discountPercent === null || Number(req.body.discountPercent) <= 0) {
+      finalDiscountPercent = undefined;
+      finalDiscountPrice = undefined;
+    } else {
+      const pct = Math.min(99, Math.max(1, Math.round(Number(req.body.discountPercent))));
+      finalDiscountPercent = pct;
+      finalDiscountPrice = Math.max(0, Math.round(newPrice * (1 - pct / 100)));
+    }
+  } else if (req.body.discountPrice !== undefined) {
+    if (req.body.discountPrice === '' || req.body.discountPrice === null || Number(req.body.discountPrice) <= 0) {
+      finalDiscountPercent = undefined;
+      finalDiscountPrice = undefined;
+    } else {
+      const dp = Math.max(0, Number(req.body.discountPrice));
+      finalDiscountPrice = dp;
+      finalDiscountPercent = newPrice > 0 ? Math.round(((newPrice - dp) / newPrice) * 100) : undefined;
+    }
+  }
+
+  const updated: Product = {
+    ...existing,
+    ...req.body,
+    price: newPrice,
+    discountPercent: finalDiscountPercent,
+    discountPrice: finalDiscountPrice,
+    stock: newStock,
+    status: prodStatus,
+    updatedAt: new Date().toISOString(),
+    history: [
+      ...(existing.history || []),
+      { timestamp: new Date().toISOString(), action: 'Updated details', user: admin.name }
+    ]
+  };
+
+  db.products[productIndex] = updated;
+
+  // Log stock adjustment if changed
+  if (oldStock !== newStock) {
+    db.inventoryLogs.unshift({
+      id: `inv-${Date.now()}`,
+      productId: updated.id,
+      productName: updated.name,
+      previousStock: oldStock,
+      newStock: newStock,
+      changeAmount: newStock - oldStock,
+      reason: req.body.stockAdjustmentReason || 'Stock manual update via admin editor',
+      adminName: admin.name,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  logAudit(admin, 'PRODUCT_UPDATED', `Updated product "${updated.name}"`, 'product', updated.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('products', updated.id, updated);
+  res.json(updated);
+});
+
+// Duplicate product
+app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const source = db.products.find(p => p.id === req.params.id);
+  if (!source) return res.status(404).json({ error: 'Source product not found' });
+
+  const duplicated: Product = {
+    ...source,
+    id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+    name: `${source.name} (Copy)`,
+    sku: `CRM-${source.category.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+    status: 'Available',
+    createdAt: new Date().toISOString(),
+    history: [{ timestamp: new Date().toISOString(), action: `Duplicated from ${source.id}`, user: admin.name }]
+  };
+
+  db.products.unshift(duplicated);
+  logAudit(admin, 'PRODUCT_DUPLICATED', `Duplicated product "${source.name}" -> "${duplicated.name}"`, 'product', duplicated.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('products', duplicated.id, duplicated);
+  res.status(201).json(duplicated);
+});
+
+app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const index = db.products.findIndex(p => p.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: 'Product not found' });
+
+  const removed = db.products.splice(index, 1)[0];
+  logAudit(admin, 'PRODUCT_DELETED', `Deleted product "${removed.name}"`, 'product', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('products', removed.id);
+  res.json({ message: 'Product deleted successfully', removed });
+});
+
+// -------------------------------------------------------------
+// ADMIN CATEGORIES CRUD
+// -------------------------------------------------------------
+
+app.post('/api/admin/categories', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { nameEn, nameRw, icon, description, subcategories, imageUrl } = req.body;
+  if (!nameEn || !nameRw) return res.status(400).json({ error: 'English and Kinyarwanda category names are required.' });
+
+  const id = nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  if (db.categories.some(c => c.id === id)) {
+    return res.status(400).json({ error: 'A category with this identifier already exists.' });
+  }
+
+  const newCat: Category = {
+    id,
+    nameEn: nameEn.trim(),
+    nameRw: nameRw.trim(),
+    icon: icon || 'Tag',
+    description: description?.trim(),
+    imageUrl: imageUrl ? imageUrl.trim() : undefined,
+    subcategories: Array.isArray(subcategories) ? subcategories : [],
+    isActive: true,
+    itemCount: 0
+  };
+
+  db.categories.push(newCat);
+  logAudit(admin, 'CATEGORY_CREATED', `Created category "${newCat.nameEn}" (${newCat.id})`, 'category', newCat.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('categories', newCat.id, newCat);
+  res.status(201).json(newCat);
+});
+
+app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const cat = db.categories.find(c => c.id === req.params.id);
+  if (!cat) return res.status(404).json({ error: 'Category not found' });
+
+  Object.assign(cat, req.body);
+  if (req.body.imageUrl !== undefined) {
+    cat.imageUrl = req.body.imageUrl ? req.body.imageUrl.trim() : undefined;
+  }
+  logAudit(admin, 'CATEGORY_UPDATED', `Updated category "${cat.nameEn}" (${cat.id})`, 'category', cat.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('categories', cat.id, cat);
+  res.json(cat);
+});
+
+app.delete('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const catId = req.params.id;
+
+  // Prevent accidental deletion if products are linked
+  const linkedProducts = db.products.filter(p => p.category === catId);
+  if (linkedProducts.length > 0) {
+    return res.status(400).json({
+      error: `Cannot delete category "${catId}" because ${linkedProducts.length} product(s) are currently assigned to it. Please reassign the products first.`
+    });
+  }
+
+  const index = db.categories.findIndex(c => c.id === catId);
+  if (index === -1) return res.status(404).json({ error: 'Category not found' });
+
+  const removed = db.categories.splice(index, 1)[0];
+  logAudit(admin, 'CATEGORY_DELETED', `Deleted category "${removed.nameEn}"`, 'category', catId);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('categories', catId);
+  res.json({ message: 'Category removed successfully', removed });
+});
+
+// -------------------------------------------------------------
+// ADMIN SHOPS CRUD
+// -------------------------------------------------------------
+
+app.post('/api/admin/shops', requireAdminAuth, requireRole(['owner', 'administrator', 'shop_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { name, category, description, location, address, phone, email, logo, bannerColor, deliveryInfo } = req.body;
+
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Shop name is required.' });
+
+  const newShop: VendorShop = {
+    id: `shop-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString().slice(-4)}`,
+    name: name.trim(),
+    category: category?.trim() || 'General Merchandise',
+    description: description?.trim() || '',
+    location: location?.trim() || 'Kigali, Rwanda',
+    address: address?.trim(),
+    phone: phone?.trim(),
+    email: email?.trim(),
+    logo: logo || 'ShoppingBag',
+    bannerColor: bannerColor || 'from-orange-500 to-amber-600',
+    isVerified: true,
+    followersCount: 10,
+    deliveryInfo: deliveryInfo?.trim() || 'Kigali express delivery available',
+    isActive: true,
+    createdAt: new Date().toISOString()
+  };
+
+  db.shops.push(newShop);
+  logAudit(admin, 'SHOP_CREATED', `Saved new shop "${newShop.name}" (${newShop.id}) permanently`, 'shop', newShop.id);
+  saveDbToDisk();
+  res.status(201).json(newShop);
+});
+
+app.put('/api/admin/shops/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'shop_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const shop = db.shops.find(s => s.id === req.params.id);
+  if (!shop) return res.status(404).json({ error: 'Shop not found' });
+
+  const oldName = shop.name;
+  Object.assign(shop, req.body);
+
+  // Preserve relationship: update product shopName if changed
+  if (req.body.name && req.body.name !== oldName) {
+    db.products.forEach(p => {
+      if (p.shopId === shop.id || p.shopName === oldName) {
+        p.shopName = req.body.name;
+      }
+    });
+  }
+
+  logAudit(admin, 'SHOP_UPDATED', `Updated shop "${shop.name}"`, 'shop', shop.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('shops', shop.id, shop);
+  res.json(shop);
+});
+
+app.delete('/api/admin/shops/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const shopId = req.params.id;
+
+  const linked = db.products.filter(p => p.shopId === shopId);
+  if (linked.length > 0) {
+    return res.status(400).json({
+      error: `Cannot delete shop because ${linked.length} products belong to it. You can deactivate the shop instead.`
+    });
+  }
+
+  const idx = db.shops.findIndex(s => s.id === shopId);
+  if (idx === -1) return res.status(404).json({ error: 'Shop not found' });
+
+  const removed = db.shops.splice(idx, 1)[0];
+  logAudit(admin, 'SHOP_DELETED', `Deleted shop "${removed.name}"`, 'shop', shopId);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('shops', shopId);
+  res.json({ message: 'Shop removed', removed });
+});
+
+// -------------------------------------------------------------
+// ADMIN ORDERS & DELIVERIES
+// -------------------------------------------------------------
+
+app.get('/api/admin/orders', requireAdminAuth, (req: Request, res: Response) => {
+  const { status, paymentStatus, search, shop } = req.query;
+  let results = [...db.orders];
+
+  if (status && status !== 'all') {
+    results = results.filter(o => o.status === status);
+  }
+
+  if (paymentStatus && paymentStatus !== 'all') {
+    results = results.filter(o => o.paymentStatus === paymentStatus);
+  }
+
+  if (shop && shop !== 'all') {
+    results = results.filter(o => o.shopName?.toLowerCase() === (shop as string).toLowerCase());
+  }
+
+  if (search && typeof search === 'string') {
+    const q = search.toLowerCase();
+    results = results.filter(o =>
+      o.orderNumber.toLowerCase().includes(q) ||
+      o.customerName.toLowerCase().includes(q) ||
+      o.customerPhone.toLowerCase().includes(q) ||
+      o.deliveryAddress.toLowerCase().includes(q) ||
+      (o.deliveryLocation && o.deliveryLocation.toLowerCase().includes(q))
+    );
+  }
+
+  res.json(results);
+});
+
+app.patch('/api/admin/orders/:id/status', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { status, paymentStatus, note, assignedCourier, courierPhone, internalNotes } = req.body;
+  const order = db.orders.find(o => o.id === req.params.id);
+
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const previousStatus = order.status;
+  const previousPaymentStatus = order.paymentStatus;
+
+  if (status) order.status = status as OrderStatus;
+  if (paymentStatus) order.paymentStatus = paymentStatus as PaymentStatus;
+  if (assignedCourier !== undefined) order.assignedCourier = assignedCourier;
+  if (courierPhone !== undefined) order.courierPhone = courierPhone;
+  if (internalNotes !== undefined) order.internalNotes = internalNotes;
+
+  // Stock deduction / restoration
+  if ((order.status === 'Cancelled' || order.paymentStatus === 'Refunded' || order.paymentStatus === 'Failed') && order.stockDeducted) {
+    for (const item of order.items) {
+      const prod = db.products.find(p => p.id === item.productId);
+      if (prod) {
+        prod.stock += item.quantity;
+        if (prod.stock > 0 && prod.status === 'Out of Stock') prod.status = 'Available';
+        db.inventoryLogs.unshift({
+          id: `inv-${Date.now()}`,
+          productId: prod.id,
+          productName: prod.name,
+          previousStock: prod.stock - item.quantity,
+          newStock: prod.stock,
+          changeAmount: item.quantity,
+          reason: `Stock restored from cancelled/refunded order ${order.orderNumber}`,
+          adminName: admin.name,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    order.stockDeducted = false;
+  }
+
+  if ((order.status === 'Confirmed' || order.status === 'Preparing' || order.status === 'Ready for Delivery' || order.status === 'Out for Delivery' || order.status === 'Delivered') && order.paymentStatus === 'Paid' && !order.stockDeducted) {
+    for (const item of order.items) {
+      const prod = db.products.find(p => p.id === item.productId);
+      if (prod) {
+        const prevStock = prod.stock;
+        prod.stock = Math.max(0, prod.stock - item.quantity);
+        if (prod.stock === 0) prod.status = 'Out of Stock';
+        db.inventoryLogs.unshift({
+          id: `inv-${Date.now()}`,
+          productId: prod.id,
+          productName: prod.name,
+          previousStock: prevStock,
+          newStock: prod.stock,
+          changeAmount: -item.quantity,
+          reason: `Stock deducted for confirmed order ${order.orderNumber}`,
+          adminName: admin.name,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    order.stockDeducted = true;
+  }
+
+  order.statusHistory.push({
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    timestamp: new Date().toISOString(),
+    note: note || `Order status updated to "${order.status}" (Payment: "${order.paymentStatus}") by ${admin.name}.`,
+    updatedBy: admin.name
+  });
+
+  logAudit(admin, 'ORDER_UPDATED', `Order #${order.orderNumber} updated to ${order.status} (${order.paymentStatus})`, 'order', order.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+  res.json(order);
+});
+
+// -------------------------------------------------------------
+// ADMIN PAYMENT VERIFICATION & METHODS CONFIG
+// -------------------------------------------------------------
+
+app.get('/api/admin/payments', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.paymentConfirmations);
+});
+
+app.post('/api/admin/payments/:id/verify', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { action, adminNotes } = req.body;
+  const confirmation = db.paymentConfirmations.find(c => c.id === req.params.id);
+
+  if (!confirmation) return res.status(404).json({ error: 'Payment confirmation record not found' });
+
+  const order = db.orders.find(o => o.id === confirmation.orderId || o.orderNumber === confirmation.orderNumber);
+
+  if (action === 'approve') {
+    confirmation.verificationStatus = 'Verified/Paid';
+    confirmation.verifiedAt = new Date().toISOString();
+    confirmation.verifiedBy = admin.name;
+    confirmation.adminNotes = adminNotes || 'Payment verified with MTN/Airtel statement records.';
+    confirmation.customerNotified = true;
+    confirmation.notificationMessage = `Payment of ${confirmation.amountPaid.toLocaleString()} FRW for Order #${confirmation.orderNumber} has been verified and confirmed! ContactReach Market is preparing your delivery.`;
+
+    if (order) {
+      order.paymentStatus = 'Paid';
+      order.status = 'Confirmed';
+      order.paymentConfirmation = confirmation;
+
+      if (!order.stockDeducted) {
+        for (const item of order.items) {
+          const prod = db.products.find(p => p.id === item.productId);
+          if (prod) {
+            const prev = prod.stock;
+            prod.stock = Math.max(0, prod.stock - item.quantity);
+            if (prod.stock === 0) prod.status = 'Out of Stock';
+            db.inventoryLogs.unshift({
+              id: `inv-${Date.now()}`,
+              productId: prod.id,
+              productName: prod.name,
+              previousStock: prev,
+              newStock: prod.stock,
+              changeAmount: -item.quantity,
+              reason: `Stock deducted for approved payment on order ${order.orderNumber}`,
+              adminName: admin.name,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+        order.stockDeducted = true;
+      }
+
+      // Automatically create Supplier Payout record if not already present
+      db.supplierPayouts = db.supplierPayouts || [];
+      const existingPayout = db.supplierPayouts.find(p => p.orderId === order.id || p.orderNumber === order.orderNumber);
+      if (!existingPayout) {
+        const commRate = order.commissionRate || 10;
+        const commFrw = order.commissionEarned || Math.round((order.subtotal * commRate) / 100);
+        const payoutFrw = order.supplierPayoutAmount || Math.max(0, order.subtotal - commFrw);
+        const shop = db.shops.find(s => s.name.toLowerCase() === (order.shopName || '').toLowerCase());
+
+        const payoutRecord: SupplierPayoutRecord = {
+          id: `payout-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+          shopId: shop?.id || 'shop-general',
+          shopName: order.shopName || 'ContactReach Market Supplier',
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          orderTotal: order.totalAmount,
+          commissionRate: commRate,
+          commissionEarned: commFrw,
+          payoutAmount: payoutFrw,
+          status: 'Pending',
+          createdAt: new Date().toISOString()
+        };
+        db.supplierPayouts.unshift(payoutRecord);
+        saveToFirestoreAsync('supplierPayouts', payoutRecord.id, payoutRecord);
+      }
+
+      order.statusHistory.push({
+        status: 'Confirmed',
+        paymentStatus: 'Paid',
+        timestamp: new Date().toISOString(),
+        note: `Payment verified & approved by ${admin.name}: ${confirmation.amountPaid.toLocaleString()} FRW (${confirmation.transactionId}).`,
+        updatedBy: admin.name
+      });
+      saveToFirestoreAsync('orders', order.id, order);
+    }
+
+    logAudit(admin, 'PAYMENT_APPROVED', `Approved payment of ${confirmation.amountPaid} FRW for Order #${confirmation.orderNumber} (Txn: ${confirmation.transactionId})`, 'payment', confirmation.id);
+  } else if (action === 'reject') {
+    confirmation.verificationStatus = 'Rejected';
+    confirmation.verifiedAt = new Date().toISOString();
+    confirmation.verifiedBy = admin.name;
+    confirmation.adminNotes = adminNotes || 'Transaction ID not verified on mobile money records.';
+    confirmation.customerNotified = true;
+    confirmation.notificationMessage = `Payment for Order #${confirmation.orderNumber} could not be verified against telecom records (${adminNotes || 'Unverified transaction ID'}). Please contact support or resubmit proof.`;
+
+    if (order) {
+      order.paymentStatus = 'Payment Rejected';
+      order.paymentConfirmation = confirmation;
+      order.statusHistory.push({
+        status: order.status,
+        paymentStatus: 'Payment Rejected',
+        timestamp: new Date().toISOString(),
+        note: `Payment verification rejected by ${admin.name}: ${adminNotes || 'Unverified transaction ID'}.`,
+        updatedBy: admin.name
+      });
+      saveToFirestoreAsync('orders', order.id, order);
+    }
+
+    logAudit(admin, 'PAYMENT_REJECTED', `Rejected payment for Order #${confirmation.orderNumber} (${confirmation.transactionId}): ${adminNotes}`, 'payment', confirmation.id);
+  } else if (action === 'under_verification') {
+    confirmation.verificationStatus = 'Under Verification';
+    confirmation.verifiedAt = new Date().toISOString();
+    confirmation.verifiedBy = admin.name;
+    confirmation.adminNotes = adminNotes || 'Under manual verification with telecom statements.';
+
+    if (order) {
+      order.paymentStatus = 'Under Verification';
+      order.paymentConfirmation = confirmation;
+      order.statusHistory.push({
+        status: order.status,
+        paymentStatus: 'Under Verification',
+        timestamp: new Date().toISOString(),
+        note: `Payment moved to Under Verification by ${admin.name}: ${adminNotes || 'Auditing telecom records'}.`,
+        updatedBy: admin.name
+      });
+      saveToFirestoreAsync('orders', order.id, order);
+    }
+
+    logAudit(admin, 'PAYMENT_AUDITING', `Payment marked Under Verification for Order #${confirmation.orderNumber}`, 'payment', confirmation.id);
+  } else {
+    return res.status(400).json({ error: 'Invalid action. Must be "approve", "reject", or "under_verification".' });
+  }
+
+  saveDbToDisk();
+  saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
+  res.json({ message: `Payment status updated to ${confirmation.verificationStatus} successfully.`, confirmation, order });
+});
+
+app.post('/api/admin/payment-methods', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { name, type, receiverName, receiverAccount, instructions, isActive } = req.body;
+  if (!name || !receiverAccount) return res.status(400).json({ error: 'Name and receiver account are required.' });
+
+  const newMethod: PaymentMethodConfig = {
+    id: `pm-${Date.now()}`,
+    name: name.trim(),
+    type: type || 'MTN Mobile Money',
+    receiverName: receiverName || 'Ruth',
+    receiverAccount: receiverAccount.trim(),
+    instructions: instructions?.trim() || '',
+    isActive: isActive !== false
+  };
+
+  db.paymentMethodsConfig.push(newMethod);
+  logAudit(admin, 'PAYMENT_METHOD_CREATED', `Added payment method "${newMethod.name}"`, 'payment_method', newMethod.id);
+  saveDbToDisk();
+  res.status(201).json(newMethod);
+});
+
+app.put('/api/admin/payment-methods/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const method = db.paymentMethodsConfig.find(m => m.id === req.params.id);
+  if (!method) return res.status(404).json({ error: 'Payment method not found' });
+
+  Object.assign(method, req.body);
+  logAudit(admin, 'PAYMENT_METHOD_UPDATED', `Updated payment method "${method.name}"`, 'payment_method', method.id);
+  saveDbToDisk();
+  res.json(method);
+});
+
+// -------------------------------------------------------------
+// ADMIN INVENTORY CONTROL
+// -------------------------------------------------------------
+
+app.get('/api/admin/inventory/logs', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.inventoryLogs);
+});
+
+app.post('/api/admin/inventory/adjust', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { productId, changeAmount, reason } = req.body;
+  if (!productId || changeAmount === undefined || !reason) {
+    return res.status(400).json({ error: 'Product ID, change amount, and reason are required.' });
+  }
+
+  const prod = db.products.find(p => p.id === productId);
+  if (!prod) return res.status(404).json({ error: 'Product not found' });
+
+  const prev = prod.stock;
+  const adjustment = parseInt(changeAmount, 10);
+  const nextStock = Math.max(0, prev + adjustment);
+
+  prod.stock = nextStock;
+  if (prod.stock === 0) prod.status = 'Out of Stock';
+  else if (prod.status === 'Out of Stock') prod.status = 'Available';
+
+  const log: InventoryLog = {
+    id: `inv-${Date.now()}`,
+    productId: prod.id,
+    productName: prod.name,
+    previousStock: prev,
+    newStock: nextStock,
+    changeAmount: adjustment,
+    reason: reason.trim(),
+    adminName: admin.name,
+    timestamp: new Date().toISOString()
+  };
+
+  db.inventoryLogs.unshift(log);
+  logAudit(admin, 'INVENTORY_ADJUSTED', `Adjusted stock for "${prod.name}" by ${adjustment} (${prev} -> ${nextStock}). Reason: ${reason}`, 'inventory', prod.id);
+  saveDbToDisk();
+  res.json({ message: 'Stock adjusted successfully', product: prod, log });
+});
+
+// -------------------------------------------------------------
+// ADMIN MESSAGES INBOX
+// -------------------------------------------------------------
+
+app.get('/api/admin/messages', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.messages);
+});
+
+app.patch('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'customer_support']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const msg = db.messages.find(m => m.id === req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Message not found' });
+
+  const { status, replyNote } = req.body;
+  if (status) msg.status = status;
+  if (replyNote) {
+    msg.replyNote = replyNote;
+    msg.repliedAt = new Date().toISOString();
+    msg.repliedBy = admin.name;
+    msg.status = 'replied';
+  }
+
+  saveDbToDisk();
+  res.json(msg);
+});
+
+app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.messages.findIndex(m => m.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Message not found' });
+
+  const removed = db.messages.splice(idx, 1)[0];
+  logAudit(admin, 'MESSAGE_DELETED', `Deleted message #${removed.id} from ${removed.name}`, 'message', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('messages', removed.id);
+  res.json({ message: 'Message deleted', removed });
+});
+
+// -------------------------------------------------------------
+// ADMIN CUSTOMER PROBLEMS & COMPLAINTS
+// -------------------------------------------------------------
+
+app.get('/api/admin/customer-reports', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.customerProblems);
+});
+
+app.patch('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'customer_support']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const report = db.customerProblems.find(r => r.id === req.params.id);
+  if (!report) return res.status(404).json({ error: 'Report not found' });
+
+  const { status, priority, assignedTo, resolution, newNote } = req.body;
+  if (status) {
+    report.status = status;
+    if (status === 'Resolved' || status === 'Closed') {
+      report.resolvedAt = new Date().toISOString();
+    }
+  }
+  if (priority) report.priority = priority;
+  if (assignedTo !== undefined) report.assignedTo = assignedTo;
+  if (resolution !== undefined) report.resolution = resolution;
+  if (newNote && newNote.trim()) {
+    if (!report.privateNotes) report.privateNotes = [];
+    report.privateNotes.push({
+      timestamp: new Date().toISOString(),
+      note: newNote.trim(),
+      author: admin.name
+    });
+  }
+
+  report.updatedAt = new Date().toISOString();
+  logAudit(admin, 'PROBLEM_REPORT_UPDATED', `Case #${report.caseNumber} updated to ${report.status}`, 'problem_report', report.id);
+  saveDbToDisk();
+  res.json(report);
+});
+
+// -------------------------------------------------------------
+// ADMIN COUPONS & DISCOUNTS
+// -------------------------------------------------------------
+
+app.get('/api/admin/coupons', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.coupons);
+});
+
+app.post('/api/admin/coupons', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { code, discountType, discountValue, minOrderAmount, maxDiscount, expiresAt, usageLimit, isActive } = req.body;
+
+  if (!code || discountValue === undefined || discountValue === null) {
+    return res.status(400).json({ error: 'Coupon code and discount value are required.' });
+  }
+
+  const existing = db.coupons.find(c => c.code.toUpperCase() === code.trim().toUpperCase());
+  if (existing) return res.status(400).json({ error: 'Coupon code already exists.' });
+
+  const type = discountType === 'fixed' ? 'fixed' : 'percentage';
+  const val = Number(discountValue);
+
+  if (type === 'percentage' && (val < 1 || val > 100)) {
+    return res.status(400).json({ error: 'Percentage discount must be between 1% and 100%.' });
+  }
+
+  const newCoupon: Coupon = {
+    id: `coup-${Date.now()}`,
+    code: code.trim().toUpperCase(),
+    discountType: type,
+    discountValue: val,
+    minOrderAmount: minOrderAmount ? Number(minOrderAmount) : undefined,
+    maxDiscount: maxDiscount ? Number(maxDiscount) : undefined,
+    expiresAt: expiresAt || undefined,
+    usageLimit: usageLimit ? Number(usageLimit) : undefined,
+    timesUsed: 0,
+    isActive: isActive !== false
+  };
+
+  db.coupons.push(newCoupon);
+  logAudit(admin, 'COUPON_CREATED', `Created promotional coupon "${newCoupon.code}" (${val}${type === 'percentage' ? '%' : ' FRW'})`, 'coupon', newCoupon.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('coupons', newCoupon.id, newCoupon);
+  res.status(201).json(newCoupon);
+});
+
+app.put('/api/admin/coupons/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const coupon = db.coupons.find(c => c.id === req.params.id);
+  if (!coupon) return res.status(404).json({ error: 'Coupon not found' });
+
+  if (req.body.code) coupon.code = req.body.code.trim().toUpperCase();
+  if (req.body.discountType) coupon.discountType = req.body.discountType === 'fixed' ? 'fixed' : 'percentage';
+  if (req.body.discountValue !== undefined) {
+    const val = Number(req.body.discountValue);
+    if (coupon.discountType === 'percentage' && (val < 1 || val > 100)) {
+      return res.status(400).json({ error: 'Percentage discount must be between 1% and 100%.' });
+    }
+    coupon.discountValue = val;
+  }
+  if (req.body.minOrderAmount !== undefined) coupon.minOrderAmount = req.body.minOrderAmount ? Number(req.body.minOrderAmount) : undefined;
+  if (req.body.maxDiscount !== undefined) coupon.maxDiscount = req.body.maxDiscount ? Number(req.body.maxDiscount) : undefined;
+  if (req.body.expiresAt !== undefined) coupon.expiresAt = req.body.expiresAt || undefined;
+  if (req.body.usageLimit !== undefined) coupon.usageLimit = req.body.usageLimit ? Number(req.body.usageLimit) : undefined;
+  if (req.body.isActive !== undefined) coupon.isActive = Boolean(req.body.isActive);
+
+  logAudit(admin, 'COUPON_UPDATED', `Updated coupon "${coupon.code}"`, 'coupon', coupon.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('coupons', coupon.id, coupon);
+  res.json(coupon);
+});
+
+app.put('/api/admin/coupons/:id/toggle', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const coupon = db.coupons.find(c => c.id === req.params.id);
+  if (!coupon) return res.status(404).json({ error: 'Coupon not found' });
+
+  coupon.isActive = !coupon.isActive;
+  logAudit(admin, 'COUPON_TOGGLED', `${coupon.isActive ? 'Activated' : 'Deactivated'} coupon "${coupon.code}"`, 'coupon', coupon.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('coupons', coupon.id, coupon);
+  res.json(coupon);
+});
+
+app.delete('/api/admin/coupons/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.coupons.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Coupon not found' });
+
+  const removed = db.coupons.splice(idx, 1)[0];
+  logAudit(admin, 'COUPON_DELETED', `Deleted coupon "${removed.code}"`, 'coupon', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('coupons', removed.id);
+  res.json({ message: 'Coupon deleted', removed });
+});
+
+// -------------------------------------------------------------
+// ADMIN REGISTERED BUYERS & CUSTOMER DIRECTORY
+// -------------------------------------------------------------
+
+app.get('/api/admin/customers', requireAdminAuth, (req: Request, res: Response) => {
+  // Sanitize all customer records and enrich with account status and registration info
+  const sanitized = db.customers.map(c => ({
+    ...sanitizeBuyer(c),
+    isRegisteredBuyer: Boolean(c.passwordHash) || c.accountType === 'buyer',
+    hasPassword: Boolean(c.passwordHash)
+  }));
+  res.json(sanitized);
+});
+
+app.get('/api/admin/customers/:id', requireAdminAuth, (req: Request, res: Response) => {
+  const customer = db.customers.find(c => c.id === req.params.id);
+  if (!customer) return res.status(404).json({ error: 'Customer not found' });
+  const cleanPhone = customer.phone.replace(/\D/g, '');
+  const customerOrders = db.orders.filter(o => {
+    const orderPhone = o.customerPhone.replace(/\D/g, '');
+    const phoneMatch = orderPhone.endsWith(cleanPhone) || cleanPhone.endsWith(orderPhone);
+    const emailMatch = Boolean(customer.email && o.customerEmail && o.customerEmail.toLowerCase() === customer.email.toLowerCase());
+    return phoneMatch || emailMatch;
+  });
+
+  res.json({
+    customer: {
+      ...sanitizeBuyer(customer),
+      isRegisteredBuyer: Boolean(customer.passwordHash) || customer.accountType === 'buyer',
+      hasPassword: Boolean(customer.passwordHash)
+    },
+    orders: customerOrders
+  });
+});
+
+app.get('/api/admin/buyers', requireAdminAuth, (req: Request, res: Response) => {
+  // Return all registered buyers with complete account details, never displaying passwords in plain text
+  const sanitized = db.customers
+    .filter(c => Boolean(c.passwordHash) || c.accountType === 'buyer')
+    .map(c => ({
+      ...sanitizeBuyer(c),
+      isRegisteredBuyer: true,
+      hasPassword: Boolean(c.passwordHash)
+    }));
+  res.json(sanitized);
+});
+
+app.put('/api/admin/buyers/:id/status', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { status } = req.body;
+  const customer = db.customers.find(c => c.id === req.params.id);
+  if (!customer) return res.status(404).json({ error: 'Buyer record not found' });
+
+  if (status !== 'Active' && status !== 'Suspended') {
+    return res.status(400).json({ error: 'Status must be "Active" or "Suspended"' });
+  }
+
+  customer.status = status;
+  logAudit(admin, 'BUYER_STATUS_CHANGED', `Changed status of buyer "${customer.name}" (${customer.phone}) to ${status}`, 'buyer', customer.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', customer.id, sanitizeBuyer(customer));
+
+  res.json({ message: `Buyer account status updated to ${status}`, customer: sanitizeBuyer(customer) });
+});
+
+app.put('/api/admin/buyers/:id/reset-password', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  return res.json({ message: 'Buyer accounts now sign in exclusively via Google Authentication. Password management is handled securely by Google.' });
+});
+
+// -------------------------------------------------------------
+// ADMIN AUDIT LOGS
+// -------------------------------------------------------------
+
+app.get('/api/admin/audit-logs', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  res.json(db.auditLogs);
+});
+
+// -------------------------------------------------------------
+// ADMIN SETTINGS UPDATE & MAINTENANCE MODE
+// -------------------------------------------------------------
+
+app.put('/api/admin/settings', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const previousMaintenance = db.settings.isMaintenanceMode;
+  db.settings = { ...db.settings, ...req.body };
+  
+  if (req.body.isMaintenanceMode !== undefined && req.body.isMaintenanceMode !== previousMaintenance) {
+    db.settings.maintenanceUpdatedAt = new Date().toISOString();
+    logAudit(
+      admin,
+      req.body.isMaintenanceMode ? 'MAINTENANCE_MODE_ENABLED' : 'MAINTENANCE_MODE_DISABLED',
+      `Maintenance Mode was turned ${req.body.isMaintenanceMode ? 'ON' : 'OFF'} by ${admin.name}. Public visitors ${req.body.isMaintenanceMode ? 'now see "We’ll Be Back Soon" screen' : 'can now access and browse marketplace normally'}.`,
+      'settings',
+      'global'
+    );
+  } else {
+    logAudit(admin, 'SETTINGS_UPDATED', 'Updated marketplace configuration and receiver details');
+  }
+
+  saveDbToDisk();
+  saveToFirestoreAsync('settings', 'global', db.settings);
+  res.json(db.settings);
+});
+
+// Dedicated fast Maintenance Mode toggle endpoint
+app.post('/api/admin/maintenance-toggle', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { isMaintenanceMode, maintenanceTitle, maintenanceMessage, maintenanceEstimatedTime } = req.body;
+  
+  if (typeof isMaintenanceMode !== 'boolean') {
+    return res.status(400).json({ error: 'isMaintenanceMode (boolean) is required.' });
+  }
+
+  const previousState = Boolean(db.settings.isMaintenanceMode);
+  db.settings.isMaintenanceMode = isMaintenanceMode;
+  if (maintenanceTitle !== undefined) db.settings.maintenanceTitle = maintenanceTitle;
+  if (maintenanceMessage !== undefined) db.settings.maintenanceMessage = maintenanceMessage;
+  if (maintenanceEstimatedTime !== undefined) db.settings.maintenanceEstimatedTime = maintenanceEstimatedTime;
+  db.settings.maintenanceUpdatedAt = new Date().toISOString();
+
+  logAudit(
+    admin,
+    isMaintenanceMode ? 'MAINTENANCE_MODE_ENABLED' : 'MAINTENANCE_MODE_DISABLED',
+    `Maintenance Mode toggled ${isMaintenanceMode ? 'ON' : 'OFF'} by ${admin.name} (Previous: ${previousState ? 'ON' : 'OFF'}). Headline: "${db.settings.maintenanceTitle || "We'll Be Back Soon"}".`,
+    'settings',
+    'global'
+  );
+
+  saveDbToDisk();
+  saveToFirestoreAsync('settings', 'global', db.settings);
+
+  res.json({
+    success: true,
+    message: isMaintenanceMode
+      ? 'Maintenance Mode is now ON. Public visitors see the "We’ll Be Back Soon" screen.'
+      : 'Maintenance Mode is now OFF. Public storefront is live for all visitors.',
+    settings: db.settings
+  });
+});
+
+// -------------------------------------------------------------
+// ADMIN SUPPLIER ONBOARDING APPLICATIONS (PHASE 9)
+// -------------------------------------------------------------
+
+app.get('/api/admin/supplier-applications', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.supplierApplications || []);
+});
+
+app.patch('/api/admin/supplier-applications/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'shop_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { status, adminNotes } = req.body;
+  db.supplierApplications = db.supplierApplications || [];
+  const application = db.supplierApplications.find(a => a.id === req.params.id);
+
+  if (!application) return res.status(404).json({ error: 'Supplier application not found' });
+
+  application.status = status;
+  application.reviewedBy = admin.name;
+  application.reviewedAt = new Date().toISOString();
+
+  // If approved, automatically create a new VendorShop if not already created
+  if (status === 'Approved') {
+    const existingShop = db.shops.find(s => s.name.toLowerCase() === application.businessName.toLowerCase());
+    if (!existingShop) {
+      const newShop: VendorShop = {
+        id: `shop-${application.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString().slice(-4)}`,
+        name: application.businessName,
+        category: application.category,
+        description: application.description || `Verified retail supplier on ContactReach Market (${application.location}).`,
+        location: application.location,
+        phone: application.phone,
+        email: application.email,
+        logo: 'Store',
+        bannerColor: 'from-orange-500 to-amber-600',
+        isVerified: true,
+        followersCount: 5,
+        deliveryInfo: 'Kigali express dispatch available',
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+      db.shops.push(newShop);
+      saveDbToDisk();
+      saveToFirestoreAsync('shops', newShop.id, newShop);
+    }
+  }
+
+  logAudit(admin, 'SUPPLIER_APPLICATION_REVIEWED', `Supplier application for "${application.businessName}" set to ${status}`, 'supplier_application', application.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('supplierApplications', application.id, application);
+
+  res.json(application);
+});
+
+// -------------------------------------------------------------
+// ADMIN SUPPLIER PAYOUTS & DISBURSEMENTS (PHASE 9)
+// -------------------------------------------------------------
+
+app.get('/api/admin/supplier-payouts', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.supplierPayouts || []);
+});
+
+app.post('/api/admin/supplier-payouts/:id/disburse', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { paymentReference } = req.body;
+  db.supplierPayouts = db.supplierPayouts || [];
+  const payout = db.supplierPayouts.find(p => p.id === req.params.id);
+  if (!payout) return res.status(404).json({ error: 'Payout record not found' });
+
+  // Guard against duplicate payout disbursements
+  if (payout.status === 'Paid') {
+    return res.status(400).json({
+      error: `Supplier payout of ${payout.payoutAmount.toLocaleString()} FRW has already been disbursed on ${payout.paidAt} (Ref: ${payout.paymentReference}). Duplicate payout disbursement is blocked.`
+    });
+  }
+
+  payout.status = 'Paid';
+  payout.paymentReference = paymentReference || `MOMO-${Date.now().toString().slice(-6)}`;
+  payout.paidAt = new Date().toISOString();
+  payout.approvedBy = admin.name;
+
+  // Also update corresponding order if present
+  const order = db.orders.find(o => o.id === payout.orderId || o.orderNumber === payout.orderNumber);
+  if (order) {
+    order.supplierPayoutStatus = 'Paid';
+    order.supplierPayoutRef = payout.paymentReference;
+    saveToFirestoreAsync('orders', order.id, order);
+  }
+
+  logAudit(admin, 'SUPPLIER_PAYOUT_DISBURSED', `Disbursed supplier payout of ${payout.payoutAmount.toLocaleString()} FRW to "${payout.shopName}" (Ref: ${payout.paymentReference})`, 'supplier_payout', payout.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('supplierPayouts', payout.id, payout);
+
+  res.json({ message: 'Payout marked as successfully disbursed', payout });
+});
+
+// -------------------------------------------------------------
+// API 404 & ERROR HANDLER (ENSURES JSON, NEVER HTML)
+// -------------------------------------------------------------
+
+app.all('/api/*', (req: Request, res: Response) => {
+  res.status(404).json({ error: `API endpoint ${req.method} ${req.originalUrl} not found.` });
+});
+
+app.use('/api', (err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('[API Error]:', err);
+  res.status(500).json({ error: err?.message || 'Internal server error' });
+});
+
+// -------------------------------------------------------------
+// VITE DEV MIDDLEWARE / STATIC ASSETS
+// -------------------------------------------------------------
+
+async function startServer() {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Run initial Cloud Firestore synchronization non-blocking with 3s timeout
+  try {
+    await Promise.race([
+      syncWithFirestore(),
+      new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
+  } catch (syncErr) {
+    console.warn('[Firebase] Background sync non-blocking error:', syncErr);
+  }
+
+  if (!isProduction) {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+    app.use('*', async (req: Request, res: Response, next: NextFunction) => {
+      if (req.method !== 'GET' || req.originalUrl.startsWith('/api')) {
+        return next();
+      }
+      try {
+        const url = req.originalUrl;
+        let template = fs.readFileSync(path.resolve('index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        next(e);
+      }
+    });
+  } else {
+    app.use(express.static(path.resolve('dist')));
+    app.get('*', (req: Request, res: Response) => {
+      res.sendFile(path.resolve('dist/index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`ContactReach Market running at http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+});

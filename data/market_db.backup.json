@@ -1,0 +1,227 @@
+{
+  "backupTimestamp": "2026-10-19T00:30:00.000Z",
+  "backupReason": "Phase 4 Pre-Migration Backup to Firestore",
+  "products": [],
+  "categories": [
+    {
+      "id": "hair-beauty",
+      "nameEn": "Beauty & Cosmetics",
+      "nameRw": "Ubwiza",
+      "icon": "Sparkles",
+      "itemCount": 0,
+      "description": "Salon supplies, cosmetics, hair care, and personal wellness."
+    },
+    {
+      "id": "electronics",
+      "nameEn": "Electronics & TV",
+      "nameRw": "Ibyuma",
+      "icon": "Tv",
+      "itemCount": 0,
+      "description": "Smartphones, TV accessories, audio devices, and gadgets."
+    },
+    {
+      "id": "fashion",
+      "nameEn": "Fashion & Apparel",
+      "nameRw": "Imyenda",
+      "icon": "Shirt",
+      "itemCount": 0,
+      "description": "Clothing, shoes, bags, and modern Rwandan & international styles."
+    },
+    {
+      "id": "amatara",
+      "nameEn": "Lighting & Gadgets",
+      "nameRw": "Amatara",
+      "icon": "Lightbulb",
+      "itemCount": 0,
+      "description": "Home lighting, LED strips, rechargeable lamps, and decor."
+    },
+    {
+      "id": "impano",
+      "nameEn": "Gifts & Home Decor",
+      "nameRw": "Impano",
+      "icon": "Gift",
+      "itemCount": 0,
+      "description": "Curated gift hampers, decorative accents, and special packages."
+    },
+    {
+      "id": "abana",
+      "nameEn": "Kids & Toys",
+      "nameRw": "Abana",
+      "icon": "Baby",
+      "itemCount": 0,
+      "description": "Educational toys, kids essentials, clothing, and baby care."
+    },
+    {
+      "id": "amasaha",
+      "nameEn": "Watches & Jewelry",
+      "nameRw": "Amasaha",
+      "icon": "Watch",
+      "itemCount": 0,
+      "description": "Wristwatches, necklaces, bracelets, and fashion accessories."
+    },
+    {
+      "id": "ibikapu",
+      "nameEn": "Bags & Luggage",
+      "nameRw": "Ibikapu",
+      "icon": "Briefcase",
+      "itemCount": 0,
+      "description": "Backpacks, handbags, travel luggage, and laptop cases."
+    },
+    {
+      "id": "sports",
+      "nameEn": "Sports & Fitness",
+      "nameRw": "Imikino",
+      "icon": "Dumbbell",
+      "itemCount": 0,
+      "description": "Workout accessories, activewear, and fitness gear."
+    },
+    {
+      "id": "books",
+      "nameEn": "Books & Learning",
+      "nameRw": "Books",
+      "icon": "BookOpen",
+      "itemCount": 0,
+      "description": "School materials, stationery, books, and business planners."
+    }
+  ],
+  "shops": [],
+  "orders": [],
+  "paymentConfirmations": [],
+  "paymentMethodsConfig": [
+    {
+      "id": "pm-mtn-momo",
+      "name": "MTN Mobile Money (Direct Transfer)",
+      "type": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverAccount": "078002260",
+      "instructions": "Dial *182*1*1*078002260*AMOUNT# to send mobile money directly to Ruth.",
+      "isActive": true
+    },
+    {
+      "id": "pm-mtn-merchant",
+      "name": "MTN MoMoPay (Merchant Code)",
+      "type": "MTN Merchant Code",
+      "receiverName": "ContactReach Market",
+      "receiverAccount": "078002",
+      "instructions": "Dial *182*8*1*078002*AMOUNT# to pay Ruth / ContactReach Market merchant.",
+      "isActive": true
+    },
+    {
+      "id": "pm-airtel",
+      "name": "Airtel Money",
+      "type": "Airtel Money",
+      "receiverName": "Ruth",
+      "receiverAccount": "078002260",
+      "instructions": "Dial *182*1*2*078002260*AMOUNT# to pay via Airtel Money.",
+      "isActive": true
+    },
+    {
+      "id": "pm-bank",
+      "name": "Bank Transfer / I&M Bank Rwanda",
+      "type": "Bank Transfer",
+      "receiverName": "ContactReach Media Ltd",
+      "receiverAccount": "00014-0239102-19 (I&M Bank)",
+      "instructions": "Transfer to ContactReach Media Ltd, Account 00014-0239102-19. Use your Order # as reference.",
+      "isActive": true
+    },
+    {
+      "id": "pm-cod",
+      "name": "Cash on Pickup / Collection",
+      "type": "Cash on Delivery",
+      "receiverName": "Ruth / Warehouse Desk",
+      "receiverAccount": "Fair View Plaza, Kigali",
+      "instructions": "Pay in cash when picking up your packaged order at Fair View Plaza, Kigali.",
+      "isActive": true
+    }
+  ],
+  "messages": [],
+  "customerProblems": [],
+  "coupons": [
+    {
+      "id": "coup-welcome",
+      "code": "WELCOME10",
+      "discountType": "percentage",
+      "discountValue": 10,
+      "minOrderAmount": 10000,
+      "maxDiscount": 10000,
+      "expiresAt": "2026-12-31T23:59:59Z",
+      "usageLimit": 500,
+      "timesUsed": 0,
+      "isActive": true
+    }
+  ],
+  "inventoryLogs": [],
+  "auditLogs": [
+    {
+      "id": "aud-init",
+      "timestamp": "2026-10-15T00:00:00.000Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SYSTEM_PURGE_DEMO_DATA",
+      "details": "Demo content and mock figures purged. ContactReach Market configured for genuine supplier onboarding and live orders."
+    }
+  ],
+  "customers": [],
+  "adminUsers": [
+    {
+      "id": "adm-owner-ruth",
+      "name": "Ruth (System Owner)",
+      "email": "contactreachmedialimited@gmail.com",
+      "role": "owner",
+      "active": true,
+      "phone": "+250 780 022 600"
+    }
+  ],
+  "reviews": [],
+  "settings": {
+    "companyName": "ContactReach Media Ltd",
+    "marketName": "ContactReach Market",
+    "slogan": "Discover Products. Pay Easily. Shop with Confidence.",
+    "phone": "0780022600",
+    "email": "contactreachmedialimited@gmail.com",
+    "address": "KG 622 St, Fair View Plaza, Kigali, Rwanda",
+    "receiverName": "Ruth",
+    "paymentNumber": "078002260",
+    "merchantCode": "078002",
+    "mtnUssdPattern": "*182*1*1*078002260*{AMOUNT}#",
+    "airtelUssdPattern": "*182*1*2*078002260*{AMOUNT}#",
+    "whatsAppNumber": "+250780022600",
+    "socials": {
+      "tiktok": "https://tiktok.com/@contactreachmedia",
+      "instagram": "https://instagram.com/@contactreachmedia",
+      "youtube": "https://youtube.com/@contactreachmedia",
+      "facebook": "https://facebook.com/@contactreachmedia"
+    },
+    "deliveryFeeKigali": 1500,
+    "deliveryFeeUpcountry": 3500,
+    "pickupAddress": "Fair View Plaza, KG 622 St, Kigali, Rwanda",
+    "kigaliAreas": [
+      {
+        "id": "gasabo",
+        "name": "Gasabo (Kimironko, Remera, Kacyiru, Gisozi, Kibagabaga)",
+        "fee": 1500,
+        "estimatedTime": "2 - 4 hours"
+      },
+      {
+        "id": "nyarugenge",
+        "name": "Nyarugenge (Downtown, Kiyovu, Nyamirambo, Muhima)",
+        "fee": 1500,
+        "estimatedTime": "2 - 4 hours"
+      },
+      {
+        "id": "kicukiro",
+        "name": "Kicukiro (Sonatubes, Gikondo, Kanombe, Niboye, Kagarama)",
+        "fee": 1500,
+        "estimatedTime": "2 - 4 hours"
+      },
+      {
+        "id": "express",
+        "name": "Kigali Express Direct Courier (Within 60-90 Mins)",
+        "fee": 3000,
+        "estimatedTime": "60 - 90 mins"
+      }
+    ],
+    "freeDeliveryThreshold": 50000,
+    "outsideKigaliNotice": "Locations outside the configured Kigali delivery areas: Additional delivery charges apply. Please contact our seller/support team on WhatsApp (+250 780 022 600) to confirm transport cost and delivery arrangements before completing your order."
+  }
+}

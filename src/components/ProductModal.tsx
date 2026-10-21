@@ -1,0 +1,442 @@
+import React, { useState, useEffect } from 'react';
+import {
+  X, Star, ShoppingBag, Truck, RotateCcw, Heart, Plus, Minus,
+  MessageCircle, Maximize2, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft, Tag
+} from 'lucide-react';
+import { Product, ProductReview } from '../types.ts';
+import { Language, translations } from '../translations.ts';
+import { api } from '../services/api.ts';
+
+interface ProductModalProps {
+  product: Product | null;
+  onClose: () => void;
+  onAddToCart: (product: Product, quantity: number, variation?: { [key: string]: string }) => void;
+  onBuyNow: (product: Product, quantity: number, variation?: { [key: string]: string }) => void;
+  allProducts: Product[];
+  onSelectSimilar: (product: Product) => void;
+  currentLang: Language;
+}
+
+export const ProductModal: React.FC<ProductModalProps> = ({
+  product,
+  onClose,
+  onAddToCart,
+  onBuyNow,
+  allProducts,
+  onSelectSimilar,
+  currentLang
+}) => {
+  const [quantity, setQuantity] = useState(1);
+  const [activeTab, setActiveTab] = useState<'description' | 'reviews'>('description');
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [selectedVariations, setSelectedVariations] = useState<{ [key: string]: string }>({});
+
+  // Reviews state
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [revRating, setRevRating] = useState(5);
+  const [revName, setRevName] = useState('');
+  const [revComment, setRevComment] = useState('');
+  const [revSubmitting, setRevSubmitting] = useState(false);
+  const [revSuccess, setRevSuccess] = useState(false);
+
+  useEffect(() => {
+    if (product) {
+      setQuantity(1);
+      setSelectedImageIndex(0);
+      setSelectedVariations({});
+      // Load initial selected variation if options exist
+      if (product.variations && product.variations.length > 0) {
+        const initialVars: { [key: string]: string } = {};
+        product.variations.forEach(v => {
+          if (v.options.length > 0) initialVars[v.name] = v.options[0];
+        });
+        setSelectedVariations(initialVars);
+      }
+      // Load reviews
+      api.getProductReviews(product.id).then(r => setReviews(r)).catch(() => {});
+    }
+  }, [product]);
+
+  if (!product) return null;
+
+  const t = translations[currentLang];
+  const hasDiscount = Boolean(
+    (product.discountPercent !== undefined && product.discountPercent > 0) ||
+    (product.discountPrice !== undefined && product.discountPrice < product.price)
+  );
+  const discountPercent = product.discountPercent || (hasDiscount && product.price > 0 && product.discountPrice
+    ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
+    : 0);
+  const unitPrice = (product.discountPrice !== undefined && product.discountPrice < product.price)
+    ? product.discountPrice
+    : (discountPercent > 0 ? Math.round(product.price * (1 - discountPercent / 100)) : product.price);
+  const totalPrice = unitPrice * quantity;
+  const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0;
+
+  // Real gallery images
+  const galleryImages = product.images && product.images.length > 0
+    ? product.images
+    : [product.imageUrl];
+
+  // Filter similar items from same category
+  const similarItems = allProducts
+    .filter(p => p.id !== product.id && p.category === product.category)
+    .slice(0, 5);
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!revName.trim() || !revComment.trim()) return;
+    setRevSubmitting(true);
+    try {
+      const review = await api.submitProductReview(product.id, {
+        customerName: revName.trim(),
+        rating: revRating,
+        comment: revComment.trim()
+      });
+      setReviews([review, ...reviews]);
+      setRevSuccess(true);
+      setRevName('');
+      setRevComment('');
+      setTimeout(() => setRevSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to submit review:', err);
+    } finally {
+      setRevSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[94vh] overflow-y-auto shadow-2xl relative border border-slate-100 flex flex-col">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+          aria-label="Close modal"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Modal Main Content */}
+        <div className="p-6 sm:p-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            {/* LEFT COLUMN: Gallery with multiple views */}
+            <div className="space-y-3">
+              {/* Main Image with Expand Icon */}
+              <div className="relative rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 pt-[80%] shadow-inner">
+                <img
+                  src={galleryImages[selectedImageIndex] || product.imageUrl}
+                  alt={product.name}
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover object-center"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
+                  }}
+                />
+              </div>
+
+              {/* Thumbnails Row */}
+              {galleryImages.length > 1 && (
+                <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                  {galleryImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedImageIndex(idx)}
+                      className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                        selectedImageIndex === idx ? 'border-[#FF5500] ring-2 ring-orange-200' : 'border-slate-200 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={img} alt="thumbnail" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN: Product Purchase Panel */}
+            <div className="space-y-4">
+              {/* Title & Wishlist */}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    {product.brand && (
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{product.brand}</span>
+                    )}
+                    {product.sku && (
+                      <span className="text-[10px] font-mono text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded">
+                        SKU: {product.sku}
+                      </span>
+                    )}
+                  </div>
+                  <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 leading-snug">
+                    {product.name}
+                  </h1>
+                </div>
+                <button
+                  onClick={() => setIsWishlisted(!isWishlisted)}
+                  className={`p-2 rounded-full border transition-colors shrink-0 cursor-pointer ${
+                    isWishlisted ? 'border-rose-300 bg-rose-50 text-rose-500' : 'border-slate-200 hover:bg-slate-50 text-slate-400'
+                  }`}
+                  aria-label="Wishlist"
+                >
+                  <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-rose-500 text-rose-500' : ''}`} />
+                </button>
+              </div>
+
+              {/* Price & Stock */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-y border-slate-100 py-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-2xl sm:text-3xl font-black text-[#FF5500] font-mono tabular-nums">
+                    {unitPrice.toLocaleString()} frw
+                  </span>
+                  {hasDiscount && (
+                    <>
+                      <span className="text-xs sm:text-sm text-slate-400 line-through font-mono">
+                        {product.price.toLocaleString()} frw
+                      </span>
+                      <span className="text-xs font-black text-white bg-[#FF6000] px-2 py-0.5 rounded-md shadow-2xs">
+                        -{discountPercent}% OFF
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-600">
+                        (Save {(product.price - unitPrice).toLocaleString()} frw)
+                      </span>
+                    </>
+                  )}
+                </div>
+                {isOutOfStock ? (
+                  <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200">
+                    Out of Stock
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Available ({product.stock} in stock)
+                  </span>
+                )}
+              </div>
+
+              {/* Variations Selector (e.g. Size, Color) */}
+              {product.variations && product.variations.length > 0 && (
+                <div className="space-y-3 pt-1">
+                  {product.variations.map((v, i) => (
+                    <div key={i} className="text-xs">
+                      <span className="font-bold text-slate-700 block mb-1.5">{v.name}:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {v.options.map((opt, oIdx) => {
+                          const isSelected = selectedVariations[v.name] === opt;
+                          return (
+                            <button
+                              key={oIdx}
+                              type="button"
+                              onClick={() => setSelectedVariations({ ...selectedVariations, [v.name]: opt })}
+                              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#FF5500] text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                              }`}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Supported Payment Options & Receiver info */}
+              <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-xs space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-amber-900 font-semibold">
+                  <span>Available Payment Methods:</span>
+                  <span className="font-mono text-slate-700 font-bold">
+                    Receiver: {product.receiverName || 'Ruth'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(product.paymentMethods && product.paymentMethods.length > 0
+                    ? product.paymentMethods
+                    : ['MTN Merchant Code', 'MTN Mobile Money']
+                  ).map((method) => (
+                    <span
+                      key={method}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-amber-300 text-[10px] font-bold text-slate-800 font-mono shadow-2xs"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                      {method === 'MTN Merchant Code'
+                        ? `MTN MoMoPay (*182*8*1*${product.merchantCode || '078002'}#)`
+                        : method === 'MTN Mobile Money'
+                        ? `MTN Transfer (*182*1*1*${product.receiverPhone || '078002260'}#)`
+                        : method}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quantity Stepper & Buy Buttons */}
+              <div className="flex items-center gap-3 pt-1">
+                <div className="inline-flex items-center border border-slate-300 rounded-lg p-1 bg-white">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    disabled={quantity <= 1 || isOutOfStock}
+                    className="w-7 h-7 rounded flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="w-9 text-center font-bold text-xs font-mono">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
+                    disabled={quantity >= product.stock || isOutOfStock}
+                    className="w-7 h-7 rounded flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => onAddToCart(product, quantity, selectedVariations)}
+                  disabled={isOutOfStock}
+                  className="py-2.5 px-4 rounded-xl font-bold text-xs border border-[#FF5500] text-[#FF5500] hover:bg-orange-50 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Add to Cart</span>
+                </button>
+
+                <button
+                  onClick={() => onBuyNow(product, quantity, selectedVariations)}
+                  disabled={isOutOfStock}
+                  className="py-2.5 px-6 rounded-xl font-extrabold text-xs bg-[#FF5500] hover:bg-[#E54D00] text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <span>Gura Nonaha</span>
+                </button>
+              </div>
+
+              {/* Seller shop info */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <Store className="w-4 h-4 text-[#FF5500]" />
+                  <div>
+                    <span className="font-bold text-slate-800 block">{product.shopName || 'ContactReach Market'}</span>
+                    <span className="text-[10px] text-slate-400">{product.location || 'Kigali, Rwanda'}</span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Verified Seller
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Tabs: Description vs Reviews */}
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+              <button
+                onClick={() => setActiveTab('description')}
+                className={`text-xs font-bold pb-2 relative cursor-pointer ${
+                  activeTab === 'description' ? 'text-[#FF5500]' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Sobanukirwa Icyo Igicuruzwa Cyagenewe
+                {activeTab === 'description' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF5500] rounded-full" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('reviews')}
+                className={`text-xs font-bold pb-2 relative cursor-pointer ${
+                  activeTab === 'reviews' ? 'text-[#FF5500]' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Customer Reviews ({reviews.length})
+                {activeTab === 'reviews' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF5500] rounded-full" />
+                )}
+              </button>
+            </div>
+
+            {activeTab === 'description' ? (
+              <div className="text-xs text-slate-700 leading-relaxed space-y-3 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
+                <p>{product.description}</p>
+                {product.deliveryInfo && (
+                  <div className="flex items-center gap-2 text-slate-600 pt-2 border-t border-slate-200/60">
+                    <Truck className="w-4 h-4 text-orange-600 shrink-0" />
+                    <span>Delivery Details: {product.deliveryInfo}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Submit review */}
+                <form onSubmit={handleSubmitReview} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-xs">
+                  <h4 className="font-extrabold text-slate-900">Write a Customer Review</h4>
+                  {revSuccess && (
+                    <div className="p-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl">
+                      Review submitted and published! Thank you.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Your Name"
+                      value={revName}
+                      onChange={(e) => setRevName(e.target.value)}
+                      className="px-3 py-2 rounded-xl border border-slate-300 bg-white"
+                    />
+                    <select
+                      value={revRating}
+                      onChange={(e) => setRevRating(Number(e.target.value))}
+                      className="px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold"
+                    >
+                      <option value={5}>⭐⭐⭐⭐⭐ 5 Stars - Excellent</option>
+                      <option value={4}>⭐⭐⭐⭐ 4 Stars - Very Good</option>
+                      <option value={3}>⭐⭐⭐ 3 Stars - Average</option>
+                      <option value={2}>⭐⭐ 2 Stars - Below Expectations</option>
+                      <option value={1}>⭐ 1 Star - Poor</option>
+                    </select>
+                  </div>
+                  <textarea
+                    rows={2}
+                    required
+                    placeholder="Share your experience with this product..."
+                    value={revComment}
+                    onChange={(e) => setRevComment(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white"
+                  />
+                  <button
+                    type="submit"
+                    disabled={revSubmitting}
+                    className="px-4 py-2 bg-slate-900 hover:bg-black text-white font-bold rounded-xl cursor-pointer disabled:opacity-50"
+                  >
+                    Submit Review
+                  </button>
+                </form>
+
+                {/* Reviews List */}
+                <div className="space-y-2">
+                  {reviews.length > 0 ? (
+                    reviews.map(r => (
+                      <div key={r.id} className="p-3 bg-white rounded-xl border border-slate-200 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900">{r.customerName}</span>
+                          <span className="text-[10px] text-slate-400">{new Date(r.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="text-amber-500 font-bold">
+                          {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                        </div>
+                        <p className="text-slate-600">{r.comment}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-400 py-3 text-center">No reviews yet. Be the first to review this product!</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

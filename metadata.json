@@ -1,0 +1,6 @@
+{
+  "name": "ContactReach Market",
+  "description": "Discover Products. Pay Easily. Shop with Confidence. Premier Rwandan online marketplace powered by ContactReach Media Ltd with MTN & Airtel mobile money integration, live product catalog, and secure order tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
