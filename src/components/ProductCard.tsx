@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Star } from 'lucide-react';
+import { Heart, Star, Camera } from 'lucide-react';
 import { Product } from '../types.ts';
 import { Language } from '../translations.ts';
 
@@ -68,6 +68,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
       {/* Product Image */}
       <div className="relative pt-[100%] bg-slate-50/70 overflow-hidden">
+        {/* Primary Image */}
         <img
           src={product.imageUrl}
           alt={product.name}
@@ -77,8 +78,32 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
           }}
         />
+
+        {/* Secondary Angle Image Preview on Hover */}
+        {product.images && product.images[1] && product.images[1] !== product.imageUrl && (
+          <img
+            src={product.images[1]}
+            alt={`${product.name} alternate view`}
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 w-full h-full object-cover object-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+        )}
+
+        {/* Multiple Photos Badge */}
+        {product.images && product.images.length > 1 && (
+          <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+            <span className="bg-slate-900/75 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+              <Camera className="w-2.5 h-2.5 text-orange-400" />
+              <span>{product.images.length} photos</span>
+            </span>
+          </div>
+        )}
+
         {(product.status === 'Out of Stock' || product.stock <= 0) && (
-          <div className="absolute inset-0 bg-white/85 backdrop-blur-2xs flex flex-col items-center justify-center p-2 text-center">
+          <div className="absolute inset-0 bg-white/85 backdrop-blur-2xs flex flex-col items-center justify-center p-2 text-center z-10">
             <span className="bg-rose-600 text-white text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider shadow-xs">
               Out of stock
             </span>

@@ -193,6 +193,11 @@ async function runTests() {
         price: 35000,
         stock: 15,
         shopName: 'Kigali Quality Audio Ltd',
+        images: [
+          'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80'
+        ],
         status: 'Available'
       })
     });
@@ -201,7 +206,29 @@ async function runTests() {
     assert.strictEqual(prod.name, 'Wireless Studio Bluetooth Headphones');
     assert.strictEqual(prod.price, 35000);
     assert.strictEqual(prod.stock, 15);
+    assert(Array.isArray(prod.images) && prod.images.length === 3, 'Product should have 3 images linked');
+    assert.strictEqual(prod.imageUrl, prod.images[0], 'Primary imageUrl should match first image');
     createdProductId = prod.id;
+
+    // Test updating images on product
+    const updateImgRes = await fetch(`${BASE_URL}/api/admin/products/${createdProductId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        images: [
+          'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=600&q=80'
+        ]
+      })
+    });
+    assert.strictEqual(updateImgRes.status, 200);
+    const updatedProd = await updateImgRes.json();
+    assert.strictEqual(updatedProd.images.length, 4, 'Updated product should have 4 images');
   });
 
   // TEST 8: Order Placement, Commission Calculation, and Tracking Token
@@ -842,6 +869,234 @@ async function runTests() {
     assert.strictEqual(rejectRes.status, 200);
     const rejected = await rejectRes.json();
     assert.strictEqual(rejected.status, 'Rejected');
+  });
+
+  // TEST 24: System Health Check Endpoint
+  await test('System Health check endpoint returns detailed operational metrics', async () => {
+    const healthRes = await fetch(`${BASE_URL}/api/health`);
+    assert.strictEqual(healthRes.status, 200, 'Health check should return 200');
+    const health = await healthRes.json();
+    assert.strictEqual(health.status, 'healthy');
+    assert.strictEqual(health.database.storage, 'persistent-json-atomic');
+    assert(typeof health.uptimeSeconds === 'number', 'Uptime should be a number');
+    assert(health.database.productsCount >= 0, 'Products count should be non-negative');
+    assert(health.database.ordersCount >= 0, 'Orders count should be non-negative');
+  });
+
+  // TEST 25: Security Headers Enforcement
+  await test('Security headers are strictly enforced on HTTP responses', async () => {
+    const res = await fetch(`${BASE_URL}/api/settings`);
+    assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff', 'Must include X-Content-Type-Options: nosniff');
+    assert.strictEqual(res.headers.get('x-frame-options'), 'SAMEORIGIN', 'Must include X-Frame-Options: SAMEORIGIN');
+    assert.strictEqual(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin', 'Must include Referrer-Policy');
+  });
+
+  // TEST 26: Admin Team Management with Role-Based Access Control
+  let createdStaffId = '';
+  const testStaffEmail = `staff.test.${Date.now()}@contactreachmedia.rw`;
+  await test('Owner can create and manage administrative team accounts with RBAC', async () => {
+    // 1. Unauthenticated or non-admin cannot access users endpoint
+    const unauthRes = await fetch(`${BASE_URL}/api/admin/users`);
+    assert.strictEqual(unauthRes.status, 401, 'Unauthenticated users request must return 401');
+
+    // 2. Owner creates new product_manager account
+    const createRes = await fetch(`${BASE_URL}/api/admin/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Audited Staff Test',
+        email: testStaffEmail,
+        role: 'product_manager',
+        phone: '0788998877'
+      })
+    });
+    assert.strictEqual(createRes.status, 201, 'Admin user creation should succeed');
+    const created = await createRes.json();
+    assert.strictEqual(created.email, testStaffEmail.toLowerCase());
+    assert.strictEqual(created.role, 'product_manager');
+    createdStaffId = created.id;
+
+    // 3. User appears in team list
+    const listRes = await fetch(`${BASE_URL}/api/admin/users`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(listRes.status, 200);
+    const users = await listRes.json();
+    assert(users.some((u: any) => u.id === createdStaffId), 'Newly created admin must be in list');
+  });
+
+  // TEST 27: Immediate Access Revocation upon Account Deactivation
+  await test('Administrative account deactivation revokes access and sessions immediately', async () => {
+    // 1. Staff signs in with password to obtain active token
+    const staffLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testStaffEmail,
+        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
+      })
+    });
+    assert.strictEqual(staffLoginRes.status, 200, 'Staff login should succeed while active');
+    const staffData = await staffLoginRes.json();
+    const staffToken = staffData.token;
+
+    // 2. Staff token can access inventory logs
+    const testReq1 = await fetch(`${BASE_URL}/api/admin/inventory/logs`, {
+      headers: { Authorization: `Bearer ${staffToken}` }
+    });
+    assert.strictEqual(testReq1.status, 200, 'Active staff can access their role endpoints');
+
+    // 3. Owner deactivates staff account
+    const deactRes = await fetch(`${BASE_URL}/api/admin/users/${createdStaffId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ active: false })
+    });
+    assert.strictEqual(deactRes.status, 200);
+
+    // 4. Staff token is immediately rejected with 403 Forbidden
+    const testReq2 = await fetch(`${BASE_URL}/api/admin/inventory/logs`, {
+      headers: { Authorization: `Bearer ${staffToken}` }
+    });
+    assert.strictEqual(testReq2.status, 403, 'Deactivated staff request must be rejected with 403 immediately');
+
+    // 5. Subsequent login is also rejected
+    const staffLoginAgain = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testStaffEmail,
+        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
+      })
+    });
+    assert.strictEqual(staffLoginAgain.status, 401, 'Deactivated staff login must be rejected');
+
+    // 6. Clean up: Delete test user
+    const delRes = await fetch(`${BASE_URL}/api/admin/users/${createdStaffId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+  });
+
+  // TEST 28: Deletion Tombstones Prevent Deleted Products from Resurrecting
+  await test('Deletion tombstones permanently prevent deleted products from resurrecting', async () => {
+    // 1. Create temporary product
+    const createProdRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Tombstone Test Product',
+        price: 9900,
+        category: 'electronics',
+        stock: 5,
+        description: 'Test product for tombstone verification.'
+      })
+    });
+    assert.strictEqual(createProdRes.status, 201);
+    const prod = await createProdRes.json();
+
+    // 2. Verify product is live
+    const getRes1 = await fetch(`${BASE_URL}/api/products/${prod.id}`);
+    assert.strictEqual(getRes1.status, 200);
+
+    // 3. Delete product
+    const delProdRes = await fetch(`${BASE_URL}/api/admin/products/${prod.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delProdRes.status, 200);
+
+    // 4. Verify product is gone
+    const getRes2 = await fetch(`${BASE_URL}/api/products/${prod.id}`);
+    assert.strictEqual(getRes2.status, 404, 'Deleted product must return 404');
+
+    // 5. Verify health check reports tombstone count
+    const health = await (await fetch(`${BASE_URL}/api/health`)).json();
+    assert(health.database.deletedTombstonesCount > 0, 'Tombstones count must be recorded');
+  });
+
+  // TEST 29: Concurrent Stock Reservation Prevents Overselling
+  await test('Concurrent order stock reservation prevents overselling inventory', async () => {
+    // 1. Create a product with strictly 2 units in stock
+    const createRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Limited Stock Sneaker',
+        price: 15000,
+        category: 'fashion',
+        stock: 2,
+        description: 'Limited sneaker pair with only 2 units available.'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const limitedProd = await createRes.json();
+
+    // 2. Customer A places order for 2 units
+    const order1Res = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Customer A',
+        customerPhone: '0789111222',
+        deliveryType: 'pickup',
+        items: [{ productId: limitedProd.id, quantity: 2 }],
+        paymentMethod: 'MTN Mobile Money'
+      })
+    });
+    assert.strictEqual(order1Res.status, 201, 'First order taking available stock should succeed');
+
+    // 3. Customer B attempts to place order for 1 unit immediately (while Customer A is pending)
+    const order2Res = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Customer B',
+        customerPhone: '0789333444',
+        deliveryType: 'pickup',
+        items: [{ productId: limitedProd.id, quantity: 1 }],
+        paymentMethod: 'MTN Mobile Money'
+      })
+    });
+    assert.strictEqual(order2Res.status, 400, 'Second order exceeding unreserved stock MUST be rejected with 400');
+    const errData = await order2Res.json();
+    assert(errData.error.includes('Insufficient stock'), 'Error must clearly state insufficient available stock');
+
+    // Clean up test product
+    await fetch(`${BASE_URL}/api/admin/products/${limitedProd.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+  });
+
+  // TEST 30: Atomic Database Persistence & Backup Integrity
+  await test('Atomic database persistence creates valid disk snapshots and backups', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const dbPath = path.resolve('data/market_db.json');
+    const backupPath = path.resolve('data/market_db.backup.json');
+
+    assert(fs.existsSync(dbPath), 'market_db.json must exist');
+    assert(fs.existsSync(backupPath), 'market_db.backup.json must exist');
+
+    const dbContent = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
+    assert(Array.isArray(dbContent.products), 'db.products must be an array');
+    assert(Array.isArray(dbContent.orders), 'db.orders must be an array');
+    assert(Array.isArray(dbContent.adminUsers), 'db.adminUsers must be an array');
+    assert(typeof dbContent.settings === 'object', 'db.settings must be an object');
   });
 
   console.log('\n====================================================');

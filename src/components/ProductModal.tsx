@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
 import {
   X, Star, ShoppingBag, Truck, RotateCcw, Heart, Plus, Minus,
-  MessageCircle, Maximize2, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft, Tag
+  MessageCircle, Maximize2, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft, Tag, Camera
 } from 'lucide-react';
 import { Product, ProductReview } from '../types.ts';
 import { Language, translations } from '../translations.ts';
@@ -30,6 +29,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [activeTab, setActiveTab] = useState<'description' | 'reviews'>('description');
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [selectedVariations, setSelectedVariations] = useState<{ [key: string]: string }>({});
 
   // Reviews state
@@ -40,10 +40,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [revSubmitting, setRevSubmitting] = useState(false);
   const [revSuccess, setRevSuccess] = useState(false);
 
+  // Real gallery images
+  const galleryImages = (product?.images && product.images.length > 0)
+    ? (product.imageUrl && !product.images.includes(product.imageUrl) ? [product.imageUrl, ...product.images] : product.images)
+    : (product ? [product.imageUrl] : []);
+
   useEffect(() => {
     if (product) {
       setQuantity(1);
       setSelectedImageIndex(0);
+      setIsLightboxOpen(false);
       setSelectedVariations({});
       // Load initial selected variation if options exist
       if (product.variations && product.variations.length > 0) {
@@ -57,6 +63,26 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       api.getProductReviews(product.id).then(r => setReviews(r)).catch(() => {});
     }
   }, [product]);
+
+  // Keyboard navigation for image gallery & fullscreen lightbox
+  useEffect(() => {
+    if (!product || galleryImages.length === 0) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        setSelectedImageIndex(prev => (prev < galleryImages.length - 1 ? prev + 1 : 0));
+      } else if (e.key === 'ArrowLeft') {
+        setSelectedImageIndex(prev => (prev > 0 ? prev - 1 : galleryImages.length - 1));
+      } else if (e.key === 'Escape') {
+        if (isLightboxOpen) {
+          setIsLightboxOpen(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [galleryImages.length, isLightboxOpen, onClose, product]);
 
   if (!product) return null;
 
@@ -73,11 +99,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     : (discountPercent > 0 ? Math.round(product.price * (1 - discountPercent / 100)) : product.price);
   const totalPrice = unitPrice * quantity;
   const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0;
-
-  // Real gallery images
-  const galleryImages = product.images && product.images.length > 0
-    ? product.images
-    : [product.imageUrl];
 
   // Filter similar items from same category
   const similarItems = allProducts
@@ -123,31 +144,93 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             {/* LEFT COLUMN: Gallery with multiple views */}
             <div className="space-y-3">
-              {/* Main Image with Expand Icon */}
-              <div className="relative rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 pt-[80%] shadow-inner">
+              {/* Main Image with Expand Icon & Navigation Arrows */}
+              <div className="relative rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 pt-[82%] shadow-inner group/img">
                 <img
                   src={galleryImages[selectedImageIndex] || product.imageUrl}
                   alt={product.name}
                   referrerPolicy="no-referrer"
-                  className="absolute inset-0 w-full h-full object-cover object-center"
+                  onClick={() => setIsLightboxOpen(true)}
+                  className="absolute inset-0 w-full h-full object-cover object-center cursor-zoom-in transition-transform duration-300 group-hover/img:scale-[1.02]"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
                   }}
                 />
+
+                {/* Floating Image Counter Badge */}
+                {galleryImages.length > 1 && (
+                  <div className="absolute bottom-3 left-3 z-10 pointer-events-none">
+                    <span className="bg-slate-900/75 backdrop-blur-xs text-white text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-md">
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>{selectedImageIndex + 1} / {galleryImages.length}</span>
+                    </span>
+                  </div>
+                )}
+
+                {/* Fullscreen Expand Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsLightboxOpen(true)}
+                  className="absolute top-3 right-3 z-10 p-2 rounded-xl bg-white/90 hover:bg-white text-slate-700 shadow-md backdrop-blur-xs transition-all hover:scale-105 cursor-pointer"
+                  title="View fullscreen image gallery"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+
+                {/* Next / Previous Arrows Overlay */}
+                {galleryImages.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedImageIndex(prev => (prev > 0 ? prev - 1 : galleryImages.length - 1));
+                      }}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-slate-800 shadow-md backdrop-blur-xs flex items-center justify-center transition-all opacity-85 hover:opacity-100 hover:scale-110 cursor-pointer"
+                      title="Previous image"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedImageIndex(prev => (prev < galleryImages.length - 1 ? prev + 1 : 0));
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-slate-800 shadow-md backdrop-blur-xs flex items-center justify-center transition-all opacity-85 hover:opacity-100 hover:scale-110 cursor-pointer"
+                      title="Next image"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Thumbnails Row */}
               {galleryImages.length > 1 && (
-                <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1.5">
                   {galleryImages.map((img, idx) => (
                     <button
                       key={idx}
                       onClick={() => setSelectedImageIndex(idx)}
-                      className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
-                        selectedImageIndex === idx ? 'border-[#FF5500] ring-2 ring-orange-200' : 'border-slate-200 opacity-70 hover:opacity-100'
+                      className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                        selectedImageIndex === idx
+                          ? 'border-[#FF5500] ring-2 ring-orange-200 scale-102 shadow-xs'
+                          : 'border-slate-200 opacity-70 hover:opacity-100 hover:border-slate-300'
                       }`}
+                      title={`Photo ${idx + 1}`}
                     >
-                      <img src={img} alt="thumbnail" className="w-full h-full object-cover" />
+                      <img
+                        src={img}
+                        alt={`Thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
+                        }}
+                      />
+                      <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[8px] font-bold px-1 rounded">
+                        {idx + 1}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -437,6 +520,84 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Fullscreen Lightbox Modal */}
+      {isLightboxOpen && (
+        <div className="fixed inset-0 z-60 bg-black/95 flex flex-col justify-between p-4 sm:p-6 animate-in fade-in duration-200">
+          {/* Top Bar */}
+          <div className="flex items-center justify-between text-white pb-3 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1 rounded-full bg-white/10 text-xs font-mono font-bold flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-orange-400" />
+                <span>{selectedImageIndex + 1} of {galleryImages.length}</span>
+              </span>
+              <span className="text-sm font-semibold truncate max-w-md hidden sm:inline">
+                {product.name}
+              </span>
+            </div>
+            <button
+              onClick={() => setIsLightboxOpen(false)}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              title="Close fullscreen (Esc)"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Centered Image with Large Prev/Next */}
+          <div className="relative flex-1 flex items-center justify-center p-2 min-h-0">
+            {galleryImages.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setSelectedImageIndex(prev => (prev > 0 ? prev - 1 : galleryImages.length - 1))}
+                className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 transition-all hover:scale-110 cursor-pointer z-10"
+                title="Previous image (Left arrow)"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+
+            <img
+              src={galleryImages[selectedImageIndex] || product.imageUrl}
+              alt={product.name}
+              className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
+              }}
+            />
+
+            {galleryImages.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setSelectedImageIndex(prev => (prev < galleryImages.length - 1 ? prev + 1 : 0))}
+                className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 transition-all hover:scale-110 cursor-pointer z-10"
+                title="Next image (Right arrow)"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Thumbnails Strip */}
+          {galleryImages.length > 1 && (
+            <div className="flex items-center justify-center gap-2 overflow-x-auto py-2 pt-3 border-t border-white/10">
+              {galleryImages.map((img, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedImageIndex(idx)}
+                  className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                    selectedImageIndex === idx
+                      ? 'border-[#FF5500] ring-2 ring-orange-500 scale-105'
+                      : 'border-transparent opacity-50 hover:opacity-90'
+                  }`}
+                >
+                  <img src={img} alt="thumbnail" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

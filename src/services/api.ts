@@ -2,7 +2,7 @@ import {
   Product, Order, PaymentConfirmation, AppSettings, Category, OrderStatus,
   VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
-  PaymentMethodConfig, ProductReview, AdminUser, ProblemCategory, ProblemPriority
+  PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority
 } from '../types.ts';
 import { initialProducts, initialCategories, initialSettings, initialShops } from '../data/initialData.ts';
 import {
@@ -782,33 +782,13 @@ export const api = {
       if (parsed.isJson && parsed.json?.error) {
         throw new Error(parsed.json.error);
       }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('API endpoint') && !fetchErr.message.includes('fetch')) {
-        throw fetchErr;
+    } catch (err: any) {
+      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
+        throw err;
       }
     }
 
-    // Resilient fallback if server is offline or in decoupled static mode
-    const normalized = cleanEmail.toLowerCase();
-    const isOwner = normalized === 'contactreachmedialimited@gmail.com' ||
-                    normalized === 'manirihothierry36@gmail.com' ||
-                    normalized === 'manirihothierry6@gmail.com';
-    const fallbackUser = fallbackAdminUsers.find(a => a.email.toLowerCase() === normalized);
-
-    if ((isOwner || fallbackUser) && password === 'CRM@2026') {
-      const adminData = fallbackUser || {
-        id: 'adm-owner-ruth',
-        name: 'Ruth (System Owner)',
-        email: cleanEmail,
-        role: 'owner',
-        active: true
-      };
-      const token = `crm_token_${Date.now()}`;
-      setAdminToken(token, adminData);
-      return { token, admin: adminData };
-    }
-
-    throw new Error('Invalid administrator credentials. Please check your email and password.');
+    throw new Error('Invalid administrator credentials. Please verify your email and password.');
   },
 
   async adminFirebaseLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
@@ -1938,6 +1918,65 @@ export const api = {
     const parsed = await safeParseResponse<Coupon>(res);
     if (!res.ok || !parsed.isJson || !parsed.json) {
       throw new Error('Failed to toggle coupon status');
+    }
+    return parsed.json;
+  },
+
+  // Admin Team & Roles Management
+  async adminGetUsers(): Promise<AdminUser[]> {
+    const res = await fetch('/api/admin/users', {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<AdminUser[]>(res);
+    if (!res.ok || !parsed.isJson || !Array.isArray(parsed.json)) {
+      throw new Error(parsed.json && (parsed.json as any).error ? (parsed.json as any).error : 'Failed to fetch admin users');
+    }
+    return parsed.json;
+  },
+
+  async adminCreateUser(payload: { name: string; email: string; role: AdminRole; phone?: string }): Promise<AdminUser> {
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<AdminUser>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json && (parsed.json as any).error ? (parsed.json as any).error : 'Failed to create admin user');
+    }
+    return parsed.json;
+  },
+
+  async adminUpdateUser(id: string, updates: Partial<AdminUser>): Promise<AdminUser> {
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates)
+    });
+    const parsed = await safeParseResponse<AdminUser>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json && (parsed.json as any).error ? (parsed.json as any).error : 'Failed to update admin user');
+    }
+    return parsed.json;
+  },
+
+  async adminDeleteUser(id: string): Promise<any> {
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to remove admin user');
+    }
+    return parsed.json;
+  },
+
+  async getHealthCheck(): Promise<any> {
+    const res = await fetch('/api/health');
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'System health check failed');
     }
     return parsed.json;
   }

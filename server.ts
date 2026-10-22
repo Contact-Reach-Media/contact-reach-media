@@ -85,6 +85,7 @@ interface MarketDatabase {
   supplierApplications: SupplierApplication[];
   supplierPayouts: SupplierPayoutRecord[];
   settings: AppSettings;
+  deletedRecordIds: string[];
   adminTokens: Map<string, { user: AdminUser; expiresAt: number }>;
   customerTokens: Map<string, { customerId: string; expiresAt: number }>;
 }
@@ -237,6 +238,7 @@ let db: MarketDatabase = {
     email: 'contactreachmedialimited@gmail.com',
     phone: '0780022600'
   },
+  deletedRecordIds: [],
   adminTokens: new Map(),
   customerTokens: new Map()
 };
@@ -281,17 +283,28 @@ function saveDbToDisk() {
       reviews: db.reviews,
       supplierApplications: db.supplierApplications,
       supplierPayouts: db.supplierPayouts,
-      settings: db.settings
+      settings: db.settings,
+      deletedRecordIds: db.deletedRecordIds || []
     };
-    fs.writeFileSync(DB_FILE, JSON.stringify(dataToSave, null, 2), 'utf-8');
+    // Atomic disk persistence: write to temp file then rename
+    const tempFile = path.resolve('data/market_db.tmp.json');
+    fs.writeFileSync(tempFile, JSON.stringify(dataToSave, null, 2), 'utf-8');
+    fs.renameSync(tempFile, DB_FILE);
   } catch (err) {
-    console.error('Failed to persist DB to disk:', err);
+    console.error('Failed to persist DB to disk atomically:', err);
   }
 }
 
 function loadDbFromDisk() {
   if (fs.existsSync(DB_FILE)) {
     try {
+      // Safe rolling backup before loading
+      try {
+        fs.copyFileSync(DB_FILE, path.resolve('data/market_db.backup.json'));
+      } catch (bkErr) {
+        console.warn('Backup notice:', bkErr);
+      }
+
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       if (parsed.products && Array.isArray(parsed.products)) db.products = parsed.products;
@@ -322,6 +335,7 @@ function loadDbFromDisk() {
       if (parsed.supplierApplications && Array.isArray(parsed.supplierApplications)) db.supplierApplications = parsed.supplierApplications;
       if (parsed.supplierPayouts && Array.isArray(parsed.supplierPayouts)) db.supplierPayouts = parsed.supplierPayouts;
       if (parsed.settings) db.settings = { ...initialSettings, ...parsed.settings, email: 'contactreachmedialimited@gmail.com', phone: '0780022600' };
+      if (parsed.deletedRecordIds && Array.isArray(parsed.deletedRecordIds)) db.deletedRecordIds = parsed.deletedRecordIds;
       console.log(`Loaded ${db.products.length} products, ${db.orders.length} orders, ${db.shops.length} shops from storage.`);
     } catch (err) {
       console.error('Error reading DB file, using initial data:', err);
@@ -418,14 +432,20 @@ async function syncWithFirestore() {
       const catSnap = await firestoreGetDocs(catCol);
       if (catSnap.size > 0) {
         const fsCats: Category[] = [];
-        catSnap.forEach(d => fsCats.push({ ...(d.data() as Category), id: d.id }));
+        catSnap.forEach(d => {
+          if (!db.deletedRecordIds?.includes(d.id)) {
+            fsCats.push({ ...(d.data() as Category), id: d.id });
+          } else {
+            deleteFromFirestoreAsync('categories', d.id);
+          }
+        });
         if (fsCats.length > 0) {
           const fsCatIds = new Set(fsCats.map(c => c.id));
-          const missingInitial = initialCategories.filter(c => !fsCatIds.has(c.id));
-          db.categories = [...fsCats, ...missingInitial];
+          const missing = db.categories.filter(c => !fsCatIds.has(c.id) && !db.deletedRecordIds?.includes(c.id));
+          db.categories = [...fsCats, ...missing];
         }
       } else {
-        initialCategories.forEach(cat => {
+        db.categories.forEach(cat => {
           saveToFirestoreAsync('categories', cat.id, cat);
         });
       }
@@ -439,10 +459,20 @@ async function syncWithFirestore() {
       const prodSnap = await firestoreGetDocs(prodCol);
       if (prodSnap.size > 0) {
         const fsProds: Product[] = [];
-        prodSnap.forEach(d => fsProds.push({ ...(d.data() as Product), id: d.id }));
-        if (fsProds.length > 0) db.products = fsProds;
+        prodSnap.forEach(d => {
+          if (!db.deletedRecordIds?.includes(d.id)) {
+            fsProds.push({ ...(d.data() as Product), id: d.id });
+          } else {
+            deleteFromFirestoreAsync('products', d.id);
+          }
+        });
+        // Intelligently merge: keep valid local products and update/add remote products
+        const mergedProdsMap = new Map<string, Product>();
+        db.products.filter(p => !db.deletedRecordIds?.includes(p.id)).forEach(p => mergedProdsMap.set(p.id, p));
+        fsProds.forEach(p => mergedProdsMap.set(p.id, p));
+        db.products = Array.from(mergedProdsMap.values());
       } else {
-        initialProducts.forEach(prod => {
+        db.products.forEach(prod => {
           saveToFirestoreAsync('products', prod.id, prod);
         });
       }
@@ -456,10 +486,19 @@ async function syncWithFirestore() {
       const shopSnap = await firestoreGetDocs(shopCol);
       if (shopSnap.size > 0) {
         const fsShops: VendorShop[] = [];
-        shopSnap.forEach(d => fsShops.push({ ...(d.data() as VendorShop), id: d.id }));
-        if (fsShops.length > 0) db.shops = fsShops;
+        shopSnap.forEach(d => {
+          if (!db.deletedRecordIds?.includes(d.id)) {
+            fsShops.push({ ...(d.data() as VendorShop), id: d.id });
+          } else {
+            deleteFromFirestoreAsync('shops', d.id);
+          }
+        });
+        const mergedShopsMap = new Map<string, VendorShop>();
+        db.shops.filter(s => !db.deletedRecordIds?.includes(s.id)).forEach(s => mergedShopsMap.set(s.id, s));
+        fsShops.forEach(s => mergedShopsMap.set(s.id, s));
+        db.shops = Array.from(mergedShopsMap.values());
       } else {
-        initialShops.forEach(shop => {
+        db.shops.forEach(shop => {
           saveToFirestoreAsync('shops', shop.id, shop);
         });
       }
@@ -473,14 +512,20 @@ async function syncWithFirestore() {
       const coupSnap = await firestoreGetDocs(coupCol);
       if (coupSnap.size > 0) {
         const fsCoups: Coupon[] = [];
-        coupSnap.forEach(d => fsCoups.push({ ...(d.data() as Coupon), id: d.id }));
+        coupSnap.forEach(d => {
+          if (!db.deletedRecordIds?.includes(d.id)) {
+            fsCoups.push({ ...(d.data() as Coupon), id: d.id });
+          } else {
+            deleteFromFirestoreAsync('coupons', d.id);
+          }
+        });
         if (fsCoups.length > 0) {
           const fsCoupIds = new Set(fsCoups.map(c => c.id));
-          const missing = db.coupons.filter(c => !fsCoupIds.has(c.id));
+          const missing = db.coupons.filter(c => !fsCoupIds.has(c.id) && !db.deletedRecordIds?.includes(c.id));
           db.coupons = [...fsCoups, ...missing];
         }
       } else {
-        defaultCoupons.forEach(cp => {
+        db.coupons.forEach(cp => {
           saveToFirestoreAsync('coupons', cp.id, cp);
         });
       }
@@ -582,11 +627,31 @@ async function syncWithFirestore() {
 }
 
 // JSON middleware
+// Security Headers Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 app.use(express.json({ limit: '20mb' }));
 
 // Auth & Permissions Config
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'contactreachmedialimited@gmail.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CRM@2026';
+
+// Constant-time password comparison to prevent timing attacks
+function timingSafeEqualStr(a: string, b: string): boolean {
+  try {
+    const hashA = crypto.createHash('sha256').update(String(a)).digest();
+    const hashB = crypto.createHash('sha256').update(String(b)).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+  } catch {
+    return false;
+  }
+}
 
 // Middleware to authenticate admin token
 function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
@@ -603,6 +668,19 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
     db.adminTokens.delete(token);
     return res.status(403).json({ error: 'Session has expired. Please sign in again.' });
   }
+
+  // Ensure live account is not deactivated
+  const liveAdmin = db.adminUsers.find(u => u.id === session.user.id || u.email.toLowerCase() === session.user.email.toLowerCase());
+  if (liveAdmin) {
+    if (!liveAdmin.active) {
+      db.adminTokens.delete(token);
+      return res.status(403).json({ error: 'Administrator account has been deactivated. Access revoked.' });
+    }
+    session.user.role = liveAdmin.role;
+    session.user.name = liveAdmin.name;
+    session.user.active = liveAdmin.active;
+  }
+
   (req as any).adminUser = session.user;
   next();
 }
@@ -620,6 +698,37 @@ function requireRole(allowedRoles: AdminRole[]) {
     });
   };
 }
+
+// -------------------------------------------------------------
+// PUBLIC API: SYSTEM HEALTH & MONITORING
+// -------------------------------------------------------------
+
+app.get('/api/health', (req: Request, res: Response) => {
+  const dbFileSize = fs.existsSync(DB_FILE) ? fs.statSync(DB_FILE).size : 0;
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    database: {
+      storage: 'persistent-json-atomic',
+      dbFileSizeKb: Math.round(dbFileSize / 1024),
+      productsCount: db.products.length,
+      categoriesCount: db.categories.length,
+      shopsCount: db.shops.length,
+      ordersCount: db.orders.length,
+      paymentsCount: db.paymentConfirmations.length,
+      customersCount: db.customers.length,
+      adminUsersCount: db.adminUsers.length,
+      messagesCount: db.messages.length,
+      deletedTombstonesCount: (db.deletedRecordIds || []).length
+    },
+    firestoreSync: {
+      connected: Boolean(firestoreDb),
+      databaseId: firestoreDb ? 'configured' : 'none'
+    },
+    maintenanceMode: Boolean(db.settings.isMaintenanceMode)
+  });
+});
 
 // -------------------------------------------------------------
 // PUBLIC API: SETTINGS & BRANDING
@@ -861,9 +970,19 @@ app.post('/api/orders', (req: Request, res: Response) => {
       return res.status(400).json({ error: `Product "${item.productId}" not found.` });
     }
     const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-    if (product.status === 'Out of Stock' || product.stock < qty) {
+    // Concurrency reservation protection: check recent pending orders within 15 minutes that haven't been cancelled or fulfilled
+    const fifteenMinsAgo = Date.now() - 15 * 60 * 1000;
+    const reservedPendingQty = db.orders
+      .filter(o => o.status === 'New' && o.paymentStatus === 'Pending Payment' && !o.stockDeducted && new Date(o.createdAt).getTime() > fifteenMinsAgo)
+      .reduce((sum, o) => {
+        const matchingItem = o.items.find(it => it.productId === product.id);
+        return sum + (matchingItem ? matchingItem.quantity : 0);
+      }, 0);
+
+    const availableStock = Math.max(0, product.stock - reservedPendingQty);
+    if (product.status === 'Out of Stock' || product.stock < qty || availableStock < qty) {
       return res.status(400).json({
-        error: `Insufficient stock for "${product.name}". Available: ${product.stock} units.`
+        error: `Insufficient stock for "${product.name}". Available: ${Math.min(product.stock, availableStock)} units.`
       });
     }
 
@@ -1659,11 +1778,11 @@ app.put('/api/buyers/profile', requireBuyerAuth, (req: Request, res: Response) =
 // 5. Buyer Order History
 app.get('/api/buyers/orders', requireBuyerAuth, (req: Request, res: Response) => {
   const buyer = (req as any).buyerUser as CustomerUser;
-  const cleanPhone = buyer.phone.replace(/\D/g, '');
+  const cleanPhone = buyer.phone ? buyer.phone.replace(/\D/g, '') : '';
 
   const buyerOrders = db.orders.filter(o =>
     (o.userId && o.userId === buyer.id) ||
-    (o.customerPhone && o.customerPhone.replace(/\D/g, '') === cleanPhone)
+    (cleanPhone.length >= 7 && o.customerPhone && o.customerPhone.replace(/\D/g, '') === cleanPhone)
   );
 
   res.json(buyerOrders);
@@ -1713,7 +1832,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
                        normalizedEmail === ADMIN_EMAIL.toLowerCase();
 
   const user = db.adminUsers.find(u => u.email.toLowerCase() === normalizedEmail && u.active);
-  const passwordMatches = (isOwnerEmail || user) && password === ADMIN_PASSWORD;
+  const passwordMatches = (isOwnerEmail || user) && timingSafeEqualStr(password, ADMIN_PASSWORD);
 
   if (passwordMatches) {
     // Reset rate-limiting on success
@@ -2030,115 +2149,150 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
   const stockNum = stock !== undefined ? Math.max(0, parseInt(stock, 10)) : 0;
   const prodStatus: ProductStatus = status === 'Hidden' ? 'Hidden' : stockNum <= 0 ? 'Out of Stock' : (status || 'Available');
 
-  const newProduct: Product = {
-    id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-    name: name.trim(),
-    sku: sku ? sku.trim() : `CRM-${category.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
-    description: description.trim(),
-    price: finalPrice,
-    discountPercent: finalDiscountPercent,
-    discountPrice: finalDiscountPrice,
-    category: category.trim(),
-    subcategory: subcategory?.trim(),
-    stock: stockNum,
-    imageUrl: imageUrl?.trim() || '/src/assets/images/product_street_sneakers_1791966366958.jpg',
-    images: Array.isArray(images) && images.length > 0 ? images : [imageUrl?.trim() || '/src/assets/images/product_street_sneakers_1791966366958.jpg'],
-    shopName: shopName ? shopName.trim() : (db.settings.companyName || 'ContactReach Market'),
-    shopId: shopId || undefined,
-    receiverName: receiverName ? receiverName.trim() : (db.settings.receiverName || 'Ruth'),
-    paymentMethods: Array.isArray(paymentMethods) && paymentMethods.length > 0
-      ? paymentMethods
-      : ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-    merchantCode: merchantCode ? merchantCode.trim() : (db.settings.merchantCode || '078002'),
-    receiverPhone: receiverPhone ? receiverPhone.trim() : (db.settings.paymentNumber || '078002260'),
-    location: location ? location.trim() : 'Kigali, Rwanda',
-    deliveryInfo: deliveryInfo ? deliveryInfo.trim() : 'Same-day Kigali express (2-4 hrs)',
-    status: prodStatus,
-    isFeatured: Boolean(isFeatured),
-    isNewArrival: Boolean(isNewArrival),
-    isBestSeller: Boolean(isBestSeller),
-    brand: brand?.trim(),
-    variations: Array.isArray(variations) ? variations : undefined,
-    unit: unit ? unit.trim() : 'Piece',
-    rating: 5.0,
-    reviewsCount: 0,
-    createdAt: new Date().toISOString(),
-    history: [{ timestamp: new Date().toISOString(), action: 'Created', user: admin.name }]
-  };
+    const rawImages: string[] = Array.isArray(images)
+      ? images.map((s: any) => String(s).trim()).filter(Boolean)
+      : (typeof images === 'string'
+          ? images.split('\n').map((s: string) => s.trim()).filter(Boolean)
+          : []);
 
-  db.products.unshift(newProduct);
+    const defaultPlaceholder = '/src/assets/images/product_street_sneakers_1791966366958.jpg';
+    const mainImage = imageUrl?.trim() || rawImages[0] || defaultPlaceholder;
+    const finalImages = rawImages.length > 0
+      ? (rawImages.includes(mainImage) ? rawImages : [mainImage, ...rawImages])
+      : [mainImage];
 
-  // Log stock intake
-  if (stockNum > 0) {
-    db.inventoryLogs.unshift({
-      id: `inv-${Date.now()}`,
-      productId: newProduct.id,
-      productName: newProduct.name,
-      previousStock: 0,
-      newStock: stockNum,
-      changeAmount: stockNum,
-      reason: 'Initial stock intake upon product creation',
-      adminName: admin.name,
-      timestamp: new Date().toISOString()
-    });
-  }
+    const newProduct: Product = {
+      id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      name: name.trim(),
+      sku: sku ? sku.trim() : `CRM-${category.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      description: description.trim(),
+      price: finalPrice,
+      discountPercent: finalDiscountPercent,
+      discountPrice: finalDiscountPrice,
+      category: category.trim(),
+      subcategory: subcategory?.trim(),
+      stock: stockNum,
+      imageUrl: mainImage,
+      images: finalImages,
+      shopName: shopName ? shopName.trim() : (db.settings.companyName || 'ContactReach Market'),
+      shopId: shopId || undefined,
+      receiverName: receiverName ? receiverName.trim() : (db.settings.receiverName || 'Ruth'),
+      paymentMethods: Array.isArray(paymentMethods) && paymentMethods.length > 0
+        ? paymentMethods
+        : ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+      merchantCode: merchantCode ? merchantCode.trim() : (db.settings.merchantCode || '078002'),
+      receiverPhone: receiverPhone ? receiverPhone.trim() : (db.settings.paymentNumber || '078002260'),
+      location: location ? location.trim() : 'Kigali, Rwanda',
+      deliveryInfo: deliveryInfo ? deliveryInfo.trim() : 'Same-day Kigali express (2-4 hrs)',
+      status: prodStatus,
+      isFeatured: Boolean(isFeatured),
+      isNewArrival: Boolean(isNewArrival),
+      isBestSeller: Boolean(isBestSeller),
+      brand: brand?.trim(),
+      variations: Array.isArray(variations) ? variations : undefined,
+      unit: unit ? unit.trim() : 'Piece',
+      rating: 5.0,
+      reviewsCount: 0,
+      createdAt: new Date().toISOString(),
+      history: [{ timestamp: new Date().toISOString(), action: 'Created', user: admin.name }]
+    };
 
-  logAudit(admin, 'PRODUCT_CREATED', `Created product "${newProduct.name}" (SKU: ${newProduct.sku}) with stock ${stockNum}`, 'product', newProduct.id);
-  saveDbToDisk();
-  saveToFirestoreAsync('products', newProduct.id, newProduct);
-  res.status(201).json(newProduct);
-});
+    db.products.unshift(newProduct);
 
-app.put('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
-  const admin = (req as any).adminUser;
-  const productIndex = db.products.findIndex(p => p.id === req.params.id);
-  if (productIndex === -1) return res.status(404).json({ error: 'Product not found' });
-
-  const existing = db.products[productIndex];
-  const oldStock = existing.stock;
-  const newStock = req.body.stock !== undefined ? Math.max(0, parseInt(req.body.stock, 10)) : existing.stock;
-
-  let prodStatus: ProductStatus = req.body.status !== undefined ? req.body.status : existing.status;
-  if (newStock === 0 && prodStatus === 'Available') prodStatus = 'Out of Stock';
-
-  const newPrice = req.body.price !== undefined ? Math.max(0, Number(req.body.price)) : existing.price;
-  let finalDiscountPercent: number | undefined = existing.discountPercent;
-  let finalDiscountPrice: number | undefined = existing.discountPrice;
-
-  if (req.body.discountPercent !== undefined) {
-    if (req.body.discountPercent === '' || req.body.discountPercent === null || Number(req.body.discountPercent) <= 0) {
-      finalDiscountPercent = undefined;
-      finalDiscountPrice = undefined;
-    } else {
-      const pct = Math.min(99, Math.max(1, Math.round(Number(req.body.discountPercent))));
-      finalDiscountPercent = pct;
-      finalDiscountPrice = Math.max(0, Math.round(newPrice * (1 - pct / 100)));
+    // Log stock intake
+    if (stockNum > 0) {
+      db.inventoryLogs.unshift({
+        id: `inv-${Date.now()}`,
+        productId: newProduct.id,
+        productName: newProduct.name,
+        previousStock: 0,
+        newStock: stockNum,
+        changeAmount: stockNum,
+        reason: 'Initial stock intake upon product creation',
+        adminName: admin.name,
+        timestamp: new Date().toISOString()
+      });
     }
-  } else if (req.body.discountPrice !== undefined) {
-    if (req.body.discountPrice === '' || req.body.discountPrice === null || Number(req.body.discountPrice) <= 0) {
-      finalDiscountPercent = undefined;
-      finalDiscountPrice = undefined;
-    } else {
-      const dp = Math.max(0, Number(req.body.discountPrice));
-      finalDiscountPrice = dp;
-      finalDiscountPercent = newPrice > 0 ? Math.round(((newPrice - dp) / newPrice) * 100) : undefined;
-    }
-  }
 
-  const updated: Product = {
-    ...existing,
-    ...req.body,
-    price: newPrice,
-    discountPercent: finalDiscountPercent,
-    discountPrice: finalDiscountPrice,
-    stock: newStock,
-    status: prodStatus,
-    updatedAt: new Date().toISOString(),
-    history: [
-      ...(existing.history || []),
-      { timestamp: new Date().toISOString(), action: 'Updated details', user: admin.name }
-    ]
-  };
+    logAudit(admin, 'PRODUCT_CREATED', `Created product "${newProduct.name}" (SKU: ${newProduct.sku}) with stock ${stockNum}`, 'product', newProduct.id);
+    saveDbToDisk();
+    saveToFirestoreAsync('products', newProduct.id, newProduct);
+    res.status(201).json(newProduct);
+  });
+
+  app.put('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+    const admin = (req as any).adminUser;
+    const productIndex = db.products.findIndex(p => p.id === req.params.id);
+    if (productIndex === -1) return res.status(404).json({ error: 'Product not found' });
+
+    const existing = db.products[productIndex];
+    const oldStock = existing.stock;
+    const newStock = req.body.stock !== undefined ? Math.max(0, parseInt(req.body.stock, 10)) : existing.stock;
+
+    let prodStatus: ProductStatus = req.body.status !== undefined ? req.body.status : existing.status;
+    if (newStock === 0 && prodStatus === 'Available') prodStatus = 'Out of Stock';
+
+    const newPrice = req.body.price !== undefined ? Math.max(0, Number(req.body.price)) : existing.price;
+    let finalDiscountPercent: number | undefined = existing.discountPercent;
+    let finalDiscountPrice: number | undefined = existing.discountPrice;
+
+    if (req.body.discountPercent !== undefined) {
+      if (req.body.discountPercent === '' || req.body.discountPercent === null || Number(req.body.discountPercent) <= 0) {
+        finalDiscountPercent = undefined;
+        finalDiscountPrice = undefined;
+      } else {
+        const pct = Math.min(99, Math.max(1, Math.round(Number(req.body.discountPercent))));
+        finalDiscountPercent = pct;
+        finalDiscountPrice = Math.max(0, Math.round(newPrice * (1 - pct / 100)));
+      }
+    } else if (req.body.discountPrice !== undefined) {
+      if (req.body.discountPrice === '' || req.body.discountPrice === null || Number(req.body.discountPrice) <= 0) {
+        finalDiscountPercent = undefined;
+        finalDiscountPrice = undefined;
+      } else {
+        const dp = Math.max(0, Number(req.body.discountPrice));
+        finalDiscountPrice = dp;
+        finalDiscountPercent = newPrice > 0 ? Math.round(((newPrice - dp) / newPrice) * 100) : undefined;
+      }
+    }
+
+    // Process multiple image links
+    let finalImages: string[] = existing.images || (existing.imageUrl ? [existing.imageUrl] : []);
+    if (req.body.images !== undefined) {
+      if (Array.isArray(req.body.images)) {
+        finalImages = req.body.images.map((u: any) => String(u).trim()).filter(Boolean);
+      } else if (typeof req.body.images === 'string') {
+        finalImages = req.body.images.split('\n').map((u: any) => String(u).trim()).filter(Boolean);
+      }
+    }
+
+    let finalImageUrl = req.body.imageUrl !== undefined ? String(req.body.imageUrl).trim() : existing.imageUrl;
+    if (!finalImageUrl && finalImages.length > 0) {
+      finalImageUrl = finalImages[0];
+    }
+    if (finalImageUrl && !finalImages.includes(finalImageUrl)) {
+      finalImages.unshift(finalImageUrl);
+    }
+    if (finalImages.length === 0 && finalImageUrl) {
+      finalImages = [finalImageUrl];
+    }
+
+    const updated: Product = {
+      ...existing,
+      ...req.body,
+      imageUrl: finalImageUrl,
+      images: finalImages,
+      price: newPrice,
+      discountPercent: finalDiscountPercent,
+      discountPrice: finalDiscountPrice,
+      stock: newStock,
+      status: prodStatus,
+      updatedAt: new Date().toISOString(),
+      history: [
+        ...(existing.history || []),
+        { timestamp: new Date().toISOString(), action: 'Updated details', user: admin.name }
+      ]
+    };
 
   db.products[productIndex] = updated;
 
@@ -2192,6 +2346,10 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'a
   if (index === -1) return res.status(404).json({ error: 'Product not found' });
 
   const removed = db.products.splice(index, 1)[0];
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(removed.id)) {
+    db.deletedRecordIds.push(removed.id);
+  }
   logAudit(admin, 'PRODUCT_DELETED', `Deleted product "${removed.name}"`, 'product', removed.id);
   saveDbToDisk();
   deleteFromFirestoreAsync('products', removed.id);
@@ -2262,6 +2420,10 @@ app.delete('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 
   if (index === -1) return res.status(404).json({ error: 'Category not found' });
 
   const removed = db.categories.splice(index, 1)[0];
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(catId)) {
+    db.deletedRecordIds.push(catId);
+  }
   logAudit(admin, 'CATEGORY_DELETED', `Deleted category "${removed.nameEn}"`, 'category', catId);
   saveDbToDisk();
   deleteFromFirestoreAsync('categories', catId);
@@ -2299,6 +2461,7 @@ app.post('/api/admin/shops', requireAdminAuth, requireRole(['owner', 'administra
   db.shops.push(newShop);
   logAudit(admin, 'SHOP_CREATED', `Saved new shop "${newShop.name}" (${newShop.id}) permanently`, 'shop', newShop.id);
   saveDbToDisk();
+  saveToFirestoreAsync('shops', newShop.id, newShop);
   res.status(201).json(newShop);
 });
 
@@ -2340,6 +2503,10 @@ app.delete('/api/admin/shops/:id', requireAdminAuth, requireRole(['owner', 'admi
   if (idx === -1) return res.status(404).json({ error: 'Shop not found' });
 
   const removed = db.shops.splice(idx, 1)[0];
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(shopId)) {
+    db.deletedRecordIds.push(shopId);
+  }
   logAudit(admin, 'SHOP_DELETED', `Deleted shop "${removed.name}"`, 'shop', shopId);
   saveDbToDisk();
   deleteFromFirestoreAsync('shops', shopId);
@@ -2696,6 +2863,7 @@ app.patch('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'ad
   }
 
   saveDbToDisk();
+  saveToFirestoreAsync('messages', msg.id, msg);
   res.json(msg);
 });
 
@@ -2705,6 +2873,10 @@ app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'a
   if (idx === -1) return res.status(404).json({ error: 'Message not found' });
 
   const removed = db.messages.splice(idx, 1)[0];
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(removed.id)) {
+    db.deletedRecordIds.push(removed.id);
+  }
   logAudit(admin, 'MESSAGE_DELETED', `Deleted message #${removed.id} from ${removed.name}`, 'message', removed.id);
   saveDbToDisk();
   deleteFromFirestoreAsync('messages', removed.id);
@@ -2920,6 +3092,117 @@ app.put('/api/admin/buyers/:id/reset-password', requireAdminAuth, requireRole(['
 
 app.get('/api/admin/audit-logs', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
   res.json(db.auditLogs);
+});
+
+// -------------------------------------------------------------
+// ADMIN USERS & ROLE PERMISSIONS (OWNER ONLY)
+// -------------------------------------------------------------
+
+app.get('/api/admin/users', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  res.json(db.adminUsers);
+});
+
+app.post('/api/admin/users', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { name, email, role, phone } = req.body;
+  if (!name || !email || !role) {
+    return res.status(400).json({ error: 'Name, email, and role are required' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (db.adminUsers.some(u => u.email.toLowerCase() === normalizedEmail)) {
+    return res.status(400).json({ error: 'An administrator with this email already exists' });
+  }
+
+  const validRoles: AdminRole[] = ['owner', 'administrator', 'product_manager', 'order_manager', 'customer_support', 'shop_manager'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: 'Invalid administrative role specified' });
+  }
+
+  const newAdmin: AdminUser = {
+    id: `adm-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    name: name.trim(),
+    email: normalizedEmail,
+    role,
+    phone: phone ? phone.trim() : undefined,
+    active: true,
+    lastLogin: undefined
+  };
+
+  db.adminUsers.push(newAdmin);
+  logAudit(admin, 'ADMIN_USER_CREATED', `Created administrator account for ${newAdmin.name} (${newAdmin.email}) with role ${newAdmin.role}`, 'admin_user', newAdmin.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('adminUsers', newAdmin.id, newAdmin);
+
+  res.status(201).json(newAdmin);
+});
+
+app.patch('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const user = db.adminUsers.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'Administrator user not found' });
+
+  const { role, active, phone, name } = req.body;
+
+  if (name && typeof name === 'string') user.name = name.trim();
+  if (phone !== undefined) user.phone = phone ? phone.trim() : undefined;
+
+  if (role) {
+    const validRoles: AdminRole[] = ['owner', 'administrator', 'product_manager', 'order_manager', 'customer_support', 'shop_manager'];
+    if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid administrative role' });
+    user.role = role;
+  }
+
+  if (active !== undefined) {
+    if (admin.id === user.id && !active) {
+      return res.status(400).json({ error: 'You cannot deactivate your own administrative account.' });
+    }
+    user.active = Boolean(active);
+    if (!user.active) {
+      // Immediate revocation: clear all active session tokens for this user
+      for (const [token, session] of db.adminTokens.entries()) {
+        if (session.user.id === user.id || session.user.email.toLowerCase() === user.email.toLowerCase()) {
+          db.adminTokens.delete(token);
+        }
+      }
+    }
+  }
+
+  logAudit(admin, 'ADMIN_USER_UPDATED', `Updated administrator account ${user.name} (${user.email}): role=${user.role}, active=${user.active}`, 'admin_user', user.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('adminUsers', user.id, user);
+
+  res.json({ message: 'Administrator account updated', user });
+});
+
+app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const index = db.adminUsers.findIndex(u => u.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: 'Administrator user not found' });
+
+  const target = db.adminUsers[index];
+  if (target.id === admin.id || target.email.toLowerCase() === admin.email.toLowerCase()) {
+    return res.status(400).json({ error: 'You cannot delete your own administrative account.' });
+  }
+
+  const removed = db.adminUsers.splice(index, 1)[0];
+  // Immediate revocation: clear all active session tokens
+  for (const [token, session] of db.adminTokens.entries()) {
+    if (session.user.id === removed.id || session.user.email.toLowerCase() === removed.email.toLowerCase()) {
+      db.adminTokens.delete(token);
+    }
+  }
+
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(removed.id)) {
+    db.deletedRecordIds.push(removed.id);
+  }
+
+  logAudit(admin, 'ADMIN_USER_DELETED', `Deleted administrator account for ${removed.name} (${removed.email})`, 'admin_user', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('adminUsers', removed.id);
+
+  res.json({ message: 'Administrator account removed successfully', removed });
 });
 
 // -------------------------------------------------------------

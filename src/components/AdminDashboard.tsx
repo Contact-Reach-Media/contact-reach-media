@@ -6,7 +6,8 @@ import {
   MapPin, Truck, RefreshCw, Filter, ArrowUpRight, CheckCircle2, XCircle,
   AlertCircle, Clock, ChevronDown, Download, Printer, ShieldCheck,
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
-  KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power
+  KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
+  Star, ArrowLeft, ArrowRight
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -39,6 +40,7 @@ type TabType =
   | 'problems'
   | 'coupons'
   | 'audit'
+  | 'team'
   | 'settings';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -88,6 +90,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [inventoryLogs, setInventoryLogs] = useState<InventoryLog[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [customers, setCustomers] = useState<CustomerUser[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [newUserModalOpen, setNewUserModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPhone, setNewUserPhone] = useState('');
+  const [newUserRole, setNewUserRole] = useState<AdminRole>('administrator');
+  const [creatingUser, setCreatingUser] = useState(false);
   const [supplierApplications, setSupplierApplications] = useState<any[]>([]);
   const [supplierPayouts, setSupplierPayouts] = useState<any[]>([]);
   const [disbursePayoutModal, setDisbursePayoutModal] = useState<any | null>(null);
@@ -171,6 +180,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     colors: ''
   });
 
+  // Multiple Image Links helper state for Product Modal
+  const [newImageLink, setNewImageLink] = useState('');
+  const [showBulkImagePaste, setShowBulkImagePaste] = useState(false);
+  const [bulkImageInput, setBulkImageInput] = useState('');
+
+  const getParsedImageList = (imagesText: string, primaryUrl: string): string[] => {
+    const list = (imagesText || '').split('\n').map(s => s.trim()).filter(Boolean);
+    if (primaryUrl && primaryUrl.trim() && !list.includes(primaryUrl.trim())) {
+      list.unshift(primaryUrl.trim());
+    }
+    return Array.from(new Set(list));
+  };
+
+  const handleAddImageLink = () => {
+    if (!newImageLink.trim()) return;
+    const url = newImageLink.trim();
+    const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+    if (currentList.includes(url)) {
+      showToast('Image link is already in the gallery', 'error');
+      return;
+    }
+    const updatedList = [...currentList, url];
+    setProdForm(prev => ({
+      ...prev,
+      imageUrl: prev.imageUrl || url,
+      imagesText: updatedList.join('\n')
+    }));
+    setNewImageLink('');
+    showToast('Image link added to gallery!');
+  };
+
+  const handleApplyBulkImages = () => {
+    if (!bulkImageInput.trim()) return;
+    const lines = bulkImageInput
+      .split(/[\n,]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 5);
+
+    if (lines.length === 0) {
+      showToast('No valid URLs found', 'error');
+      return;
+    }
+
+    const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+    const combined = Array.from(new Set([...currentList, ...lines]));
+    setProdForm(prev => ({
+      ...prev,
+      imageUrl: prev.imageUrl || combined[0],
+      imagesText: combined.join('\n')
+    }));
+    setBulkImageInput('');
+    setShowBulkImagePaste(false);
+    showToast(`Added ${lines.length} image link${lines.length > 1 ? 's' : ''}!`);
+  };
+
+  const handleSetPrimaryImage = (targetUrl: string) => {
+    const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+    const reordered = [targetUrl, ...currentList.filter(u => u !== targetUrl)];
+    setProdForm(prev => ({
+      ...prev,
+      imageUrl: targetUrl,
+      imagesText: reordered.join('\n')
+    }));
+    showToast('Cover image updated!');
+  };
+
+  const handleRemoveImage = (targetUrl: string) => {
+    const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+    const filtered = currentList.filter(u => u !== targetUrl);
+    const newPrimary = prodForm.imageUrl === targetUrl ? (filtered[0] || '') : prodForm.imageUrl;
+    setProdForm(prev => ({
+      ...prev,
+      imageUrl: newPrimary,
+      imagesText: filtered.join('\n')
+    }));
+  };
+
+  const handleMoveImage = (index: number, direction: 'left' | 'right') => {
+    const list = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    const copy = [...list];
+    const temp = copy[index];
+    copy[index] = copy[targetIndex];
+    copy[targetIndex] = temp;
+    setProdForm(prev => ({
+      ...prev,
+      imageUrl: copy[0],
+      imagesText: copy.join('\n')
+    }));
+  };
+
   // Category Editor Modal
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -244,6 +345,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         fetchedInvLogs,
         fetchedAuditLogs,
         fetchedCustomers,
+        fetchedAdminUsers,
         fetchedSupplierApps,
         fetchedSupplierPayouts,
         fetchedSettings
@@ -260,6 +362,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         api.adminGetInventoryLogs().catch(() => []),
         api.adminGetAuditLogs().catch(() => []),
         api.adminGetCustomers().catch(() => []),
+        api.adminGetUsers().catch(() => []),
         api.adminGetSupplierApplications().catch(() => []),
         api.adminGetSupplierPayouts().catch(() => []),
         api.getSettings().catch(() => null)
@@ -277,6 +380,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedInvLogs) setInventoryLogs(fetchedInvLogs);
       if (fetchedAuditLogs) setAuditLogs(fetchedAuditLogs);
       if (fetchedCustomers) setCustomers(fetchedCustomers);
+      if (fetchedAdminUsers) setAdminUsers(fetchedAdminUsers);
       if (fetchedSupplierApps) setSupplierApplications(fetchedSupplierApps);
       if (fetchedSupplierPayouts) setSupplierPayouts(fetchedSupplierPayouts);
       if (fetchedSettings) setSettings(fetchedSettings);
@@ -371,6 +475,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       sizes: '',
       colors: ''
     });
+    setNewImageLink('');
+    setShowBulkImagePaste(false);
+    setBulkImageInput('');
     setProductModalOpen(true);
   };
 
@@ -402,6 +509,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       sizes: p.variations?.find(v => v.name.toLowerCase() === 'size')?.options.join(', ') || '',
       colors: p.variations?.find(v => v.name.toLowerCase() === 'color')?.options.join(', ') || ''
     });
+    setNewImageLink('');
+    setShowBulkImagePaste(false);
+    setBulkImageInput('');
     setProductModalOpen(true);
   };
 
@@ -426,9 +536,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
     }
 
-    const imagesList = prodForm.imagesText.split('\n').map(s => s.trim()).filter(Boolean);
-    if (!imagesList.includes(prodForm.imageUrl.trim())) {
-      imagesList.unshift(prodForm.imageUrl.trim());
+    const imagesList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+    const finalPrimaryImage = prodForm.imageUrl.trim() || imagesList[0] || '/src/assets/images/product_street_sneakers_1791966366958.jpg';
+    if (!imagesList.includes(finalPrimaryImage)) {
+      imagesList.unshift(finalPrimaryImage);
     }
 
     const finalPrice = Math.max(0, Number(prodForm.price));
@@ -449,7 +560,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category: prodForm.category,
       subcategory: prodForm.subcategory.trim() || undefined,
       stock: Math.max(0, parseInt(String(prodForm.stock), 10) || 0),
-      imageUrl: prodForm.imageUrl.trim(),
+      imageUrl: finalPrimaryImage,
       images: imagesList,
       shopName: prodForm.shopName,
       shopId: prodForm.shopId || undefined,
@@ -1127,6 +1238,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <ShieldCheck className="w-4 h-4" />
                 <span>Audit Logs</span>
               </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('team')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'team' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-4 h-4" />
+                <span>Team & Roles</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'team' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {adminUsers.length}
+              </span>
             </button>
 
             <button
@@ -2807,6 +2935,130 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
+          {/* TAB 12B: TEAM & ROLES MANAGEMENT */}
+          {activeTab === 'team' && (
+            <div className="space-y-6 max-w-5xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-xl font-black text-slate-900 tracking-tight">Administrative Team & Role Permissions</h1>
+                  <p className="text-xs text-slate-500">Manage staff roles, access privileges, and security enforcement. Account revocations take effect immediately.</p>
+                </div>
+                {currentUser?.role === 'owner' && (
+                  <button
+                    onClick={() => setNewUserModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Team Member</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Security Invariant Banner */}
+              <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-200/80 rounded-2xl p-4 flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-700 leading-relaxed">
+                  <strong className="font-bold text-slate-900">Enforced Role-Based Access Control (RBAC):</strong>
+                  <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600 text-[11px]">
+                    <li><span className="font-semibold text-slate-800">Owner:</span> Full operational and team authority across all functions.</li>
+                    <li><span className="font-semibold text-slate-800">Administrator:</span> Catalog, orders, payments, coupons, and customer inquiries.</li>
+                    <li><span className="font-semibold text-slate-800">Product Manager:</span> Product catalog creation, pricing, and inventory adjustments.</li>
+                    <li><span className="font-semibold text-slate-800">Customer Support:</span> Inquiry messages, problem tickets, and order tracking assistance.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Team Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px]">
+                        <th className="py-3 px-4">Member Name</th>
+                        <th className="py-3 px-3">Email Address</th>
+                        <th className="py-3 px-3">Role</th>
+                        <th className="py-3 px-3">Phone</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {adminUsers.map(u => (
+                        <tr key={u.id} className="hover:bg-slate-50/60">
+                          <td className="py-3 px-4 font-bold text-slate-900">
+                            {u.name}
+                            {u.email.toLowerCase() === currentUser?.email.toLowerCase() && (
+                              <span className="ml-2 text-[10px] bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded-full">You</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{u.email}</td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              u.role === 'owner' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                              u.role === 'administrator' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                              u.role === 'product_manager' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                              u.role === 'order_manager' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                              'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}>
+                              {u.role.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-600">{u.phone || '—'}</td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              u.active !== false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {u.active !== false ? 'Active' : 'Suspended'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right space-x-2">
+                            {currentUser?.role === 'owner' && u.email.toLowerCase() !== currentUser?.email.toLowerCase() && (
+                              <>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const nextActive = u.active === false;
+                                      await api.adminUpdateUser(u.id, { active: nextActive });
+                                      showToast(`Staff account ${nextActive ? 'activated' : 'deactivated and access revoked immediately'}`);
+                                      fetchAllData();
+                                    } catch (err: any) {
+                                      showToast(err.message || 'Failed to update user', 'error');
+                                    }
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
+                                    u.active !== false ? 'bg-rose-50 hover:bg-rose-100 text-rose-700' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                                  }`}
+                                >
+                                  {u.active !== false ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm(`Are you sure you want to remove administrator ${u.name}?`)) {
+                                      try {
+                                        await api.adminDeleteUser(u.id);
+                                        showToast(`Removed administrator ${u.name}`);
+                                        fetchAllData();
+                                      } catch (err: any) {
+                                        showToast(err.message || 'Failed to remove user', 'error');
+                                      }
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 cursor-pointer transition-all"
+                                >
+                                  Remove
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 13: SETTINGS */}
           {activeTab === 'settings' && (
             <div className="space-y-6 max-w-3xl">
@@ -3083,6 +3335,113 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </main>
       </div>
 
+      {/* MODAL: ADD TEAM MEMBER */}
+      {newUserModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-base text-slate-900">Add Administrative Staff Member</h3>
+              <button onClick={() => setNewUserModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                if (!newUserName.trim() || !newUserEmail.trim()) {
+                  showToast('Name and email are required', 'error');
+                  return;
+                }
+                setCreatingUser(true);
+                try {
+                  await api.adminCreateUser({
+                    name: newUserName.trim(),
+                    email: newUserEmail.trim(),
+                    role: newUserRole,
+                    phone: newUserPhone.trim() || undefined
+                  });
+                  showToast('Staff member added successfully!');
+                  setNewUserModalOpen(false);
+                  setNewUserName('');
+                  setNewUserEmail('');
+                  setNewUserPhone('');
+                  fetchAllData();
+                } catch (err: any) {
+                  showToast(err.message || 'Failed to create staff member', 'error');
+                } finally {
+                  setCreatingUser(false);
+                }
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Eric Kwizera"
+                  value={newUserName}
+                  onChange={e => setNewUserName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="staff@contactreachmedia.rw"
+                  value={newUserEmail}
+                  onChange={e => setNewUserEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-[11px]"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Phone Number (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="078..."
+                  value={newUserPhone}
+                  onChange={e => setNewUserPhone(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Role & Authority</label>
+                <select
+                  value={newUserRole}
+                  onChange={e => setNewUserRole(e.target.value as AdminRole)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                >
+                  <option value="administrator">Administrator (Full operational access)</option>
+                  <option value="product_manager">Product Manager (Catalog & inventory)</option>
+                  <option value="order_manager">Order Manager (Order status & payments)</option>
+                  <option value="customer_support">Customer Support (Inquiries & cases)</option>
+                  <option value="shop_manager">Shop Manager (Vendors & suppliers)</option>
+                  <option value="owner">Owner (Complete platform ownership)</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setNewUserModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingUser}
+                  className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                >
+                  {creatingUser ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL 1: PRODUCT ADD / EDIT */}
       {productModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
@@ -3268,17 +3627,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="block font-bold text-slate-700">
-                  Product Image * <span className="font-normal text-xs text-slate-500">(Upload from device or enter valid public image URL)</span>
-                </label>
-
-                {/* Upload or URL Controls */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* MULTIPLE IMAGES & GALLERY LINKS MANAGER */}
+              <div className="space-y-3 p-4 bg-slate-50/90 rounded-2xl border border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-50 hover:bg-orange-100 text-[#FF6000] border-2 border-dashed border-orange-200 rounded-xl cursor-pointer font-bold text-xs transition-colors">
-                      <Upload className="w-4 h-4" />
-                      <span>Upload Image File</span>
+                    <label className="block font-black text-slate-800 text-xs">
+                      Product Images & Gallery Links *
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Add multiple image URLs or upload pictures. Customers will be able to browse all angles in an interactive gallery.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#FF6000] font-bold text-[11px]">
+                      {getParsedImageList(prodForm.imagesText, prodForm.imageUrl).length} {getParsedImageList(prodForm.imagesText, prodForm.imageUrl).length === 1 ? 'Image' : 'Images'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkImagePaste(!showBulkImagePaste)}
+                      className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg cursor-pointer transition-colors"
+                    >
+                      {showBulkImagePaste ? 'Hide Bulk Paste' : 'Bulk Paste URLs'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bulk Paste Box (Collapsible) */}
+                {showBulkImagePaste && (
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Paste Multiple Image Links (One URL per line or comma-separated):
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={bulkImageInput}
+                      onChange={(e) => setBulkImageInput(e.target.value)}
+                      placeholder="https://images.unsplash.com/photo-1...&#10;https://images.unsplash.com/photo-2...&#10;https://example.com/item-angle-3.jpg"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-[11px]"
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkImageInput('');
+                          setShowBulkImagePaste(false);
+                        }}
+                        className="px-3 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleApplyBulkImages}
+                        className="px-3.5 py-1 text-[11px] font-bold bg-[#FF6000] hover:bg-[#e05500] text-white rounded-lg shadow-2xs cursor-pointer"
+                      >
+                        Add Links to Gallery
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Add Bar: Input URL + Add Button + Upload Button */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-8 flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newImageLink}
+                      onChange={(e) => setNewImageLink(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddImageLink();
+                        }
+                      }}
+                      placeholder="Paste image URL (https://...) and click Add"
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddImageLink}
+                      className="px-3.5 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl text-xs flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Link</span>
+                    </button>
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-orange-50 text-slate-700 hover:text-[#FF6000] border border-slate-300 hover:border-orange-200 rounded-xl cursor-pointer font-bold text-xs transition-colors h-full">
+                      <Upload className="w-3.5 h-3.5 text-[#FF6000]" />
+                      <span>Upload File</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -3287,49 +3724,126 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     </label>
                   </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      value={prodForm.imageUrl}
-                      onChange={(e) => setProdForm({ ...prodForm, imageUrl: e.target.value })}
-                      placeholder="https://... or image URL"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono"
-                    />
-                  </div>
                 </div>
 
-                {/* Live Image Preview */}
-                {prodForm.imageUrl && (
-                  <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={prodForm.imageUrl}
-                        alt="Product Preview"
-                        className="w-14 h-14 object-cover rounded-xl border border-slate-200 bg-white shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLElement).setAttribute('src', '/src/assets/images/hero_marketplace_shopper_1791966365592.jpg');
-                        }}
-                      />
-                      <div className="min-w-0">
-                        <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Active Primary Image</span>
-                        </span>
-                        <p className="text-[10px] text-slate-400 font-mono truncate max-w-xs">
-                          {prodForm.imageUrl.startsWith('data:') ? 'Uploaded local file (Base64)' : prodForm.imageUrl}
-                        </p>
+                {/* Visual Image Cards Gallery List */}
+                {(() => {
+                  const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+                  if (currentList.length === 0) {
+                    return (
+                      <div className="py-6 px-4 bg-white rounded-xl border border-dashed border-slate-300 text-center">
+                        <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+                        <p className="font-bold text-slate-600 text-xs">No images added yet</p>
+                        <p className="text-[11px] text-slate-400">Enter an image URL above or upload a photo to configure the gallery</p>
                       </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pt-1">
+                      {currentList.map((imgUrl, idx) => {
+                        const isPrimary = idx === 0 || imgUrl === prodForm.imageUrl;
+                        return (
+                          <div
+                            key={idx}
+                            className={`relative bg-white rounded-xl border overflow-hidden shadow-2xs transition-all group flex flex-col justify-between ${
+                              isPrimary ? 'border-[#FF6000] ring-2 ring-orange-200' : 'border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            {/* Primary Badge */}
+                            <div className="absolute top-1.5 left-1.5 z-10">
+                              {isPrimary ? (
+                                <span className="bg-[#FF6000] text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                  <Star className="w-2.5 h-2.5 fill-white" />
+                                  <span>Cover</span>
+                                </span>
+                              ) : (
+                                <span className="bg-slate-900/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                  #{idx + 1}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Delete Button */}
+                            <div className="absolute top-1.5 right-1.5 z-10">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(imgUrl)}
+                                className="w-6 h-6 rounded-md bg-white/90 hover:bg-rose-600 hover:text-white text-slate-500 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+                                title="Remove Image"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            {/* Thumbnail Area */}
+                            <div className="relative pt-[80%] bg-slate-100 overflow-hidden">
+                              <img
+                                src={imgUrl}
+                                alt={`Product angle ${idx + 1}`}
+                                className="absolute inset-0 w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).setAttribute('src', '/src/assets/images/hero_marketplace_shopper_1791966365592.jpg');
+                                }}
+                              />
+                            </div>
+
+                            {/* Card Footer Actions */}
+                            <div className="p-1.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-1 text-[10px]">
+                              {!isPrimary ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetPrimaryImage(imgUrl)}
+                                  className="text-[10px] font-bold text-[#FF6000] hover:underline flex items-center gap-0.5 cursor-pointer"
+                                >
+                                  <Star className="w-2.5 h-2.5" />
+                                  <span>Set Cover</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
+                                  <Check className="w-2.5 h-2.5" />
+                                  <span>Cover</span>
+                                </span>
+                              )}
+
+                              <div className="flex items-center gap-0.5">
+                                {idx > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveImage(idx, 'left')}
+                                    className="p-1 text-slate-500 hover:text-slate-800 rounded hover:bg-slate-200 cursor-pointer"
+                                    title="Move Left"
+                                  >
+                                    <ArrowLeft className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {idx < currentList.length - 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveImage(idx, 'right')}
+                                    className="p-1 text-slate-500 hover:text-slate-800 rounded hover:bg-slate-200 cursor-pointer"
+                                    title="Move Right"
+                                  >
+                                    <ArrowRight className="w-3 h-3" />
+                                  </button>
+                                )}
+                                <a
+                                  href={imgUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-200"
+                                  title="Open in new tab"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setProdForm({ ...prodForm, imageUrl: '' })}
-                      className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2 py-1 shrink-0"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
