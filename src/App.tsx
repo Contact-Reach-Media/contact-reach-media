@@ -28,6 +28,7 @@ import { HeroCarousel } from './components/HeroCarousel.tsx';
 import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
 import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
 import { MaintenancePage } from './components/MaintenancePage.tsx';
+import { NotFoundPage } from './components/NotFoundPage.tsx';
 
 // Client-side URL route parser for Vercel, Netlify & direct browser reloads
 function parseRouteFromLocation() {
@@ -64,9 +65,13 @@ function parseRouteFromLocation() {
     view = 'admin';
   } else if (rawPath === '/orders' || rawPath === '/track' || rawPath === '/track-order') {
     view = 'track-order';
+  } else if (rawPath === '/404' || rawPath === '/not-found') {
+    view = '404';
   } else if (rawPath.startsWith('/product/')) {
     productId = window.location.pathname.replace(/^\/product\//i, '').trim();
     view = 'shop';
+  } else if (rawPath !== '/' && rawPath !== '') {
+    view = '404';
   }
 
   return {
@@ -142,15 +147,19 @@ export default function App() {
     else if (view === 'contact') targetPath = '/contact';
     else if (view === 'track-order' || view === 'orders') targetPath = '/orders';
     else if (view === 'admin') targetPath = '/admin';
+    else if (view === '404') targetPath = '/404';
 
     if (view === 'admin') {
+      setActiveView('admin');
       if (isAdminLoggedIn) {
-        setActiveView('admin');
         if (push && window.location.pathname !== targetPath) {
           window.history.pushState({ view: 'admin' }, '', targetPath);
         }
       } else {
         setIsAdminLoginOpen(true);
+        if (push && window.location.pathname !== targetPath) {
+          window.history.pushState({ view: 'admin' }, '', targetPath);
+        }
       }
       return;
     }
@@ -214,10 +223,8 @@ export default function App() {
     const handlePopState = () => {
       const route = parseRouteFromLocation();
       if (route.view === 'admin') {
-        if (isAdminLoggedIn) {
-          setActiveView('admin');
-        } else {
-          setActiveView('home');
+        setActiveView('admin');
+        if (!isAdminLoggedIn) {
           setIsAdminLoginOpen(true);
         }
       } else if (route.view === 'track-order') {
@@ -425,16 +432,59 @@ export default function App() {
       />
 
       {/* VIEW: ADMIN DASHBOARD */}
-      {activeView === 'admin' && isAdminLoggedIn ? (
-        <AdminDashboard
-          onLogout={async () => {
-            await api.adminLogout();
-            setIsAdminLoggedIn(false);
-            handleNavigate('home');
-            showToast('Logged out of admin portal');
+      {activeView === 'admin' ? (
+        isAdminLoggedIn ? (
+          <AdminDashboard
+            onLogout={async () => {
+              await api.adminLogout();
+              setIsAdminLoggedIn(false);
+              handleNavigate('home');
+              showToast('Logged out of admin portal');
+            }}
+            categories={categories}
+            onRefreshPublicData={refreshAllData}
+          />
+        ) : (
+          <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 py-16 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white text-center">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-xl shadow-orange-500/20 mb-6">
+              <ShieldCheck className="w-8 h-8 text-white" />
+            </div>
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-semibold mb-4">
+              <span>ADMIN GATEWAY</span>
+            </div>
+            <h2 className="text-3xl font-black mb-3">ContactReach Admin Portal</h2>
+            <p className="text-slate-400 max-w-md text-sm mb-6">
+              Restricted management area for verified platform owners, catalog managers, and customer support operators.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={() => setIsAdminLoginOpen(true)}
+                className="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-600/30 transition hover:scale-105 cursor-pointer"
+              >
+                Sign In with Admin Credentials
+              </button>
+              <button
+                onClick={() => handleNavigate('home')}
+                className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm border border-slate-700 transition cursor-pointer"
+              >
+                Return to Storefront
+              </button>
+            </div>
+          </div>
+        )
+      ) : activeView === '404' ? (
+        <NotFoundPage
+          currentLang={currentLang}
+          products={products}
+          onNavigate={handleNavigate}
+          onSelectProduct={(p) => setSelectedProduct(p)}
+          onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
+          onOpenTracking={() => setIsTrackingOpen(true)}
+          onSearch={(q) => {
+            setSearchQuery(q);
+            handleNavigate('shop');
           }}
-          categories={categories}
-          onRefreshPublicData={refreshAllData}
+          settings={settings}
         />
       ) : activeView === 'shops' ? (
         /* VIEW: SHOPS / STORES DIRECTORY (Matching Screenshot 7) */
