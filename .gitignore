@@ -22,3 +22,7 @@ yarn-error.log*
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Runtime marketplace database files must never be committed
+/data/market_db.json
+/data/market_db.backup.json
