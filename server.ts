@@ -1035,7 +1035,7 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
     if (phone) {
       const cleanOrderPhone = order.customerPhone.replace(/\D/g, '');
       const cleanSearchPhone = phone.replace(/\D/g, '');
-      phoneMatches = cleanOrderPhone.endsWith(cleanSearchPhone) || cleanSearchPhone.endsWith(cleanOrderPhone);
+      phoneMatches = cleanOrderPhone.length >= 8 && cleanSearchPhone.length >= 8 && cleanOrderPhone === cleanSearchPhone;
     }
 
     if (!tokenMatches && !phoneMatches) {
@@ -1048,7 +1048,6 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
     return res.json({
       id: order.id,
       orderNumber: order.orderNumber,
-      trackingToken: order.trackingToken,
       createdAt: order.createdAt,
       customerName: order.customerName,
       deliveryType: order.deliveryType,
