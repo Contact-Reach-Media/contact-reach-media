@@ -45,7 +45,7 @@ To access the Staff Control Panel:
 1. Navigate to the website and open the **Staff / Admin Login** modal (or visit `https://your-domain/admin`).
 2. Enter your authorized administrator credentials:
    - **Email:** `contactreachmedialimited@gmail.com`
-   - **Password:** `CRM@2026`
+
    *(Or click "Sign in with Google" using the authorized company Google account).*
 
 ### Security Invariants:
