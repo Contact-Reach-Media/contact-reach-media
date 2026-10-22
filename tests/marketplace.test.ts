@@ -74,7 +74,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'contactreachmedialimited@gmail.com',
-        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
+        password: process.env.ADMIN_PASSWORD || ''
       })
     });
     assert.strictEqual(loginRes.status, 200, 'Admin login should succeed');
@@ -84,21 +84,18 @@ async function runTests() {
     adminToken = data.token;
   });
 
-  // TEST 3B: Admin Google Firebase Authentication Success
-  await test('Admin can sign in with authorized Google account', async () => {
-    const googleAdminRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
+  // TEST 3B: Firebase login must reject caller-supplied identity without an ID token
+  await test('Firebase admin login rejects spoofed email without ID token', async () => {
+    const response = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'contactreachmedialimited@gmail.com',
-        displayName: 'Ruth (System Owner)',
-        uid: 'google-admin-owner-uid-123'
+        displayName: 'Spoofed Owner',
+        uid: 'attacker-controlled-uid'
       })
     });
-    assert.strictEqual(googleAdminRes.status, 200, 'Admin Google login should succeed');
-    const googleData = await googleAdminRes.json();
-    assert(googleData.token, 'Session token should be returned');
-    assert.strictEqual(googleData.admin.role, 'owner');
+    assert.strictEqual(response.status, 401, 'Client-supplied identity must not authenticate');
   });
 
   // TEST 4: Protected Admin Endpoints Guard
