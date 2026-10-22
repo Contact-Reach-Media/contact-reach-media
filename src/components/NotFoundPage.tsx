@@ -132,16 +132,6 @@ export function NotFoundPage({
                 <span>🛍</span>
                 <span>{isRw ? 'Shakisha Ibicuruzwa' : 'Browse Products'}</span>
               </button>
-
-              {onOpenAdminLogin && (
-                <button
-                  onClick={onOpenAdminLogin}
-                  className="min-h-[48px] px-4 py-3 rounded-xl bg-[#102344]/80 hover:bg-[#102344] text-white border border-white/20 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-all cursor-pointer"
-                >
-                  <span>🛡️</span>
-                  <span>{isRw ? 'Injira muri Admin' : 'Admin Sign-In'}</span>
-                </button>
-              )}
             </div>
           </div>
 
