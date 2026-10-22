@@ -586,7 +586,7 @@ app.use(express.json({ limit: '20mb' }));
 
 // Auth & Permissions Config
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'contactreachmedialimited@gmail.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CRM@2026';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 // Middleware to authenticate admin token
 function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
@@ -1758,43 +1758,51 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   return res.status(401).json({ error: 'Invalid administrator credentials.' });
 });
 
-// Firebase Authentication Login Endpoint (Strict ID Token & Email Verification)
+// Firebase Authentication Login Endpoint (fail closed; never trust client-supplied identity fields)
 app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
-  const { email, displayName, uid, idToken } = req.body;
-  if (!email && !idToken) {
-    return res.status(400).json({ error: 'Email or ID token is required from Firebase authentication.' });
+  const { idToken } = req.body || {};
+  if (typeof idToken !== 'string' || idToken.length < 20) {
+    return res.status(401).json({ error: 'A valid Firebase ID token is required.' });
   }
 
-  let verifiedEmail = (email || '').trim().toLowerCase();
-  let verifiedUid = uid;
-  let verifiedDisplayName = displayName;
+  let verifiedEmail = '';
+  let verifiedUid = '';
+  let verifiedDisplayName = '';
 
-  // Cryptographic Google ID Token Verification via Identity Toolkit
-  if (idToken && typeof idToken === 'string') {
-    try {
-      const fbConfigPath = path.resolve('firebase-applet-config.json');
-      if (fs.existsSync(fbConfigPath)) {
-        const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
-        const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${config.apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken })
-        });
-        if (verifyRes.ok) {
-          const verifyData = await verifyRes.json();
-          if (verifyData.users && verifyData.users.length > 0) {
-            const googleUser = verifyData.users[0];
-            if (googleUser.email) verifiedEmail = googleUser.email.toLowerCase().trim();
-            if (googleUser.localId) verifiedUid = googleUser.localId;
-            if (googleUser.displayName) verifiedDisplayName = googleUser.displayName;
-          }
-        } else {
-          return res.status(401).json({ error: 'Invalid or expired Firebase ID token.' });
-        }
-      }
-    } catch (tokenErr) {
-      console.warn('[Firebase Auth] Verification lookup notice:', tokenErr);
+  try {
+    const fbConfigPath = path.resolve('firebase-applet-config.json');
+    if (!fs.existsSync(fbConfigPath)) {
+      return res.status(503).json({ error: 'Firebase authentication is not configured.' });
     }
+    const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
+    if (!config.apiKey) {
+      return res.status(503).json({ error: 'Firebase authentication is not configured.' });
+    }
+
+    const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    });
+    if (!verifyRes.ok) {
+      return res.status(401).json({ error: 'Invalid or expired Firebase ID token.' });
+    }
+
+    const verifyData = await verifyRes.json();
+    const firebaseUser = verifyData?.users?.[0];
+    if (!firebaseUser || typeof firebaseUser.email !== 'string' || !firebaseUser.localId) {
+      return res.status(401).json({ error: 'Firebase token did not identify a valid user.' });
+    }
+    if (firebaseUser.emailVerified !== true) {
+      return res.status(403).json({ error: 'Please verify your Google account email before signing in.' });
+    }
+
+    verifiedEmail = firebaseUser.email.trim().toLowerCase();
+    verifiedUid = firebaseUser.localId;
+    verifiedDisplayName = typeof firebaseUser.displayName === 'string' ? firebaseUser.displayName : '';
+  } catch (error) {
+    console.error('[Firebase Auth] Token verification failed.');
+    return res.status(503).json({ error: 'Unable to verify Firebase authentication at this time.' });
   }
 
   const isOwner = verifiedEmail === 'manirihothierry36@gmail.com' ||
@@ -1811,8 +1819,8 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
     const token = crypto.randomBytes(32).toString('hex');
     const role: AdminRole = isOwner ? 'owner' : (user ? user.role : 'administrator');
     const adminUser: AdminUser = user || {
-      id: verifiedUid ? `adm-fb-${verifiedUid}` : 'adm-owner-thierry',
-      name: verifiedDisplayName || (isOwner ? 'Thierry Maniriho (Platform Owner)' : 'Authorized Administrator'),
+      id: `adm-fb-${verifiedUid}`,
+      name: verifiedDisplayName || (isOwner ? 'Platform Owner' : 'Authorized Administrator'),
       email: verifiedEmail,
       role,
       active: true,
@@ -1820,23 +1828,15 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
     };
 
     adminUser.lastLogin = new Date().toISOString();
-
     db.adminTokens.set(token, {
       user: adminUser,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000
     });
-
-    logAudit({ name: adminUser.name, role: adminUser.role }, 'FIREBASE_GOOGLE_LOGIN', `Admin signed in with Google Firebase Auth (${verifiedEmail})`);
-
-    return res.json({
-      token,
-      admin: adminUser
-    });
+    logAudit({ name: adminUser.name, role: adminUser.role }, 'FIREBASE_GOOGLE_LOGIN', `Admin signed in with verified Firebase Auth (${verifiedEmail})`);
+    return res.json({ token, admin: adminUser });
   }
 
-  return res.status(403).json({
-    error: `The Google account (${verifiedEmail}) is not authorized as an administrator for ContactReach Market.`
-  });
+  return res.status(403).json({ error: 'This Google account is not authorized as a ContactReach Market administrator.' });
 });
 
 app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
