@@ -74,7 +74,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'contactreachmedialimited@gmail.com',
-        password: process.env.ADMIN_PASSWORD || 'ContactReachAdmin2026!SecureKey#9'
+        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
       })
     });
     assert.strictEqual(loginRes.status, 200, 'Admin login should succeed');
@@ -82,6 +82,23 @@ async function runTests() {
     assert(data.token, 'Session token should be returned');
     assert.strictEqual(data.admin.role, 'owner', 'Role should be owner');
     adminToken = data.token;
+  });
+
+  // TEST 3B: Admin Google Firebase Authentication Success
+  await test('Admin can sign in with authorized Google account', async () => {
+    const googleAdminRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'contactreachmedialimited@gmail.com',
+        displayName: 'Ruth (System Owner)',
+        uid: 'google-admin-owner-uid-123'
+      })
+    });
+    assert.strictEqual(googleAdminRes.status, 200, 'Admin Google login should succeed');
+    const googleData = await googleAdminRes.json();
+    assert(googleData.token, 'Session token should be returned');
+    assert.strictEqual(googleData.admin.role, 'owner');
   });
 
   // TEST 4: Protected Admin Endpoints Guard

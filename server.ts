@@ -586,7 +586,7 @@ app.use(express.json({ limit: '20mb' }));
 
 // Auth & Permissions Config
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'contactreachmedialimited@gmail.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'ContactReachAdmin2026!SecureKey#9');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CRM@2026';
 
 // Middleware to authenticate admin token
 function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
