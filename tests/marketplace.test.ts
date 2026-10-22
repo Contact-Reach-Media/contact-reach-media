@@ -242,12 +242,17 @@ async function runTests() {
     assert.strictEqual(tokenTrack.status, 200, 'Tracking with valid trackingToken must succeed');
     const tokenData = await tokenTrack.json();
     assert.strictEqual(tokenData.orderNumber, createdOrderNumber);
+    assert.strictEqual(tokenData.trackingToken, undefined, 'Public tracking MUST NOT expose the reusable tracking token');
     assert.strictEqual(tokenData.commissionEarned, undefined, 'Public tracking MUST NOT leak internal commission');
     assert.strictEqual(tokenData.supplierPayoutAmount, undefined, 'Public tracking MUST NOT leak supplier payouts');
 
     // Attempt 3: tracking with recipient phone number should succeed
     const phoneTrack = await fetch(`${BASE_URL}/api/orders/${createdOrderNumber}?phone=0788123456`);
     assert.strictEqual(phoneTrack.status, 200, 'Tracking with matching recipient phone must succeed');
+    const partialPhone = await fetch(`${BASE_URL}/api/orders/${createdOrderNumber}?phone=123456`);
+    assert.strictEqual(partialPhone.status, 403, 'Partial phone numbers must not authorize order access');
+    const nonNumericPhone = await fetch(`${BASE_URL}/api/orders/${createdOrderNumber}?phone=letters`);
+    assert.strictEqual(nonNumericPhone.status, 403, 'Nonnumeric phone input must not bypass verification');
   });
 
   // TEST 10: Payment Confirmation Submission & Administrative Verification
