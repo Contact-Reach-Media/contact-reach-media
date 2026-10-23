@@ -1163,6 +1163,40 @@ async function runTests() {
     assert.strictEqual(publicProd.images.length, 4);
   });
 
+  // TEST 33: Admin Session Persistence Across Page Reloads & Restarts
+  await test('Admin session persists across browser reloads without prompting sign in again', async () => {
+    // 1. Sign in as admin
+    const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'contactreachmedialimited@gmail.com',
+        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
+      })
+    });
+    assert.strictEqual(loginRes.status, 200);
+    const loginData = await loginRes.json();
+    const token = loginData.token;
+    assert(token, 'Must return token');
+
+    // 2. Validate token on /api/auth/me (what runs on browser reload)
+    const meRes = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    assert.strictEqual(meRes.status, 200, '/api/auth/me should succeed on reload');
+    const meData = await meRes.json();
+    assert.strictEqual(meData.email, 'contactreachmedialimited@gmail.com');
+    assert.strictEqual(meData.active, true);
+
+    // 3. Verify disk persistence: market_db.json contains the active adminToken
+    const fs = await import('fs');
+    const dbContent = JSON.parse(fs.readFileSync('data/market_db.json', 'utf-8'));
+    assert(Array.isArray(dbContent.adminTokens), 'adminTokens must be stored on disk');
+    const tokenEntry = dbContent.adminTokens.find(([k]: any) => k === token);
+    assert(tokenEntry, 'The login session token must be persisted in database file on disk');
+    assert(tokenEntry[1].expiresAt > Date.now(), 'Token must have future expiry date');
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

@@ -8,7 +8,7 @@ import {
 
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
 import { initialProducts, initialCategories, initialSettings, initialShops } from './data/initialData.ts';
-import { api } from './services/api.ts';
+import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
 import { Language, translations } from './translations.ts';
 
 import { Header } from './components/Header.tsx';
@@ -115,7 +115,12 @@ export default function App() {
   );
   const [trackingOrderNumber, setTrackingOrderNumber] = useState(initialRoute.orderRef);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const token = api.getAdminToken();
+    const user = api.getStoredAdminUser();
+    return Boolean(token && user && user.active !== false);
+  });
   const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
   const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
@@ -151,7 +156,9 @@ export default function App() {
 
     if (view === 'admin') {
       setActiveView('admin');
-      if (isAdminLoggedIn) {
+      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+      if (isAuth) {
+        setIsAdminLoggedIn(true);
         if (push && window.location.pathname !== targetPath) {
           window.history.pushState({ view: 'admin' }, '', targetPath);
         }
@@ -195,7 +202,7 @@ export default function App() {
       setShops(fetchedShops);
       setIsAdminLoggedIn(isAuth);
 
-      if (initialRoute.view === 'admin' && !isAuth) {
+      if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
         setIsAdminLoginOpen(true);
       }
 
@@ -224,7 +231,8 @@ export default function App() {
       const route = parseRouteFromLocation();
       if (route.view === 'admin') {
         setActiveView('admin');
-        if (!isAdminLoggedIn) {
+        const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+        if (!isAuth) {
           setIsAdminLoginOpen(true);
         }
       } else if (route.view === 'track-order') {
@@ -986,13 +994,13 @@ export default function App() {
               window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
             }
           }}
-          onLoginSuccess={() => {
+          onLoginSuccess={(user) => {
             setIsAdminLoggedIn(true);
             setActiveView('admin');
             if (window.location.pathname !== '/admin') {
               window.history.pushState({ view: 'admin' }, '', '/admin');
             }
-            showToast('Welcome Administrator Ruth');
+            showToast(`Welcome Administrator ${user?.name || ''}`);
           }}
         />
       )}

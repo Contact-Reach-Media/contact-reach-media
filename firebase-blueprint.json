@@ -16,6 +16,7 @@
         "stock": { "type": "number" },
         "imageUrl": { "type": "string", "maxLength": 1000 },
         "images": { "type": "array" },
+        "videoUrl": { "type": "string", "maxLength": 1000 },
         "shopName": { "type": "string", "maxLength": 128 },
         "shopId": { "type": "string", "maxLength": 128 },
         "receiverName": { "type": "string", "maxLength": 128 },

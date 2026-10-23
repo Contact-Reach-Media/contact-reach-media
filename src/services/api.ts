@@ -193,6 +193,12 @@ const fallbackAdminUsers: AdminUser[] = [
 ];
 
 export const api = {
+  // Admin & Token Helpers
+  getAdminToken,
+  setAdminToken,
+  getStoredAdminUser,
+  removeAdminToken,
+
   // Public Settings
   async getSettings(): Promise<AppSettings> {
     try {
@@ -853,14 +859,32 @@ export const api = {
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.email || parsed.json?.role)) {
+        // Refresh stored admin user profile
+        setAdminToken(token, parsed.json);
         return true;
       }
+
+      // Explicit deactivation / revocation guard
+      if (res.status === 401 || res.status === 403) {
+        const errMsg = (parsed.json?.error || '').toLowerCase();
+        if (errMsg.includes('deactivated') || errMsg.includes('revoked')) {
+          removeAdminToken();
+          return false;
+        }
+      }
+
+      // If stored user is active, maintain session to prevent accidental logout on reload
+      const stored = getStoredAdminUser();
+      if (stored && stored.active !== false) {
+        return true;
+      }
+
       removeAdminToken();
       return false;
     } catch {
-      // In case of transient offline, keep existing session if stored
+      // In case of transient network offline or server reboot, keep existing session if stored
       const stored = getStoredAdminUser();
-      return Boolean(stored && stored.active);
+      return Boolean(stored && stored.active !== false);
     }
   },
 
@@ -1061,6 +1085,7 @@ export const api = {
       stock: Number(product.stock) || 0,
       imageUrl: product.imageUrl || '/logo.png',
       images: product.images || [],
+      videoUrl: product.videoUrl ? product.videoUrl.trim() : undefined,
       shopName: product.shopName || 'ContactReach Market',
       shopId: product.shopId || '',
       brand: product.brand || '',

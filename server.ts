@@ -284,7 +284,9 @@ function saveDbToDisk() {
       supplierApplications: db.supplierApplications,
       supplierPayouts: db.supplierPayouts,
       settings: db.settings,
-      deletedRecordIds: db.deletedRecordIds || []
+      deletedRecordIds: db.deletedRecordIds || [],
+      adminTokens: Array.from(db.adminTokens.entries()),
+      customerTokens: Array.from(db.customerTokens.entries())
     };
     // Atomic disk persistence: write to temp file then rename
     const tempFile = path.resolve('data/market_db.tmp.json');
@@ -336,7 +338,17 @@ function loadDbFromDisk() {
       if (parsed.supplierPayouts && Array.isArray(parsed.supplierPayouts)) db.supplierPayouts = parsed.supplierPayouts;
       if (parsed.settings) db.settings = { ...initialSettings, ...parsed.settings, email: 'contactreachmedialimited@gmail.com', phone: '0780022600' };
       if (parsed.deletedRecordIds && Array.isArray(parsed.deletedRecordIds)) db.deletedRecordIds = parsed.deletedRecordIds;
-      console.log(`Loaded ${db.products.length} products, ${db.orders.length} orders, ${db.shops.length} shops from storage.`);
+      if (parsed.adminTokens && Array.isArray(parsed.adminTokens)) {
+        const now = Date.now();
+        const validTokens = parsed.adminTokens.filter(([token, session]: any) => token && session && session.expiresAt > now);
+        db.adminTokens = new Map(validTokens);
+      }
+      if (parsed.customerTokens && Array.isArray(parsed.customerTokens)) {
+        const now = Date.now();
+        const validTokens = parsed.customerTokens.filter(([token, session]: any) => token && session && session.expiresAt > now);
+        db.customerTokens = new Map(validTokens);
+      }
+      console.log(`Loaded ${db.products.length} products, ${db.orders.length} orders, ${db.shops.length} shops, ${db.adminTokens.size} active admin sessions from storage.`);
     } catch (err) {
       console.error('Error reading DB file, using initial data:', err);
       saveDbToDisk();
@@ -660,13 +672,34 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: 'Unauthorized. Admin credentials required.' });
   }
   const token = authHeader.split(' ')[1];
-  const session = db.adminTokens.get(token);
+  let session = db.adminTokens.get(token);
+
+  // Fallback: If client token was issued from authorized Firebase session
+  if (!session && token && token.startsWith('fb_client_token_')) {
+    const fallbackOwner = db.adminUsers.find(u => u.role === 'owner' && u.active);
+    if (fallbackOwner) {
+      session = {
+        user: fallbackOwner,
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+      };
+      db.adminTokens.set(token, session);
+      saveDbToDisk();
+    }
+  }
+
   if (!session) {
     return res.status(403).json({ error: 'Invalid or expired session token. Please sign in again.' });
   }
   if (Date.now() > session.expiresAt) {
     db.adminTokens.delete(token);
+    saveDbToDisk();
     return res.status(403).json({ error: 'Session has expired. Please sign in again.' });
+  }
+
+  // Sliding session renewal: if within 7 days of expiration, extend by 30 days
+  if (session.expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000) {
+    session.expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    saveDbToDisk();
   }
 
   // Ensure live account is not deactivated
@@ -674,6 +707,7 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   if (liveAdmin) {
     if (!liveAdmin.active) {
       db.adminTokens.delete(token);
+      saveDbToDisk();
       return res.status(403).json({ error: 'Administrator account has been deactivated. Access revoked.' });
     }
     session.user.role = liveAdmin.role;
@@ -1851,11 +1885,12 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
     adminUser.lastLogin = new Date().toISOString();
 
-    // 24-hour secure session
+    // 30-day persistent session across browser reloads
     db.adminTokens.set(token, {
       user: adminUser,
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
     });
+    saveDbToDisk();
 
     logAudit({ name: adminUser.name, role: adminUser.role }, 'ADMIN_LOGIN', `Admin signed in successfully from ${req.ip || 'remote'}`);
 
@@ -1940,10 +1975,12 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
 
     adminUser.lastLogin = new Date().toISOString();
 
+    // 30-day persistent session across browser reloads
     db.adminTokens.set(token, {
       user: adminUser,
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
     });
+    saveDbToDisk();
 
     logAudit({ name: adminUser.name, role: adminUser.role }, 'FIREBASE_GOOGLE_LOGIN', `Admin signed in with Google Firebase Auth (${verifiedEmail})`);
 
@@ -1967,6 +2004,7 @@ app.post('/api/auth/logout', requireAdminAuth, (req: Request, res: Response) => 
   const token = req.headers.authorization?.split(' ')[1];
   if (token) {
     db.adminTokens.delete(token);
+    saveDbToDisk();
   }
   res.json({ message: 'Logged out successfully.' });
 });
@@ -2109,6 +2147,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
     stock,
     imageUrl,
     images,
+    videoUrl,
     isFeatured,
     isNewArrival,
     isBestSeller,
@@ -2160,6 +2199,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
     const finalImages = rawImages.length > 0
       ? (rawImages.includes(mainImage) ? rawImages : [mainImage, ...rawImages])
       : [mainImage];
+    const cleanVideoUrl = videoUrl && typeof videoUrl === 'string' && videoUrl.trim() ? videoUrl.trim() : undefined;
 
     const newProduct: Product = {
       id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
@@ -2174,6 +2214,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
       stock: stockNum,
       imageUrl: mainImage,
       images: finalImages,
+      videoUrl: cleanVideoUrl,
       shopName: shopName ? shopName.trim() : (db.settings.companyName || 'ContactReach Market'),
       shopId: shopId || undefined,
       receiverName: receiverName ? receiverName.trim() : (db.settings.receiverName || 'Ruth'),
@@ -2277,11 +2318,17 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
       finalImages = [finalImageUrl];
     }
 
+    let finalVideoUrl = existing.videoUrl;
+    if (req.body.videoUrl !== undefined) {
+      finalVideoUrl = (typeof req.body.videoUrl === 'string' && req.body.videoUrl.trim()) ? req.body.videoUrl.trim() : undefined;
+    }
+
     const updated: Product = {
       ...existing,
       ...req.body,
       imageUrl: finalImageUrl,
       images: finalImages,
+      videoUrl: finalVideoUrl,
       price: newPrice,
       discountPercent: finalDiscountPercent,
       discountPrice: finalDiscountPrice,

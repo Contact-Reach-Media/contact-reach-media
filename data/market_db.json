@@ -1,6 +1,282 @@
 {
   "products": [
     {
+      "id": "prod-1792750994373-a179de",
+      "name": "Multi-Angle Gallery Test Sneakers",
+      "sku": "CRM-FAS-5923",
+      "description": "Premium shoes with full 360-degree multiple angle gallery.",
+      "price": 45000,
+      "category": "fashion-shoes",
+      "stock": 12,
+      "imageUrl": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=600&q=80"
+      ],
+      "shopName": "ContactReach Media Ltd",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "rating": 5,
+      "reviewsCount": 0,
+      "createdAt": "2026-10-23T10:23:14.373Z",
+      "history": [
+        {
+          "timestamp": "2026-10-23T10:23:14.373Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-23T10:23:14.435Z"
+    },
+    {
+      "id": "prod-1792750993469-db63c1",
+      "name": "Glow Facial Vitamin C Serum (20% OFF Special)",
+      "sku": "CRM-HAI-5022",
+      "description": "Brightening facial serum with 20% promotional discount.",
+      "price": 25000,
+      "discountPercent": 30,
+      "discountPrice": 17500,
+      "category": "hair-beauty",
+      "stock": 40,
+      "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+      "images": [
+        "/src/assets/images/product_street_sneakers_1791966366958.jpg"
+      ],
+      "shopName": "ContactReach Media Ltd",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "rating": 5,
+      "reviewsCount": 0,
+      "createdAt": "2026-10-23T10:23:13.469Z",
+      "history": [
+        {
+          "timestamp": "2026-10-23T10:23:13.469Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-23T10:23:13.503Z",
+          "action": "Updated details",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-23T10:23:13.503Z"
+    },
+    {
+      "id": "prod-1792750993180-3a94f6",
+      "name": "Wireless Studio Bluetooth Headphones",
+      "sku": "CRM-ELE-5209",
+      "description": "Crystal clear studio sound with deep bass and noise cancellation.",
+      "price": 35000,
+      "category": "electronics",
+      "stock": 14,
+      "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=600&q=80"
+      ],
+      "shopName": "Kigali Quality Audio Ltd",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "rating": 5,
+      "reviewsCount": 0,
+      "createdAt": "2026-10-23T10:23:13.180Z",
+      "history": [
+        {
+          "timestamp": "2026-10-23T10:23:13.180Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-23T10:23:13.210Z",
+          "action": "Updated details",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-23T10:23:13.210Z"
+    },
+    {
+      "id": "prod-1792750976202-4c914c",
+      "name": "Multi-Angle Gallery Test Sneakers",
+      "sku": "CRM-FAS-6074",
+      "description": "Premium shoes with full 360-degree multiple angle gallery.",
+      "price": 45000,
+      "category": "fashion-shoes",
+      "stock": 12,
+      "imageUrl": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=600&q=80"
+      ],
+      "shopName": "ContactReach Media Ltd",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "rating": 5,
+      "reviewsCount": 0,
+      "createdAt": "2026-10-23T10:22:56.202Z",
+      "history": [
+        {
+          "timestamp": "2026-10-23T10:22:56.202Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-23T10:22:56.255Z"
+    },
+    {
+      "id": "prod-1792750975400-e77397",
+      "name": "Glow Facial Vitamin C Serum (20% OFF Special)",
+      "sku": "CRM-HAI-6556",
+      "description": "Brightening facial serum with 20% promotional discount.",
+      "price": 25000,
+      "discountPercent": 30,
+      "discountPrice": 17500,
+      "category": "hair-beauty",
+      "stock": 40,
+      "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+      "images": [
+        "/src/assets/images/product_street_sneakers_1791966366958.jpg"
+      ],
+      "shopName": "ContactReach Media Ltd",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "rating": 5,
+      "reviewsCount": 0,
+      "createdAt": "2026-10-23T10:22:55.400Z",
+      "history": [
+        {
+          "timestamp": "2026-10-23T10:22:55.400Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-23T10:22:55.434Z",
+          "action": "Updated details",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-23T10:22:55.434Z"
+    },
+    {
+      "id": "prod-1792750975156-f08659",
+      "name": "Wireless Studio Bluetooth Headphones",
+      "sku": "CRM-ELE-4116",
+      "description": "Crystal clear studio sound with deep bass and noise cancellation.",
+      "price": 35000,
+      "category": "electronics",
+      "stock": 14,
+      "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=600&q=80"
+      ],
+      "shopName": "Kigali Quality Audio Ltd",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "rating": 5,
+      "reviewsCount": 0,
+      "createdAt": "2026-10-23T10:22:55.156Z",
+      "history": [
+        {
+          "timestamp": "2026-10-23T10:22:55.156Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-23T10:22:55.187Z",
+          "action": "Updated details",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-23T10:22:55.187Z"
+    },
+    {
       "id": "prod-1792750120322-f5f165",
       "name": "Multi-Angle Gallery Test Sneakers",
       "sku": "CRM-FAS-7582",
@@ -927,6 +1203,28 @@
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:08:02.013Z",
       "updatedAt": "2026-10-23T10:08:02.013Z"
+    },
+    {
+      "name": "2026 Bicep Loop Bracelet Custom Arm Belt Wristband Watch Band Nylon Strap for Google Fitbit Air Charge 6 Versa Sense 2 4 Ace",
+      "sku": "CRM-CAT-3785",
+      "description": "Breathable & Comfortable: Soft woven nylon keeps your wrist cool and dry all day.\nPrecise Adjustable Fit: Metal buckle allows for a secure, custom fit.\nDurable & Long-Lasting: High-density nylon resists fraying, stretching, and dries quickly.\nVibrant Color Options: Available in Blue, Light Green, Brown with Orange Stripes, Black, and Red.\nWide Compatibility: Fits many smartwatches & fitness trackers.\nLightweight Feel: Ultra-light design for all-day comfort.\nHypoallergenic & Skin-Friendly: Safe for sensitive skin.\nEasy Quick-Release: Tool-free installation in seconds with spring bars.\nGreat Value Upgrade: Superior comfort and style at a competitive price.",
+      "price": 5000,
+      "discountPercent": 5,
+      "discountPrice": 4750,
+      "category": "cat-1792750382767",
+      "stock": 0,
+      "imageUrl": "data:image/avif;base64,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",
+      "images": [
+        "data:image/avif;base64,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"
+      ],
+      "shopName": "Sky Beauty",
+      "brand": "2026  Dong Guan Shi Dai Precision Mould Limited Company",
+      "unit": "Piece",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": true,
+      "id": "prod-1792750159641-qh72"
     }
   ],
   "categories": [
@@ -949,6 +1247,66 @@
       "itemCount": 0,
       "description": "",
       "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT3gTvDYY4vsb83acR_9OMe8Ubm5_IZpggtffY19HyBIg&s=10",
+      "subcategories": [],
+      "isActive": true
+    },
+    {
+      "id": "cat-1792750237744",
+      "nameEn": "Home And Kitchen Products",
+      "nameRw": "Ibikoresho byo murugo",
+      "icon": "Tag",
+      "itemCount": 0,
+      "description": "",
+      "subcategories": [],
+      "isActive": true
+    },
+    {
+      "id": "cat-1792750295152",
+      "nameEn": "Shoes",
+      "nameRw": "Inkweto",
+      "icon": "Tag",
+      "itemCount": 0,
+      "description": "",
+      "subcategories": [],
+      "isActive": true
+    },
+    {
+      "id": "cat-1792750382767",
+      "nameEn": "Home, Beauty & Personal Care",
+      "nameRw": "Ubwiza",
+      "icon": "Tag",
+      "itemCount": 0,
+      "description": "",
+      "subcategories": [],
+      "isActive": true
+    },
+    {
+      "id": "cat-1792750384552",
+      "nameEn": "Home, Beauty & Personal Care",
+      "nameRw": "Ubwiza",
+      "icon": "Tag",
+      "itemCount": 0,
+      "description": "",
+      "subcategories": [],
+      "isActive": true
+    },
+    {
+      "id": "cat-1792750591797",
+      "nameEn": "Baby and family essentials",
+      "nameRw": "Ibikoresho by'abana",
+      "icon": "Tag",
+      "itemCount": 0,
+      "description": "",
+      "subcategories": [],
+      "isActive": true
+    },
+    {
+      "id": "cat-1792750654448",
+      "nameEn": "School, Office and business supplies",
+      "nameRw": "Ibikoresho byo muri office",
+      "icon": "Tag",
+      "itemCount": 0,
+      "description": "",
       "subcategories": [],
       "isActive": true
     },
@@ -1097,6 +1455,1130 @@
     }
   ],
   "orders": [
+    {
+      "id": "ord-1792750994298-5ef0ab",
+      "orderNumber": "CRM-57531",
+      "trackingToken": "a2f93e0e512589d87bf9014adabc167b",
+      "createdAt": "2026-10-23T10:23:14.298Z",
+      "customerName": "Customer A",
+      "customerPhone": "0789111222",
+      "deliveryType": "pickup",
+      "deliveryLocation": "Store Pickup (Fair View Plaza)",
+      "deliveryAddress": "Fair View Plaza, KG 622 St, Kigali, Rwanda",
+      "items": [
+        {
+          "productId": "prod-1792750994262-82ba2e",
+          "productName": "Limited Stock Sneaker",
+          "price": 15000,
+          "quantity": 2,
+          "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+          "sku": "CRM-FAS-6383"
+        }
+      ],
+      "subtotal": 30000,
+      "deliveryFee": 0,
+      "totalAmount": 30000,
+      "commissionRate": 10,
+      "commissionEarned": 3000,
+      "supplierPayoutAmount": 27000,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "ContactReach Media Ltd",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:14.298Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750993939-edae04",
+      "orderNumber": "CRM-59190",
+      "trackingToken": "8796b778470f28198372e5d34d18ff0f",
+      "createdAt": "2026-10-23T10:23:13.939Z",
+      "customerName": "Sam Habimana",
+      "customerPhone": "0780445566",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Kicukiro (Gikondo)",
+      "deliveryAddress": "Kigali",
+      "items": [
+        {
+          "productId": "prod-1792750993180-3a94f6",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-5209"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.939Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:23:13.962Z",
+          "note": "Payment confirmation submitted. Txn ID: CLAIM-1792750993955, Phone: 0780445566. Pending verification."
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750993962-19d00e",
+        "orderId": "ord-1792750993939-edae04",
+        "orderNumber": "CRM-59190",
+        "customerName": "Sam Habimana",
+        "paymentPhone": "0780445566",
+        "paymentMethod": "MTN Mobile Money",
+        "amountPaid": 36500,
+        "transactionId": "CLAIM-1792750993955",
+        "submittedAt": "2026-10-23T10:23:13.962Z",
+        "verificationStatus": "Pending Verification",
+        "isDuplicateTxn": false,
+        "flaggedSuspicious": false
+      }
+    },
+    {
+      "id": "ord-1792750993846-dab730",
+      "orderNumber": "CRM-69726",
+      "trackingToken": "1de8d88e8b55d6976162281f011da785",
+      "createdAt": "2026-10-23T10:23:13.846Z",
+      "customerName": "Keza Diane",
+      "customerPhone": "0788998822",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Nyarugenge",
+      "deliveryAddress": "KN 20 St",
+      "items": [
+        {
+          "productId": "prod-1792750993180-3a94f6",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 2,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-5209"
+        }
+      ],
+      "subtotal": 70000,
+      "deliveryFee": 0,
+      "totalAmount": 70000,
+      "commissionRate": 10,
+      "commissionEarned": 7000,
+      "supplierPayoutAmount": 63000,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Paid",
+      "status": "Cancelled",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.846Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-23T10:23:13.868Z",
+          "note": "Order status updated to \"Confirmed\" (Payment: \"Paid\") by Ruth (System Owner).",
+          "updatedBy": "Ruth (System Owner)"
+        },
+        {
+          "status": "Cancelled",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-23T10:23:13.900Z",
+          "note": "Customer requested cancellation.",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750993779-da5272",
+      "orderNumber": "CRM-22000",
+      "trackingToken": "ee5b435d3a46972e2d189e16bbc74f5e",
+      "createdAt": "2026-10-23T10:23:13.779Z",
+      "customerName": "Admin Test Shopper",
+      "customerPhone": "0780991122",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo",
+      "deliveryAddress": "KG 12 St",
+      "items": [
+        {
+          "productId": "prod-1792750993180-3a94f6",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-5209"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.779Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750993637-60a53b",
+      "orderNumber": "CRM-28573",
+      "trackingToken": "6bba9ce9f4c263fbc68f416fedfe061a",
+      "createdAt": "2026-10-23T10:23:13.637Z",
+      "customerName": "Eric Safari",
+      "customerPhone": "0780998877",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo (Kacyiru)",
+      "deliveryAddress": "KG 544 St, Kacyiru",
+      "items": [
+        {
+          "productId": "prod-1792750993180-3a94f6",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-5209"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.637Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750993532-e56c9e",
+      "orderNumber": "CRM-67889",
+      "trackingToken": "27e7b66f15084201d10a6dc15a6c9686",
+      "createdAt": "2026-10-23T10:23:13.532Z",
+      "customerName": "Gisele Umuhoza",
+      "customerPhone": "0788776655",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Nyarugenge (City Center)",
+      "deliveryAddress": "KN 4 Ave, Kigali",
+      "items": [
+        {
+          "productId": "prod-1792750993180-3a94f6",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-5209"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "Airtel Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Under Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.532Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.553Z",
+          "note": "Customer updated payment channel from \"MTN Merchant Code\" to \"Airtel Money\"."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:23:13.580Z",
+          "note": "Payment confirmation submitted. Txn ID: 991827461, Phone: 0788776655 [WARNING: Duplicate Txn ID detected]. Pending verification."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Under Verification",
+          "timestamp": "2026-10-23T10:23:13.602Z",
+          "note": "Payment moved to Under Verification by Ruth (System Owner): Suspicious duplicate transaction reference detected. Requesting telecom statement export..",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750993579-87425d",
+        "orderId": "ord-1792750993532-e56c9e",
+        "orderNumber": "CRM-67889",
+        "customerName": "Gisele Umuhoza",
+        "paymentPhone": "0788776655",
+        "paymentMethod": "Airtel Money",
+        "amountPaid": 36500,
+        "transactionId": "991827461",
+        "submittedAt": "2026-10-23T10:23:13.580Z",
+        "verificationStatus": "Under Verification",
+        "isDuplicateTxn": true,
+        "duplicateOrderNumbers": [
+          "CRM-97014",
+          "CRM-93140",
+          "CRM-35913",
+          "CRM-80132",
+          "CRM-25099",
+          "CRM-80420",
+          "CRM-97025",
+          "CRM-59836",
+          "CRM-72274",
+          "CRM-61019",
+          "CRM-22410",
+          "CRM-27403",
+          "CRM-79683",
+          "CRM-95910",
+          "CRM-12402",
+          "CRM-77513",
+          "CRM-18765",
+          "CRM-72126",
+          "CRM-69625",
+          "CRM-30061",
+          "CRM-88178",
+          "CRM-14918",
+          "CRM-34118",
+          "CRM-56470",
+          "CRM-39288",
+          "CRM-26669",
+          "CRM-13158",
+          "CRM-27214",
+          "CRM-67718",
+          "CRM-31287",
+          "CRM-13927",
+          "CRM-41950",
+          "CRM-80704",
+          "CRM-78885",
+          "CRM-73401",
+          "CRM-25621",
+          "CRM-74566",
+          "CRM-39000",
+          "CRM-19233",
+          "CRM-46821",
+          "CRM-10642"
+        ],
+        "flaggedSuspicious": true,
+        "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-97014, #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642",
+        "verifiedAt": "2026-10-23T10:23:13.602Z",
+        "verifiedBy": "Ruth (System Owner)",
+        "adminNotes": "Suspicious duplicate transaction reference detected. Requesting telecom statement export."
+      }
+    },
+    {
+      "id": "ord-1792750993336-3cf3fc",
+      "orderNumber": "CRM-97014",
+      "trackingToken": "c5374b31825c34bf0554eac0c70a3ccc",
+      "createdAt": "2026-10-23T10:23:13.336Z",
+      "customerName": "Kwizera Bosco",
+      "customerPhone": "0780112233",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Kicukiro (Sonatubes)",
+      "deliveryAddress": "Sonatubes near Bank of Kigali",
+      "items": [
+        {
+          "productId": "prod-1792750993180-3a94f6",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-5209"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Merchant Code",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.336Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:23:13.353Z",
+          "note": "Payment confirmation submitted. Txn ID: 991827461, Phone: 0780112233 (SMS pasted) (Screenshot attached) [WARNING: Duplicate Txn ID detected]. Pending verification."
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750993353-36eb3b",
+        "orderId": "ord-1792750993336-3cf3fc",
+        "orderNumber": "CRM-97014",
+        "customerName": "Kwizera Bosco",
+        "paymentPhone": "0780112233",
+        "paymentMethod": "MTN Merchant Code",
+        "amountPaid": 36500,
+        "transactionId": "991827461",
+        "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "confirmationMessage": "Y'ello! You have transferred 36,500 RWF to ContactReach Market (078002) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.",
+        "submittedAt": "2026-10-23T10:23:13.353Z",
+        "verificationStatus": "Pending Verification",
+        "isDuplicateTxn": true,
+        "duplicateOrderNumbers": [
+          "CRM-93140",
+          "CRM-35913",
+          "CRM-80132",
+          "CRM-25099",
+          "CRM-80420",
+          "CRM-97025",
+          "CRM-59836",
+          "CRM-72274",
+          "CRM-61019",
+          "CRM-22410",
+          "CRM-27403",
+          "CRM-79683",
+          "CRM-95910",
+          "CRM-12402",
+          "CRM-77513",
+          "CRM-18765",
+          "CRM-72126",
+          "CRM-69625",
+          "CRM-30061",
+          "CRM-88178",
+          "CRM-14918",
+          "CRM-34118",
+          "CRM-56470",
+          "CRM-39288",
+          "CRM-26669",
+          "CRM-13158",
+          "CRM-27214",
+          "CRM-67718",
+          "CRM-31287",
+          "CRM-13927",
+          "CRM-41950",
+          "CRM-80704",
+          "CRM-78885",
+          "CRM-73401",
+          "CRM-25621",
+          "CRM-74566",
+          "CRM-39000",
+          "CRM-19233",
+          "CRM-46821",
+          "CRM-10642"
+        ],
+        "flaggedSuspicious": true,
+        "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642"
+      }
+    },
+    {
+      "id": "ord-1792750993243-526956",
+      "orderNumber": "CRM-18623",
+      "trackingToken": "0a785529cde94e48d8d41a8d5ed74586",
+      "createdAt": "2026-10-23T10:23:13.243Z",
+      "customerName": "Aline Mugabo",
+      "customerPhone": "0788123456",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo (Kimironko)",
+      "deliveryAddress": "KG 15 Ave, Kimironko",
+      "items": [
+        {
+          "productId": "prod-1792750993180-3a94f6",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-5209"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Paid",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Paid",
+      "status": "Confirmed",
+      "stockDeducted": true,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:23:13.243Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:23:13.277Z",
+          "note": "Payment confirmation submitted. Txn ID: TXN1792750993275, Phone: 0788123456. Pending verification."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-23T10:23:13.296Z",
+          "note": "Payment verified & approved by Ruth (System Owner): 36,500 FRW (TXN1792750993275).",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750993277-fdfb21",
+        "orderId": "ord-1792750993243-526956",
+        "orderNumber": "CRM-18623",
+        "customerName": "Aline Mugabo",
+        "paymentPhone": "0788123456",
+        "paymentMethod": "MTN Mobile Money",
+        "amountPaid": 36500,
+        "transactionId": "TXN1792750993275",
+        "submittedAt": "2026-10-23T10:23:13.277Z",
+        "verificationStatus": "Verified/Paid",
+        "isDuplicateTxn": false,
+        "flaggedSuspicious": false,
+        "verifiedAt": "2026-10-23T10:23:13.294Z",
+        "verifiedBy": "Ruth (System Owner)",
+        "adminNotes": "Verified via MTN MoMo statement.",
+        "customerNotified": true,
+        "notificationMessage": "Payment of 36,500 FRW for Order #CRM-18623 has been verified and confirmed! ContactReach Market is preparing your delivery."
+      },
+      "supplierPayoutRef": "MOMO-PAY-776611"
+    },
+    {
+      "id": "ord-1792750976140-df4a15",
+      "orderNumber": "CRM-14050",
+      "trackingToken": "8fa220b8f893ae4219b544dec88a70f2",
+      "createdAt": "2026-10-23T10:22:56.140Z",
+      "customerName": "Customer A",
+      "customerPhone": "0789111222",
+      "deliveryType": "pickup",
+      "deliveryLocation": "Store Pickup (Fair View Plaza)",
+      "deliveryAddress": "Fair View Plaza, KG 622 St, Kigali, Rwanda",
+      "items": [
+        {
+          "productId": "prod-1792750976114-b5e070",
+          "productName": "Limited Stock Sneaker",
+          "price": 15000,
+          "quantity": 2,
+          "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+          "sku": "CRM-FAS-8886"
+        }
+      ],
+      "subtotal": 30000,
+      "deliveryFee": 0,
+      "totalAmount": 30000,
+      "commissionRate": 10,
+      "commissionEarned": 3000,
+      "supplierPayoutAmount": 27000,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "ContactReach Media Ltd",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:56.140Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750975816-c33774",
+      "orderNumber": "CRM-21093",
+      "trackingToken": "c2baf382bfdfc7a5986c3ed3a9563e67",
+      "createdAt": "2026-10-23T10:22:55.816Z",
+      "customerName": "Sam Habimana",
+      "customerPhone": "0780445566",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Kicukiro (Gikondo)",
+      "deliveryAddress": "Kigali",
+      "items": [
+        {
+          "productId": "prod-1792750975156-f08659",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-4116"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.816Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:22:55.833Z",
+          "note": "Payment confirmation submitted. Txn ID: CLAIM-1792750975832, Phone: 0780445566. Pending verification."
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750975833-212f43",
+        "orderId": "ord-1792750975816-c33774",
+        "orderNumber": "CRM-21093",
+        "customerName": "Sam Habimana",
+        "paymentPhone": "0780445566",
+        "paymentMethod": "MTN Mobile Money",
+        "amountPaid": 36500,
+        "transactionId": "CLAIM-1792750975832",
+        "submittedAt": "2026-10-23T10:22:55.833Z",
+        "verificationStatus": "Pending Verification",
+        "isDuplicateTxn": false,
+        "flaggedSuspicious": false
+      }
+    },
+    {
+      "id": "ord-1792750975718-067750",
+      "orderNumber": "CRM-14904",
+      "trackingToken": "b2cbcf11571c71f5f8c63233a098146d",
+      "createdAt": "2026-10-23T10:22:55.718Z",
+      "customerName": "Keza Diane",
+      "customerPhone": "0788998822",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Nyarugenge",
+      "deliveryAddress": "KN 20 St",
+      "items": [
+        {
+          "productId": "prod-1792750975156-f08659",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 2,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-4116"
+        }
+      ],
+      "subtotal": 70000,
+      "deliveryFee": 0,
+      "totalAmount": 70000,
+      "commissionRate": 10,
+      "commissionEarned": 7000,
+      "supplierPayoutAmount": 63000,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Paid",
+      "status": "Cancelled",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.718Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-23T10:22:55.733Z",
+          "note": "Order status updated to \"Confirmed\" (Payment: \"Paid\") by Ruth (System Owner).",
+          "updatedBy": "Ruth (System Owner)"
+        },
+        {
+          "status": "Cancelled",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-23T10:22:55.773Z",
+          "note": "Customer requested cancellation.",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750975647-0d2ee7",
+      "orderNumber": "CRM-38874",
+      "trackingToken": "3cecfd1c428fa79adcdc2eda620b46b4",
+      "createdAt": "2026-10-23T10:22:55.647Z",
+      "customerName": "Admin Test Shopper",
+      "customerPhone": "0780991122",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo",
+      "deliveryAddress": "KG 12 St",
+      "items": [
+        {
+          "productId": "prod-1792750975156-f08659",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-4116"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.647Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750975552-f70dba",
+      "orderNumber": "CRM-55461",
+      "trackingToken": "672f9f4d86ca80d312f4c514acbc292d",
+      "createdAt": "2026-10-23T10:22:55.552Z",
+      "customerName": "Eric Safari",
+      "customerPhone": "0780998877",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo (Kacyiru)",
+      "deliveryAddress": "KG 544 St, Kacyiru",
+      "items": [
+        {
+          "productId": "prod-1792750975156-f08659",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-4116"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.552Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1792750975462-f93ead",
+      "orderNumber": "CRM-93140",
+      "trackingToken": "1f2316ed581dc8e3634d680e2d3fb8b8",
+      "createdAt": "2026-10-23T10:22:55.462Z",
+      "customerName": "Gisele Umuhoza",
+      "customerPhone": "0788776655",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Nyarugenge (City Center)",
+      "deliveryAddress": "KN 4 Ave, Kigali",
+      "items": [
+        {
+          "productId": "prod-1792750975156-f08659",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-4116"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "Airtel Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Under Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.462Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.477Z",
+          "note": "Customer updated payment channel from \"MTN Merchant Code\" to \"Airtel Money\"."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:22:55.495Z",
+          "note": "Payment confirmation submitted. Txn ID: 991827461, Phone: 0788776655 [WARNING: Duplicate Txn ID detected]. Pending verification."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Under Verification",
+          "timestamp": "2026-10-23T10:22:55.514Z",
+          "note": "Payment moved to Under Verification by Ruth (System Owner): Suspicious duplicate transaction reference detected. Requesting telecom statement export..",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750975495-97fd09",
+        "orderId": "ord-1792750975462-f93ead",
+        "orderNumber": "CRM-93140",
+        "customerName": "Gisele Umuhoza",
+        "paymentPhone": "0788776655",
+        "paymentMethod": "Airtel Money",
+        "amountPaid": 36500,
+        "transactionId": "991827461",
+        "submittedAt": "2026-10-23T10:22:55.495Z",
+        "verificationStatus": "Under Verification",
+        "isDuplicateTxn": true,
+        "duplicateOrderNumbers": [
+          "CRM-35913",
+          "CRM-80132",
+          "CRM-25099",
+          "CRM-80420",
+          "CRM-97025",
+          "CRM-59836",
+          "CRM-72274",
+          "CRM-61019",
+          "CRM-22410",
+          "CRM-27403",
+          "CRM-79683",
+          "CRM-95910",
+          "CRM-12402",
+          "CRM-77513",
+          "CRM-18765",
+          "CRM-72126",
+          "CRM-69625",
+          "CRM-30061",
+          "CRM-88178",
+          "CRM-14918",
+          "CRM-34118",
+          "CRM-56470",
+          "CRM-39288",
+          "CRM-26669",
+          "CRM-13158",
+          "CRM-27214",
+          "CRM-67718",
+          "CRM-31287",
+          "CRM-13927",
+          "CRM-41950",
+          "CRM-80704",
+          "CRM-78885",
+          "CRM-73401",
+          "CRM-25621",
+          "CRM-74566",
+          "CRM-39000",
+          "CRM-19233",
+          "CRM-46821",
+          "CRM-10642"
+        ],
+        "flaggedSuspicious": true,
+        "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642",
+        "verifiedAt": "2026-10-23T10:22:55.514Z",
+        "verifiedBy": "Ruth (System Owner)",
+        "adminNotes": "Suspicious duplicate transaction reference detected. Requesting telecom statement export."
+      }
+    },
+    {
+      "id": "ord-1792750975302-4dd038",
+      "orderNumber": "CRM-35913",
+      "trackingToken": "b47d3a735953a5a2b2c6d12039a70fe4",
+      "createdAt": "2026-10-23T10:22:55.302Z",
+      "customerName": "Kwizera Bosco",
+      "customerPhone": "0780112233",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Kicukiro (Sonatubes)",
+      "deliveryAddress": "Sonatubes near Bank of Kigali",
+      "items": [
+        {
+          "productId": "prod-1792750975156-f08659",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-4116"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Merchant Code",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Pending Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.302Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:22:55.319Z",
+          "note": "Payment confirmation submitted. Txn ID: 991827461, Phone: 0780112233 (SMS pasted) (Screenshot attached) [WARNING: Duplicate Txn ID detected]. Pending verification."
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750975319-976da1",
+        "orderId": "ord-1792750975302-4dd038",
+        "orderNumber": "CRM-35913",
+        "customerName": "Kwizera Bosco",
+        "paymentPhone": "0780112233",
+        "paymentMethod": "MTN Merchant Code",
+        "amountPaid": 36500,
+        "transactionId": "991827461",
+        "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "confirmationMessage": "Y'ello! You have transferred 36,500 RWF to ContactReach Market (078002) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.",
+        "submittedAt": "2026-10-23T10:22:55.319Z",
+        "verificationStatus": "Pending Verification",
+        "isDuplicateTxn": true,
+        "duplicateOrderNumbers": [
+          "CRM-80132",
+          "CRM-25099",
+          "CRM-80420",
+          "CRM-97025",
+          "CRM-59836",
+          "CRM-72274",
+          "CRM-61019",
+          "CRM-22410",
+          "CRM-27403",
+          "CRM-79683",
+          "CRM-95910",
+          "CRM-12402",
+          "CRM-77513",
+          "CRM-18765",
+          "CRM-72126",
+          "CRM-69625",
+          "CRM-30061",
+          "CRM-88178",
+          "CRM-14918",
+          "CRM-34118",
+          "CRM-56470",
+          "CRM-39288",
+          "CRM-26669",
+          "CRM-13158",
+          "CRM-27214",
+          "CRM-67718",
+          "CRM-31287",
+          "CRM-13927",
+          "CRM-41950",
+          "CRM-80704",
+          "CRM-78885",
+          "CRM-73401",
+          "CRM-25621",
+          "CRM-74566",
+          "CRM-39000",
+          "CRM-19233",
+          "CRM-46821",
+          "CRM-10642"
+        ],
+        "flaggedSuspicious": true,
+        "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642"
+      }
+    },
+    {
+      "id": "ord-1792750975215-6dc6c7",
+      "orderNumber": "CRM-60687",
+      "trackingToken": "fe3add794702c8d235a85758d0513658",
+      "createdAt": "2026-10-23T10:22:55.215Z",
+      "customerName": "Aline Mugabo",
+      "customerPhone": "0788123456",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo (Kimironko)",
+      "deliveryAddress": "KG 15 Ave, Kimironko",
+      "items": [
+        {
+          "productId": "prod-1792750975156-f08659",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-4116"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Paid",
+      "supplierFulfillmentStatus": "Pending",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Kigali Quality Audio Ltd",
+      "paymentStatus": "Paid",
+      "status": "Confirmed",
+      "stockDeducted": true,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-23T10:22:55.216Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-23T10:22:55.242Z",
+          "note": "Payment confirmation submitted. Txn ID: TXN1792750975240, Phone: 0788123456. Pending verification."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-23T10:22:55.258Z",
+          "note": "Payment verified & approved by Ruth (System Owner): 36,500 FRW (TXN1792750975240).",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1792750975242-b9db84",
+        "orderId": "ord-1792750975215-6dc6c7",
+        "orderNumber": "CRM-60687",
+        "customerName": "Aline Mugabo",
+        "paymentPhone": "0788123456",
+        "paymentMethod": "MTN Mobile Money",
+        "amountPaid": 36500,
+        "transactionId": "TXN1792750975240",
+        "submittedAt": "2026-10-23T10:22:55.242Z",
+        "verificationStatus": "Verified/Paid",
+        "isDuplicateTxn": false,
+        "flaggedSuspicious": false,
+        "verifiedAt": "2026-10-23T10:22:55.258Z",
+        "verifiedBy": "Ruth (System Owner)",
+        "adminNotes": "Verified via MTN MoMo statement.",
+        "customerNotified": true,
+        "notificationMessage": "Payment of 36,500 FRW for Order #CRM-60687 has been verified and confirmed! ContactReach Market is preparing your delivery."
+      },
+      "supplierPayoutRef": "MOMO-PAY-776611"
+    },
     {
       "id": "ord-1792750120266-43234a",
       "orderNumber": "CRM-66821",
@@ -10845,6 +12327,308 @@
   ],
   "paymentConfirmations": [
     {
+      "id": "conf-1792750993962-19d00e",
+      "orderId": "ord-1792750993939-edae04",
+      "orderNumber": "CRM-59190",
+      "customerName": "Sam Habimana",
+      "paymentPhone": "0780445566",
+      "paymentMethod": "MTN Mobile Money",
+      "amountPaid": 36500,
+      "transactionId": "CLAIM-1792750993955",
+      "submittedAt": "2026-10-23T10:23:13.962Z",
+      "verificationStatus": "Pending Verification",
+      "isDuplicateTxn": false,
+      "flaggedSuspicious": false
+    },
+    {
+      "id": "conf-1792750993579-87425d",
+      "orderId": "ord-1792750993532-e56c9e",
+      "orderNumber": "CRM-67889",
+      "customerName": "Gisele Umuhoza",
+      "paymentPhone": "0788776655",
+      "paymentMethod": "Airtel Money",
+      "amountPaid": 36500,
+      "transactionId": "991827461",
+      "submittedAt": "2026-10-23T10:23:13.580Z",
+      "verificationStatus": "Under Verification",
+      "isDuplicateTxn": true,
+      "duplicateOrderNumbers": [
+        "CRM-97014",
+        "CRM-93140",
+        "CRM-35913",
+        "CRM-80132",
+        "CRM-25099",
+        "CRM-80420",
+        "CRM-97025",
+        "CRM-59836",
+        "CRM-72274",
+        "CRM-61019",
+        "CRM-22410",
+        "CRM-27403",
+        "CRM-79683",
+        "CRM-95910",
+        "CRM-12402",
+        "CRM-77513",
+        "CRM-18765",
+        "CRM-72126",
+        "CRM-69625",
+        "CRM-30061",
+        "CRM-88178",
+        "CRM-14918",
+        "CRM-34118",
+        "CRM-56470",
+        "CRM-39288",
+        "CRM-26669",
+        "CRM-13158",
+        "CRM-27214",
+        "CRM-67718",
+        "CRM-31287",
+        "CRM-13927",
+        "CRM-41950",
+        "CRM-80704",
+        "CRM-78885",
+        "CRM-73401",
+        "CRM-25621",
+        "CRM-74566",
+        "CRM-39000",
+        "CRM-19233",
+        "CRM-46821",
+        "CRM-10642"
+      ],
+      "flaggedSuspicious": true,
+      "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-97014, #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642",
+      "verifiedAt": "2026-10-23T10:23:13.602Z",
+      "verifiedBy": "Ruth (System Owner)",
+      "adminNotes": "Suspicious duplicate transaction reference detected. Requesting telecom statement export."
+    },
+    {
+      "id": "conf-1792750993353-36eb3b",
+      "orderId": "ord-1792750993336-3cf3fc",
+      "orderNumber": "CRM-97014",
+      "customerName": "Kwizera Bosco",
+      "paymentPhone": "0780112233",
+      "paymentMethod": "MTN Merchant Code",
+      "amountPaid": 36500,
+      "transactionId": "991827461",
+      "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "confirmationMessage": "Y'ello! You have transferred 36,500 RWF to ContactReach Market (078002) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.",
+      "submittedAt": "2026-10-23T10:23:13.353Z",
+      "verificationStatus": "Pending Verification",
+      "isDuplicateTxn": true,
+      "duplicateOrderNumbers": [
+        "CRM-93140",
+        "CRM-35913",
+        "CRM-80132",
+        "CRM-25099",
+        "CRM-80420",
+        "CRM-97025",
+        "CRM-59836",
+        "CRM-72274",
+        "CRM-61019",
+        "CRM-22410",
+        "CRM-27403",
+        "CRM-79683",
+        "CRM-95910",
+        "CRM-12402",
+        "CRM-77513",
+        "CRM-18765",
+        "CRM-72126",
+        "CRM-69625",
+        "CRM-30061",
+        "CRM-88178",
+        "CRM-14918",
+        "CRM-34118",
+        "CRM-56470",
+        "CRM-39288",
+        "CRM-26669",
+        "CRM-13158",
+        "CRM-27214",
+        "CRM-67718",
+        "CRM-31287",
+        "CRM-13927",
+        "CRM-41950",
+        "CRM-80704",
+        "CRM-78885",
+        "CRM-73401",
+        "CRM-25621",
+        "CRM-74566",
+        "CRM-39000",
+        "CRM-19233",
+        "CRM-46821",
+        "CRM-10642"
+      ],
+      "flaggedSuspicious": true,
+      "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642"
+    },
+    {
+      "id": "conf-1792750993277-fdfb21",
+      "orderId": "ord-1792750993243-526956",
+      "orderNumber": "CRM-18623",
+      "customerName": "Aline Mugabo",
+      "paymentPhone": "0788123456",
+      "paymentMethod": "MTN Mobile Money",
+      "amountPaid": 36500,
+      "transactionId": "TXN1792750993275",
+      "submittedAt": "2026-10-23T10:23:13.277Z",
+      "verificationStatus": "Verified/Paid",
+      "isDuplicateTxn": false,
+      "flaggedSuspicious": false,
+      "verifiedAt": "2026-10-23T10:23:13.294Z",
+      "verifiedBy": "Ruth (System Owner)",
+      "adminNotes": "Verified via MTN MoMo statement.",
+      "customerNotified": true,
+      "notificationMessage": "Payment of 36,500 FRW for Order #CRM-18623 has been verified and confirmed! ContactReach Market is preparing your delivery."
+    },
+    {
+      "id": "conf-1792750975833-212f43",
+      "orderId": "ord-1792750975816-c33774",
+      "orderNumber": "CRM-21093",
+      "customerName": "Sam Habimana",
+      "paymentPhone": "0780445566",
+      "paymentMethod": "MTN Mobile Money",
+      "amountPaid": 36500,
+      "transactionId": "CLAIM-1792750975832",
+      "submittedAt": "2026-10-23T10:22:55.833Z",
+      "verificationStatus": "Pending Verification",
+      "isDuplicateTxn": false,
+      "flaggedSuspicious": false
+    },
+    {
+      "id": "conf-1792750975495-97fd09",
+      "orderId": "ord-1792750975462-f93ead",
+      "orderNumber": "CRM-93140",
+      "customerName": "Gisele Umuhoza",
+      "paymentPhone": "0788776655",
+      "paymentMethod": "Airtel Money",
+      "amountPaid": 36500,
+      "transactionId": "991827461",
+      "submittedAt": "2026-10-23T10:22:55.495Z",
+      "verificationStatus": "Under Verification",
+      "isDuplicateTxn": true,
+      "duplicateOrderNumbers": [
+        "CRM-35913",
+        "CRM-80132",
+        "CRM-25099",
+        "CRM-80420",
+        "CRM-97025",
+        "CRM-59836",
+        "CRM-72274",
+        "CRM-61019",
+        "CRM-22410",
+        "CRM-27403",
+        "CRM-79683",
+        "CRM-95910",
+        "CRM-12402",
+        "CRM-77513",
+        "CRM-18765",
+        "CRM-72126",
+        "CRM-69625",
+        "CRM-30061",
+        "CRM-88178",
+        "CRM-14918",
+        "CRM-34118",
+        "CRM-56470",
+        "CRM-39288",
+        "CRM-26669",
+        "CRM-13158",
+        "CRM-27214",
+        "CRM-67718",
+        "CRM-31287",
+        "CRM-13927",
+        "CRM-41950",
+        "CRM-80704",
+        "CRM-78885",
+        "CRM-73401",
+        "CRM-25621",
+        "CRM-74566",
+        "CRM-39000",
+        "CRM-19233",
+        "CRM-46821",
+        "CRM-10642"
+      ],
+      "flaggedSuspicious": true,
+      "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642",
+      "verifiedAt": "2026-10-23T10:22:55.514Z",
+      "verifiedBy": "Ruth (System Owner)",
+      "adminNotes": "Suspicious duplicate transaction reference detected. Requesting telecom statement export."
+    },
+    {
+      "id": "conf-1792750975319-976da1",
+      "orderId": "ord-1792750975302-4dd038",
+      "orderNumber": "CRM-35913",
+      "customerName": "Kwizera Bosco",
+      "paymentPhone": "0780112233",
+      "paymentMethod": "MTN Merchant Code",
+      "amountPaid": 36500,
+      "transactionId": "991827461",
+      "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "confirmationMessage": "Y'ello! You have transferred 36,500 RWF to ContactReach Market (078002) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.",
+      "submittedAt": "2026-10-23T10:22:55.319Z",
+      "verificationStatus": "Pending Verification",
+      "isDuplicateTxn": true,
+      "duplicateOrderNumbers": [
+        "CRM-80132",
+        "CRM-25099",
+        "CRM-80420",
+        "CRM-97025",
+        "CRM-59836",
+        "CRM-72274",
+        "CRM-61019",
+        "CRM-22410",
+        "CRM-27403",
+        "CRM-79683",
+        "CRM-95910",
+        "CRM-12402",
+        "CRM-77513",
+        "CRM-18765",
+        "CRM-72126",
+        "CRM-69625",
+        "CRM-30061",
+        "CRM-88178",
+        "CRM-14918",
+        "CRM-34118",
+        "CRM-56470",
+        "CRM-39288",
+        "CRM-26669",
+        "CRM-13158",
+        "CRM-27214",
+        "CRM-67718",
+        "CRM-31287",
+        "CRM-13927",
+        "CRM-41950",
+        "CRM-80704",
+        "CRM-78885",
+        "CRM-73401",
+        "CRM-25621",
+        "CRM-74566",
+        "CRM-39000",
+        "CRM-19233",
+        "CRM-46821",
+        "CRM-10642"
+      ],
+      "flaggedSuspicious": true,
+      "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642"
+    },
+    {
+      "id": "conf-1792750975242-b9db84",
+      "orderId": "ord-1792750975215-6dc6c7",
+      "orderNumber": "CRM-60687",
+      "customerName": "Aline Mugabo",
+      "paymentPhone": "0788123456",
+      "paymentMethod": "MTN Mobile Money",
+      "amountPaid": 36500,
+      "transactionId": "TXN1792750975240",
+      "submittedAt": "2026-10-23T10:22:55.242Z",
+      "verificationStatus": "Verified/Paid",
+      "isDuplicateTxn": false,
+      "flaggedSuspicious": false,
+      "verifiedAt": "2026-10-23T10:22:55.258Z",
+      "verifiedBy": "Ruth (System Owner)",
+      "adminNotes": "Verified via MTN MoMo statement.",
+      "customerNotified": true,
+      "notificationMessage": "Payment of 36,500 FRW for Order #CRM-60687 has been verified and confirmed! ContactReach Market is preparing your delivery."
+    },
+    {
       "id": "conf-1792750120015-ba5d05",
       "orderId": "ord-1792750119985-2ccced",
       "orderNumber": "CRM-41105",
@@ -13081,6 +14865,182 @@
   ],
   "inventoryLogs": [
     {
+      "id": "inv-1792750994373",
+      "productId": "prod-1792750994373-a179de",
+      "productName": "Multi-Angle Gallery Test Sneakers",
+      "previousStock": 0,
+      "newStock": 12,
+      "changeAmount": 12,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:14.373Z"
+    },
+    {
+      "id": "inv-1792750994262",
+      "productId": "prod-1792750994262-82ba2e",
+      "productName": "Limited Stock Sneaker",
+      "previousStock": 0,
+      "newStock": 2,
+      "changeAmount": 2,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:14.262Z"
+    },
+    {
+      "id": "inv-1792750994194",
+      "productId": "prod-1792750994194-33a8f6",
+      "productName": "Tombstone Test Product",
+      "previousStock": 0,
+      "newStock": 5,
+      "changeAmount": 5,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:14.194Z"
+    },
+    {
+      "id": "inv-1792750993900",
+      "productId": "prod-1792750993180-3a94f6",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 12,
+      "newStock": 14,
+      "changeAmount": 2,
+      "reason": "Stock restored from cancelled/refunded order CRM-69726",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:13.900Z"
+    },
+    {
+      "id": "inv-1792750993868",
+      "productId": "prod-1792750993180-3a94f6",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 14,
+      "newStock": 12,
+      "changeAmount": -2,
+      "reason": "Stock deducted for confirmed order CRM-69726",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:13.868Z"
+    },
+    {
+      "id": "inv-1792750993469",
+      "productId": "prod-1792750993469-db63c1",
+      "productName": "Glow Facial Vitamin C Serum (20% OFF Special)",
+      "previousStock": 0,
+      "newStock": 40,
+      "changeAmount": 40,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:13.469Z"
+    },
+    {
+      "id": "inv-1792750993294",
+      "productId": "prod-1792750993180-3a94f6",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 15,
+      "newStock": 14,
+      "changeAmount": -1,
+      "reason": "Stock deducted for approved payment on order CRM-18623",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:13.294Z"
+    },
+    {
+      "id": "inv-1792750993180",
+      "productId": "prod-1792750993180-3a94f6",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 0,
+      "newStock": 15,
+      "changeAmount": 15,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:23:13.180Z"
+    },
+    {
+      "id": "inv-1792750976202",
+      "productId": "prod-1792750976202-4c914c",
+      "productName": "Multi-Angle Gallery Test Sneakers",
+      "previousStock": 0,
+      "newStock": 12,
+      "changeAmount": 12,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:56.202Z"
+    },
+    {
+      "id": "inv-1792750976114",
+      "productId": "prod-1792750976114-b5e070",
+      "productName": "Limited Stock Sneaker",
+      "previousStock": 0,
+      "newStock": 2,
+      "changeAmount": 2,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:56.114Z"
+    },
+    {
+      "id": "inv-1792750976047",
+      "productId": "prod-1792750976047-187577",
+      "productName": "Tombstone Test Product",
+      "previousStock": 0,
+      "newStock": 5,
+      "changeAmount": 5,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:56.047Z"
+    },
+    {
+      "id": "inv-1792750975773",
+      "productId": "prod-1792750975156-f08659",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 12,
+      "newStock": 14,
+      "changeAmount": 2,
+      "reason": "Stock restored from cancelled/refunded order CRM-14904",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:55.773Z"
+    },
+    {
+      "id": "inv-1792750975733",
+      "productId": "prod-1792750975156-f08659",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 14,
+      "newStock": 12,
+      "changeAmount": -2,
+      "reason": "Stock deducted for confirmed order CRM-14904",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:55.733Z"
+    },
+    {
+      "id": "inv-1792750975400",
+      "productId": "prod-1792750975400-e77397",
+      "productName": "Glow Facial Vitamin C Serum (20% OFF Special)",
+      "previousStock": 0,
+      "newStock": 40,
+      "changeAmount": 40,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:55.400Z"
+    },
+    {
+      "id": "inv-1792750975258",
+      "productId": "prod-1792750975156-f08659",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 15,
+      "newStock": 14,
+      "changeAmount": -1,
+      "reason": "Stock deducted for approved payment on order CRM-60687",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:55.258Z"
+    },
+    {
+      "id": "inv-1792750975156",
+      "productId": "prod-1792750975156-f08659",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 0,
+      "newStock": 15,
+      "changeAmount": 15,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-23T10:22:55.156Z"
+    },
+    {
       "id": "inv-1792750120326",
       "productId": "prod-1792750120322-f5f165",
       "productName": "Multi-Angle Gallery Test Sneakers",
@@ -14457,6 +16417,522 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud-1792750994488-efcf",
+      "timestamp": "2026-10-23T10:23:14.488Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1792750994435-6113",
+      "timestamp": "2026-10-23T10:23:14.435Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_IMAGES_UPDATED",
+      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
+      "entityType": "product",
+      "entityId": "prod-1792750994373-a179de"
+    },
+    {
+      "id": "aud-1792750994406-4fae",
+      "timestamp": "2026-10-23T10:23:14.406Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_IMAGES_UPDATED",
+      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
+      "entityType": "product",
+      "entityId": "prod-1792750994373-a179de"
+    },
+    {
+      "id": "aud-1792750994373-8501",
+      "timestamp": "2026-10-23T10:23:14.373Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Multi-Angle Gallery Test Sneakers\" (SKU: CRM-FAS-5923) with stock 12",
+      "entityType": "product",
+      "entityId": "prod-1792750994373-a179de"
+    },
+    {
+      "id": "aud-1792750994323-e4e2",
+      "timestamp": "2026-10-23T10:23:14.323Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Limited Stock Sneaker\"",
+      "entityType": "product",
+      "entityId": "prod-1792750994262-82ba2e"
+    },
+    {
+      "id": "aud-1792750994262-c32d",
+      "timestamp": "2026-10-23T10:23:14.262Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Limited Stock Sneaker\" (SKU: CRM-FAS-6383) with stock 2",
+      "entityType": "product",
+      "entityId": "prod-1792750994262-82ba2e"
+    },
+    {
+      "id": "aud-1792750994223-b0f5",
+      "timestamp": "2026-10-23T10:23:14.223Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Tombstone Test Product\"",
+      "entityType": "product",
+      "entityId": "prod-1792750994194-33a8f6"
+    },
+    {
+      "id": "aud-1792750994194-3f42",
+      "timestamp": "2026-10-23T10:23:14.194Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Tombstone Test Product\" (SKU: CRM-ELE-7137) with stock 5",
+      "entityType": "product",
+      "entityId": "prod-1792750994194-33a8f6"
+    },
+    {
+      "id": "aud-1792750994166-30cf",
+      "timestamp": "2026-10-23T10:23:14.166Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_DELETED",
+      "details": "Deleted administrator account for Audited Staff Test (staff.test.1792750994042@contactreachmedia.rw)",
+      "entityType": "admin_user",
+      "entityId": "adm-1792750994064-c493"
+    },
+    {
+      "id": "aud-1792750994129-2148",
+      "timestamp": "2026-10-23T10:23:14.129Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_UPDATED",
+      "details": "Updated administrator account Audited Staff Test (staff.test.1792750994042@contactreachmedia.rw): role=product_manager, active=false",
+      "entityType": "admin_user",
+      "entityId": "adm-1792750994064-c493"
+    },
+    {
+      "id": "aud-1792750994110-c14f",
+      "timestamp": "2026-10-23T10:23:14.110Z",
+      "adminName": "Audited Staff Test",
+      "adminRole": "product_manager",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1792750994064-e2e9",
+      "timestamp": "2026-10-23T10:23:14.064Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_CREATED",
+      "details": "Created administrator account for Audited Staff Test (staff.test.1792750994042@contactreachmedia.rw) with role product_manager",
+      "entityType": "admin_user",
+      "entityId": "adm-1792750994064-c493"
+    },
+    {
+      "id": "aud-1792750994004-a2ca",
+      "timestamp": "2026-10-23T10:23:14.004Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_APPLICATION_REVIEWED",
+      "details": "Supplier application for \"Unverified Vendor Hub\" set to Rejected",
+      "entityType": "supplier_application",
+      "entityId": "supp-app-1792750993984-5c6b"
+    },
+    {
+      "id": "aud-1792750993900-f82a",
+      "timestamp": "2026-10-23T10:23:13.900Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_UPDATED",
+      "details": "Order #CRM-69726 updated to Cancelled (Paid)",
+      "entityType": "order",
+      "entityId": "ord-1792750993846-dab730"
+    },
+    {
+      "id": "aud-1792750993868-3c10",
+      "timestamp": "2026-10-23T10:23:13.869Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_UPDATED",
+      "details": "Order #CRM-69726 updated to Confirmed (Paid)",
+      "entityType": "order",
+      "entityId": "ord-1792750993846-dab730"
+    },
+    {
+      "id": "aud-1792750993815-e3a8",
+      "timestamp": "2026-10-23T10:23:13.815Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "MAINTENANCE_MODE_DISABLED",
+      "details": "Maintenance Mode was turned OFF by Ruth (System Owner). Public visitors can now access and browse marketplace normally.",
+      "entityType": "settings",
+      "entityId": "global"
+    },
+    {
+      "id": "aud-1792750993737-9705",
+      "timestamp": "2026-10-23T10:23:13.737Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "MAINTENANCE_MODE_ENABLED",
+      "details": "Maintenance Mode was turned ON by Ruth (System Owner). Public visitors now see \"We’ll Be Back Soon\" screen.",
+      "entityType": "settings",
+      "entityId": "global"
+    },
+    {
+      "id": "aud-1792750993677-d849",
+      "timestamp": "2026-10-23T10:23:13.677Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_PAYOUT_DISBURSED",
+      "details": "Disbursed supplier payout of 31,500 FRW to \"Kigali Quality Audio Ltd\" (Ref: MOMO-PAY-776611)",
+      "entityType": "supplier_payout",
+      "entityId": "payout-1792750993294-ee84"
+    },
+    {
+      "id": "aud-1792750993602-60ca",
+      "timestamp": "2026-10-23T10:23:13.602Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PAYMENT_AUDITING",
+      "details": "Payment marked Under Verification for Order #CRM-67889",
+      "entityType": "payment",
+      "entityId": "conf-1792750993579-87425d"
+    },
+    {
+      "id": "aud-1792750993503-e773",
+      "timestamp": "2026-10-23T10:23:13.503Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_UPDATED",
+      "details": "Updated product \"Glow Facial Vitamin C Serum (20% OFF Special)\"",
+      "entityType": "product",
+      "entityId": "prod-1792750993469-db63c1"
+    },
+    {
+      "id": "aud-1792750993469-a246",
+      "timestamp": "2026-10-23T10:23:13.469Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Glow Facial Vitamin C Serum (20% OFF Special)\" (SKU: CRM-HAI-5022) with stock 40",
+      "entityType": "product",
+      "entityId": "prod-1792750993469-db63c1"
+    },
+    {
+      "id": "aud-1792750993297-d793",
+      "timestamp": "2026-10-23T10:23:13.297Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PAYMENT_APPROVED",
+      "details": "Approved payment of 36500 FRW for Order #CRM-18623 (Txn: TXN1792750993275)",
+      "entityType": "payment",
+      "entityId": "conf-1792750993277-fdfb21"
+    },
+    {
+      "id": "aud-1792750993210-d3d6",
+      "timestamp": "2026-10-23T10:23:13.210Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_UPDATED",
+      "details": "Updated product \"Wireless Studio Bluetooth Headphones\"",
+      "entityType": "product",
+      "entityId": "prod-1792750993180-3a94f6"
+    },
+    {
+      "id": "aud-1792750993180-786f",
+      "timestamp": "2026-10-23T10:23:13.180Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Wireless Studio Bluetooth Headphones\" (SKU: CRM-ELE-5209) with stock 15",
+      "entityType": "product",
+      "entityId": "prod-1792750993180-3a94f6"
+    },
+    {
+      "id": "aud-1792750993143-a8f2",
+      "timestamp": "2026-10-23T10:23:13.143Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_APPLICATION_REVIEWED",
+      "details": "Supplier application for \"Kigali Quality Audio Ltd\" set to Approved",
+      "entityType": "supplier_application",
+      "entityId": "supp-app-1792750993126-0475"
+    },
+    {
+      "id": "aud-1792750993067-207d",
+      "timestamp": "2026-10-23T10:23:13.067Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "FIREBASE_GOOGLE_LOGIN",
+      "details": "Admin signed in with Google Firebase Auth (contactreachmedialimited@gmail.com)"
+    },
+    {
+      "id": "aud-1792750993033-ed25",
+      "timestamp": "2026-10-23T10:23:13.033Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1792750976255-c460",
+      "timestamp": "2026-10-23T10:22:56.255Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_IMAGES_UPDATED",
+      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
+      "entityType": "product",
+      "entityId": "prod-1792750976202-4c914c"
+    },
+    {
+      "id": "aud-1792750976228-481e",
+      "timestamp": "2026-10-23T10:22:56.228Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_IMAGES_UPDATED",
+      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
+      "entityType": "product",
+      "entityId": "prod-1792750976202-4c914c"
+    },
+    {
+      "id": "aud-1792750976202-27a2",
+      "timestamp": "2026-10-23T10:22:56.202Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Multi-Angle Gallery Test Sneakers\" (SKU: CRM-FAS-6074) with stock 12",
+      "entityType": "product",
+      "entityId": "prod-1792750976202-4c914c"
+    },
+    {
+      "id": "aud-1792750976161-b7b0",
+      "timestamp": "2026-10-23T10:22:56.161Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Limited Stock Sneaker\"",
+      "entityType": "product",
+      "entityId": "prod-1792750976114-b5e070"
+    },
+    {
+      "id": "aud-1792750976114-193f",
+      "timestamp": "2026-10-23T10:22:56.114Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Limited Stock Sneaker\" (SKU: CRM-FAS-8886) with stock 2",
+      "entityType": "product",
+      "entityId": "prod-1792750976114-b5e070"
+    },
+    {
+      "id": "aud-1792750976080-3140",
+      "timestamp": "2026-10-23T10:22:56.081Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Tombstone Test Product\"",
+      "entityType": "product",
+      "entityId": "prod-1792750976047-187577"
+    },
+    {
+      "id": "aud-1792750976047-f85e",
+      "timestamp": "2026-10-23T10:22:56.047Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Tombstone Test Product\" (SKU: CRM-ELE-8520) with stock 5",
+      "entityType": "product",
+      "entityId": "prod-1792750976047-187577"
+    },
+    {
+      "id": "aud-1792750976019-f84f",
+      "timestamp": "2026-10-23T10:22:56.019Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_DELETED",
+      "details": "Deleted administrator account for Audited Staff Test (staff.test.1792750975920@contactreachmedia.rw)",
+      "entityType": "admin_user",
+      "entityId": "adm-1792750975922-9bce"
+    },
+    {
+      "id": "aud-1792750975988-11a2",
+      "timestamp": "2026-10-23T10:22:55.988Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_UPDATED",
+      "details": "Updated administrator account Audited Staff Test (staff.test.1792750975920@contactreachmedia.rw): role=product_manager, active=false",
+      "entityType": "admin_user",
+      "entityId": "adm-1792750975922-9bce"
+    },
+    {
+      "id": "aud-1792750975972-8ab6",
+      "timestamp": "2026-10-23T10:22:55.972Z",
+      "adminName": "Audited Staff Test",
+      "adminRole": "product_manager",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1792750975922-e207",
+      "timestamp": "2026-10-23T10:22:55.922Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_CREATED",
+      "details": "Created administrator account for Audited Staff Test (staff.test.1792750975920@contactreachmedia.rw) with role product_manager",
+      "entityType": "admin_user",
+      "entityId": "adm-1792750975922-9bce"
+    },
+    {
+      "id": "aud-1792750975867-9611",
+      "timestamp": "2026-10-23T10:22:55.867Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_APPLICATION_REVIEWED",
+      "details": "Supplier application for \"Unverified Vendor Hub\" set to Rejected",
+      "entityType": "supplier_application",
+      "entityId": "supp-app-1792750975851-fef1"
+    },
+    {
+      "id": "aud-1792750975773-3771",
+      "timestamp": "2026-10-23T10:22:55.773Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_UPDATED",
+      "details": "Order #CRM-14904 updated to Cancelled (Paid)",
+      "entityType": "order",
+      "entityId": "ord-1792750975718-067750"
+    },
+    {
+      "id": "aud-1792750975733-79bf",
+      "timestamp": "2026-10-23T10:22:55.733Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_UPDATED",
+      "details": "Order #CRM-14904 updated to Confirmed (Paid)",
+      "entityType": "order",
+      "entityId": "ord-1792750975718-067750"
+    },
+    {
+      "id": "aud-1792750975669-923a",
+      "timestamp": "2026-10-23T10:22:55.669Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "MAINTENANCE_MODE_DISABLED",
+      "details": "Maintenance Mode was turned OFF by Ruth (System Owner). Public visitors can now access and browse marketplace normally.",
+      "entityType": "settings",
+      "entityId": "global"
+    },
+    {
+      "id": "aud-1792750975610-d8ea",
+      "timestamp": "2026-10-23T10:22:55.610Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "MAINTENANCE_MODE_ENABLED",
+      "details": "Maintenance Mode was turned ON by Ruth (System Owner). Public visitors now see \"We’ll Be Back Soon\" screen.",
+      "entityType": "settings",
+      "entityId": "global"
+    },
+    {
+      "id": "aud-1792750975571-e4d7",
+      "timestamp": "2026-10-23T10:22:55.571Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_PAYOUT_DISBURSED",
+      "details": "Disbursed supplier payout of 31,500 FRW to \"Kigali Quality Audio Ltd\" (Ref: MOMO-PAY-776611)",
+      "entityType": "supplier_payout",
+      "entityId": "payout-1792750975258-13f0"
+    },
+    {
+      "id": "aud-1792750975514-a6d1",
+      "timestamp": "2026-10-23T10:22:55.519Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PAYMENT_AUDITING",
+      "details": "Payment marked Under Verification for Order #CRM-93140",
+      "entityType": "payment",
+      "entityId": "conf-1792750975495-97fd09"
+    },
+    {
+      "id": "aud-1792750975434-b5cc",
+      "timestamp": "2026-10-23T10:22:55.434Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_UPDATED",
+      "details": "Updated product \"Glow Facial Vitamin C Serum (20% OFF Special)\"",
+      "entityType": "product",
+      "entityId": "prod-1792750975400-e77397"
+    },
+    {
+      "id": "aud-1792750975400-4d7b",
+      "timestamp": "2026-10-23T10:22:55.400Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Glow Facial Vitamin C Serum (20% OFF Special)\" (SKU: CRM-HAI-6556) with stock 40",
+      "entityType": "product",
+      "entityId": "prod-1792750975400-e77397"
+    },
+    {
+      "id": "aud-1792750975259-c758",
+      "timestamp": "2026-10-23T10:22:55.259Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PAYMENT_APPROVED",
+      "details": "Approved payment of 36500 FRW for Order #CRM-60687 (Txn: TXN1792750975240)",
+      "entityType": "payment",
+      "entityId": "conf-1792750975242-b9db84"
+    },
+    {
+      "id": "aud-1792750975187-c2d2",
+      "timestamp": "2026-10-23T10:22:55.187Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_UPDATED",
+      "details": "Updated product \"Wireless Studio Bluetooth Headphones\"",
+      "entityType": "product",
+      "entityId": "prod-1792750975156-f08659"
+    },
+    {
+      "id": "aud-1792750975156-626d",
+      "timestamp": "2026-10-23T10:22:55.156Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Wireless Studio Bluetooth Headphones\" (SKU: CRM-ELE-4116) with stock 15",
+      "entityType": "product",
+      "entityId": "prod-1792750975156-f08659"
+    },
+    {
+      "id": "aud-1792750975124-c061",
+      "timestamp": "2026-10-23T10:22:55.124Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_APPLICATION_REVIEWED",
+      "details": "Supplier application for \"Kigali Quality Audio Ltd\" set to Approved",
+      "entityType": "supplier_application",
+      "entityId": "supp-app-1792750975083-89df"
+    },
+    {
+      "id": "aud-1792750975048-0b94",
+      "timestamp": "2026-10-23T10:22:55.048Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "FIREBASE_GOOGLE_LOGIN",
+      "details": "Admin signed in with Google Firebase Auth (contactreachmedialimited@gmail.com)"
+    },
+    {
+      "id": "aud-1792750975022-04b5",
+      "timestamp": "2026-10-23T10:22:55.022Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
     {
       "id": "aud-1792750120375-5bb3",
       "timestamp": "2026-10-23T10:08:40.375Z",
@@ -17865,8 +20341,8 @@
       "phone": "0788123456",
       "deliveryAddress": "KG 15 Ave, Kimironko",
       "createdAt": "2026-10-19T07:50:46.576Z",
-      "totalOrders": 26,
-      "totalSpent": 949000
+      "totalOrders": 28,
+      "totalSpent": 1022000
     },
     {
       "id": "cust-1792484463972-89ed",
@@ -17904,8 +20380,8 @@
       "phone": "0780112233",
       "deliveryAddress": "Sonatubes near Bank of Kigali",
       "createdAt": "2026-10-21T12:15:21.238Z",
-      "totalOrders": 19,
-      "totalSpent": 693500
+      "totalOrders": 21,
+      "totalSpent": 766500
     },
     {
       "id": "cust-g-google_uid_1792584921256",
@@ -17930,8 +20406,8 @@
       "phone": "0788776655",
       "deliveryAddress": "KN 4 Ave, Kigali",
       "createdAt": "2026-10-21T12:15:21.290Z",
-      "totalOrders": 19,
-      "totalSpent": 693500
+      "totalOrders": 21,
+      "totalSpent": 766500
     },
     {
       "id": "cust-1792584921330",
@@ -17939,8 +20415,8 @@
       "phone": "0780998877",
       "deliveryAddress": "KG 544 St, Kacyiru",
       "createdAt": "2026-10-21T12:15:21.330Z",
-      "totalOrders": 19,
-      "totalSpent": 693500
+      "totalOrders": 21,
+      "totalSpent": 766500
     },
     {
       "id": "cust-1792584921397",
@@ -17948,8 +20424,8 @@
       "phone": "0780991122",
       "deliveryAddress": "KG 12 St",
       "createdAt": "2026-10-21T12:15:21.397Z",
-      "totalOrders": 19,
-      "totalSpent": 693500
+      "totalOrders": 21,
+      "totalSpent": 766500
     },
     {
       "id": "cust-1792584921438",
@@ -17957,8 +20433,8 @@
       "phone": "0788998822",
       "deliveryAddress": "KN 20 St",
       "createdAt": "2026-10-21T12:15:21.438Z",
-      "totalOrders": 19,
-      "totalSpent": 1330000
+      "totalOrders": 21,
+      "totalSpent": 1470000
     },
     {
       "id": "cust-g-google_uid_1792585782264",
@@ -17999,8 +20475,8 @@
       "name": "Sam Habimana",
       "phone": "0780445566",
       "createdAt": "2026-10-21T12:30:39.344Z",
-      "totalOrders": 18,
-      "totalSpent": 657000
+      "totalOrders": 20,
+      "totalSpent": 730000
     },
     {
       "id": "cust-g-google_uid_1792585967807",
@@ -18228,8 +20704,8 @@
       "name": "Customer A",
       "phone": "0789111222",
       "createdAt": "2026-10-22T09:47:40.032Z",
-      "totalOrders": 6,
-      "totalSpent": 180000
+      "totalOrders": 8,
+      "totalSpent": 240000
     },
     {
       "id": "cust-g-google_uid_1792662801890",
@@ -18315,6 +20791,40 @@
       "googleUid": "google_uid_1792750119573",
       "authProvider": "google",
       "isRegisteredBuyer": true
+    },
+    {
+      "id": "cust-g-google_uid_1792750975344",
+      "name": "Gisele Uwase",
+      "phone": "0789123456",
+      "email": "buyer.shopper.1792750975344@gmail.com",
+      "deliveryAddress": "Kigali, Kicukiro, Sonatubes",
+      "createdAt": "2026-10-23T10:22:55.352Z",
+      "totalOrders": 0,
+      "totalSpent": 0,
+      "status": "Active",
+      "accountType": "buyer",
+      "lastLogin": "2026-10-23T10:22:55.352Z",
+      "photoURL": "https://lh3.googleusercontent.com/a/default-user",
+      "googleUid": "google_uid_1792750975344",
+      "authProvider": "google",
+      "isRegisteredBuyer": true
+    },
+    {
+      "id": "cust-g-google_uid_1792750993388",
+      "name": "Gisele Uwase",
+      "phone": "0789123456",
+      "email": "buyer.shopper.1792750993388@gmail.com",
+      "deliveryAddress": "Kigali, Kicukiro, Sonatubes",
+      "createdAt": "2026-10-23T10:23:13.415Z",
+      "totalOrders": 0,
+      "totalSpent": 0,
+      "status": "Active",
+      "accountType": "buyer",
+      "lastLogin": "2026-10-23T10:23:13.415Z",
+      "photoURL": "https://lh3.googleusercontent.com/a/default-user",
+      "googleUid": "google_uid_1792750993388",
+      "authProvider": "google",
+      "isRegisteredBuyer": true
     }
   ],
   "adminUsers": [
@@ -18325,7 +20835,7 @@
       "role": "owner",
       "active": true,
       "phone": "+250 780 022 600",
-      "lastLogin": "2026-10-23T10:08:39.294Z"
+      "lastLogin": "2026-10-23T10:23:14.476Z"
     },
     {
       "id": "adm-owner-thierry",
@@ -18378,6 +20888,60 @@
   ],
   "reviews": [],
   "supplierApplications": [
+    {
+      "id": "supp-app-1792750993984-5c6b",
+      "businessName": "Unverified Vendor Hub",
+      "ownerName": "Unknown",
+      "phone": "0780000000",
+      "location": "Remote",
+      "category": "electronics",
+      "description": "No documentation provided.",
+      "status": "Rejected",
+      "createdAt": "2026-10-23T10:23:13.984Z",
+      "reviewedBy": "Ruth (System Owner)",
+      "reviewedAt": "2026-10-23T10:23:14.004Z"
+    },
+    {
+      "id": "supp-app-1792750993126-0475",
+      "businessName": "Kigali Quality Audio Ltd",
+      "ownerName": "Jean Paul",
+      "phone": "0788990011",
+      "email": "jeanpaul@qualityaudio.rw",
+      "location": "Downtown Kigali, Quartier Commercial",
+      "category": "electronics",
+      "description": "Authorized importer of sound systems and smart audio accessories.",
+      "status": "Approved",
+      "createdAt": "2026-10-23T10:23:13.126Z",
+      "reviewedBy": "Ruth (System Owner)",
+      "reviewedAt": "2026-10-23T10:23:13.143Z"
+    },
+    {
+      "id": "supp-app-1792750975851-fef1",
+      "businessName": "Unverified Vendor Hub",
+      "ownerName": "Unknown",
+      "phone": "0780000000",
+      "location": "Remote",
+      "category": "electronics",
+      "description": "No documentation provided.",
+      "status": "Rejected",
+      "createdAt": "2026-10-23T10:22:55.851Z",
+      "reviewedBy": "Ruth (System Owner)",
+      "reviewedAt": "2026-10-23T10:22:55.867Z"
+    },
+    {
+      "id": "supp-app-1792750975083-89df",
+      "businessName": "Kigali Quality Audio Ltd",
+      "ownerName": "Jean Paul",
+      "phone": "0788990011",
+      "email": "jeanpaul@qualityaudio.rw",
+      "location": "Downtown Kigali, Quartier Commercial",
+      "category": "electronics",
+      "description": "Authorized importer of sound systems and smart audio accessories.",
+      "status": "Approved",
+      "createdAt": "2026-10-23T10:22:55.083Z",
+      "reviewedBy": "Ruth (System Owner)",
+      "reviewedAt": "2026-10-23T10:22:55.124Z"
+    },
     {
       "id": "supp-app-1792750120032-8231",
       "businessName": "Unverified Vendor Hub",
@@ -19025,6 +21589,38 @@
   ],
   "supplierPayouts": [
     {
+      "id": "payout-1792750993294-ee84",
+      "shopId": "shop-kigali-quality-audio-ltd-3222",
+      "shopName": "Kigali Quality Audio Ltd",
+      "orderId": "ord-1792750993243-526956",
+      "orderNumber": "CRM-18623",
+      "orderTotal": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "payoutAmount": 31500,
+      "status": "Paid",
+      "createdAt": "2026-10-23T10:23:13.294Z",
+      "paymentReference": "MOMO-PAY-776611",
+      "paidAt": "2026-10-23T10:23:13.677Z",
+      "approvedBy": "Ruth (System Owner)"
+    },
+    {
+      "id": "payout-1792750975258-13f0",
+      "shopId": "shop-kigali-quality-audio-ltd-3222",
+      "shopName": "Kigali Quality Audio Ltd",
+      "orderId": "ord-1792750975215-6dc6c7",
+      "orderNumber": "CRM-60687",
+      "orderTotal": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "payoutAmount": 31500,
+      "status": "Paid",
+      "createdAt": "2026-10-23T10:22:55.258Z",
+      "paymentReference": "MOMO-PAY-776611",
+      "paidAt": "2026-10-23T10:22:55.570Z",
+      "approvedBy": "Ruth (System Owner)"
+    },
+    {
       "id": "payout-1792750119498-ae2f",
       "shopId": "shop-kigali-quality-audio-ltd-3222",
       "shopName": "Kigali Quality Audio Ltd",
@@ -19383,7 +21979,7 @@
     "maintenanceTitle": "We'll Be Back Soon",
     "maintenanceMessage": "ContactReach Market is currently under scheduled maintenance. We will return online shortly.",
     "maintenanceEstimatedTime": "",
-    "maintenanceUpdatedAt": "2026-10-23T10:08:39.863Z"
+    "maintenanceUpdatedAt": "2026-10-23T10:23:13.815Z"
   },
   "deletedRecordIds": [
     "adm-1792662459899-6fa1",
@@ -19403,6 +21999,105 @@
     "prod-1792750100775-3f63d6",
     "adm-1792750120077-065e",
     "prod-1792750120177-86b15f",
-    "prod-1792750120236-f60338"
+    "prod-1792750120236-f60338",
+    "adm-1792750975922-9bce",
+    "prod-1792750976047-187577",
+    "prod-1792750976114-b5e070",
+    "adm-1792750994064-c493",
+    "prod-1792750994194-33a8f6",
+    "prod-1792750994262-82ba2e"
+  ],
+  "adminTokens": [
+    [
+      "fd2cc1968c8e46d7310ae233c9a2ba11c6629f7d5418ad586cf417b4ab23c3ba",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-23T10:23:14.476Z"
+        },
+        "expiresAt": 1795342975004
+      }
+    ],
+    [
+      "64422cac1a8e6eeb61861d8d5aaaf1d6f7890fb3215c183b0cd0b13480579008",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-23T10:23:14.476Z"
+        },
+        "expiresAt": 1795342975037
+      }
+    ],
+    [
+      "5c522512792fd6f8a942efa752772f26a65fb0d094596a815ec4447c887140b5",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-23T10:23:14.476Z"
+        },
+        "expiresAt": 1795342993022
+      }
+    ],
+    [
+      "1f1fb4679922c564cccb41b21a96a7bbf35a08e297557e57156848ee11a94cf1",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-23T10:23:14.476Z"
+        },
+        "expiresAt": 1795342993053
+      }
+    ],
+    [
+      "375cbde316880ee906d8d7775541f899d902b3dfd2e6758bd372982863c2cb8f",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-23T10:23:14.476Z"
+        },
+        "expiresAt": 1795342994476
+      }
+    ]
+  ],
+  "customerTokens": [
+    [
+      "buyer_g_a2e8124ecbfbb3abd0ac57c1b805e334cec8b99784e70b2d",
+      {
+        "customerId": "cust-g-google_uid_1792750975344",
+        "expiresAt": 1795342975352
+      }
+    ],
+    [
+      "buyer_g_49054899ca96ae826884f484cbba05293550be1956859108",
+      {
+        "customerId": "cust-g-google_uid_1792750993388",
+        "expiresAt": 1795342993416
+      }
+    ]
   ]
 }

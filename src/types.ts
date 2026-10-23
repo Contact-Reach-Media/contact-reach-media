@@ -89,6 +89,7 @@ export interface Product {
   stock: number;
   imageUrl: string;
   images?: string[];
+  videoUrl?: string; // YouTube video link or embed URL
   shopName?: string;
   shopId?: string;
   receiverName?: string;
