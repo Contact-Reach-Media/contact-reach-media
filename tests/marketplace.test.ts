@@ -192,7 +192,7 @@ async function runTests() {
         description: 'Crystal clear studio sound with deep bass and noise cancellation.',
         price: 35000,
         stock: 15,
-        shopName: 'Kigali Quality Audio Ltd',
+        shopName: 'Inziza Sound Studio Lab',
         images: [
           'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80',
           'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=600&q=80',
@@ -209,6 +209,40 @@ async function runTests() {
     assert(Array.isArray(prod.images) && prod.images.length === 3, 'Product should have 3 images linked');
     assert.strictEqual(prod.imageUrl, prod.images[0], 'Primary imageUrl should match first image');
     createdProductId = prod.id;
+
+    // Verify that the shop was automatically created in shops and stored as isRecommended: false
+    const shopsRes = await fetch(`${BASE_URL}/api/shops`);
+    assert.strictEqual(shopsRes.status, 200);
+    const allShops = await shopsRes.json();
+    const createdShop = allShops.find((s: any) => s.name === 'Inziza Sound Studio Lab');
+    assert(createdShop, 'Shop "Inziza Sound Studio Lab" should have been automatically stored in shops');
+    assert.strictEqual(createdShop.isRecommended, false, 'Auto-created shop must NOT be recommended (isRecommended: false)');
+
+    // Verify that uploading another product with the same shop name reuses the shop without duplicates
+    const secondProdRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Studio Audio Cable Aux Cord',
+        category: 'electronics',
+        description: 'Gold-plated 3.5mm stereo cable.',
+        price: 5000,
+        stock: 30,
+        shopName: 'Inziza Sound Studio Lab',
+        status: 'Available'
+      })
+    });
+    assert.strictEqual(secondProdRes.status, 201);
+    const secondProd = await secondProdRes.json();
+    assert.strictEqual(secondProd.shopId, createdShop.id, 'Second product should reuse existing shopId');
+
+    const shopsAfterRes = await fetch(`${BASE_URL}/api/shops`);
+    const allShopsAfter = await shopsAfterRes.json();
+    const matchingCount = allShopsAfter.filter((s: any) => s.name === 'Inziza Sound Studio Lab').length;
+    assert.strictEqual(matchingCount, 1, 'Should NOT create duplicate shop when shop already exists');
 
     // Test updating images on product
     const updateImgRes = await fetch(`${BASE_URL}/api/admin/products/${createdProductId}`, {

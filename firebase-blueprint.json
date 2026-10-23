@@ -70,6 +70,7 @@
         "logo": { "type": "string", "maxLength": 64 },
         "bannerColor": { "type": "string", "maxLength": 64 },
         "isVerified": { "type": "boolean" },
+        "isRecommended": { "type": "boolean" },
         "followersCount": { "type": "number" },
         "deliveryInfo": { "type": "string", "maxLength": 200 },
         "isActive": { "type": "boolean" },

@@ -112,9 +112,16 @@ export const ShopsSection: React.FC<ShopsSectionProps> = ({
                       </div>
                     </div>
 
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-white/90 bg-black/20 px-2 py-0.5 rounded backdrop-blur-xs">
-                      {shop.category}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/90 bg-black/20 px-2 py-0.5 rounded backdrop-blur-xs">
+                        {shop.category}
+                      </span>
+                      {shop.isRecommended && (
+                        <span className="text-[10px] font-black text-amber-950 bg-amber-400 px-2 py-0.5 rounded shadow-2xs">
+                          ★ Recommended
+                        </span>
+                      )}
+                    </div>
 
                     {/* Follow Button */}
                     <button

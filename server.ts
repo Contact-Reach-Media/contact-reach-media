@@ -370,6 +370,11 @@ function loadDbFromDisk() {
     }
   });
 
+  // Ensure isRecommended boolean is guaranteed on all shops (defaults to false)
+  db.shops.forEach(s => {
+    s.isRecommended = Boolean(s.isRecommended);
+  });
+
   saveDbToDisk();
 }
 
@@ -2147,6 +2152,69 @@ app.get('/api/admin/products', requireAdminAuth, (req: Request, res: Response) =
   res.json(db.products);
 });
 
+// Helper to resolve or automatically register a shop when uploading / editing a product
+function resolveOrCreateShop(
+  shopNameInput?: string,
+  shopIdInput?: string,
+  extra?: {
+    location?: string;
+    phone?: string;
+    category?: string;
+    description?: string;
+  },
+  adminName?: string
+): { shopId: string; shopName: string; createdShop?: VendorShop } {
+  const defaultShopName = db.settings.companyName || 'ContactReach Market';
+  const targetName = (shopNameInput || '').trim() || defaultShopName;
+
+  // Check if shop already exists (by ID if provided, or case-insensitive name match)
+  let existing = shopIdInput ? db.shops.find(s => s.id === shopIdInput) : undefined;
+  if (!existing) {
+    existing = db.shops.find(s => s.name.trim().toLowerCase() === targetName.toLowerCase());
+  }
+
+  if (existing) {
+    // If the shop exists, no need to write/create it!
+    return { shopId: existing.id, shopName: existing.name };
+  }
+
+  // Shop does NOT exist: auto-create and store in db.shops permanently
+  // CRITICAL REQUIREMENT: newly auto-added shop is NOT recommended (isRecommended: false)
+  const safeSlug = targetName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'shop';
+  const newShopRecord: VendorShop = {
+    id: `shop-${safeSlug}-${Date.now().toString().slice(-4)}`,
+    name: targetName,
+    category: extra?.category?.trim() || 'General Merchandise',
+    description: extra?.description?.trim() || `Supplier partner on ContactReach Market`,
+    location: extra?.location?.trim() || 'Kigali, Rwanda',
+    phone: extra?.phone?.trim() || undefined,
+    logo: 'ShoppingBag',
+    bannerColor: 'from-slate-700 to-slate-900',
+    isVerified: false,
+    isRecommended: false, // Explicit user requirement: "is not recommanded"
+    followersCount: 0,
+    deliveryInfo: 'Kigali delivery available',
+    isActive: true,
+    createdAt: new Date().toISOString()
+  };
+
+  db.shops.push(newShopRecord);
+  saveDbToDisk();
+  saveToFirestoreAsync('shops', newShopRecord.id, newShopRecord);
+
+  if (adminName) {
+    logAudit(
+      { name: adminName, role: 'administrator' },
+      'SHOP_STORED_FROM_PRODUCT_UPLOAD',
+      `Stored new shop "${newShopRecord.name}" (isRecommended: false) during product upload`,
+      'shop',
+      newShopRecord.id
+    );
+  }
+
+  return { shopId: newShopRecord.id, shopName: newShopRecord.name, createdShop: newShopRecord };
+}
+
 app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const {
@@ -2186,6 +2254,19 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
   }
   if (!description || !description.trim()) return res.status(400).json({ error: 'Product description is required.' });
 
+  // Resolve shop: if shop exists no need to write it, if new shop add it to shops with isRecommended: false
+  const { shopId: finalShopId, shopName: finalShopName } = resolveOrCreateShop(
+    shopName,
+    shopId,
+    {
+      location: req.body.shopLocation || req.body.newShopLocation || req.body.newShop?.location || location,
+      phone: req.body.shopPhone || req.body.newShopPhone || req.body.newShop?.phone || receiverPhone,
+      category: req.body.shopCategory || req.body.newShop?.category || category,
+      description: req.body.shopDescription || req.body.newShop?.description
+    },
+    admin.name
+  );
+
   const finalPrice = Math.max(0, Number(price));
   let finalDiscountPercent: number | undefined = undefined;
   let finalDiscountPrice: number | undefined = undefined;
@@ -2202,35 +2283,35 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
   const stockNum = stock !== undefined ? Math.max(0, parseInt(stock, 10)) : 0;
   const prodStatus: ProductStatus = status === 'Hidden' ? 'Hidden' : stockNum <= 0 ? 'Out of Stock' : (status || 'Available');
 
-    const rawImages: string[] = Array.isArray(images)
-      ? images.map((s: any) => String(s).trim()).filter(Boolean)
-      : (typeof images === 'string'
-          ? images.split('\n').map((s: string) => s.trim()).filter(Boolean)
-          : []);
+  const rawImages: string[] = Array.isArray(images)
+    ? images.map((s: any) => String(s).trim()).filter(Boolean)
+    : (typeof images === 'string'
+        ? images.split('\n').map((s: string) => s.trim()).filter(Boolean)
+        : []);
 
-    const defaultPlaceholder = '/src/assets/images/product_street_sneakers_1791966366958.jpg';
-    const mainImage = imageUrl?.trim() || rawImages[0] || defaultPlaceholder;
-    const finalImages = rawImages.length > 0
-      ? (rawImages.includes(mainImage) ? rawImages : [mainImage, ...rawImages])
-      : [mainImage];
-    const cleanVideoUrl = videoUrl && typeof videoUrl === 'string' && videoUrl.trim() ? videoUrl.trim() : undefined;
+  const defaultPlaceholder = '/src/assets/images/product_street_sneakers_1791966366958.jpg';
+  const mainImage = imageUrl?.trim() || rawImages[0] || defaultPlaceholder;
+  const finalImages = rawImages.length > 0
+    ? (rawImages.includes(mainImage) ? rawImages : [mainImage, ...rawImages])
+    : [mainImage];
+  const cleanVideoUrl = videoUrl && typeof videoUrl === 'string' && videoUrl.trim() ? videoUrl.trim() : undefined;
 
-    const newProduct: Product = {
-      id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-      name: name.trim(),
-      sku: sku ? sku.trim() : `CRM-${category.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
-      description: description.trim(),
-      price: finalPrice,
-      discountPercent: finalDiscountPercent,
-      discountPrice: finalDiscountPrice,
-      category: category.trim(),
-      subcategory: subcategory?.trim(),
-      stock: stockNum,
-      imageUrl: mainImage,
-      images: finalImages,
-      videoUrl: cleanVideoUrl,
-      shopName: shopName ? shopName.trim() : (db.settings.companyName || 'ContactReach Market'),
-      shopId: shopId || undefined,
+  const newProduct: Product = {
+    id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+    name: name.trim(),
+    sku: sku ? sku.trim() : `CRM-${category.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+    description: description.trim(),
+    price: finalPrice,
+    discountPercent: finalDiscountPercent,
+    discountPrice: finalDiscountPrice,
+    category: category.trim(),
+    subcategory: subcategory?.trim(),
+    stock: stockNum,
+    imageUrl: mainImage,
+    images: finalImages,
+    videoUrl: cleanVideoUrl,
+    shopName: finalShopName,
+    shopId: finalShopId,
       receiverName: receiverName ? receiverName.trim() : (db.settings.receiverName || 'Ruth'),
       paymentMethods: Array.isArray(paymentMethods) && paymentMethods.length > 0
         ? paymentMethods
@@ -2337,12 +2418,32 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
       finalVideoUrl = (typeof req.body.videoUrl === 'string' && req.body.videoUrl.trim()) ? req.body.videoUrl.trim() : undefined;
     }
 
+    let updatedShopName = existing.shopName;
+    let updatedShopId = existing.shopId;
+    if (req.body.shopName !== undefined || req.body.shopId !== undefined) {
+      const resolved = resolveOrCreateShop(
+        req.body.shopName,
+        req.body.shopId,
+        {
+          location: req.body.shopLocation || req.body.newShopLocation || req.body.newShop?.location,
+          phone: req.body.shopPhone || req.body.newShopPhone || req.body.newShop?.phone,
+          category: req.body.shopCategory || req.body.newShop?.category || req.body.category,
+          description: req.body.shopDescription || req.body.newShop?.description
+        },
+        admin.name
+      );
+      updatedShopName = resolved.shopName;
+      updatedShopId = resolved.shopId;
+    }
+
     const updated: Product = {
       ...existing,
       ...req.body,
       imageUrl: finalImageUrl,
       images: finalImages,
       videoUrl: finalVideoUrl,
+      shopName: updatedShopName,
+      shopId: updatedShopId,
       price: newPrice,
       discountPercent: finalDiscountPercent,
       discountPrice: finalDiscountPrice,
@@ -2550,7 +2651,7 @@ app.get('/api/admin/shops', requireAdminAuth, (req: Request, res: Response) => {
 
 app.post('/api/admin/shops', requireAdminAuth, requireRole(['owner', 'administrator', 'shop_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const { name, category, description, location, address, phone, email, logo, bannerColor, deliveryInfo } = req.body;
+  const { name, category, description, location, address, phone, email, logo, bannerColor, deliveryInfo, isRecommended } = req.body;
 
   if (!name || !name.trim()) return res.status(400).json({ error: 'Shop name is required.' });
 
@@ -2566,6 +2667,7 @@ app.post('/api/admin/shops', requireAdminAuth, requireRole(['owner', 'administra
     logo: logo || 'ShoppingBag',
     bannerColor: bannerColor || 'from-orange-500 to-amber-600',
     isVerified: true,
+    isRecommended: Boolean(isRecommended) || false,
     followersCount: 10,
     deliveryInfo: deliveryInfo?.trim() || 'Kigali express delivery available',
     isActive: true,
@@ -3417,6 +3519,7 @@ app.patch('/api/admin/supplier-applications/:id', requireAdminAuth, requireRole(
         logo: 'Store',
         bannerColor: 'from-orange-500 to-amber-600',
         isVerified: true,
+        isRecommended: false,
         followersCount: 5,
         deliveryInfo: 'Kigali express dispatch available',
         isActive: true,

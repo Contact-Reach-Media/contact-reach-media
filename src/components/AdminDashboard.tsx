@@ -151,6 +151,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     imagesText: string;
     shopName: string;
     shopId: string;
+    isAddingNewShop: boolean;
+    newShopName: string;
+    newShopLocation: string;
+    newShopPhone: string;
+    newShopDescription: string;
     brand: string;
     unit: string;
     status: ProductStatus;
@@ -173,6 +178,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     imagesText: '',
     shopName: 'ContactReach Market',
     shopId: '',
+    isAddingNewShop: false,
+    newShopName: '',
+    newShopLocation: 'Kigali, Rwanda',
+    newShopPhone: '',
+    newShopDescription: '',
     brand: '',
     unit: 'Piece',
     status: 'Available',
@@ -401,7 +411,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     email: 'contactreachmedialimited@gmail.com',
     deliveryInfo: 'Express same-day Kigali delivery',
     logo: 'ShoppingBag',
-    bannerColor: 'from-orange-500 to-amber-600'
+    bannerColor: 'from-orange-500 to-amber-600',
+    isRecommended: false
   });
 
   // Stock Adjustment Modal
@@ -670,6 +681,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Handlers for Products
   const handleOpenAddProduct = () => {
     setEditingProduct(null);
+    const defaultShop = shops[0]?.name || 'ContactReach Market';
+    const defaultShopId = shops[0]?.id || '';
     setProdForm({
       name: '',
       sku: `CRM-${(categories[0]?.id || 'PROD').toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -682,8 +695,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       stock: 25,
       imageUrl: '/src/assets/images/product_hair_curl_cream_1791966366308.jpg',
       imagesText: '',
-      shopName: shops[0]?.name || 'Sky Beauty',
-      shopId: shops[0]?.id || '',
+      shopName: defaultShop,
+      shopId: defaultShopId,
+      isAddingNewShop: false,
+      newShopName: '',
+      newShopLocation: 'Kigali, Rwanda',
+      newShopPhone: '',
+      newShopDescription: '',
       brand: '',
       unit: 'Piece',
       status: 'Available',
@@ -718,6 +736,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       imagesText: p.images ? p.images.join('\n') : '',
       shopName: p.shopName || 'ContactReach Market',
       shopId: p.shopId || '',
+      isAddingNewShop: false,
+      newShopName: '',
+      newShopLocation: 'Kigali, Rwanda',
+      newShopPhone: '',
+      newShopDescription: '',
       brand: p.brand || '',
       unit: p.unit || 'Piece',
       status: p.status,
@@ -768,7 +791,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ? Math.max(0, Math.round(finalPrice * (1 - numPercent / 100)))
       : undefined;
 
-    const payload: Partial<Product> = {
+    // Resolve shop: if shop exists no need to write it, if adding new shop it will be stored as unrecommended
+    let targetShopName = prodForm.shopName;
+    let targetShopId = prodForm.shopId;
+    let shopLocation: string | undefined = undefined;
+    let shopPhone: string | undefined = undefined;
+    let newShopPayload: any = undefined;
+
+    if (prodForm.isAddingNewShop) {
+      const enteredNewName = prodForm.newShopName.trim();
+      if (!enteredNewName) {
+        showToast('Please enter a shop name or pick an existing shop from the list.', 'error');
+        return;
+      }
+      // Check if typed shop already exists in directory (case-insensitive)
+      const existingMatch = shops.find(s => s.name.trim().toLowerCase() === enteredNewName.toLowerCase());
+      if (existingMatch) {
+        // Re-use existing shop! No duplicate created
+        targetShopName = existingMatch.name;
+        targetShopId = existingMatch.id;
+      } else {
+        targetShopName = enteredNewName;
+        targetShopId = '';
+        shopLocation = prodForm.newShopLocation.trim() || 'Kigali, Rwanda';
+        shopPhone = prodForm.newShopPhone.trim() || undefined;
+        newShopPayload = {
+          name: enteredNewName,
+          location: shopLocation,
+          phone: shopPhone,
+          description: prodForm.newShopDescription.trim() || undefined,
+          category: prodForm.category
+        };
+      }
+    } else {
+      const existingMatch = shops.find(s => s.name === prodForm.shopName || s.id === prodForm.shopId);
+      if (existingMatch) {
+        targetShopName = existingMatch.name;
+        targetShopId = existingMatch.id;
+      }
+    }
+
+    const payload: any = {
       name: prodForm.name.trim(),
       sku: prodForm.sku.trim(),
       description: prodForm.description.trim(),
@@ -780,8 +843,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       stock: Math.max(0, parseInt(String(prodForm.stock), 10) || 0),
       imageUrl: finalPrimaryImage,
       images: imagesList,
-      shopName: prodForm.shopName,
-      shopId: prodForm.shopId || undefined,
+      shopName: targetShopName,
+      shopId: targetShopId || undefined,
+      shopLocation,
+      shopPhone,
+      newShop: newShopPayload,
       brand: prodForm.brand.trim() || undefined,
       unit: prodForm.unit.trim() || 'Piece',
       status: prodForm.status,
@@ -1990,7 +2056,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       email: 'contactreachmedialimited@gmail.com',
                       deliveryInfo: 'Express same-day Kigali delivery',
                       logo: 'ShoppingBag',
-                      bannerColor: 'from-orange-500 to-amber-600'
+                      bannerColor: 'from-orange-500 to-amber-600',
+                      isRecommended: false
                     });
                     setShopModalOpen(true);
                   }}
@@ -2008,11 +2075,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div key={shop.id} className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs">
                       <div className={`h-14 bg-gradient-to-r ${shop.bannerColor} p-3 flex items-center justify-between text-white`}>
                         <span className="font-extrabold text-sm">{shop.name}</span>
-                        {shop.isVerified && (
-                          <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">
-                            Verified
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {shop.isRecommended ? (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black">
+                              ★ Recommended
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-black/25 text-white/90 text-[10px] font-medium border border-white/20">
+                              Standard
+                            </span>
+                          )}
+                          {shop.isVerified && (
+                            <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">
+                              Verified
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="p-4 space-y-3 text-xs">
                         <div>
@@ -2046,7 +2124,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 email: shop.email || 'contactreachmedialimited@gmail.com',
                                 deliveryInfo: shop.deliveryInfo || 'Kigali delivery',
                                 logo: shop.logo,
-                                bannerColor: shop.bannerColor
+                                bannerColor: shop.bannerColor,
+                                isRecommended: Boolean(shop.isRecommended)
                               });
                               setShopModalOpen(true);
                             }}
@@ -3880,21 +3959,117 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Assigned Saved Shop</label>
-                  <select
-                    value={prodForm.shopName}
-                    onChange={(e) => {
-                      const shp = shops.find(s => s.name === e.target.value);
-                      setProdForm({ ...prodForm, shopName: e.target.value, shopId: shp?.id || '' });
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-semibold"
-                  >
-                    {shops.map(s => (
-                      <option key={s.id} value={s.name}>{s.name} ({s.location})</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">Merchant Shop *</label>
+                    <button
+                      type="button"
+                      onClick={() => setProdForm(prev => ({ ...prev, isAddingNewShop: !prev.isAddingNewShop }))}
+                      className="text-[11px] font-bold text-[#FF6000] hover:text-[#e05500] hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      {prodForm.isAddingNewShop ? '← Select Existing Shop' : '+ Add New Shop'}
+                    </button>
+                  </div>
+
+                  {!prodForm.isAddingNewShop ? (
+                    <div>
+                      <select
+                        value={prodForm.shopName}
+                        onChange={(e) => {
+                          if (e.target.value === '__NEW_SHOP__') {
+                            setProdForm(prev => ({ ...prev, isAddingNewShop: true, newShopName: '' }));
+                          } else {
+                            const shp = shops.find(s => s.name === e.target.value);
+                            setProdForm({ ...prodForm, shopName: e.target.value, shopId: shp?.id || '' });
+                          }
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-semibold bg-white"
+                      >
+                        {shops.map(s => (
+                          <option key={s.id} value={s.name}>
+                            {s.name} ({s.location || 'Kigali'}){s.isRecommended ? ' ★ Recommended' : ''}
+                          </option>
+                        ))}
+                        <option value="__NEW_SHOP__">➕ + Add New Shop...</option>
+                      </select>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        If the shop exists, no need to write it — select it above.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        value={prodForm.newShopName}
+                        onChange={(e) => setProdForm(prev => ({ ...prev, newShopName: e.target.value }))}
+                        placeholder="Enter new shop name..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-orange-400 focus:border-orange-500 font-bold bg-orange-50/20"
+                      />
+                      <p className="text-[10px] text-orange-700 mt-1 font-medium">
+                        Stored in Shops directory as a standard (unrecommended) shop.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Inline New Shop Form when adding a new shop */}
+              {prodForm.isAddingNewShop && (
+                <div className="p-3.5 bg-orange-50/50 rounded-2xl border border-orange-200 space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-orange-950">
+                      <Store className="w-4 h-4 text-[#FF6000]" />
+                      <span>New Shop Details (Saved to directory with <code>isRecommended: false</code>)</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full border border-orange-200">
+                      Standard Shop (Not Recommended)
+                    </span>
+                  </div>
+
+                  {/* Real-time duplicate check */}
+                  {prodForm.newShopName.trim() && shops.some(s => s.name.trim().toLowerCase() === prodForm.newShopName.trim().toLowerCase()) && (
+                    <div className="p-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-[11px] flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                      <div>
+                        <strong>"{prodForm.newShopName.trim()}" already exists</strong> in your shops directory! It will be reused automatically so you don't need to write or create a duplicate.
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Shop Location / Plaza</label>
+                      <input
+                        type="text"
+                        value={prodForm.newShopLocation}
+                        onChange={(e) => setProdForm(prev => ({ ...prev, newShopLocation: e.target.value }))}
+                        placeholder="e.g. Fair View Plaza, Kigali"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Contact Phone (Optional)</label>
+                      <input
+                        type="text"
+                        value={prodForm.newShopPhone}
+                        onChange={(e) => setProdForm(prev => ({ ...prev, newShopPhone: e.target.value }))}
+                        placeholder="e.g. 0780022600"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Shop Description (Optional)</label>
+                    <input
+                      type="text"
+                      value={prodForm.newShopDescription}
+                      onChange={(e) => setProdForm(prev => ({ ...prev, newShopDescription: e.target.value }))}
+                      placeholder="e.g. Direct supplier for cosmetics and hair supplies"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* MULTIPLE IMAGES & GALLERY LINKS MANAGER */}
               <div className="space-y-3 p-4 bg-slate-50/90 rounded-2xl border border-slate-200">
@@ -4702,6 +4877,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onChange={(e) => setShopForm({ ...shopForm, description: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
                 />
+              </div>
+
+              <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="modalShopIsRecommended"
+                  checked={shopForm.isRecommended}
+                  onChange={(e) => setShopForm({ ...shopForm, isRecommended: e.target.checked })}
+                  className="w-4 h-4 text-[#FF6000] rounded focus:ring-orange-500 cursor-pointer"
+                />
+                <label htmlFor="modalShopIsRecommended" className="font-bold text-slate-700 text-xs cursor-pointer">
+                  Featured / Recommended Shop (Show ★ Recommended badge)
+                </label>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">

@@ -1148,7 +1148,7 @@ export const api = {
       const res = await fetch('/api/admin/products', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(prod)
+        body: JSON.stringify({ ...prod, ...product })
       });
       const parsed = await safeParseResponse<Product>(res);
       if (res.ok && parsed.isJson && parsed.json) {

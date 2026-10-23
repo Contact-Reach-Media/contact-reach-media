@@ -291,6 +291,7 @@ export interface VendorShop {
   logo: string;
   bannerColor: string;
   isVerified: boolean;
+  isRecommended?: boolean;
   followersCount: number;
   deliveryInfo?: string;
   isActive?: boolean;
