@@ -7,7 +7,7 @@ import {
   AlertCircle, Clock, ChevronDown, Download, Printer, ShieldCheck,
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
-  Star, ArrowLeft, ArrowRight
+  Star, ArrowLeft, ArrowRight, Camera
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -180,10 +180,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     colors: ''
   });
 
-  // Multiple Image Links helper state for Product Modal
+  // Multiple Picture Links helper state for Product Modal
   const [newImageLink, setNewImageLink] = useState('');
   const [showBulkImagePaste, setShowBulkImagePaste] = useState(false);
   const [bulkImageInput, setBulkImageInput] = useState('');
+
+  // Quick Manage Picture Links Modal for any product directly from table
+  const [manageImagesProduct, setManageImagesProduct] = useState<Product | null>(null);
+  const [manageImagesList, setManageImagesList] = useState<string[]>([]);
+  const [manageImagesInput, setManageImagesInput] = useState('');
+  const [savingManageImages, setSavingManageImages] = useState(false);
+
+  // Robust extractor for single or multiple picture URLs from line breaks, commas, semicolons, whitespace, or JSON
+  const extractPictureLinks = (input: string): string[] => {
+    if (!input) return [];
+    const trimmed = input.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(s => String(s).trim()).filter(s => s.length > 5);
+        }
+      } catch {}
+    }
+    return trimmed
+      .split(/[\n,;]+|\s+(?=https?:\/\/)/i)
+      .map(s => s.trim().replace(/^['"]+|['"]+$/g, ''))
+      .filter(s => s.length > 5);
+  };
 
   const getParsedImageList = (imagesText: string, primaryUrl: string): string[] => {
     const list = (imagesText || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -195,36 +219,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleAddImageLink = () => {
     if (!newImageLink.trim()) return;
-    const url = newImageLink.trim();
-    const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
-    if (currentList.includes(url)) {
-      showToast('Image link is already in the gallery', 'error');
+    const links = extractPictureLinks(newImageLink);
+    if (links.length === 0) {
+      showToast('Please enter at least one valid picture link URL', 'error');
       return;
     }
-    const updatedList = [...currentList, url];
+
+    const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
+    const newItems = links.filter(l => !currentList.includes(l));
+    if (newItems.length === 0) {
+      showToast('Provided picture link(s) already in gallery', 'error');
+      return;
+    }
+
+    const updatedList = [...currentList, ...newItems];
     setProdForm(prev => ({
       ...prev,
-      imageUrl: prev.imageUrl || url,
+      imageUrl: prev.imageUrl || updatedList[0],
       imagesText: updatedList.join('\n')
     }));
     setNewImageLink('');
-    showToast('Image link added to gallery!');
+    showToast(newItems.length === 1 ? 'Picture link added to gallery!' : `Added ${newItems.length} picture links to gallery!`);
   };
 
   const handleApplyBulkImages = () => {
     if (!bulkImageInput.trim()) return;
-    const lines = bulkImageInput
-      .split(/[\n,]+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 5);
+    const links = extractPictureLinks(bulkImageInput);
 
-    if (lines.length === 0) {
-      showToast('No valid URLs found', 'error');
+    if (links.length === 0) {
+      showToast('No valid picture URLs found', 'error');
       return;
     }
 
     const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
-    const combined = Array.from(new Set([...currentList, ...lines]));
+    const combined = Array.from(new Set([...currentList, ...links]));
     setProdForm(prev => ({
       ...prev,
       imageUrl: prev.imageUrl || combined[0],
@@ -232,7 +260,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }));
     setBulkImageInput('');
     setShowBulkImagePaste(false);
-    showToast(`Added ${lines.length} image link${lines.length > 1 ? 's' : ''}!`);
+    showToast(`Added ${links.length} picture link${links.length > 1 ? 's' : ''}!`);
   };
 
   const handleSetPrimaryImage = (targetUrl: string) => {
@@ -243,7 +271,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       imageUrl: targetUrl,
       imagesText: reordered.join('\n')
     }));
-    showToast('Cover image updated!');
+    showToast('Cover picture updated!');
   };
 
   const handleRemoveImage = (targetUrl: string) => {
@@ -270,6 +298,82 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       imageUrl: copy[0],
       imagesText: copy.join('\n')
     }));
+  };
+
+  // Quick Manage Pictures Modal Handlers
+  const handleOpenManageImages = (p: Product) => {
+    const initialList = p.images && p.images.length > 0
+      ? [...p.images]
+      : (p.imageUrl ? [p.imageUrl] : []);
+    setManageImagesProduct(p);
+    setManageImagesList(initialList);
+    setManageImagesInput('');
+  };
+
+  const handleAddLinksToManageModal = () => {
+    if (!manageImagesInput.trim()) return;
+    const links = extractPictureLinks(manageImagesInput);
+    if (links.length === 0) {
+      showToast('Please enter at least one valid picture link', 'error');
+      return;
+    }
+    const newItems = links.filter(l => !manageImagesList.includes(l));
+    if (newItems.length === 0) {
+      showToast('These picture links are already in the product gallery', 'error');
+      return;
+    }
+    setManageImagesList(prev => [...prev, ...newItems]);
+    setManageImagesInput('');
+    showToast(newItems.length === 1 ? 'Picture link added!' : `Added ${newItems.length} picture links!`);
+  };
+
+  const handleManageModalUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const fileList = Array.from(files);
+    const validFiles = fileList.filter(f => f.size <= 5 * 1024 * 1024);
+    if (validFiles.length < fileList.length) {
+      showToast('Some files exceeded the 5MB limit and were skipped.', 'error');
+    }
+    if (validFiles.length === 0) return;
+
+    let loadedCount = 0;
+    const uploaded: string[] = [];
+    validFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        uploaded.push(reader.result as string);
+        loadedCount++;
+        if (loadedCount === validFiles.length) {
+          setManageImagesList(prev => [...prev, ...uploaded.filter(u => !prev.includes(u))]);
+          showToast(`Uploaded ${uploaded.length} picture${uploaded.length > 1 ? 's' : ''}!`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSaveManageImages = async () => {
+    if (!manageImagesProduct) return;
+    if (manageImagesList.length === 0) {
+      showToast('Product must have at least one picture', 'error');
+      return;
+    }
+    setSavingManageImages(true);
+    try {
+      await api.adminUpdateProductImages(manageImagesProduct.id, {
+        images: manageImagesList,
+        imageUrl: manageImagesList[0]
+      });
+      showToast(`Updated pictures for "${manageImagesProduct.name}"!`);
+      setManageImagesProduct(null);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update product pictures', 'error');
+    } finally {
+      setSavingManageImages(false);
+    }
   };
 
   // Category Editor Modal
@@ -666,31 +770,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Image Upload Handlers (FileReader -> base64 Data URL)
+  // Image Upload Handlers (FileReader -> base64 Data URL) - supports single or multiple file selection
   const handleProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Image file too large. Please select an image under 5MB.', 'error');
-      return;
+    const fileList = Array.from(files);
+    const validFiles = fileList.filter(f => f.size <= 5 * 1024 * 1024);
+    if (validFiles.length < fileList.length) {
+      showToast('Some files exceeded the 5MB limit and were skipped.', 'error');
     }
+    if (validFiles.length === 0) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setProdForm(prev => {
-        const existingList = prev.imagesText ? prev.imagesText.split('\n').filter(Boolean) : [];
-        const updatedList = [result, ...existingList.filter(u => u !== result)];
-        return {
-          ...prev,
-          imageUrl: result,
-          imagesText: updatedList.join('\n')
-        };
-      });
-      showToast('Product image uploaded successfully!');
-    };
-    reader.readAsDataURL(file);
+    let loadedCount = 0;
+    const newBase64Images: string[] = [];
+
+    validFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        newBase64Images.push(result);
+        loadedCount++;
+        if (loadedCount === validFiles.length) {
+          setProdForm(prev => {
+            const existingList = getParsedImageList(prev.imagesText, prev.imageUrl);
+            const combined = [...existingList, ...newBase64Images.filter(img => !existingList.includes(img))];
+            return {
+              ...prev,
+              imageUrl: prev.imageUrl || combined[0],
+              imagesText: combined.join('\n')
+            };
+          });
+          showToast(`Uploaded ${newBase64Images.length} picture${newBase64Images.length > 1 ? 's' : ''}!`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleCategoryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1519,15 +1634,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <tr key={p.id} className="hover:bg-slate-50/60">
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <img
-                                src={p.imageUrl}
-                                alt={p.name}
-                                className="w-12 h-12 object-cover rounded-xl border border-slate-200 shrink-0"
-                              />
+                              <div className="relative group shrink-0">
+                                <img
+                                  src={p.imageUrl}
+                                  alt={p.name}
+                                  className="w-12 h-12 object-cover rounded-xl border border-slate-200"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenManageImages(p)}
+                                  className="absolute inset-0 bg-black/60 text-white rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                                  title="Manage picture links"
+                                >
+                                  <Camera className="w-4 h-4 text-orange-400" />
+                                </button>
+                              </div>
                               <div className="max-w-xs">
                                 <span className="font-bold text-slate-900 block line-clamp-1">{p.name}</span>
-                                <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                   <span className="text-[10px] font-mono text-slate-400 font-bold">{p.sku}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenManageImages(p)}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-orange-50 hover:bg-orange-100 text-[#FF6000] border border-orange-200 cursor-pointer transition-colors"
+                                    title="Click to view or add multiple picture links"
+                                  >
+                                    <Camera className="w-2.5 h-2.5 text-[#FF6000]" />
+                                    <span>{p.images && p.images.length > 0 ? p.images.length : (p.imageUrl ? 1 : 0)} photo{((p.images && p.images.length > 0 ? p.images.length : (p.imageUrl ? 1 : 0)) === 1 ? '' : 's')}</span>
+                                    <span className="text-orange-400">· Add Links</span>
+                                  </button>
                                   {p.isFeatured && <span className="px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 text-[9px] font-black">Featured</span>}
                                   {p.isNewArrival && <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[9px] font-black">New</span>}
                                 </div>
@@ -1574,6 +1709,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenManageImages(p)}
+                              title="Manage picture links"
+                              className="p-1.5 rounded-lg text-orange-600 hover:text-orange-800 hover:bg-orange-50 cursor-pointer"
+                            >
+                              <Camera className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleOpenEditProduct(p)}
                               title="Edit product"
@@ -3687,7 +3830,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 )}
 
-                {/* Quick Add Bar: Input URL + Add Button + Upload Button */}
+                {/* Quick Add Bar: Input Single or Multiple URLs + Add Button + Upload Button */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                   <div className="sm:col-span-8 flex gap-1.5">
                     <input
@@ -3700,24 +3843,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           handleAddImageLink();
                         }
                       }}
-                      placeholder="Paste image URL (https://...) and click Add"
+                      placeholder="Paste picture URL or multiple links (separated by comma, space, or newline)"
                       className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono bg-white"
                     />
                     <button
                       type="button"
                       onClick={handleAddImageLink}
                       className="px-3.5 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl text-xs flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                      title="Add single or multiple picture links"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add Link</span>
+                      <span>Add Picture Link(s)</span>
                     </button>
                   </div>
                   <div className="sm:col-span-4">
                     <label className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-orange-50 text-slate-700 hover:text-[#FF6000] border border-slate-300 hover:border-orange-200 rounded-xl cursor-pointer font-bold text-xs transition-colors h-full">
                       <Upload className="w-3.5 h-3.5 text-[#FF6000]" />
-                      <span>Upload File</span>
+                      <span>Upload Picture(s)</span>
                       <input
                         type="file"
+                        multiple
                         accept="image/*"
                         onChange={handleProductImageUpload}
                         className="hidden"
@@ -5262,6 +5407,247 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 currentLang="en"
                 onToggleLang={() => {}}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: QUICK MANAGE PICTURE LINKS FOR A PRODUCT */}
+      {manageImagesProduct && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-slate-200 flex flex-col text-xs">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center text-[#FF6000]">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900">Manage Picture Links</h3>
+                  <p className="text-[11px] text-slate-500 font-medium truncate max-w-sm">
+                    {manageImagesProduct.name} <span className="font-mono text-slate-400">({manageImagesProduct.sku})</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManageImagesProduct(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 flex-1">
+              {/* Add Picture Links Section */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 block">
+                    Add Picture Link(s)
+                  </label>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    Supports 1 or multiple URLs at once
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <textarea
+                    rows={2}
+                    value={manageImagesInput}
+                    onChange={(e) => setManageImagesInput(e.target.value)}
+                    placeholder="Paste one or multiple picture URLs here (separated by newlines, commas, or spaces)&#10;e.g. https://images.unsplash.com/photo-1...&#10;https://images.unsplash.com/photo-2..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono focus:ring-2 focus:ring-[#FF6000]"
+                  />
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-400">
+                      Tip: You can paste multiple links at once from your supplier catalog or image host.
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <label className="px-3 py-1.5 bg-white hover:bg-orange-50 text-slate-700 hover:text-[#FF6000] border border-slate-300 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors">
+                        <Upload className="w-3.5 h-3.5 text-[#FF6000]" />
+                        <span>Upload Photos</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={handleManageModalUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleAddLinksToManageModal}
+                        disabled={!manageImagesInput.trim()}
+                        className="px-4 py-1.5 bg-[#FF6000] hover:bg-[#e05500] disabled:bg-slate-200 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Picture Link(s)</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gallery of Picture Links */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="font-extrabold text-slate-900">
+                    Product Pictures ({manageImagesList.length})
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    The first picture is the primary cover image
+                  </span>
+                </div>
+
+                {manageImagesList.length === 0 ? (
+                  <div className="py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-center">
+                    <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-bold text-slate-600">No picture links yet</p>
+                    <p className="text-[11px] text-slate-400">Paste links above or upload photos to set this product's gallery</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                    {manageImagesList.map((url, idx) => {
+                      const isCover = idx === 0;
+                      return (
+                        <div
+                          key={idx}
+                          className={`relative bg-white rounded-xl border overflow-hidden shadow-2xs flex flex-col justify-between ${
+                            isCover ? 'border-[#FF6000] ring-2 ring-orange-200' : 'border-slate-200'
+                          }`}
+                        >
+                          {/* Badge */}
+                          <div className="absolute top-1.5 left-1.5 z-10">
+                            {isCover ? (
+                              <span className="bg-[#FF6000] text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                <Star className="w-2.5 h-2.5 fill-white" />
+                                <span>Cover</span>
+                              </span>
+                            ) : (
+                              <span className="bg-slate-900/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                #{idx + 1}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Delete */}
+                          <div className="absolute top-1.5 right-1.5 z-10">
+                            <button
+                              type="button"
+                              onClick={() => setManageImagesList(prev => prev.filter((_, i) => i !== idx))}
+                              className="w-6 h-6 rounded-md bg-white/90 hover:bg-rose-600 hover:text-white text-slate-500 flex items-center justify-center shadow-2xs cursor-pointer transition-colors"
+                              title="Remove picture"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          {/* Thumbnail */}
+                          <div className="relative pt-[80%] bg-slate-100 overflow-hidden">
+                            <img
+                              src={url}
+                              alt={`Product picture ${idx + 1}`}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLElement).setAttribute('src', '/src/assets/images/hero_marketplace_shopper_1791966365592.jpg');
+                              }}
+                            />
+                          </div>
+
+                          {/* Actions */}
+                          <div className="p-1.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-1 text-[10px]">
+                            {!isCover ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setManageImagesList(prev => [url, ...prev.filter((_, i) => i !== idx)]);
+                                }}
+                                className="font-bold text-[#FF6000] hover:underline flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <Star className="w-2.5 h-2.5" />
+                                <span>Set Cover</span>
+                              </button>
+                            ) : (
+                              <span className="font-bold text-emerald-600 flex items-center gap-0.5">
+                                <Check className="w-2.5 h-2.5" />
+                                <span>Cover</span>
+                              </span>
+                            )}
+
+                            <div className="flex items-center gap-0.5">
+                              {idx > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setManageImagesList(prev => {
+                                      const copy = [...prev];
+                                      const temp = copy[idx];
+                                      copy[idx] = copy[idx - 1];
+                                      copy[idx - 1] = temp;
+                                      return copy;
+                                    });
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-slate-800 rounded hover:bg-slate-200 cursor-pointer"
+                                  title="Move Left"
+                                >
+                                  <ArrowLeft className="w-3 h-3" />
+                                </button>
+                              )}
+                              {idx < manageImagesList.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setManageImagesList(prev => {
+                                      const copy = [...prev];
+                                      const temp = copy[idx];
+                                      copy[idx] = copy[idx + 1];
+                                      copy[idx + 1] = temp;
+                                      return copy;
+                                    });
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-slate-800 rounded-hover:bg-slate-200 cursor-pointer"
+                                  title="Move Right"
+                                >
+                                  <ArrowRight className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2 sticky bottom-0">
+              <span className="text-[11px] text-slate-500 font-mono">
+                {manageImagesList.length} picture{manageImagesList.length === 1 ? '' : 's'} configured
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setManageImagesProduct(null)}
+                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-xl border border-slate-300 cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingManageImages || manageImagesList.length === 0}
+                  onClick={handleSaveManageImages}
+                  className="px-5 py-2 bg-[#FF6000] hover:bg-[#e05500] disabled:bg-slate-300 text-white font-bold rounded-xl shadow-xs cursor-pointer text-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{savingManageImages ? 'Saving Pictures...' : 'Save Product Pictures'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

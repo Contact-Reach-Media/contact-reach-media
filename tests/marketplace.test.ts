@@ -1099,6 +1099,70 @@ async function runTests() {
     assert(typeof dbContent.settings === 'object', 'db.settings must be an object');
   });
 
+  // TEST 32: Multiple Picture Links Management (Add, Append, Reorder, Set Cover)
+  await test('Admin can add, append, and update multiple picture links on a product', async () => {
+    // 1. Create a product with 1 image
+    const createRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Multi-Angle Gallery Test Sneakers',
+        category: 'fashion-shoes',
+        description: 'Premium shoes with full 360-degree multiple angle gallery.',
+        price: 45000,
+        stock: 12,
+        imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const prod = await createRes.json();
+    assert.strictEqual(prod.images.length, 1);
+
+    // 2. Append multiple picture links via PATCH endpoint
+    const patchRes = await fetch(`${BASE_URL}/api/admin/products/${prod.id}/images`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        newImages: [
+          'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=600&q=80'
+        ]
+      })
+    });
+    assert.strictEqual(patchRes.status, 200, 'Adding multiple picture links must succeed');
+    const patchData = await patchRes.json();
+    assert.strictEqual(patchData.product.images.length, 4, 'Product should now have 4 picture links');
+
+    // 3. Set a specific picture link as cover and reorder
+    const reorderRes = await fetch(`${BASE_URL}/api/admin/products/${prod.id}/images`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        imageUrl: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80'
+      })
+    });
+    assert.strictEqual(reorderRes.status, 200);
+    const reorderedData = await reorderRes.json();
+    assert.strictEqual(reorderedData.product.imageUrl, 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80');
+    assert.strictEqual(reorderedData.product.images[0], 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80');
+
+    // 4. Verify public product endpoint returns all picture links in images array
+    const publicProdRes = await fetch(`${BASE_URL}/api/products/${prod.id}`);
+    assert.strictEqual(publicProdRes.status, 200);
+    const publicProd = await publicProdRes.json();
+    assert.strictEqual(publicProd.images.length, 4);
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

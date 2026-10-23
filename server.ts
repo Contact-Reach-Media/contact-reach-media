@@ -2317,6 +2317,47 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
   res.json(updated);
 });
 
+// Update or Append Multiple Picture Links on a Product
+app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const product = db.products.find(p => p.id === req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+
+  const { images, imageUrl, newImages } = req.body;
+  let updatedImages: string[] = product.images ? [...product.images] : (product.imageUrl ? [product.imageUrl] : []);
+
+  if (Array.isArray(newImages)) {
+    // Append new picture links
+    const toAdd = newImages.map((u: any) => String(u).trim()).filter(Boolean);
+    toAdd.forEach(url => {
+      if (!updatedImages.includes(url)) updatedImages.push(url);
+    });
+  } else if (Array.isArray(images)) {
+    // Set explicit picture links array
+    updatedImages = images.map((u: any) => String(u).trim()).filter(Boolean);
+  } else if (typeof images === 'string') {
+    updatedImages = images.split(/[\n,;]+|\s+(?=https?:\/\/)/i).map((u: any) => String(u).trim()).filter(Boolean);
+  }
+
+  if (imageUrl) {
+    const primary = String(imageUrl).trim();
+    if (primary) {
+      updatedImages = [primary, ...updatedImages.filter(u => u !== primary)];
+    }
+  }
+
+  const primaryImage = updatedImages[0] || product.imageUrl;
+  product.images = updatedImages;
+  product.imageUrl = primaryImage;
+  product.updatedAt = new Date().toISOString();
+
+  logAudit(admin, 'PRODUCT_IMAGES_UPDATED', `Updated picture links for "${product.name}" (${updatedImages.length} pictures total)`, 'product', product.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('products', product.id, product);
+
+  res.json({ message: 'Product picture links updated successfully', product });
+});
+
 // Duplicate product
 app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;

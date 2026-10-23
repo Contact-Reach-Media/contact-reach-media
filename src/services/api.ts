@@ -1130,6 +1130,32 @@ export const api = {
     return updated;
   },
 
+  async adminUpdateProductImages(id: string, payload: { images?: string[]; newImages?: string[]; imageUrl?: string }): Promise<Product> {
+    try {
+      const res = await fetch(`/api/admin/products/${id}/images`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json?.product) {
+        try {
+          await saveProductToFirestore(parsed.json.product);
+        } catch {}
+        return parsed.json.product;
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+        throw err;
+      }
+    }
+
+    return this.adminUpdateProduct(id, payload);
+  },
+
   async adminDuplicateProduct(id: string): Promise<Product> {
     try {
       const res = await fetch(`/api/admin/products/${id}/duplicate`, {

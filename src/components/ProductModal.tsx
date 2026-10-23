@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import {
   X, Star, ShoppingBag, Truck, RotateCcw, Heart, Plus, Minus,
   MessageCircle, Maximize2, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft, Tag, Camera
