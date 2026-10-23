@@ -159,6 +159,14 @@ export async function safeParseResponse<T = any>(res: Response): Promise<{
 // Fallback admin directory for direct verification when running in decoupled static hosting mode
 const fallbackAdminUsers: AdminUser[] = [
   {
+    id: 'adm-owner-umuhuza',
+    name: 'Umuhuza Market (Platform Owner)',
+    email: 'umuhuzamarket@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0780022600'
+  },
+  {
     id: 'adm-owner-ruth',
     name: 'Ruth (System Owner)',
     email: 'contactreachmedialimited@gmail.com',
@@ -830,7 +838,8 @@ export const api = {
     // Resilient Google Auth fallback if server is offline or in decoupled static mode
     const isOwner = cleanEmail.toLowerCase() === 'contactreachmedialimited@gmail.com' ||
                     cleanEmail.toLowerCase() === 'manirihothierry36@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'manirihothierry6@gmail.com';
+                    cleanEmail.toLowerCase() === 'manirihothierry6@gmail.com' ||
+                    cleanEmail.toLowerCase() === 'umuhuzamarket@gmail.com';
     const fallbackUser = fallbackAdminUsers.find(a => a.email.toLowerCase() === cleanEmail.toLowerCase());
 
     if (isOwner || fallbackUser) {
@@ -1068,6 +1077,43 @@ export const api = {
       }
     } catch {}
     return {} as Order;
+  },
+
+  // Admin Products, Categories, Shops
+  async adminGetProducts(): Promise<Product[]> {
+    try {
+      const res = await fetch('/api/admin/products', { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<Product[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+
+    return this.getProducts();
+  },
+
+  async adminGetCategories(): Promise<Category[]> {
+    try {
+      const res = await fetch('/api/admin/categories', { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<Category[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+
+    return this.getCategories();
+  },
+
+  async adminGetShops(): Promise<VendorShop[]> {
+    try {
+      const res = await fetch('/api/admin/shops', { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<VendorShop[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+
+    return this.getShops();
   },
 
   // Products

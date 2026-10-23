@@ -16,6 +16,8 @@ import {
   AdminUser, AdminRole, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority
 } from '../types.ts';
 import { api, getStoredAdminUser } from '../services/api.ts';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firebase.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
 
@@ -51,6 +53,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(getStoredAdminUser());
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
 
   // Toast feedback
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -432,9 +435,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [probStatus, setProbStatus] = useState<ProblemStatus>('In Progress');
   const [probStaffNote, setProbStaffNote] = useState('');
 
-  // Load All Admin Data
-  const fetchAllData = async () => {
-    setLoading(true);
+  // Load All Admin Data (supports silent background real-time updates)
+  const fetchAllData = async (silent: boolean = false) => {
+    if (!silent) setLoading(true);
     try {
       const [
         fetchedStats,
@@ -456,9 +459,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ] = await Promise.all([
         api.adminGetStats().catch(() => null),
         api.adminGetOrders().catch(() => []),
-        api.getProducts().catch(() => []),
-        api.getCategories().catch(() => []),
-        api.getShops().catch(() => []),
+        api.adminGetProducts().catch(() => []),
+        api.adminGetCategories().catch(() => []),
+        api.adminGetShops().catch(() => []),
         api.adminGetPayments().catch(() => []),
         api.adminGetMessages().catch(() => []),
         api.adminGetCustomerReports().catch(() => []),
@@ -488,15 +491,126 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedSupplierApps) setSupplierApplications(fetchedSupplierApps);
       if (fetchedSupplierPayouts) setSupplierPayouts(fetchedSupplierPayouts);
       if (fetchedSettings) setSettings(fetchedSettings);
+      setLastSyncTime(new Date());
     } catch (err) {
       console.error('Error fetching admin data:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
+  // Real-time synchronization: Firestore snapshot listeners + silent interval polling
   useEffect(() => {
-    fetchAllData();
+    // Initial fetch
+    fetchAllData(false);
+
+    // Background interval sync every 4 seconds to guarantee freshness across all 14 panels
+    const syncInterval = setInterval(() => {
+      fetchAllData(true);
+    }, 4000);
+
+    // Live Firestore onSnapshot listeners for instant push updates
+    const unsubs: (() => void)[] = [];
+    try {
+      // 1. Orders
+      const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
+        if (!snapshot.empty) {
+          const liveOrders: Order[] = [];
+          snapshot.forEach(docSnap => {
+            liveOrders.push({ ...(docSnap.data() as Order), id: docSnap.id });
+          });
+          setOrders(liveOrders);
+          setLastSyncTime(new Date());
+        }
+      }, (err) => {
+        console.warn('[Firestore] Live orders subscription notice:', err.message);
+      });
+      unsubs.push(unsubOrders);
+
+      // 2. Payments
+      const unsubPayments = onSnapshot(collection(db, 'paymentConfirmations'), (snapshot) => {
+        if (!snapshot.empty) {
+          const livePayments: PaymentConfirmation[] = [];
+          snapshot.forEach(docSnap => {
+            livePayments.push({ ...(docSnap.data() as PaymentConfirmation), id: docSnap.id });
+          });
+          setPayments(livePayments);
+          setLastSyncTime(new Date());
+        }
+      }, (err) => {
+        console.warn('[Firestore] Live payments subscription notice:', err.message);
+      });
+      unsubs.push(unsubPayments);
+
+      // 3. Supplier Applications
+      const unsubSuppliers = onSnapshot(collection(db, 'supplierApplications'), (snapshot) => {
+        if (!snapshot.empty) {
+          const liveApps: any[] = [];
+          snapshot.forEach(docSnap => {
+            liveApps.push({ ...(docSnap.data() as any), id: docSnap.id });
+          });
+          setSupplierApplications(liveApps);
+          setLastSyncTime(new Date());
+        }
+      }, (err) => {
+        console.warn('[Firestore] Live suppliers subscription notice:', err.message);
+      });
+      unsubs.push(unsubSuppliers);
+
+      // 4. Messages
+      const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
+        if (!snapshot.empty) {
+          const liveMsgs: AdminMessage[] = [];
+          snapshot.forEach(docSnap => {
+            liveMsgs.push({ ...(docSnap.data() as AdminMessage), id: docSnap.id });
+          });
+          setMessages(liveMsgs);
+          setLastSyncTime(new Date());
+        }
+      }, (err) => {
+        console.warn('[Firestore] Live messages subscription notice:', err.message);
+      });
+      unsubs.push(unsubMessages);
+
+      // 5. Problems & Reports
+      const unsubProblems = onSnapshot(collection(db, 'customerProblems'), (snapshot) => {
+        if (!snapshot.empty) {
+          const liveProblems: CustomerProblemReport[] = [];
+          snapshot.forEach(docSnap => {
+            liveProblems.push({ ...(docSnap.data() as CustomerProblemReport), id: docSnap.id });
+          });
+          setProblems(liveProblems);
+          setLastSyncTime(new Date());
+        }
+      }, (err) => {
+        console.warn('[Firestore] Live problems subscription notice:', err.message);
+      });
+      unsubs.push(unsubProblems);
+
+      // 6. Audit Logs
+      const unsubAudit = onSnapshot(collection(db, 'auditLogs'), (snapshot) => {
+        if (!snapshot.empty) {
+          const liveAudit: AuditLog[] = [];
+          snapshot.forEach(docSnap => {
+            liveAudit.push({ ...(docSnap.data() as AuditLog), id: docSnap.id });
+          });
+          setAuditLogs(liveAudit);
+          setLastSyncTime(new Date());
+        }
+      }, (err) => {
+        console.warn('[Firestore] Live audit logs subscription notice:', err.message);
+      });
+      unsubs.push(unsubAudit);
+    } catch (e) {
+      console.warn('[Firestore] Realtime subscription init error:', e);
+    }
+
+    return () => {
+      clearInterval(syncInterval);
+      unsubs.forEach(unsub => {
+        try { unsub(); } catch {}
+      });
+    };
   }, []);
 
   const handleToggleMaintenance = async (newVal: boolean) => {
@@ -1031,6 +1145,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Live Sync Status Indicator */}
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px] font-bold text-emerald-400 shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Live Sync Active</span>
+            <span className="text-[10px] text-slate-400 font-mono hidden xl:inline">
+              · {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          </div>
+
           {/* Quick Maintenance Toggle in Header */}
           <button
             onClick={() => handleToggleMaintenance(!settings?.isMaintenanceMode)}
@@ -1052,7 +1175,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
-            onClick={fetchAllData}
+            onClick={() => {
+              fetchAllData(false);
+              showToast('Database records synchronized successfully!');
+            }}
             title="Refresh database records"
             className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
           >

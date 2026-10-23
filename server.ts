@@ -158,6 +158,14 @@ const defaultCoupons: Coupon[] = [
 // Default Initial Admin Users
 const defaultAdminUsers: AdminUser[] = [
   {
+    id: 'adm-owner-umuhuza',
+    name: 'Umuhuza Market (Platform Owner)',
+    email: 'umuhuzamarket@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0780022600'
+  },
+  {
     id: 'adm-owner-thierry-primary',
     name: 'Thierry Maniriho (Platform Owner)',
     email: 'manirihothierry36@gmail.com',
@@ -1863,6 +1871,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   const isOwnerEmail = normalizedEmail === 'manirihothierry36@gmail.com' ||
                        normalizedEmail === 'manirihothierry6@gmail.com' ||
                        normalizedEmail === 'contactreachmedialimited@gmail.com' ||
+                       normalizedEmail === 'umuhuzamarket@gmail.com' ||
                        normalizedEmail === ADMIN_EMAIL.toLowerCase();
 
   const user = db.adminUsers.find(u => u.email.toLowerCase() === normalizedEmail && u.active);
@@ -1956,6 +1965,7 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
                   verifiedEmail === 'contactreachmedialimited@gmail.com' ||
                   verifiedEmail === 'inzozilink@gmail.com' ||
                   verifiedEmail === 'manirihothierry11@gmail.com' ||
+                  verifiedEmail === 'umuhuzamarket@gmail.com' ||
                   verifiedEmail === ADMIN_EMAIL.toLowerCase();
 
   const user = db.adminUsers.find(u => u.email.toLowerCase() === verifiedEmail && u.active);
@@ -2132,6 +2142,10 @@ app.patch('/api/admin/orders/:id/supplier-status', requireAdminAuth, requireRole
 // -------------------------------------------------------------
 // ADMIN PRODUCT CRUD
 // -------------------------------------------------------------
+
+app.get('/api/admin/products', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.products);
+});
 
 app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
@@ -2448,6 +2462,14 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'a
 // ADMIN CATEGORIES CRUD
 // -------------------------------------------------------------
 
+app.get('/api/admin/categories', requireAdminAuth, (req: Request, res: Response) => {
+  const categoriesWithCounts = db.categories.map(c => {
+    const count = db.products.filter(p => p.category === c.id).length;
+    return { ...c, itemCount: count };
+  });
+  res.json(categoriesWithCounts);
+});
+
 app.post('/api/admin/categories', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { nameEn, nameRw, icon, description, subcategories, imageUrl } = req.body;
@@ -2521,6 +2543,10 @@ app.delete('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 
 // -------------------------------------------------------------
 // ADMIN SHOPS CRUD
 // -------------------------------------------------------------
+
+app.get('/api/admin/shops', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(db.shops);
+});
 
 app.post('/api/admin/shops', requireAdminAuth, requireRole(['owner', 'administrator', 'shop_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
@@ -3178,7 +3204,7 @@ app.put('/api/admin/buyers/:id/reset-password', requireAdminAuth, requireRole(['
 // ADMIN AUDIT LOGS
 // -------------------------------------------------------------
 
-app.get('/api/admin/audit-logs', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+app.get('/api/admin/audit-logs', requireAdminAuth, (req: Request, res: Response) => {
   res.json(db.auditLogs);
 });
 

@@ -33,6 +33,7 @@ service cloud.firestore {
             request.auth.token.email == 'contactreachmedialimited@gmail.com' ||
             request.auth.token.email == 'inzozilink@gmail.com' ||
             request.auth.token.email == 'manirihothierry11@gmail.com' ||
+            request.auth.token.email == 'umuhuzamarket@gmail.com' ||
             request.auth.token.email == 'admin@contactreachmedia.rw' ||
             request.auth.token.email.matches('.*@contactreachmedia\\.rw$')
           ) && request.auth.token.email_verified == true
