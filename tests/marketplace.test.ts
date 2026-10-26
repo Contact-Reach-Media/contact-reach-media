@@ -1600,6 +1600,101 @@ async function runTests() {
     assert(pullData.totalSheetRows > 0, 'Should have processed sheet rows');
   });
 
+  await test('DSers & AliExpress: Product mapping, manual order approval, and tracking updates', async () => {
+    // 1. Get products list to find a product to map
+    const prodsRes = await fetch(`${BASE_URL}/api/products`);
+    const prods = await prodsRes.json();
+    assert(prods.length > 0, 'Catalog should have products');
+    const targetProd = prods[0];
+
+    // 2. Save AliExpress URL and exact supplier variant for product SKU
+    const mapRes = await fetch(`${BASE_URL}/api/admin/products/${targetProd.id}/supplier-mapping`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        aliExpressUrl: 'https://www.aliexpress.com/item/1005007129482103.html',
+        supplierVariant: 'Color: Midnight Black, Size: Large',
+        supplierSku: 'ALI-TEST-7129-L',
+        costPrice: 9500
+      })
+    });
+    assert.strictEqual(mapRes.status, 200, 'Supplier mapping should succeed with 200');
+    const mappedProd = await mapRes.json();
+    assert.strictEqual(mappedProd.aliExpressUrl, 'https://www.aliexpress.com/item/1005007129482103.html');
+    assert.strictEqual(mappedProd.supplierVariant, 'Color: Midnight Black, Size: Large');
+    assert.strictEqual(mappedProd.supplierSku, 'ALI-TEST-7129-L');
+    assert.strictEqual(mappedProd.isSupplierMapped, true);
+
+    // 3. Create a customer order containing the mapped product
+    const orderRes = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'DSers Workflow Tester',
+        customerPhone: '0789123456',
+        customerEmail: 'dsers-test@example.com',
+        deliveryType: 'delivery',
+        deliveryLocation: 'Kigali Gasabo Area',
+        deliveryAddress: 'KG 622 St, Fair View Plaza',
+        paymentMethod: 'MTN Mobile Money',
+        items: [{ productId: targetProd.id, quantity: 1 }]
+      })
+    });
+    assert(orderRes.status === 201 || orderRes.status === 200, `Order creation should succeed, got ${orderRes.status}`);
+    const order = await orderRes.json();
+    assert.strictEqual(order.supplierApprovalStatus, 'Pending Review', 'Order should initially require manual admin approval');
+    assert(order.items[0].aliExpressUrl, 'Order item should inherit mapped supplier URL');
+
+    // 4. Admin reviews and manually approves the order for DSers fulfillment
+    const approveRes = await fetch(`${BASE_URL}/api/admin/orders/${order.id}/supplier-approval`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        approvalStatus: 'Approved',
+        note: 'Admin verified payment and product SKU mapping'
+      })
+    });
+    assert.strictEqual(approveRes.status, 200, 'Order manual approval should return 200');
+    const approvedOrder = await approveRes.json();
+    assert.strictEqual(approvedOrder.supplierApprovalStatus, 'Approved');
+    assert(approvedOrder.supplierApprovedAt, 'Approval timestamp should be recorded');
+    assert(approvedOrder.statusHistory.some((h: any) => h.note.includes('Approved')), 'Audit note should be recorded');
+
+    // 5. Admin updates tracking number from supplier shipment
+    const trackRes = await fetch(`${BASE_URL}/api/admin/orders/${order.id}/tracking`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        trackingNumber: 'LP0069284019284',
+        trackingCarrier: 'AliExpress Standard Shipping',
+        updateOrderStatus: true,
+        notes: 'Dispatched via Shenzhen Logistics Hub'
+      })
+    });
+    assert.strictEqual(trackRes.status, 200, 'Tracking update should succeed with 200');
+    const trackedOrder = await trackRes.json();
+    assert.strictEqual(trackedOrder.trackingNumber, 'LP0069284019284');
+    assert.strictEqual(trackedOrder.trackingCarrier, 'AliExpress Standard Shipping');
+    assert.strictEqual(trackedOrder.status, 'Out for Delivery');
+
+    // 6. Public customer order tracking endpoint immediately reflects live tracking details
+    const publicTrackRes = await fetch(`${BASE_URL}/api/orders/${order.orderNumber}?token=${order.trackingToken}`);
+    assert.strictEqual(publicTrackRes.status, 200, 'Public tracking should succeed');
+    const publicTrack = await publicTrackRes.json();
+    assert.strictEqual(publicTrack.trackingNumber, 'LP0069284019284');
+    assert.strictEqual(publicTrack.trackingCarrier, 'AliExpress Standard Shipping');
+  });
+
+
 
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);

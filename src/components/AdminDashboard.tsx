@@ -24,7 +24,13 @@ import { getCategoryCoverImage, getCategoryImageSource } from '../utils/category
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
 import { ProductSpreadsheetModal } from './ProductSpreadsheetModal.tsx';
-import { exportProductsToExcel, exportProductsToCsv } from '../utils/spreadsheet.ts';
+import { DsersFulfillmentTab } from './DsersFulfillmentTab.tsx';
+import {
+  exportProductsToExcel,
+  exportProductsToCsv,
+  exportProductsToDsersProductTemplate,
+  exportOrdersToDsersOrderTemplate
+} from '../utils/spreadsheet.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -39,6 +45,8 @@ type TabType =
   | 'shops'
   | 'suppliers'
   | 'payouts'
+  | 'cjdropshipping'
+  | 'dsers'
   | 'orders'
   | 'payments'
   | 'inventory'
@@ -48,8 +56,7 @@ type TabType =
   | 'coupons'
   | 'audit'
   | 'team'
-  | 'settings'
-  | 'cjdropshipping';
+  | 'settings';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
@@ -1948,6 +1955,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('dsers')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'dsers' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 text-emerald-600" />
+                <span>DSers & Fulfillment</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {orders.filter(o => o.status !== 'Cancelled' && (o.supplierApprovalStatus || 'Pending Review') === 'Pending Review').length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold bg-amber-500 text-white animate-pulse" title="Orders awaiting manual approval">
+                    {orders.filter(o => o.status !== 'Cancelled' && (o.supplierApprovalStatus || 'Pending Review') === 'Pending Review').length}
+                  </span>
+                )}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  activeTab === 'dsers' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {products.filter(p => Boolean(p.aliExpressUrl || p.supplierProductUrl)).length}/{products.length}
+                </span>
+              </div>
+            </button>
+
+            <button
               onClick={() => setActiveTab('orders')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'orders' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
@@ -2305,6 +2336,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <Download className="w-3.5 h-3.5 text-slate-500" />
                     <span>Export (.xlsx)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const res = exportProductsToDsersProductTemplate(products, categories, 'csv');
+                      showToast(`Exported ${res.totalCount} products to DSers template (${res.mappedCount} mapped, ${res.unmappedCount} unmapped).`);
+                    }}
+                    className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Export product IDs, SKUs and supplier URLs into the official DSers product template"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>DSers Template (CSV)</span>
                   </button>
 
                   <button
@@ -3078,7 +3121,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <h1 className="text-xl font-black text-slate-900 tracking-tight">Orders & Delivery Management</h1>
-                  <p className="text-xs text-slate-500">Track shipments, assign dispatch couriers, and generate invoices</p>
+                  <p className="text-xs text-slate-500">Track shipments, manual supplier approvals, assign dispatch couriers, and generate invoices</p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => {
+                      const res = exportOrdersToDsersOrderTemplate(orders, products, { onlyApproved: true, format: 'csv' });
+                      if (res.orderCount === 0) {
+                        showToast('No approved eligible orders found to export. Review and approve orders in DSers tab first!', 'error');
+                      } else {
+                        showToast(`Exported ${res.orderCount} approved orders (${res.exportedCount} items) to DSers order template.`);
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Export eligible customer orders into the DSers order template"
+                  >
+                    <Download className="w-4 h-4 text-indigo-200" />
+                    <span>Export DSers Orders (CSV)</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('dsers')}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Open DSers & Supplier Fulfillment Tab for manual review and product mapping"
+                  >
+                    <Globe className="w-4 h-4 text-emerald-600" />
+                    <span>DSers Fulfillment Hub</span>
+                  </button>
                 </div>
               </div>
 
@@ -3167,7 +3236,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-3 px-3">
-                            <span className="font-semibold text-slate-800">{ord.status}</span>
+                            <span className="font-semibold text-slate-800 block">{ord.status}</span>
+                            <span className={`inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                              ord.supplierApprovalStatus === 'Approved'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : ord.supplierApprovalStatus === 'Submitted to Supplier'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : ord.supplierApprovalStatus === 'Rejected'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}>
+                              DSers: {ord.supplierApprovalStatus || 'Pending Review'}
+                            </span>
+                            {ord.trackingNumber ? (
+                              <div className="flex items-center gap-1 text-[10px] text-blue-700 font-mono font-bold mt-0.5" title={`${ord.trackingCarrier || 'Tracking'}: ${ord.trackingNumber}`}>
+                                <Truck className="w-3 h-3 text-blue-600 shrink-0" />
+                                <span className="truncate max-w-[100px]">{ord.trackingNumber}</span>
+                              </div>
+                            ) : null}
                             {ord.assignedCourier && (
                               <span className="block text-[10px] text-slate-400">Courier: {ord.assignedCourier}</span>
                             )}
@@ -5865,6 +5951,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               )}
             </div>
+          )}
+
+          {/* TAB: DSERS DROPSHIPPING & SUPPLIER FULFILLMENT */}
+          {activeTab === 'dsers' && (
+            <DsersFulfillmentTab
+              products={products}
+              orders={orders}
+              categories={categories}
+              onRefreshData={() => fetchAllData(true)}
+              showToast={(msg) => showToast(msg)}
+              onOpenProductEdit={(p) => handleOpenEditProduct(p)}
+            />
           )}
         </main>
       </div>

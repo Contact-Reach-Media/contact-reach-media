@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Product, Category, VendorShop } from '../types.ts';
+import { Product, Category, VendorShop, Order } from '../types.ts';
 
 export interface SpreadsheetPreviewItem {
   id?: string;
@@ -165,6 +165,228 @@ export function exportProductsToCsv(
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Export product IDs, SKUs and supplier URLs into the official DSers product template.
+ * DSers requires matching Product IDs and SKUs across product and order imports.
+ */
+export function exportProductsToDsersProductTemplate(
+  products: Product[],
+  categories?: Category[],
+  format: 'csv' | 'xlsx' = 'csv',
+  filename?: string
+): { totalCount: number; mappedCount: number; unmappedCount: number } {
+  const categoryMap = new Map((categories || []).map(c => [c.id, c.nameEn || c.id]));
+
+  let mappedCount = 0;
+  let unmappedCount = 0;
+
+  const rows = products.map((p) => {
+    const isMapped = Boolean(p.aliExpressUrl || p.supplierProductUrl);
+    if (isMapped) mappedCount++;
+    else unmappedCount++;
+
+    return {
+      'Product ID': p.id,
+      'Product SKU': p.sku || `CRM-${p.id.slice(-6).toUpperCase()}`,
+      'Product Title': p.name,
+      'Supplier URL': p.aliExpressUrl || p.supplierProductUrl || '',
+      'Supplier Variant': p.supplierVariant || '',
+      'Supplier SKU': p.supplierSku || '',
+      'Store Price (RWF)': p.price,
+      'Supplier Cost (RWF)': p.costPrice ?? '',
+      'Stock Quantity': p.stock,
+      'Mapping Status': isMapped ? 'Mapped' : 'Unmapped',
+      'Category': categoryMap.get(p.category) || p.category,
+      'Store Status': p.status || 'Available',
+      'Notes': isMapped ? 'Ready for DSers order fulfillment' : 'Requires AliExpress URL & Variant mapping before fulfillment'
+    };
+  });
+
+  const nowStr = new Date().toISOString().split('T')[0];
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+
+  if (format === 'xlsx') {
+    worksheet['!cols'] = [
+      { wch: 18 }, // Product ID
+      { wch: 18 }, // Product SKU
+      { wch: 35 }, // Product Title
+      { wch: 45 }, // Supplier URL
+      { wch: 25 }, // Supplier Variant
+      { wch: 18 }, // Supplier SKU
+      { wch: 16 }, // Store Price
+      { wch: 16 }, // Cost
+      { wch: 12 }, // Stock
+      { wch: 14 }, // Mapping Status
+      { wch: 20 }, // Category
+      { wch: 14 }, // Store Status
+      { wch: 45 }  // Notes
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'DSers Product Mapping');
+    const targetFilename = filename || `DSers_Product_Mapping_${nowStr}.xlsx`;
+    XLSX.writeFile(workbook, targetFilename);
+  } else {
+    const csvContent = XLSX.utils.sheet_to_csv(worksheet);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename || `DSers_Product_Mapping_${nowStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  return { totalCount: products.length, mappedCount, unmappedCount };
+}
+
+/**
+ * Export eligible customer orders into the DSers order template.
+ * Matches exact Product IDs and SKUs with the DSers product template.
+ */
+export function exportOrdersToDsersOrderTemplate(
+  orders: Order[],
+  products: Product[],
+  options?: {
+    onlyApproved?: boolean;
+    format?: 'csv' | 'xlsx';
+    filename?: string;
+  }
+): { exportedCount: number; orderCount: number; unmappedItemsCount: number } {
+  const onlyApproved = options?.onlyApproved ?? true;
+  const format = options?.format ?? 'csv';
+
+  const productMap = new Map(products.map(p => [p.id, p]));
+  const productSkuMap = new Map(products.filter(p => p.sku).map(p => [(p.sku || '').toLowerCase(), p]));
+
+  // Filter eligible orders
+  const eligibleOrders = orders.filter(o => {
+    if (o.status === 'Cancelled' || o.paymentStatus === 'Refunded' || o.paymentStatus === 'Failed') {
+      return false;
+    }
+    if (onlyApproved) {
+      // Must be approved by admin or submitted to supplier or paid/confirmed
+      return (
+        o.supplierApprovalStatus === 'Approved' ||
+        o.supplierApprovalStatus === 'Submitted to Supplier' ||
+        o.status === 'Confirmed' ||
+        o.status === 'Preparing' ||
+        o.status === 'Ready for Delivery' ||
+        o.paymentStatus === 'Paid'
+      );
+    }
+    return true;
+  });
+
+  let unmappedItemsCount = 0;
+  const rows: any[] = [];
+
+  eligibleOrders.forEach(order => {
+    const orderDate = (order.createdAt || new Date().toISOString()).split('T')[0];
+
+    order.items.forEach((item, itemIdx) => {
+      const prod = productMap.get(item.productId) || (item.sku ? productSkuMap.get(item.sku.toLowerCase()) : undefined);
+
+      const resolvedProductId = item.productId || prod?.id || `PROD-${itemIdx}`;
+      const resolvedSku = item.sku || prod?.sku || `CRM-${resolvedProductId.slice(-6).toUpperCase()}`;
+      const supplierUrl = item.aliExpressUrl || prod?.aliExpressUrl || prod?.supplierProductUrl || '';
+      const supplierVariant = item.supplierVariant || prod?.supplierVariant || item.variation || '';
+      const supplierSku = item.supplierSku || prod?.supplierSku || '';
+
+      const isMapped = Boolean(supplierUrl);
+      if (!isMapped) unmappedItemsCount++;
+
+      // Standard DSers order import columns:
+      rows.push({
+        'Order ID': order.orderNumber,
+        'Order Date': orderDate,
+        'Product ID': resolvedProductId,
+        'Product SKU': resolvedSku,
+        'Product Title': item.productName,
+        'Variant / Option': item.variation || supplierVariant || '',
+        'Quantity': item.quantity,
+        'Unit Price (RWF)': item.price,
+        'Customer Name': order.customerName,
+        'Customer Phone': order.customerPhone,
+        'Customer Email': order.customerEmail || '',
+        'Shipping Address 1': order.deliveryAddress,
+        'Shipping Address 2': order.deliveryLocation,
+        'City': order.deliveryLocation.includes('Kigali') ? 'Kigali' : order.deliveryLocation,
+        'Province / State': 'Kigali City',
+        'Country': 'RW',
+        'Zip / Postal Code': '00000',
+        'Supplier URL': supplierUrl,
+        'Supplier Variant': supplierVariant,
+        'Supplier SKU': supplierSku,
+        'Order Total (RWF)': order.totalAmount,
+        'Payment Method': order.paymentMethod,
+        'Payment Status': order.paymentStatus,
+        'Admin Approval': order.supplierApprovalStatus || 'Approved',
+        'Tracking Number': order.trackingNumber || '',
+        'Shipping Carrier': order.trackingCarrier || '',
+        'Customer Note': (order.deliveryNotes || '').replace(/[\r\n]+/g, ' ')
+      });
+    });
+  });
+
+  const nowStr = new Date().toISOString().split('T')[0];
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+
+  if (format === 'xlsx') {
+    worksheet['!cols'] = [
+      { wch: 16 }, // Order ID
+      { wch: 12 }, // Order Date
+      { wch: 18 }, // Product ID
+      { wch: 18 }, // Product SKU
+      { wch: 30 }, // Product Title
+      { wch: 20 }, // Variant
+      { wch: 8 },  // Quantity
+      { wch: 14 }, // Unit Price
+      { wch: 22 }, // Customer Name
+      { wch: 16 }, // Customer Phone
+      { wch: 24 }, // Customer Email
+      { wch: 35 }, // Address 1
+      { wch: 20 }, // Address 2
+      { wch: 14 }, // City
+      { wch: 16 }, // Province
+      { wch: 8 },  // Country
+      { wch: 10 }, // Zip
+      { wch: 45 }, // Supplier URL
+      { wch: 25 }, // Supplier Variant
+      { wch: 16 }, // Supplier SKU
+      { wch: 16 }, // Total
+      { wch: 18 }, // Payment Method
+      { wch: 16 }, // Payment Status
+      { wch: 16 }, // Approval
+      { wch: 22 }, // Tracking Number
+      { wch: 20 }, // Carrier
+      { wch: 30 }  // Note
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'DSers Orders');
+    const targetFilename = options?.filename || `DSers_Orders_${nowStr}.xlsx`;
+    XLSX.writeFile(workbook, targetFilename);
+  } else {
+    const csvContent = XLSX.utils.sheet_to_csv(worksheet);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', options?.filename || `DSers_Orders_${nowStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  return {
+    exportedCount: rows.length,
+    orderCount: eligibleOrders.length,
+    unmappedItemsCount
+  };
 }
 
 // -------------------------------------------------------------

@@ -116,6 +116,12 @@ export interface Product {
   profitMargin?: number; // Calculated profit margin in RWF
   cjLastSyncAt?: string;
   reviewStatus?: 'Pending Approval' | 'Approved' | 'Rejected';
+  // DSers & AliExpress Supplier Mapping
+  aliExpressUrl?: string; // Exact AliExpress Product URL for DSers mapping
+  supplierVariant?: string; // Exact supplier variant string (e.g. "Color: Black, Size: XL")
+  supplierSku?: string; // Exact supplier SKU
+  supplierProductUrl?: string; // Supplier / Wholesale product link
+  isSupplierMapped?: boolean; // True when store SKU is mapped to an AliExpress item
   createdAt: string;
   updatedAt?: string;
   lastVerifiedAt?: string;
@@ -151,6 +157,9 @@ export interface OrderItem {
   imageUrl: string;
   variation?: string;
   sku?: string;
+  aliExpressUrl?: string;
+  supplierVariant?: string;
+  supplierSku?: string;
 }
 
 export interface Order {
@@ -190,6 +199,16 @@ export interface Order {
   courierPhone?: string;
   internalNotes?: string;
   userId?: string;
+  // DSers & AliExpress Supplier Fulfillment & Manual Approval
+  supplierApprovalStatus?: 'Pending Review' | 'Approved' | 'Rejected' | 'Submitted to Supplier' | 'Fulfilled';
+  supplierApprovedAt?: string;
+  supplierApprovedBy?: string;
+  supplierRejectionReason?: string;
+  // Live Parcel Tracking (AliExpress / Local Courier / DHL)
+  trackingNumber?: string;
+  trackingCarrier?: string;
+  trackingUrl?: string;
+  trackingAddedAt?: string;
   // CJ Dropshipping Fulfillment Approval
   cjFulfillmentStatus?: 'Pending Admin Approval' | 'Approved for CJ Fulfillment' | 'Fulfilled' | 'Not Applicable';
   cjFulfillmentApprovedAt?: string;

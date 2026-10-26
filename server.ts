@@ -1136,7 +1136,10 @@ app.post('/api/orders', (req: Request, res: Response) => {
       quantity: qty,
       imageUrl: product.imageUrl,
       variation: item.variation || undefined,
-      sku: product.sku
+      sku: product.sku,
+      aliExpressUrl: product.aliExpressUrl || product.supplierProductUrl || undefined,
+      supplierVariant: product.supplierVariant || undefined,
+      supplierSku: product.supplierSku || undefined
     });
   }
 
@@ -1221,6 +1224,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
     supplierPayoutAmount,
     supplierPayoutStatus: 'Pending',
     supplierFulfillmentStatus: 'Pending',
+    supplierApprovalStatus: 'Pending Review',
     cjFulfillmentStatus: hasCjItems ? 'Pending Admin Approval' : 'Not Applicable',
     paymentMethod: method,
     receiverName: primaryReceiverName,
@@ -1328,6 +1332,11 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
       status: order.status,
       assignedCourier: order.assignedCourier,
       courierPhone: order.courierPhone,
+      trackingNumber: order.trackingNumber,
+      trackingCarrier: order.trackingCarrier,
+      trackingUrl: order.trackingUrl,
+      trackingAddedAt: order.trackingAddedAt,
+      supplierApprovalStatus: order.supplierApprovalStatus,
       statusHistory: order.statusHistory
     });
   }
@@ -2242,6 +2251,155 @@ app.patch('/api/admin/orders/:id/supplier-status', requireAdminAuth, requireRole
   logAudit(admin, 'SUPPLIER_STATUS_UPDATED', `Order #${order.orderNumber} supplier fulfillment: ${order.supplierFulfillmentStatus}, payout: ${order.supplierPayoutStatus}`, 'order', order.id);
   saveDbToDisk();
   res.json(order);
+});
+
+// Admin Manual Order Review & Supplier Approval (DSers / AliExpress fulfillment requirement)
+app.post('/api/admin/orders/:id/supplier-approval', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { approvalStatus, rejectionReason, note } = req.body;
+  const order = db.orders.find(o => o.id === req.params.id || o.orderNumber === req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const validStatuses = ['Pending Review', 'Approved', 'Rejected', 'Submitted to Supplier', 'Fulfilled'];
+  if (approvalStatus && !validStatuses.includes(approvalStatus)) {
+    return res.status(400).json({ error: `Invalid approval status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const previousStatus = order.supplierApprovalStatus || 'Pending Review';
+  order.supplierApprovalStatus = approvalStatus || 'Approved';
+
+  if (order.supplierApprovalStatus === 'Approved') {
+    order.supplierApprovedAt = new Date().toISOString();
+    order.supplierApprovedBy = admin.name;
+    order.supplierRejectionReason = undefined;
+    if (order.status === 'New') {
+      order.status = 'Confirmed';
+    }
+  } else if (order.supplierApprovalStatus === 'Rejected') {
+    order.supplierRejectionReason = rejectionReason || note || 'Rejected by administrator';
+  } else if (order.supplierApprovalStatus === 'Submitted to Supplier') {
+    if (!order.supplierApprovedAt) {
+      order.supplierApprovedAt = new Date().toISOString();
+      order.supplierApprovedBy = admin.name;
+    }
+    if (order.status === 'New' || order.status === 'Confirmed') {
+      order.status = 'Preparing';
+    }
+  }
+
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    timestamp: new Date().toISOString(),
+    note: `Supplier/DSers review: ${order.supplierApprovalStatus}${order.supplierRejectionReason ? ` (${order.supplierRejectionReason})` : ''}${note ? `. Note: ${note}` : ''}`,
+    updatedBy: admin.name
+  });
+
+  logAudit(admin, 'ORDER_SUPPLIER_APPROVAL', `Order #${order.orderNumber} supplier approval updated from "${previousStatus}" to "${order.supplierApprovalStatus}"`, 'order', order.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+  res.json(order);
+});
+
+// Admin Add / Update Tracking Number for Order
+app.post('/api/admin/orders/:id/tracking', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { trackingNumber, trackingCarrier, trackingUrl, updateOrderStatus, notes } = req.body;
+  const order = db.orders.find(o => o.id === req.params.id || o.orderNumber === req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  if (!trackingNumber || !String(trackingNumber).trim()) {
+    return res.status(400).json({ error: 'Tracking number is required' });
+  }
+
+  const cleanTracking = String(trackingNumber).trim();
+  const carrier = (trackingCarrier || '').trim() || 'AliExpress Standard Shipping';
+  const customUrl = (trackingUrl || '').trim() || `https://t.17track.net/en#nums=${encodeURIComponent(cleanTracking)}`;
+
+  order.trackingNumber = cleanTracking;
+  order.trackingCarrier = carrier;
+  order.trackingUrl = customUrl;
+  order.trackingAddedAt = new Date().toISOString();
+
+  // If requested or if order was in preparing/confirmed, automatically transition to Out for Delivery
+  if (updateOrderStatus || order.status === 'Confirmed' || order.status === 'Preparing') {
+    if (order.status !== 'Delivered' && order.status !== 'Cancelled') {
+      order.status = 'Out for Delivery';
+    }
+  }
+
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    timestamp: new Date().toISOString(),
+    note: `Tracking added: ${cleanTracking} via ${carrier}.${notes ? ` Note: ${notes}` : ''}`,
+    updatedBy: admin.name
+  });
+
+  logAudit(admin, 'ORDER_TRACKING_UPDATED', `Order #${order.orderNumber} tracking set to ${cleanTracking} (${carrier})`, 'order', order.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+  res.json(order);
+});
+
+// Admin Update Supplier Mapping for a Product (AliExpress URL & Supplier Variant)
+app.patch('/api/admin/products/:id/supplier-mapping', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const product = db.products.find(p => p.id === req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+
+  const { aliExpressUrl, supplierVariant, supplierSku, supplierProductUrl, costPrice } = req.body;
+
+  if (aliExpressUrl !== undefined) product.aliExpressUrl = (aliExpressUrl || '').trim();
+  if (supplierVariant !== undefined) product.supplierVariant = (supplierVariant || '').trim();
+  if (supplierSku !== undefined) product.supplierSku = (supplierSku || '').trim();
+  if (supplierProductUrl !== undefined) product.supplierProductUrl = (supplierProductUrl || '').trim();
+  if (costPrice !== undefined && !isNaN(Number(costPrice))) product.costPrice = Math.max(0, Number(costPrice));
+
+  product.isSupplierMapped = Boolean(product.aliExpressUrl || product.supplierProductUrl);
+  product.updatedAt = new Date().toISOString();
+
+  product.history = product.history || [];
+  product.history.push({
+    timestamp: new Date().toISOString(),
+    action: `Updated DSers/AliExpress supplier mapping: ${product.isSupplierMapped ? 'Mapped' : 'Unmapped'} (${product.aliExpressUrl || 'None'})`,
+    user: admin.name
+  });
+
+  logAudit(admin, 'PRODUCT_SUPPLIER_MAPPED', `Product "${product.name}" (${product.sku || product.id}) supplier mapping updated`, 'product', product.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('products', product.id, product);
+  res.json(product);
+});
+
+// Admin Bulk Update Supplier Mappings
+app.post('/api/admin/products/supplier-mapping/bulk', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { mappings } = req.body;
+  if (!Array.isArray(mappings) || mappings.length === 0) {
+    return res.status(400).json({ error: 'Mappings array is required' });
+  }
+
+  let updatedCount = 0;
+  for (const m of mappings) {
+    const prod = db.products.find(p => p.id === m.id || (p.sku && p.sku.toLowerCase() === (m.sku || '').toLowerCase()));
+    if (prod) {
+      if (m.aliExpressUrl !== undefined) prod.aliExpressUrl = (m.aliExpressUrl || '').trim();
+      if (m.supplierVariant !== undefined) prod.supplierVariant = (m.supplierVariant || '').trim();
+      if (m.supplierSku !== undefined) prod.supplierSku = (m.supplierSku || '').trim();
+      if (m.costPrice !== undefined && !isNaN(Number(m.costPrice))) prod.costPrice = Math.max(0, Number(m.costPrice));
+      prod.isSupplierMapped = Boolean(prod.aliExpressUrl || prod.supplierProductUrl);
+      prod.updatedAt = new Date().toISOString();
+      updatedCount++;
+      saveToFirestoreAsync('products', prod.id, prod);
+    }
+  }
+
+  logAudit(admin, 'BULK_SUPPLIER_MAPPING', `Bulk updated supplier mapping for ${updatedCount} products`);
+  saveDbToDisk();
+  res.json({ success: true, updatedCount, totalProducts: db.products.length });
 });
 
 // -------------------------------------------------------------

@@ -2525,6 +2525,86 @@ export const api = {
       throw new Error(parsed.json?.error || 'Failed to save products to Google Sheet');
     }
     return parsed.json;
+  },
+
+  async updateSupplierMapping(productId: string, mapping: {
+    aliExpressUrl?: string;
+    supplierVariant?: string;
+    supplierSku?: string;
+    supplierProductUrl?: string;
+    costPrice?: number;
+  }): Promise<Product> {
+    const res = await fetch(`/api/admin/products/${productId}/supplier-mapping`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(mapping)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to update supplier mapping');
+    }
+    return parsed.json as Product;
+  },
+
+  async bulkUpdateSupplierMapping(mappings: Array<{
+    id: string;
+    sku?: string;
+    aliExpressUrl?: string;
+    supplierVariant?: string;
+    supplierSku?: string;
+    costPrice?: number;
+  }>): Promise<{ success: boolean; updatedCount: number; totalProducts: number }> {
+    const res = await fetch('/api/admin/products/supplier-mapping/bulk', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ mappings })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to update supplier mappings in bulk');
+    }
+    return parsed.json;
+  },
+
+  async approveOrderForSupplier(
+    orderId: string,
+    approvalStatus: 'Pending Review' | 'Approved' | 'Rejected' | 'Submitted to Supplier' | 'Fulfilled',
+    options?: { rejectionReason?: string; note?: string }
+  ): Promise<Order> {
+    const res = await fetch(`/api/admin/orders/${orderId}/supplier-approval`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        approvalStatus,
+        rejectionReason: options?.rejectionReason,
+        note: options?.note
+      })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to update order supplier approval');
+    }
+    return parsed.json as Order;
+  },
+
+  async updateOrderTracking(orderId: string, data: {
+    trackingNumber: string;
+    trackingCarrier?: string;
+    trackingUrl?: string;
+    updateOrderStatus?: boolean;
+    notes?: string;
+  }): Promise<Order> {
+    const res = await fetch(`/api/admin/orders/${orderId}/tracking`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to update order tracking');
+    }
+    return parsed.json as Order;
   }
 };
+
 
