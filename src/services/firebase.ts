@@ -45,12 +45,14 @@ const app = initializeApp(firebaseConfig);
 // Suppress internal gRPC stream lifecycle noise
 setLogLevel('error');
 
-// CRITICAL: The app will break without this line
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = (firebaseConfig as any).firestoreDatabaseId
+  ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
+  : getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-// Google Drive scope for backing up product catalog
+// Google Drive scopes for reading, auto-filling, and backing up product catalog
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
 
 // In-memory access token cache for Google Workspace APIs
 let cachedAccessToken: string | null = null;
@@ -302,6 +304,161 @@ export async function syncProductsToGoogleDrive(
     console.error('Google Drive backup error:', error);
     throw error;
   }
+}
+
+export interface GoogleDriveImportResult {
+  success: boolean;
+  fileId: string;
+  fileName: string;
+  productCount: number;
+  products: Product[];
+  importedAt: string;
+  message: string;
+}
+
+/**
+ * Reads product catalog from Google Drive file and imports/auto-fills products into ContactReach Market
+ */
+export async function importProductsFromGoogleDrive(
+  explicitToken?: string,
+  targetFileId?: string
+): Promise<GoogleDriveImportResult> {
+  const token = explicitToken || cachedAccessToken;
+  if (!token) {
+    throw new Error('Google Drive access token not available. Please sign in with Google to authorize Drive access.');
+  }
+
+  let fileId = targetFileId;
+  let fileName = 'ContactReach_Market_Products.json';
+
+  // If no fileId specified, search Drive for the default catalog or any product JSON file
+  if (!fileId) {
+    const searchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${fileName}'+and+trashed=false&fields=files(id,name,modifiedTime)`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      if (searchData.files && searchData.files.length > 0) {
+        fileId = searchData.files[0].id;
+        fileName = searchData.files[0].name;
+      }
+    }
+
+    // Secondary fallback search for any file containing 'product'
+    if (!fileId) {
+      const altSearchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=name+contains+'product'+and+trashed=false&fields=files(id,name,modifiedTime)&pageSize=5`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      if (altSearchRes.ok) {
+        const altData = await altSearchRes.json();
+        if (altData.files && altData.files.length > 0) {
+          fileId = altData.files[0].id;
+          fileName = altData.files[0].name;
+        }
+      }
+    }
+  }
+
+  if (!fileId) {
+    throw new Error('No product catalog file found in your Google Drive. You can create or upload ContactReach_Market_Products.json, or backup existing items to Drive first.');
+  }
+
+  // Fetch the file content from Google Drive
+  const downloadRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    {
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  );
+
+  if (!downloadRes.ok) {
+    const errText = await downloadRes.text();
+    throw new Error(`Failed to read file from Google Drive (Status ${downloadRes.status}): ${errText}`);
+  }
+
+  let parsedData: any;
+  try {
+    const text = await downloadRes.text();
+    parsedData = JSON.parse(text);
+  } catch (parseErr: any) {
+    throw new Error('The Google Drive file does not contain valid JSON product data.');
+  }
+
+  // Extract products array from payload
+  let rawList: any[] = [];
+  if (Array.isArray(parsedData)) {
+    rawList = parsedData;
+  } else if (parsedData && Array.isArray(parsedData.products)) {
+    rawList = parsedData.products;
+  } else if (parsedData && Array.isArray(parsedData.items)) {
+    rawList = parsedData.items;
+  } else if (parsedData && typeof parsedData === 'object') {
+    rawList = Object.values(parsedData).filter(v => v && typeof v === 'object' && ((v as any).name || (v as any).price));
+  }
+
+  if (rawList.length === 0) {
+    throw new Error(`No products found inside "${fileName}". Please check file format.`);
+  }
+
+  // Normalize each item into valid ContactReach Market product
+  const normalizedProducts: Product[] = rawList.map((item, idx) => {
+    const images: string[] = Array.isArray(item.images) && item.images.length > 0
+      ? item.images
+      : (item.imageUrl ? [item.imageUrl] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
+
+    return {
+      id: item.id || `prod-gd-${Date.now()}-${idx}`,
+      name: item.name || `Imported Drive Product #${idx + 1}`,
+      sku: item.sku || `CRM-GD-${1000 + idx}`,
+      description: item.description || 'Imported product catalog from Google Drive.',
+      price: Math.max(0, parseInt(String(item.price), 10) || 10000),
+      costPrice: item.costPrice !== undefined ? Math.max(0, parseInt(String(item.costPrice), 10)) : undefined,
+      costOverriddenByAdmin: Boolean(item.costOverriddenByAdmin),
+      category: item.category || 'electronics',
+      subcategory: item.subcategory,
+      stock: item.stock !== undefined ? Math.max(0, parseInt(String(item.stock), 10)) : 25,
+      imageUrl: item.imageUrl || images[0],
+      images,
+      shopName: item.shopName || 'ContactReach Market',
+      shopId: item.shopId,
+      receiverName: item.receiverName || 'Ruth',
+      paymentMethods: item.paymentMethods || ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+      merchantCode: item.merchantCode || '078002',
+      receiverPhone: item.receiverPhone || '078002260',
+      location: item.location || 'Kigali, Rwanda',
+      deliveryInfo: item.deliveryInfo || 'Same-day Kigali delivery',
+      status: item.status || 'Available',
+      isFeatured: Boolean(item.isFeatured),
+      isNewArrival: item.isNewArrival !== undefined ? Boolean(item.isNewArrival) : true,
+      isBestSeller: Boolean(item.isBestSeller),
+      brand: item.brand,
+      unit: item.unit || 'Piece',
+      videoUrl: item.videoUrl,
+      variations: item.variations,
+      rating: item.rating || 5.0,
+      reviewsCount: item.reviewsCount || 0,
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      source: 'googledrive' as const
+    };
+  });
+
+  return {
+    success: true,
+    fileId,
+    fileName,
+    productCount: normalizedProducts.length,
+    products: normalizedProducts,
+    importedAt: new Date().toISOString(),
+    message: `Successfully loaded ${normalizedProducts.length} products from Google Drive file "${fileName}".`
+  };
 }
 
 // -------------------------------------------------------------

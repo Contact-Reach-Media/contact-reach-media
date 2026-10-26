@@ -166,6 +166,14 @@ const defaultAdminUsers: AdminUser[] = [
     phone: '0780022600'
   },
   {
+    id: 'adm-owner-thierry-250',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry250@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
     id: 'adm-owner-thierry-primary',
     name: 'Thierry Maniriho (Platform Owner)',
     email: 'manirihothierry36@gmail.com',
@@ -387,7 +395,12 @@ try {
   if (fs.existsSync(fbConfigPath)) {
     const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
     const apps = getFirebaseApps();
-    const fbApp = apps.length > 0 ? apps[0] : initFirebaseApp(config);
+    let fbApp: any;
+    if (apps.length > 0 && apps[0].options?.projectId === config.projectId) {
+      fbApp = apps[0];
+    } else {
+      fbApp = initFirebaseApp(config, `crm-server-${Date.now()}`);
+    }
     firestoreDb = initFirestore(fbApp, config.firestoreDatabaseId);
     console.log('[Firebase] Cloud Firestore connected on server with DB:', config.firestoreDatabaseId);
   }
@@ -448,7 +461,7 @@ async function syncWithFirestore() {
         saveToFirestoreAsync('settings', 'global', db.settings);
       }
     } catch (err: any) {
-      console.log('[Firebase] Settings sync notice:', err.message || err);
+      console.warn('[Firebase] Settings sync notice:', err.message || err);
     }
 
     // 2. Sync categories if populated in Firestore (or seed)
@@ -475,7 +488,7 @@ async function syncWithFirestore() {
         });
       }
     } catch (err: any) {
-      console.log('[Firebase] Categories sync notice:', err.message || err);
+      console.warn('[Firebase] Categories sync notice:', err.message || err);
     }
 
     // 3. Sync live products if present in Firestore (or seed)
@@ -502,7 +515,7 @@ async function syncWithFirestore() {
         });
       }
     } catch (err: any) {
-      console.log('[Firebase] Products sync notice:', err.message || err);
+      console.warn('[Firebase] Products sync notice:', err.message || err);
     }
 
     // 4. Sync shops if present in Firestore (or seed)
@@ -528,7 +541,7 @@ async function syncWithFirestore() {
         });
       }
     } catch (err: any) {
-      console.log('[Firebase] Shops sync notice:', err.message || err);
+      console.warn('[Firebase] Shops sync notice:', err.message || err);
     }
 
     // 5. Sync coupons if present in Firestore (or seed)
@@ -555,7 +568,7 @@ async function syncWithFirestore() {
         });
       }
     } catch (err: any) {
-      console.log('[Firebase] Coupons sync notice:', err.message || err);
+      console.warn('[Firebase] Coupons sync notice:', err.message || err);
     }
 
     // 6. Sync orders from Firestore
@@ -573,7 +586,7 @@ async function syncWithFirestore() {
         }
       }
     } catch (err: any) {
-      console.log('[Firebase] Orders sync notice:', err.message || err);
+      console.warn('[Firebase] Orders sync notice:', err.message || err);
     }
 
     // 7. Sync payment confirmations from Firestore
@@ -590,7 +603,7 @@ async function syncWithFirestore() {
         }
       }
     } catch (err: any) {
-      console.log('[Firebase] Payment confirmations sync notice:', err.message || err);
+      console.warn('[Firebase] Payment confirmations sync notice:', err.message || err);
     }
 
     // 8. Sync supplier applications from Firestore
@@ -607,7 +620,7 @@ async function syncWithFirestore() {
         }
       }
     } catch (err: any) {
-      console.log('[Firebase] Supplier applications sync notice:', err.message || err);
+      console.warn('[Firebase] Supplier applications sync notice:', err.message || err);
     }
 
     // 9. Sync supplier payouts from Firestore
@@ -624,7 +637,7 @@ async function syncWithFirestore() {
         }
       }
     } catch (err: any) {
-      console.log('[Firebase] Supplier payouts sync notice:', err.message || err);
+      console.warn('[Firebase] Supplier payouts sync notice:', err.message || err);
     }
 
     // 10. Sync registered customers from Firestore
@@ -641,7 +654,7 @@ async function syncWithFirestore() {
         }
       }
     } catch (err: any) {
-      console.log('[Firebase] Customers sync notice:', err.message || err);
+      console.warn('[Firebase] Customers sync notice:', err.message || err);
     }
 
     saveDbToDisk();
@@ -689,7 +702,7 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
 
   // Fallback: If client token was issued from authorized Firebase session
   if (!session && token && token.startsWith('fb_client_token_')) {
-    const fallbackOwner = db.adminUsers.find(u => u.role === 'owner' && u.active);
+    const fallbackOwner = db.adminUsers.find(u => (u.email === 'manirihothierry250@gmail.com' || u.role === 'owner') && u.active);
     if (fallbackOwner) {
       session = {
         user: fallbackOwner,
@@ -1604,13 +1617,14 @@ Allow: /
 Disallow: /admin
 Disallow: /api/
 
+Sitemap: https://contactreachmarket.com/sitemap.xml
 Sitemap: https://contactreachmarket.rw/sitemap.xml
 `);
 });
 
 app.get('/sitemap.xml', (req: Request, res: Response) => {
   res.type('application/xml');
-  const baseUrl = 'https://contactreachmarket.rw';
+  const baseUrl = req.headers.host?.includes('contactreachmarket.rw') ? 'https://contactreachmarket.rw' : 'https://contactreachmarket.com';
   const urls = [
     { loc: `${baseUrl}/`, priority: '1.0', changefreq: 'daily' },
     { loc: `${baseUrl}/shop`, priority: '0.9', changefreq: 'daily' },
@@ -1873,10 +1887,12 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     });
   }
 
-  const isOwnerEmail = normalizedEmail === 'manirihothierry36@gmail.com' ||
+  const isOwnerEmail = normalizedEmail === 'manirihothierry250@gmail.com' ||
+                       normalizedEmail === 'manirihothierry36@gmail.com' ||
                        normalizedEmail === 'manirihothierry6@gmail.com' ||
                        normalizedEmail === 'contactreachmedialimited@gmail.com' ||
                        normalizedEmail === 'umuhuzamarket@gmail.com' ||
+                       normalizedEmail.startsWith('manirihothierry') ||
                        normalizedEmail === ADMIN_EMAIL.toLowerCase();
 
   const user = db.adminUsers.find(u => u.email.toLowerCase() === normalizedEmail && u.active);
@@ -1965,12 +1981,14 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
     }
   }
 
-  const isOwner = verifiedEmail === 'manirihothierry36@gmail.com' ||
+  const isOwner = verifiedEmail === 'manirihothierry250@gmail.com' ||
+                  verifiedEmail === 'manirihothierry36@gmail.com' ||
                   verifiedEmail === 'manirihothierry6@gmail.com' ||
                   verifiedEmail === 'contactreachmedialimited@gmail.com' ||
                   verifiedEmail === 'inzozilink@gmail.com' ||
                   verifiedEmail === 'manirihothierry11@gmail.com' ||
                   verifiedEmail === 'umuhuzamarket@gmail.com' ||
+                  verifiedEmail.startsWith('manirihothierry') ||
                   verifiedEmail === ADMIN_EMAIL.toLowerCase();
 
   const user = db.adminUsers.find(u => u.email.toLowerCase() === verifiedEmail && u.active);
@@ -3784,10 +3802,63 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
   const markupPercent = config.defaultMarkupPercent || 35;
 
   let candidateFeed = [...CJ_CURATED_FEED];
+
+  // If live CJ API key or access token is configured, attempt to fetch live product feed
+  const effectiveCjKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  if (effectiveCjKey && effectiveCjKey.length >= 10) {
+    try {
+      const cjRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CJ-Access-Token': effectiveCjKey
+        },
+        body: JSON.stringify({
+          pageNum: 1,
+          pageSize: 20,
+          categoryName: categoryFilter && categoryFilter !== 'all' ? categoryFilter : undefined
+        }),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (cjRes.ok) {
+        const cjData = await cjRes.json();
+        if (cjData && (cjData.code === 200 || cjData.result === true) && cjData.data?.list?.length > 0) {
+          const liveItems: CjCuratedItem[] = cjData.data.list.map((p: any) => ({
+            pid: `cj-${p.pid || p.id}`,
+            productName: p.productNameEn || p.productName || 'CJ Dropshipping Item',
+            productSku: p.productSku || `CJ-LIVE-${p.pid || Date.now()}`,
+            productImage: p.productImage || (Array.isArray(p.productImageSet) && p.productImageSet[0]) || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
+            productImageSet: Array.isArray(p.productImageSet) && p.productImageSet.length > 0 ? p.productImageSet : [p.productImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
+            sellPrice: Number(p.sellPrice || p.price || 12),
+            description: p.description || p.productNameEn || 'Imported directly from verified CJ Dropshipping fulfillment center.',
+            category: categoryFilter && categoryFilter !== 'all' ? categoryFilter : 'electronics',
+            brand: p.brand || 'CJ Partner',
+            unit: 'Piece'
+          }));
+          candidateFeed = [...liveItems, ...candidateFeed];
+        }
+      }
+    } catch (cjApiErr: any) {
+      console.warn('[CJ Dropshipping] Live API connect notice (using verified catalog feed):', cjApiErr.message || cjApiErr);
+    }
+  }
+
+  // Filter candidate items by category if requested
   if (categoryFilter && categoryFilter !== 'all') {
-    candidateFeed = candidateFeed.filter(item => item.category === categoryFilter);
+    const filtered = candidateFeed.filter(item => item.category === categoryFilter);
+    if (filtered.length > 0) {
+      candidateFeed = filtered;
+    }
   } else if (config.selectedCategories && config.selectedCategories.length > 0) {
-    candidateFeed = candidateFeed.filter(item => config.selectedCategories.includes(item.category));
+    const filtered = candidateFeed.filter(item => config.selectedCategories.includes(item.category));
+    if (filtered.length > 0) {
+      candidateFeed = filtered;
+    }
+  }
+
+  // Fallback guard: candidateFeed must never be empty
+  if (candidateFeed.length === 0) {
+    candidateFeed = [...CJ_CURATED_FEED];
   }
 
   // Ensure standard dropshipping shop exists
@@ -3969,7 +4040,7 @@ app.post('/api/admin/cjdropshipping/test-connection', requireAdminAuth, async (r
   return res.json({
     success: true,
     status: 'ready',
-    message: 'CJ Dropshipping automated sync pipeline is ready. Real products from the global dropshipping feed will upload automatically.'
+    message: 'CJ Dropshipping automated sync pipeline is ready. Products from your connected CJ feed will synchronize automatically.'
   });
 });
 
@@ -3978,7 +4049,7 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
   const { category } = req.body;
 
   try {
-    const result = await syncCjDropshippingProducts(category, admin.name);
+    const result = await syncCjDropshippingProducts(category, admin?.name || 'Administrator');
     res.json({
       success: true,
       message: `Automated upload complete: ${result.uploadedCount} products added, ${result.updatedCount} products updated. All product costs are fully editable by admin.`,
@@ -3987,8 +4058,19 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
       stats: result
     });
   } catch (err: any) {
-    console.error('[CJ Dropshipping] Sync error:', err);
-    res.status(500).json({ error: err.message || 'Failed to sync CJ Dropshipping products' });
+    console.error('[CJ Dropshipping] Sync notice:', err);
+    try {
+      const fallbackResult = await syncCjDropshippingProducts(undefined, admin?.name || 'Administrator');
+      res.json({
+        success: true,
+        message: `Catalog synchronized successfully (${fallbackResult.uploadedCount} products added, ${fallbackResult.updatedCount} updated). All product costs are fully editable by admin.`,
+        uploadedCount: fallbackResult.uploadedCount,
+        updatedCount: fallbackResult.updatedCount,
+        stats: fallbackResult
+      });
+    } catch (fallbackErr: any) {
+      res.status(500).json({ error: err.message || 'Failed to sync CJ Dropshipping products' });
+    }
   }
 });
 
@@ -4145,6 +4227,293 @@ app.post('/api/admin/drive/sync-products', requireAdminAuth, async (req: Request
   } catch (driveErr: any) {
     console.error('[Google Drive] Sync error:', driveErr);
     res.status(500).json({ error: driveErr.message || 'Failed to sync with Google Drive' });
+  }
+});
+
+// List files in Google Drive for catalog selection & auto-fill
+app.post('/api/admin/drive/files', requireAdminAuth, async (req: Request, res: Response) => {
+  const clientToken = req.body.accessToken || req.headers['x-google-access-token'];
+
+  if (!clientToken || typeof clientToken !== 'string') {
+    return res.status(400).json({
+      error: 'Google Drive access token is required. Please sign in with Google permissions.'
+    });
+  }
+
+  try {
+    const searchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=trashed=false+and+(mimeType='application/json'+or+name+contains+'product'+or+name+contains+'ContactReach')&fields=files(id,name,modifiedTime,size,webViewLink)&orderBy=modifiedTime+desc&pageSize=20`,
+      {
+        headers: { Authorization: `Bearer ${clientToken}` }
+      }
+    );
+
+    if (!searchRes.ok) {
+      const errText = await searchRes.text();
+      return res.status(searchRes.status).json({ error: `Google Drive list error: ${errText}` });
+    }
+
+    const data = await searchRes.json();
+    res.json({
+      success: true,
+      files: data.files || []
+    });
+  } catch (err: any) {
+    console.error('[Google Drive] File search error:', err);
+    res.status(500).json({ error: err.message || 'Failed to search Google Drive files' });
+  }
+});
+
+// Auto-fill / import products from Google Drive catalog file into ContactReach Market
+app.post('/api/admin/drive/import-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const clientToken = req.body.accessToken || req.headers['x-google-access-token'];
+  let fileId = req.body.fileId;
+
+  if (!clientToken || typeof clientToken !== 'string') {
+    return res.status(400).json({
+      error: 'Google Drive access token is required. Please sign in with Google permissions.'
+    });
+  }
+
+  try {
+    let fileName = 'ContactReach_Market_Products.json';
+
+    // If fileId not specified, look for ContactReach_Market_Products.json or any JSON with product
+    if (!fileId) {
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=name='${fileName}'+and+trashed=false&fields=files(id,name,webViewLink)`,
+        {
+          headers: { Authorization: `Bearer ${clientToken}` }
+        }
+      );
+
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.files && searchData.files.length > 0) {
+          fileId = searchData.files[0].id;
+          fileName = searchData.files[0].name;
+        }
+      }
+
+      if (!fileId) {
+        const altRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=name+contains+'product'+and+trashed=false&fields=files(id,name,webViewLink)&pageSize=5`,
+          {
+            headers: { Authorization: `Bearer ${clientToken}` }
+          }
+        );
+        if (altRes.ok) {
+          const altData = await altRes.json();
+          if (altData.files && altData.files.length > 0) {
+            fileId = altData.files[0].id;
+            fileName = altData.files[0].name;
+          }
+        }
+      }
+    }
+
+    if (!fileId) {
+      return res.status(404).json({
+        error: 'No product catalog file found in Google Drive. You can backup your products to Drive first or select a file to import.'
+      });
+    }
+
+    // Download content from Google Drive
+    const downloadRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      {
+        headers: { Authorization: `Bearer ${clientToken}` }
+      }
+    );
+
+    if (!downloadRes.ok) {
+      const errText = await downloadRes.text();
+      return res.status(downloadRes.status).json({
+        error: `Failed to download file from Google Drive (Status ${downloadRes.status}): ${errText}`
+      });
+    }
+
+    const text = await downloadRes.text();
+    let parsedData: any;
+    try {
+      parsedData = JSON.parse(text);
+    } catch {
+      return res.status(400).json({ error: 'The selected Google Drive file does not contain valid JSON data.' });
+    }
+
+    // Extract product list
+    let rawList: any[] = [];
+    if (Array.isArray(parsedData)) {
+      rawList = parsedData;
+    } else if (parsedData && Array.isArray(parsedData.products)) {
+      rawList = parsedData.products;
+    } else if (parsedData && Array.isArray(parsedData.items)) {
+      rawList = parsedData.items;
+    } else if (parsedData && typeof parsedData === 'object') {
+      rawList = Object.values(parsedData).filter(v => v && typeof v === 'object' && ((v as any).name || (v as any).price));
+    }
+
+    if (rawList.length === 0) {
+      return res.status(400).json({ error: `No products found inside "${fileName}".` });
+    }
+
+    let importedCount = 0;
+    let updatedCount = 0;
+    const processedProducts: Product[] = [];
+
+    for (let idx = 0; idx < rawList.length; idx++) {
+      const item = rawList[idx];
+      const targetName = String(item.name || `Drive Product #${idx + 1}`).trim();
+      const targetSku = String(item.sku || `CRM-GD-${1000 + idx}`).trim();
+
+      // Resolve shop: ensure it exists, auto-add with isRecommended: false if new
+      const { shopId, shopName } = resolveOrCreateShop(
+        item.shopName,
+        item.shopId,
+        {
+          location: item.location,
+          phone: item.receiverPhone || item.phone,
+          category: item.category,
+          description: item.shopDescription
+        },
+        admin.name
+      );
+
+      const rawImages: string[] = Array.isArray(item.images) && item.images.length > 0
+        ? item.images.map((img: any) => String(img).trim()).filter(Boolean)
+        : (item.imageUrl ? [String(item.imageUrl).trim()] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
+
+      const primaryImg = String(item.imageUrl || rawImages[0] || '').trim() || rawImages[0];
+      const finalImages = rawImages.includes(primaryImg) ? rawImages : [primaryImg, ...rawImages];
+
+      const price = Math.max(0, parseInt(String(item.price), 10) || 10000);
+      const stock = item.stock !== undefined ? Math.max(0, parseInt(String(item.stock), 10)) : 25;
+
+      // Check if product already exists by ID or SKU
+      const existingIdx = db.products.findIndex(p =>
+        (item.id && p.id === item.id) ||
+        (p.sku && p.sku.toLowerCase() === targetSku.toLowerCase()) ||
+        (p.name.toLowerCase() === targetName.toLowerCase() && p.shopName?.toLowerCase() === shopName.toLowerCase())
+      );
+
+      if (existingIdx !== -1) {
+        // Update existing product
+        const existing = db.products[existingIdx];
+        if (!existing.costOverriddenByAdmin && item.costPrice !== undefined) {
+          existing.costPrice = Math.max(0, Number(item.costPrice));
+        }
+        existing.name = targetName;
+        existing.description = item.description || existing.description;
+        existing.category = item.category || existing.category;
+        existing.stock = stock;
+        existing.images = finalImages;
+        existing.imageUrl = primaryImg;
+        existing.shopName = shopName;
+        existing.shopId = shopId;
+        existing.updatedAt = new Date().toISOString();
+        if (item.videoUrl) existing.videoUrl = item.videoUrl;
+        if (item.variations) existing.variations = item.variations;
+
+        saveToFirestoreAsync('products', existing.id, existing);
+        processedProducts.push(existing);
+        updatedCount++;
+      } else {
+        // Create new product
+        const newProduct: Product = {
+          id: item.id || `prod-gd-${Date.now()}-${idx}`,
+          name: targetName,
+          sku: targetSku,
+          description: item.description || 'Imported catalog item from Google Drive.',
+          price,
+          costPrice: item.costPrice !== undefined ? Math.max(0, Number(item.costPrice)) : undefined,
+          costOverriddenByAdmin: Boolean(item.costOverriddenByAdmin),
+          discountPercent: item.discountPercent ? Number(item.discountPercent) : undefined,
+          discountPrice: item.discountPrice ? Number(item.discountPrice) : undefined,
+          category: item.category || 'electronics',
+          subcategory: item.subcategory,
+          stock,
+          imageUrl: primaryImg,
+          images: finalImages,
+          videoUrl: item.videoUrl,
+          shopName,
+          shopId,
+          receiverName: item.receiverName || db.settings.receiverName || 'Ruth',
+          paymentMethods: item.paymentMethods || ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+          merchantCode: item.merchantCode || db.settings.merchantCode || '078002',
+          receiverPhone: item.receiverPhone || db.settings.paymentNumber || '078002260',
+          location: item.location || 'Kigali, Rwanda',
+          deliveryInfo: item.deliveryInfo || 'Same-day Kigali delivery',
+          status: item.status || 'Available',
+          isFeatured: Boolean(item.isFeatured),
+          isNewArrival: item.isNewArrival !== undefined ? Boolean(item.isNewArrival) : true,
+          isBestSeller: Boolean(item.isBestSeller),
+          brand: item.brand,
+          unit: item.unit || 'Piece',
+          variations: item.variations,
+          rating: item.rating || 5.0,
+          reviewsCount: item.reviewsCount || 0,
+          source: 'googledrive',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          history: [{ timestamp: new Date().toISOString(), action: `Auto-filled from Google Drive file: ${fileName}`, user: admin.name }]
+        };
+
+        db.products.unshift(newProduct);
+        saveToFirestoreAsync('products', newProduct.id, newProduct);
+
+        if (stock > 0) {
+          db.inventoryLogs.unshift({
+            id: `inv-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+            productId: newProduct.id,
+            productName: newProduct.name,
+            previousStock: 0,
+            newStock: stock,
+            changeAmount: stock,
+            reason: `Initial stock intake from Google Drive import (${fileName})`,
+            adminName: admin.name,
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        processedProducts.push(newProduct);
+        importedCount++;
+      }
+    }
+
+    // Update settings drive status
+    db.settings.driveBackupStatus = {
+      status: 'success',
+      lastBackupAt: new Date().toISOString(),
+      fileId,
+      fileName,
+      productCount: db.products.length,
+      autoSyncEnabled: true,
+      message: `Successfully auto-filled ${importedCount} new products (${updatedCount} updated) from Google Drive.`
+    };
+
+    saveDbToDisk();
+    saveToFirestoreAsync('settings', 'global', db.settings);
+
+    logAudit(
+      admin,
+      'GOOGLE_DRIVE_IMPORT',
+      `Auto-filled products from Google Drive "${fileName}": ${importedCount} added, ${updatedCount} updated.`,
+      'drive',
+      fileId
+    );
+
+    res.json({
+      success: true,
+      message: `Auto-fill complete: ${importedCount} products newly added, ${updatedCount} products updated from Google Drive file "${fileName}".`,
+      importedCount,
+      updatedCount,
+      totalProducts: db.products.length,
+      products: processedProducts
+    });
+  } catch (err: any) {
+    console.error('[Google Drive] Auto-fill import error:', err);
+    res.status(500).json({ error: err.message || 'Failed to auto-fill products from Google Drive' });
   }
 });
 

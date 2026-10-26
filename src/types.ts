@@ -107,8 +107,8 @@ export interface Product {
   rating?: number;
   reviewsCount?: number;
   unit?: string;
-  // CJ Dropshipping & Supplier Cost Automation
-  source?: 'local' | 'cjdropshipping';
+  // CJ Dropshipping & Supplier Cost Automation & Google Drive
+  source?: 'local' | 'cjdropshipping' | 'googledrive';
   cjProductId?: string;
   cjProductSku?: string;
   cjOriginalCostUsd?: number;

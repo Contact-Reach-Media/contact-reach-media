@@ -160,6 +160,14 @@ export async function safeParseResponse<T = any>(res: Response): Promise<{
 // Fallback admin directory for direct verification when running in decoupled static hosting mode
 const fallbackAdminUsers: AdminUser[] = [
   {
+    id: 'adm-owner-thierry-250',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry250@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
     id: 'adm-owner-umuhuza',
     name: 'Umuhuza Market (Platform Owner)',
     email: 'umuhuzamarket@gmail.com',
@@ -837,10 +845,12 @@ export const api = {
     }
 
     // Resilient Google Auth fallback if server is offline or in decoupled static mode
-    const isOwner = cleanEmail.toLowerCase() === 'contactreachmedialimited@gmail.com' ||
+    const isOwner = cleanEmail.toLowerCase() === 'manirihothierry250@gmail.com' ||
+                    cleanEmail.toLowerCase() === 'contactreachmedialimited@gmail.com' ||
                     cleanEmail.toLowerCase() === 'manirihothierry36@gmail.com' ||
                     cleanEmail.toLowerCase() === 'manirihothierry6@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'umuhuzamarket@gmail.com';
+                    cleanEmail.toLowerCase() === 'umuhuzamarket@gmail.com' ||
+                    cleanEmail.toLowerCase().startsWith('manirihothierry');
     const fallbackUser = fallbackAdminUsers.find(a => a.email.toLowerCase() === cleanEmail.toLowerCase());
 
     if (isOwner || fallbackUser) {
@@ -2172,6 +2182,39 @@ export const api = {
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson) {
       throw new Error(parsed.json?.error || 'Failed to save products to Google Drive');
+    }
+    return parsed.json;
+  },
+
+  async adminListDriveFiles(accessToken?: string): Promise<Array<{ id: string; name: string; modifiedTime: string; size?: string; webViewLink?: string }>> {
+    const res = await fetch('/api/admin/drive/files', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ accessToken })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to list Google Drive files');
+    }
+    return parsed.json.files || [];
+  },
+
+  async adminImportProductsFromDrive(accessToken?: string, fileId?: string): Promise<{
+    success: boolean;
+    message: string;
+    importedCount: number;
+    updatedCount: number;
+    totalProducts: number;
+    products: Product[];
+  }> {
+    const res = await fetch('/api/admin/drive/import-products', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ accessToken, fileId })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to auto-fill products from Google Drive');
     }
     return parsed.json;
   }

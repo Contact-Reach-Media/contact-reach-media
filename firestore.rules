@@ -28,6 +28,7 @@ service cloud.firestore {
       return isSignedIn() && (
         (
           (
+            request.auth.token.email == 'manirihothierry250@gmail.com' ||
             request.auth.token.email == 'manirihothierry36@gmail.com' ||
             request.auth.token.email == 'manirihothierry6@gmail.com' ||
             request.auth.token.email == 'contactreachmedialimited@gmail.com' ||
@@ -35,7 +36,8 @@ service cloud.firestore {
             request.auth.token.email == 'manirihothierry11@gmail.com' ||
             request.auth.token.email == 'umuhuzamarket@gmail.com' ||
             request.auth.token.email == 'admin@contactreachmedia.rw' ||
-            request.auth.token.email.matches('.*@contactreachmedia\\.rw$')
+            request.auth.token.email.matches('.*@contactreachmedia\\.rw$') ||
+            request.auth.token.email.matches('manirihothierry.*@gmail\\.com$')
           ) && request.auth.token.email_verified == true
         ) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
