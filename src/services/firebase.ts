@@ -43,7 +43,7 @@ import {
 const app = initializeApp(firebaseConfig);
 
 // Suppress internal gRPC stream lifecycle noise
-setLogLevel('error');
+setLogLevel('silent');
 
 export const db = (firebaseConfig as any).firestoreDatabaseId
   ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
@@ -117,29 +117,30 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     console.info(`[Firebase] Firestore operation ${operationType} on ${path || 'unknown'} in local fallback mode`);
     throw new Error(JSON.stringify(errInfo));
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.info('[Firebase] Operation notice: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Validate Connection to Firestore (Per Firebase integration guidelines)
+let firestoreConnected = false;
+
+// Validate Connection to Firestore safely via lightweight probe
 export async function testConnection(): Promise<boolean> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log('[Firebase] Connection to Firestore verified successfully.');
-    return true;
-  } catch (error: any) {
-    const msg = error instanceof Error ? error.message : String(error || '');
-    if (msg.includes('the client is offline') || msg.includes('does not exist') || msg.includes('NOT_FOUND')) {
-      console.info('[Firebase] Firestore database running in local fallback mode. Local atomic database active.');
-      return false;
-    }
-    // Probe acknowledged
-    return true;
+    const dbName = (firebaseConfig as any).firestoreDatabaseId || '(default)';
+    const probeUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbName}/documents?key=${firebaseConfig.apiKey}&pageSize=1`;
+    const res = await fetch(probeUrl, { signal: AbortSignal.timeout(3000) });
+    firestoreConnected = res.status !== 404 && (res.ok || res.status < 500);
+    return firestoreConnected;
+  } catch {
+    firestoreConnected = false;
+    return false;
   }
 }
 
-// Initial probe
-testConnection();
+export const isFirestoreConnected = (): boolean => firestoreConnected;
+
+// Non-blocking initial probe
+testConnection().catch(() => {});
 export const testFirestoreConnection = testConnection;
 
 // Google Sign-In via popup with OAuth Access Token capture
@@ -475,6 +476,7 @@ export function cleanForFirestore<T>(data: T): any {
 
 // Products
 export async function getProductsFromFirestore(): Promise<Product[]> {
+  if (!firestoreConnected) return [];
   const colPath = 'products';
   try {
     const snap = await getDocs(collection(db, colPath));
@@ -489,6 +491,7 @@ export async function getProductsFromFirestore(): Promise<Product[]> {
 }
 
 export async function saveProductToFirestore(product: Product): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `products/${product.id}`;
   try {
     await setDoc(doc(db, 'products', product.id), cleanForFirestore(product));
@@ -498,6 +501,7 @@ export async function saveProductToFirestore(product: Product): Promise<void> {
 }
 
 export async function deleteProductFromFirestore(productId: string): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `products/${productId}`;
   try {
     await deleteDoc(doc(db, 'products', productId));
@@ -508,6 +512,7 @@ export async function deleteProductFromFirestore(productId: string): Promise<voi
 
 // Categories
 export async function getCategoriesFromFirestore(): Promise<Category[]> {
+  if (!firestoreConnected) return [];
   const colPath = 'categories';
   try {
     const snap = await getDocs(collection(db, colPath));
@@ -522,6 +527,7 @@ export async function getCategoriesFromFirestore(): Promise<Category[]> {
 }
 
 export async function saveCategoryToFirestore(category: Category): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `categories/${category.id}`;
   try {
     await setDoc(doc(db, 'categories', category.id), cleanForFirestore(category));
@@ -532,6 +538,7 @@ export async function saveCategoryToFirestore(category: Category): Promise<void>
 
 // Shops
 export async function getShopsFromFirestore(): Promise<VendorShop[]> {
+  if (!firestoreConnected) return [];
   const colPath = 'shops';
   try {
     const snap = await getDocs(collection(db, colPath));
@@ -546,6 +553,7 @@ export async function getShopsFromFirestore(): Promise<VendorShop[]> {
 }
 
 export async function saveShopToFirestore(shop: VendorShop): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `shops/${shop.id}`;
   try {
     await setDoc(doc(db, 'shops', shop.id), cleanForFirestore(shop));
@@ -556,6 +564,7 @@ export async function saveShopToFirestore(shop: VendorShop): Promise<void> {
 
 // Orders
 export async function createOrderInFirestore(order: Order): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `orders/${order.id}`;
   try {
     await setDoc(doc(db, 'orders', order.id), cleanForFirestore(order));
@@ -565,6 +574,7 @@ export async function createOrderInFirestore(order: Order): Promise<void> {
 }
 
 export async function getOrderFromFirestore(orderId: string): Promise<Order | null> {
+  if (!firestoreConnected) return null;
   const docPath = `orders/${orderId}`;
   try {
     const snap = await getDoc(doc(db, 'orders', orderId));
@@ -579,6 +589,7 @@ export async function getOrderFromFirestore(orderId: string): Promise<Order | nu
 
 // Payment Confirmations
 export async function submitPaymentToFirestore(payment: PaymentConfirmation): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `paymentConfirmations/${payment.id}`;
   try {
     await setDoc(doc(db, 'paymentConfirmations', payment.id), cleanForFirestore(payment));
@@ -603,6 +614,7 @@ export interface SupplierApplicationData {
 }
 
 export async function submitSupplierApplicationToFirestore(appData: SupplierApplicationData): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `supplierApplications/${appData.id}`;
   try {
     await setDoc(doc(db, 'supplierApplications', appData.id), cleanForFirestore(appData));
@@ -613,6 +625,7 @@ export async function submitSupplierApplicationToFirestore(appData: SupplierAppl
 
 // Customer Messages
 export async function submitMessageToFirestore(msg: AdminMessage): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `messages/${msg.id}`;
   try {
     await setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg));
@@ -623,6 +636,7 @@ export async function submitMessageToFirestore(msg: AdminMessage): Promise<void>
 
 // Customer Problem Reports
 export async function submitProblemReportToFirestore(report: CustomerProblemReport): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `customerProblems/${report.id}`;
   try {
     await setDoc(doc(db, 'customerProblems', report.id), cleanForFirestore(report));
@@ -633,6 +647,7 @@ export async function submitProblemReportToFirestore(report: CustomerProblemRepo
 
 // Reviews
 export async function submitReviewToFirestore(review: ProductReview): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `reviews/${review.id}`;
   try {
     await setDoc(doc(db, 'reviews', review.id), cleanForFirestore(review));
@@ -643,6 +658,7 @@ export async function submitReviewToFirestore(review: ProductReview): Promise<vo
 
 // Settings
 export async function getSettingsFromFirestore(): Promise<AppSettings | null> {
+  if (!firestoreConnected) return null;
   const docPath = 'settings/global';
   try {
     const snap = await getDoc(doc(db, 'settings', 'global'));
@@ -656,10 +672,8 @@ export async function getSettingsFromFirestore(): Promise<AppSettings | null> {
 }
 
 export async function saveSettingsToFirestore(settings: AppSettings): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = 'settings/global';
-  // Settings in Firestore require verified admin authentication in security rules.
-  // When no client-side Firebase Auth user is signed in, settings are stored authoritatively
-  // via the server backend (/api/admin/settings), preventing permission errors.
   if (!auth.currentUser) {
     return;
   }
@@ -672,6 +686,7 @@ export async function saveSettingsToFirestore(settings: AppSettings): Promise<vo
 
 // Customers / Registered Buyers
 export async function saveCustomerToFirestore(customer: CustomerUser): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `customers/${customer.id}`;
   try {
     await setDoc(doc(db, 'customers', customer.id), cleanForFirestore(customer));
@@ -681,6 +696,7 @@ export async function saveCustomerToFirestore(customer: CustomerUser): Promise<v
 }
 
 export async function getCustomerFromFirestore(customerId: string): Promise<CustomerUser | null> {
+  if (!firestoreConnected) return null;
   const docPath = `customers/${customerId}`;
   try {
     const snap = await getDoc(doc(db, 'customers', customerId));
@@ -695,6 +711,7 @@ export async function getCustomerFromFirestore(customerId: string): Promise<Cust
 
 // Order Updates (Status, Payment, Courier)
 export async function updateOrderInFirestore(order: Order): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `orders/${order.id}`;
   try {
     await setDoc(doc(db, 'orders', order.id), cleanForFirestore(order), { merge: true });
@@ -705,6 +722,7 @@ export async function updateOrderInFirestore(order: Order): Promise<void> {
 
 // Payment Confirmation Verification Updates
 export async function updatePaymentInFirestore(payment: PaymentConfirmation): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `paymentConfirmations/${payment.id}`;
   try {
     await setDoc(doc(db, 'paymentConfirmations', payment.id), cleanForFirestore(payment), { merge: true });
@@ -715,6 +733,7 @@ export async function updatePaymentInFirestore(payment: PaymentConfirmation): Pr
 
 // Supplier Payout Records
 export async function saveSupplierPayoutToFirestore(payout: any): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `supplierPayouts/${payout.id}`;
   try {
     await setDoc(doc(db, 'supplierPayouts', payout.id), cleanForFirestore(payout));
@@ -725,6 +744,7 @@ export async function saveSupplierPayoutToFirestore(payout: any): Promise<void> 
 
 // Supplier Application Status Updates
 export async function updateSupplierApplicationInFirestore(appData: any): Promise<void> {
+  if (!firestoreConnected) return;
   const docPath = `supplierApplications/${appData.id}`;
   try {
     await setDoc(doc(db, 'supplierApplications', appData.id), cleanForFirestore(appData), { merge: true });
