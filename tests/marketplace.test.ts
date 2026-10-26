@@ -1423,6 +1423,20 @@ async function runTests() {
 
   // TEST 39: Spreadsheet Bulk Import with Upsert, Stock & Price Updates, and Security Guards
   await test('Admin can bulk import validated products with atomic persistence, stock updates, and audit logging', async () => {
+    // 0. Ensure test idempotency by cleaning up prior test products if present
+    const existingCheck = await fetch(`${BASE_URL}/api/products?search=Nyungwe`);
+    if (existingCheck.status === 200) {
+      const existingProds = await existingCheck.json();
+      for (const p of existingProds) {
+        if (p.sku === 'CRM-NYUNGWE-HONEY') {
+          await fetch(`${BASE_URL}/api/admin/products/${p.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${adminToken}` }
+          });
+        }
+      }
+    }
+
     // 1. Unauthenticated import must fail with 401
     const unauthImport = await fetch(`${BASE_URL}/api/admin/products/bulk-import`, {
       method: 'POST',

@@ -8,7 +8,7 @@ import {
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders,
-  Youtube, FileSpreadsheet
+  Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -4424,6 +4424,133 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+              {/* Sub-tab Navigation Bar */}
+              <div className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-1.5 flex-wrap text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setCjSubTab('catalog')}
+                  className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+                    cjSubTab === 'catalog'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Package className="w-4 h-4" />
+                  <span>Imported Catalog</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    cjSubTab === 'catalog' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-800'
+                  }`}>
+                    {products.filter(p => p.source === 'cjdropshipping').length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCjSubTab('search');
+                    if (cjSearchResults.length === 0) {
+                      handleSearchCjProducts();
+                    }
+                  }}
+                  className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+                    cjSubTab === 'search'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Search & Supplier Discovery</span>
+                  {cjSearchResults.length > 0 && (
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      cjSubTab === 'search' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {cjSearchResults.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCjSubTab('staging')}
+                  className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+                    cjSubTab === 'staging'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Review & Approval Queue</span>
+                  {(() => {
+                    const pendingCount = products.filter(p => p.source === 'cjdropshipping' && p.reviewStatus === 'Pending Approval').length;
+                    return (
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                        cjSubTab === 'staging' ? 'bg-white/20 text-white' : pendingCount > 0 ? 'bg-amber-100 text-amber-800 font-black' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {pendingCount}
+                      </span>
+                    );
+                  })()}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCjSubTab('orders');
+                    handleLoadCjOrders();
+                  }}
+                  className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+                    cjSubTab === 'orders'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Truck className="w-4 h-4" />
+                  <span>Dropshipping Orders</span>
+                  {(() => {
+                    const cjPendingFulfillment = orders.filter(o => {
+                      const hasCj = o.items.some(i => {
+                        const prod = products.find(p => p.id === i.productId);
+                        return prod?.source === 'cjdropshipping' || prod?.sku?.startsWith('CJ-');
+                      });
+                      return hasCj && (!o.cjFulfillmentStatus || o.cjFulfillmentStatus === 'Pending Admin Approval');
+                    }).length;
+                    return (
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                        cjSubTab === 'orders' ? 'bg-white/20 text-white' : cjPendingFulfillment > 0 ? 'bg-amber-100 text-amber-800 font-black' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {cjPendingFulfillment}
+                      </span>
+                    );
+                  })()}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCjSubTab('settings')}
+                  className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+                    cjSubTab === 'settings'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Sliders className="w-4 h-4" />
+                  <span>Feed Settings</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCjSubTab('instructions')}
+                  className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+                    cjSubTab === 'instructions'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Setup Guide & API</span>
+                </button>
+              </div>
+
               {/* Admin Cost Override Protection Guarantee Callout */}
               <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-3">
@@ -4442,346 +4569,1139 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Configuration Form Card */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-5 text-xs">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-purple-600" />
-                    <span>CJ Dropshipping Feed Settings</span>
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={handleSaveCjConfig}
-                    disabled={savingCjConfig}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>{savingCjConfig ? 'Saving...' : 'Save Settings'}</span>
-                  </button>
-                </div>
-
-                {/* Automation Toggles */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors">
+              {/* SUBTAB 1: CATALOG */}
+              {cjSubTab === 'catalog' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div>
-                      <span className="font-bold text-slate-800 block text-xs">Automated Upload (15-min background sync)</span>
-                      <span className="text-[11px] text-slate-500">Automatically fetches new trending products from CJ and uploads to your catalog</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={cjAutoUploadToggle}
-                      onChange={(e) => setCjAutoUploadToggle(e.target.checked)}
-                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
-                    />
-                  </label>
-
-                  <label className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors">
-                    <div>
-                      <span className="font-bold text-slate-800 block text-xs">Auto-Publish as Available</span>
-                      <span className="text-[11px] text-slate-500">Set newly imported products to "Available" immediately for public shoppers</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={cjAutoPublishToggle}
-                      onChange={(e) => setCjAutoPublishToggle(e.target.checked)}
-                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
-                    />
-                  </label>
-                </div>
-
-                {/* Currency & Markup */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">USD to RWF Exchange Rate</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min="500"
-                        value={cjUsdRateInput}
-                        onChange={(e) => setCjUsdRateInput(Number(e.target.value))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold"
-                      />
-                      <span className="absolute right-3.5 top-2.5 font-bold text-slate-400 pointer-events-none">RWF</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 mt-1 block">Standard wholesale conversion rate</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Default Profit Markup (%)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min="5"
-                        max="200"
-                        value={cjMarkupInput}
-                        onChange={(e) => setCjMarkupInput(Number(e.target.value))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold"
-                      />
-                      <span className="absolute right-3.5 top-2.5 font-bold text-slate-400 pointer-events-none">%</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 mt-1 block">Added to cost when uploading new items</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">CJ API Key / Access Token</label>
-                    <input
-                      type="password"
-                      value={cjApiKeyInput}
-                      onChange={(e) => setCjApiKeyInput(e.target.value)}
-                      placeholder="Optional API token (pre-configured)"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
-                    />
-                    <span className="text-[10px] text-slate-400 mt-1 block">Default connected feed active</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">CJ Account Email</label>
-                    <input
-                      type="email"
-                      value={cjEmailInput}
-                      onChange={(e) => setCjEmailInput(e.target.value)}
-                      placeholder="contactreachmedialimited@gmail.com"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
-                    />
-                    <span className="text-[10px] text-slate-400 mt-1 block">Account notification identifier</span>
-                  </div>
-                </div>
-
-                {/* Categories to Import */}
-                <div>
-                  <label className="block font-bold text-slate-700 mb-2">Import Categories</label>
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map(cat => {
-                      const isSelected = cjSelectedCategories.includes(cat.id);
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              setCjSelectedCategories(cjSelectedCategories.filter(c => c !== cat.id));
-                            } else {
-                              setCjSelectedCategories([...cjSelectedCategories, cat.id]);
-                            }
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                            isSelected
-                              ? 'bg-purple-100 text-purple-900 border-purple-300'
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {isSelected ? '✓ ' : '+ '} {cat.nameEn}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* CJ Products Catalog Table with Inline Cost Update */}
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-black text-slate-900">Imported CJ Dropshipping Products</h2>
-                    <p className="text-xs text-slate-500">Edit product cost, selling prices, and review margins</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                      <input
-                        type="text"
-                        value={cjProductSearch}
-                        onChange={(e) => setCjProductSearch(e.target.value)}
-                        placeholder="Search CJ products..."
-                        className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs w-48"
-                      />
+                      <h2 className="text-base font-black text-slate-900">Imported CJ Dropshipping Products</h2>
+                      <p className="text-xs text-slate-500">Edit product cost, selling prices, review margins, and synchronize inventory</p>
                     </div>
 
-                    <select
-                      value={cjProductCategoryFilter}
-                      onChange={(e) => setCjProductCategoryFilter(e.target.value)}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
-                    >
-                      <option value="all">All Categories</option>
-                      {categories.map(c => (
-                        <option key={c.id} value={c.id}>{c.nameEn}</option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleSyncCjStockAndPrices}
+                        disabled={cjSyncingStockPrices}
+                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                        title="Sync live stock levels and prices from supplier without altering admin custom costs"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${cjSyncingStockPrices ? 'animate-spin text-purple-600' : 'text-slate-600'}`} />
+                        <span>{cjSyncingStockPrices ? 'Syncing...' : '🔄 Sync Stock & Prices'}</span>
+                      </button>
+
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          value={cjProductSearch}
+                          onChange={(e) => setCjProductSearch(e.target.value)}
+                          placeholder="Search CJ products..."
+                          className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs w-48"
+                        />
+                      </div>
+
+                      <select
+                        value={cjProductCategoryFilter}
+                        onChange={(e) => setCjProductCategoryFilter(e.target.value)}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
+                      >
+                        <option value="all">All Categories</option>
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>{c.nameEn}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
 
-                <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
-                          <th className="py-3 px-4">Product / SKU</th>
-                          <th className="py-3 px-3">Category</th>
-                          <th className="py-3 px-3">CJ Wholesale (USD)</th>
-                          <th className="py-3 px-3">Product Cost (RWF)</th>
-                          <th className="py-3 px-3">Selling Price (RWF)</th>
-                          <th className="py-3 px-3">Profit Margin</th>
-                          <th className="py-3 px-3">Stock</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {products
-                          .filter(p => p.source === 'cjdropshipping')
-                          .filter(p => cjProductCategoryFilter === 'all' || p.category === cjProductCategoryFilter)
-                          .filter(p => !cjProductSearch.trim() || p.name.toLowerCase().includes(cjProductSearch.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(cjProductSearch.toLowerCase())))
-                          .map(p => {
-                            const isEditing = editingCostProductId === p.id;
-                            const currentCost = p.costPrice ?? Math.round((p.cjOriginalCostUsd || 10) * (cjConfig?.usdToRwfRate || 1420));
-                            const profit = Math.max(0, p.price - currentCost);
-                            const marginPct = p.price > 0 ? Math.round((profit / p.price) * 100) : 0;
+                  <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
+                            <th className="py-3 px-4">Product / SKU</th>
+                            <th className="py-3 px-3">Category</th>
+                            <th className="py-3 px-3">Wholesale (USD)</th>
+                            <th className="py-3 px-3">Product Cost (RWF)</th>
+                            <th className="py-3 px-3">Selling Price (RWF)</th>
+                            <th className="py-3 px-3">Profit Margin</th>
+                            <th className="py-3 px-3">Stock</th>
+                            <th className="py-3 px-3">Review Status</th>
+                            <th className="py-3 px-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {products
+                            .filter(p => p.source === 'cjdropshipping')
+                            .filter(p => cjProductCategoryFilter === 'all' || p.category === cjProductCategoryFilter)
+                            .filter(p => !cjProductSearch.trim() || p.name.toLowerCase().includes(cjProductSearch.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(cjProductSearch.toLowerCase())))
+                            .map(p => {
+                              const isEditing = editingCostProductId === p.id;
+                              const currentCost = p.costPrice ?? Math.round((p.cjOriginalCostUsd || 10) * (cjConfig?.usdToRwfRate || 1420));
+                              const profit = Math.max(0, p.price - currentCost);
+                              const marginPct = p.price > 0 ? Math.round((profit / p.price) * 100) : 0;
 
-                            return (
-                              <tr key={p.id} className="hover:bg-slate-50/60">
-                                <td className="py-3 px-4">
-                                  <div className="flex items-center gap-3">
-                                    <img
-                                      src={p.imageUrl}
-                                      alt={p.name}
-                                      className="w-10 h-10 object-cover rounded-xl border border-slate-200 shrink-0"
-                                    />
-                                    <div>
-                                      <span className="font-bold text-slate-900 block line-clamp-1">{p.name}</span>
-                                      <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1 py-0.2 rounded font-bold">
-                                          {p.cjProductSku || p.sku}
-                                        </span>
+                              return (
+                                <tr key={p.id} className="hover:bg-slate-50/60">
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-3">
+                                      <img
+                                        src={p.imageUrl}
+                                        alt={p.name}
+                                        className="w-10 h-10 object-cover rounded-xl border border-slate-200 shrink-0"
+                                      />
+                                      <div>
+                                        <span className="font-bold text-slate-900 block line-clamp-1">{p.name}</span>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                          <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1 py-0.2 rounded font-bold">
+                                            {p.cjProductSku || p.sku}
+                                          </span>
+                                          {p.status === 'Hidden' && (
+                                            <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1 py-0.2 rounded">
+                                              Hidden
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-slate-600 font-medium capitalize">
-                                  {p.category}
-                                </td>
-                                <td className="py-3 px-3 font-mono font-bold text-purple-900">
-                                  {p.cjOriginalCostUsd ? `$${p.cjOriginalCostUsd.toFixed(2)}` : '—'}
-                                </td>
-                                <td className="py-3 px-3">
-                                  {isEditing ? (
-                                    <div className="flex items-center gap-1">
+                                  </td>
+                                  <td className="py-3 px-3 text-slate-600 font-medium capitalize">
+                                    {p.category}
+                                  </td>
+                                  <td className="py-3 px-3 font-mono font-bold text-purple-900">
+                                    {p.cjOriginalCostUsd ? `$${p.cjOriginalCostUsd.toFixed(2)}` : '—'}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    {isEditing ? (
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={editingCostPriceValue}
+                                          onChange={(e) => setEditingCostPriceValue(e.target.value)}
+                                          className="w-24 px-2 py-1 rounded border border-purple-400 font-mono font-bold text-xs"
+                                          placeholder="Cost FRW"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-mono font-bold text-slate-900">
+                                            {(p.costPrice ?? currentCost).toLocaleString()} FRW
+                                          </span>
+                                          {p.costOverriddenByAdmin && (
+                                            <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 text-[8px] font-black" title="Admin Custom Cost Override">
+                                              Admin
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    {isEditing ? (
                                       <input
                                         type="number"
                                         min="0"
-                                        value={editingCostPriceValue}
-                                        onChange={(e) => setEditingCostPriceValue(e.target.value)}
+                                        value={editingSellingPriceValue}
+                                        onChange={(e) => setEditingSellingPriceValue(e.target.value)}
                                         className="w-24 px-2 py-1 rounded border border-purple-400 font-mono font-bold text-xs"
-                                        placeholder="Cost FRW"
+                                        placeholder="Price FRW"
                                       />
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      <div className="flex items-center gap-1">
-                                        <span className="font-mono font-bold text-slate-900">
-                                          {(p.costPrice ?? currentCost).toLocaleString()} FRW
-                                        </span>
-                                        {p.costOverriddenByAdmin && (
-                                          <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 text-[8px] font-black" title="Admin Custom Cost Override">
-                                            Admin
-                                          </span>
+                                    ) : (
+                                      <span className="font-mono font-bold text-slate-900">{p.price.toLocaleString()} FRW</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-extrabold ${
+                                      marginPct >= 30 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      +{marginPct}% ({profit.toLocaleString()} FRW)
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 font-mono font-bold text-slate-700">
+                                    {p.stock}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      p.reviewStatus === 'Approved'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : p.reviewStatus === 'Rejected'
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {p.reviewStatus || 'Approved'}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                                    {isEditing ? (
+                                      <div className="inline-flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleQuickUpdateProductCost(p.id)}
+                                          disabled={savingProductCostId === p.id}
+                                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] cursor-pointer"
+                                        >
+                                          {savingProductCostId === p.id ? 'Saving...' : 'Save Cost'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingCostProductId(null)}
+                                          className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg font-bold text-[10px] cursor-pointer"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="inline-flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingCostProductId(p.id);
+                                            setEditingCostPriceValue(p.costPrice !== undefined ? p.costPrice : currentCost);
+                                            setEditingSellingPriceValue(p.price);
+                                          }}
+                                          className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-bold text-[10px] cursor-pointer border border-purple-200"
+                                        >
+                                          Update Cost
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditProduct(p)}
+                                          className="p-1 rounded text-slate-500 hover:text-slate-800 cursor-pointer"
+                                          title="Full Edit"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </button>
+                                        {p.reviewStatus === 'Pending Approval' && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleApproveCjProduct(p.id)}
+                                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] cursor-pointer"
+                                            title="Approve & Publish to Store"
+                                          >
+                                            Approve
+                                          </button>
                                         )}
                                       </div>
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="py-3 px-3">
-                                  {isEditing ? (
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      value={editingSellingPriceValue}
-                                      onChange={(e) => setEditingSellingPriceValue(e.target.value)}
-                                      className="w-24 px-2 py-1 rounded border border-purple-400 font-mono font-bold text-xs"
-                                      placeholder="Price FRW"
-                                    />
-                                  ) : (
-                                    <span className="font-mono font-bold text-slate-900">{p.price.toLocaleString()} FRW</span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-3">
-                                  <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-extrabold ${
-                                    marginPct >= 30 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                                  }`}>
-                                    +{marginPct}% ({profit.toLocaleString()} FRW)
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 font-mono font-bold text-slate-700">
-                                  {p.stock}
-                                </td>
-                                <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                                  {isEditing ? (
-                                    <div className="inline-flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleQuickUpdateProductCost(p.id)}
-                                        disabled={savingProductCostId === p.id}
-                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] cursor-pointer"
-                                      >
-                                        {savingProductCostId === p.id ? 'Saving...' : 'Save Cost'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setEditingCostProductId(null)}
-                                        className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg font-bold text-[10px] cursor-pointer"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="inline-flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setEditingCostProductId(p.id);
-                                          setEditingCostPriceValue(p.costPrice !== undefined ? p.costPrice : currentCost);
-                                          setEditingSellingPriceValue(p.price);
-                                        }}
-                                        className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-bold text-[10px] cursor-pointer border border-purple-200"
-                                      >
-                                        Update Cost
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenEditProduct(p)}
-                                        className="p-1 rounded text-slate-500 hover:text-slate-800 cursor-pointer"
-                                        title="Full Edit"
-                                      >
-                                        <Edit className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
 
-                    {products.filter(p => p.source === 'cjdropshipping').length === 0 && (
-                      <div className="p-8 text-center space-y-3">
-                        <Package className="w-8 h-8 text-slate-300 mx-auto" />
-                        <div className="text-slate-600 font-bold">No CJ Dropshipping products imported yet</div>
-                        <p className="text-slate-400 text-xs">
-                          Click <strong>"⚡ Sync Feed Now"</strong> above to instantly upload curated dropshipping products.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => handleSyncCjNow()}
-                          disabled={cjSyncing}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs cursor-pointer"
-                        >
-                          Import Initial Feed Now
-                        </button>
-                      </div>
-                    )}
+                      {products.filter(p => p.source === 'cjdropshipping').length === 0 && (
+                        <div className="p-8 text-center space-y-3">
+                          <Package className="w-8 h-8 text-slate-300 mx-auto" />
+                          <div className="text-slate-600 font-bold">No CJ Dropshipping products imported yet</div>
+                          <p className="text-slate-400 text-xs">
+                            Click <strong>"⚡ Sync Feed Now"</strong> or browse the <strong>"Search & Supplier Discovery"</strong> tab to import products.
+                          </p>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSyncCjNow()}
+                              disabled={cjSyncing}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
+                            >
+                              Import Initial Feed Now
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCjSubTab('search')}
+                              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs cursor-pointer border border-slate-200"
+                            >
+                              Search Supplier Catalog
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* SUBTAB 2: SEARCH & SUPPLIER DISCOVERY */}
+              {cjSubTab === 'search' && (
+                <div className="space-y-4">
+                  {/* Search Bar Card */}
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4 text-xs">
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                        <Search className="w-4 h-4 text-purple-600" />
+                        <span>Search CJdropshipping Supplier Catalog</span>
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Discover wholesale dropshipping items, calculate landed Rwandan Franc prices, and bulk-import with custom markup.
+                      </p>
+                    </div>
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSearchCjProducts();
+                      }}
+                      className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center"
+                    >
+                      <div className="sm:col-span-6 relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                        <input
+                          type="text"
+                          value={cjSearchQuery}
+                          onChange={(e) => setCjSearchQuery(e.target.value)}
+                          placeholder="e.g. Wireless earbuds, smart watch, backpack, hair trimmer..."
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-4">
+                        <select
+                          value={cjSearchCategory}
+                          onChange={(e) => setCjSearchCategory(e.target.value)}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white"
+                        >
+                          <option value="all">All Supplier Categories</option>
+                          {cjCategoriesList.map(c => (
+                            <option key={c.id} value={c.id}>{c.name} ({c.localCategoryName})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <button
+                          type="submit"
+                          disabled={cjSearching}
+                          className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 transition-colors"
+                        >
+                          <Search className={`w-3.5 h-3.5 ${cjSearching ? 'animate-spin' : ''}`} />
+                          <span>{cjSearching ? 'Searching...' : 'Search CJ'}</span>
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Quick Category Discovery Pills */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-100 text-[11px]">
+                      <span className="text-slate-400 font-bold">Quick Categories:</span>
+                      {cjCategoriesList.slice(0, 7).map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setCjSearchCategory(c.id);
+                            api.adminSearchCjProducts({ category: c.id, query: cjSearchQuery.trim() || undefined }).then(res => {
+                              setCjSearchResults(res.products || []);
+                              setCjSelectedItemsForImport([]);
+                            });
+                          }}
+                          className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer border ${
+                            cjSearchCategory === c.id
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bulk Import Action Bar */}
+                  {cjSearchResults.length > 0 && (
+                    <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 p-4 rounded-2xl border border-purple-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (cjSelectedItemsForImport.length === cjSearchResults.length) {
+                              setCjSelectedItemsForImport([]);
+                            } else {
+                              setCjSelectedItemsForImport(cjSearchResults.map(p => p.pid));
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl font-bold text-purple-900 hover:bg-purple-100 cursor-pointer flex items-center gap-1.5"
+                        >
+                          {cjSelectedItemsForImport.length === cjSearchResults.length ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-purple-700" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                          <span>
+                            {cjSelectedItemsForImport.length === cjSearchResults.length ? 'Deselect All' : 'Select All'}
+                          </span>
+                        </button>
+
+                        <span className="font-bold text-purple-950 font-mono">
+                          {cjSelectedItemsForImport.length} of {cjSearchResults.length} selected
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-bold text-slate-600">Markup:</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="5"
+                              max="300"
+                              value={cjCustomMarkupOverride}
+                              onChange={(e) => setCjCustomMarkupOverride(e.target.value === '' ? '' : Number(e.target.value))}
+                              placeholder={`${cjMarkupInput || 35}%`}
+                              className="w-16 px-2 py-1 rounded-lg border border-purple-200 text-xs font-mono font-bold bg-white text-right pr-4"
+                            />
+                            <span className="absolute right-1.5 top-1 text-[10px] text-slate-400 font-bold pointer-events-none">%</span>
+                          </div>
+                        </div>
+
+                        <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-purple-900">
+                          <input
+                            type="checkbox"
+                            checked={cjImportWithApproval}
+                            onChange={(e) => setCjImportWithApproval(e.target.checked)}
+                            className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500"
+                          />
+                          <span>Stage for Review (Require Admin Approval)</span>
+                        </label>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkImportCjSelected()}
+                        disabled={cjImporting || cjSelectedItemsForImport.length === 0}
+                        className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                      >
+                        <Download className={`w-3.5 h-3.5 ${cjImporting ? 'animate-spin' : ''}`} />
+                        <span>{cjImporting ? 'Importing Products...' : `Bulk Import (${cjSelectedItemsForImport.length})`}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Results Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {cjSearchResults.map((item: any) => {
+                      const isSelected = cjSelectedItemsForImport.includes(item.pid);
+                      return (
+                        <div
+                          key={item.pid}
+                          className={`bg-white rounded-2xl border p-4 space-y-3 shadow-2xs transition-all relative ${
+                            isSelected ? 'border-purple-500 ring-2 ring-purple-100 bg-purple-50/20' : 'border-slate-200/90 hover:border-slate-300'
+                          }`}
+                        >
+                          {/* Checkbox Overlay */}
+                          <div className="flex items-start justify-between gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setCjSelectedItemsForImport([...cjSelectedItemsForImport, item.pid]);
+                                  } else {
+                                    setCjSelectedItemsForImport(cjSelectedItemsForImport.filter(id => id !== item.pid));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                              />
+                              <span className="text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded">
+                                {item.productSku}
+                              </span>
+                            </label>
+
+                            {item.isAlreadyImported && (
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> In Catalog
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Image & Title */}
+                          <div className="flex gap-3">
+                            <img
+                              src={item.productImage}
+                              alt={item.productName}
+                              className="w-20 h-20 object-cover rounded-xl border border-slate-200 shrink-0"
+                            />
+                            <div className="space-y-1 min-w-0">
+                              <h3 className="font-bold text-slate-900 text-xs line-clamp-2" title={item.productName}>
+                                {item.productName}
+                              </h3>
+                              <span className="text-[10px] text-slate-500 block capitalize">
+                                Category: <strong>{item.category}</strong>
+                              </span>
+                              {item.brand && (
+                                <span className="text-[10px] text-slate-400 block">
+                                  Brand: {item.brand}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Price & Margins breakdown */}
+                          <div className="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500 text-[11px]">Wholesale Cost:</span>
+                              <span className="font-mono font-bold text-slate-800">
+                                ${item.wholesaleCostUsd.toFixed(2)} USD ({item.costInFrw.toLocaleString()} FRW)
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500 text-[11px]">Suggested Retail Price:</span>
+                              <span className="font-mono font-black text-purple-900">
+                                {item.suggestedPrice.toLocaleString()} FRW
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-200 text-[11px]">
+                              <span className="text-emerald-700 font-bold">Estimated Profit Margin:</span>
+                              <span className="font-mono font-black text-emerald-700">
+                                +{item.markupPercent}% (+{item.profitMarginFrw.toLocaleString()} FRW)
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Single Item Import Button */}
+                          <div className="pt-1 flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCjSelectedItemsForImport([item.pid]);
+                                handleBulkImportCjSelected();
+                              }}
+                              disabled={cjImporting}
+                              className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer shadow-xs disabled:opacity-50"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>{item.isAlreadyImported ? 'Re-Import / Update' : 'Import Product'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {cjSearchResults.length === 0 && !cjSearching && (
+                    <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/90 shadow-2xs space-y-3">
+                      <Search className="w-10 h-10 text-slate-300 mx-auto" />
+                      <div className="text-slate-700 font-bold text-sm">Search Supplier Catalog</div>
+                      <p className="text-slate-400 text-xs max-w-md mx-auto">
+                        Type a product keyword above or pick a category to search live wholesale items from CJdropshipping with instant currency conversion to Rwandan Francs.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleSearchCjProducts}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
+                      >
+                        Explore Trending Dropshipping Products
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB 3: REVIEW & APPROVAL STAGING QUEUE */}
+              {cjSubTab === 'staging' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-base font-black text-slate-900">Product Staging & Approval Queue</h2>
+                      <p className="text-xs text-slate-500">
+                        Review imported dropshipping products before making them visible to live shoppers on ContactReach Market.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 text-xs font-bold">
+                        {(['Pending Approval', 'Approved', 'Rejected', 'all'] as const).map(filterState => (
+                          <button
+                            key={filterState}
+                            type="button"
+                            onClick={() => setCjStagingFilter(filterState)}
+                            className={`px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                              cjStagingFilter === filterState
+                                ? 'bg-white text-purple-900 shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {filterState === 'all' ? 'All Staged' : filterState}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleBulkApproveCj}
+                        disabled={cjBulkApproving || products.filter(p => p.source === 'cjdropshipping' && p.reviewStatus === 'Pending Approval').length === 0}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{cjBulkApproving ? 'Approving...' : '✓ Bulk Approve All Pending'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Staged Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {products
+                      .filter(p => p.source === 'cjdropshipping')
+                      .filter(p => cjStagingFilter === 'all' || p.reviewStatus === cjStagingFilter)
+                      .map(p => {
+                        const currentCost = p.costPrice ?? Math.round((p.cjOriginalCostUsd || 10) * (cjConfig?.usdToRwfRate || 1420));
+                        const profit = Math.max(0, p.price - currentCost);
+                        const marginPct = p.price > 0 ? Math.round((profit / p.price) * 100) : 0;
+
+                        return (
+                          <div
+                            key={p.id}
+                            className="bg-white rounded-3xl border border-slate-200/90 p-5 space-y-4 shadow-2xs hover:shadow-xs transition-shadow"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={p.imageUrl}
+                                  alt={p.name}
+                                  className="w-16 h-16 object-cover rounded-2xl border border-slate-200 shrink-0"
+                                />
+                                <div>
+                                  <h3 className="font-bold text-slate-900 text-sm line-clamp-1">{p.name}</h3>
+                                  <span className="text-[10px] font-mono text-purple-700 font-bold bg-purple-50 px-1.5 py-0.2 rounded">
+                                    {p.cjProductSku || p.sku}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 block capitalize mt-0.5">
+                                    Category: <strong>{p.category}</strong> · Brand: {p.brand || 'CJ Partner'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${
+                                p.reviewStatus === 'Approved'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : p.reviewStatus === 'Rejected'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {p.reviewStatus || 'Pending Approval'}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-slate-600 line-clamp-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                              {p.description}
+                            </p>
+
+                            {/* Pricing & Margin Card */}
+                            <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80 text-xs">
+                              <div>
+                                <span className="text-[10px] text-slate-400 block font-bold">Wholesale Cost</span>
+                                <span className="font-mono font-bold text-slate-800">
+                                  {p.costPrice ? `${p.costPrice.toLocaleString()} FRW` : `$${p.cjOriginalCostUsd || 10}`}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 block font-bold">Store Price</span>
+                                <span className="font-mono font-black text-purple-900">
+                                  {p.price.toLocaleString()} FRW
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-emerald-600 block font-bold">Margin</span>
+                                <span className="font-mono font-black text-emerald-700">
+                                  +{marginPct}% ({profit.toLocaleString()} FRW)
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Actions Bar */}
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditProduct(p)}
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>Edit Details</span>
+                              </button>
+
+                              <div className="flex items-center gap-1.5">
+                                {p.reviewStatus !== 'Rejected' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectCjProduct(p.id)}
+                                    disabled={cjRejectingId === p.id}
+                                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs cursor-pointer border border-rose-200"
+                                  >
+                                    {cjRejectingId === p.id ? 'Rejecting...' : 'Reject / Hide'}
+                                  </button>
+                                )}
+
+                                {p.reviewStatus !== 'Approved' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveCjProduct(p.id)}
+                                    disabled={cjApprovingId === p.id}
+                                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>{cjApprovingId === p.id ? 'Publishing...' : 'Approve & Publish'}</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {products.filter(p => p.source === 'cjdropshipping' && (cjStagingFilter === 'all' || p.reviewStatus === cjStagingFilter)).length === 0 && (
+                    <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/90 shadow-2xs space-y-2">
+                      <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                      <div className="text-slate-800 font-bold text-sm">No products in this staging filter</div>
+                      <p className="text-slate-400 text-xs">
+                        All dropshipping products have been reviewed, or you can import more products from the Search & Discovery tab.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB 4: DROPSHIPPING ORDER FULFILLMENT */}
+              {cjSubTab === 'orders' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-base font-black text-slate-900">Dropshipping Orders & Supplier Fulfillment</h2>
+                      <p className="text-xs text-slate-500">
+                        Review customer orders with dropshipping items and manually approve for supplier dispatch with tracking references.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={cjFulfillmentFilter}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          setCjFulfillmentFilter(val);
+                        }}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
+                      >
+                        <option value="all">All Fulfillment Statuses</option>
+                        <option value="Pending Admin Approval">Pending Admin Approval</option>
+                        <option value="Approved for CJ Fulfillment">Approved for CJ Fulfillment</option>
+                        <option value="Fulfilled">Fulfilled</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={handleLoadCjOrders}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer"
+                      >
+                        Refresh Orders
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
+                            <th className="py-3 px-4">Order # / Date</th>
+                            <th className="py-3 px-3">Customer & Address</th>
+                            <th className="py-3 px-3">CJ Items</th>
+                            <th className="py-3 px-3">Order Total</th>
+                            <th className="py-3 px-3">Payment Status</th>
+                            <th className="py-3 px-3">Fulfillment Status</th>
+                            <th className="py-3 px-4 text-right">Fulfillment Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {orders
+                            .filter(order => {
+                              const hasCj = order.items.some(item => {
+                                const prod = products.find(p => p.id === item.productId);
+                                return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
+                              });
+                              if (!hasCj) return false;
+                              if (cjFulfillmentFilter === 'all') return true;
+                              return order.cjFulfillmentStatus === cjFulfillmentFilter;
+                            })
+                            .map(ord => {
+                              const cjItems = ord.items.filter(item => {
+                                const prod = products.find(p => p.id === item.productId);
+                                return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
+                              });
+
+                              return (
+                                <tr key={ord.id} className="hover:bg-slate-50/60">
+                                  <td className="py-3 px-4">
+                                    <span className="font-mono font-black text-slate-900 block">{ord.orderNumber}</span>
+                                    <span className="text-[10px] text-slate-400 block font-mono">
+                                      {new Date(ord.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className="font-bold text-slate-900 block">{ord.customerName}</span>
+                                    <span className="text-[11px] text-slate-500 font-mono block">{ord.customerPhone}</span>
+                                    <span className="text-[10px] text-slate-400 block line-clamp-1">{ord.deliveryLocation}</span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="space-y-1">
+                                      {cjItems.map((it, idx) => (
+                                        <div key={idx} className="flex items-center gap-1.5 text-[11px]">
+                                          <span className="font-bold text-slate-800">{it.quantity}x</span>
+                                          <span className="text-slate-600 line-clamp-1">{it.productName}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 font-mono font-bold text-slate-900">
+                                    {ord.totalAmount.toLocaleString()} FRW
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      ord.paymentStatus === 'Paid'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {ord.paymentStatus}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="space-y-0.5">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold block w-fit ${
+                                        ord.cjFulfillmentStatus === 'Approved for CJ Fulfillment'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : 'bg-amber-100 text-amber-800'
+                                      }`}>
+                                        {ord.cjFulfillmentStatus || 'Pending Admin Approval'}
+                                      </span>
+                                      {ord.cjTrackingNumber && (
+                                        <span className="text-[9px] font-mono text-purple-700 block">
+                                          Ref: {ord.cjTrackingNumber}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCjFulfillmentModalOrder({
+                                          ...ord,
+                                          cjItems
+                                        });
+                                        setCjTrackingInput(ord.cjTrackingNumber || `CJ-RW-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`);
+                                        setCjFulfillmentNotesInput('');
+                                      }}
+                                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs inline-flex items-center gap-1"
+                                    >
+                                      <Truck className="w-3.5 h-3.5" />
+                                      <span>{ord.cjFulfillmentStatus === 'Approved for CJ Fulfillment' ? 'Update Tracking' : 'Approve for CJ'}</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+
+                      {orders.filter(order => order.items.some(item => {
+                        const prod = products.find(p => p.id === item.productId);
+                        return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
+                      })).length === 0 && (
+                        <div className="p-8 text-center space-y-2">
+                          <Truck className="w-8 h-8 text-slate-300 mx-auto" />
+                          <div className="text-slate-600 font-bold">No orders with CJ Dropshipping products yet</div>
+                          <p className="text-slate-400 text-xs">
+                            When customers order dropshipping items from your store, they will appear here for manual supplier fulfillment review.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SUBTAB 5: FEED SETTINGS */}
+              {cjSubTab === 'settings' && (
+                <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-6 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                      <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                        <Sliders className="w-4 h-4 text-purple-600" />
+                        <span>CJ Dropshipping Account & API Configuration</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        API credentials are secure on the backend. Credentials are never exposed in public client bundles.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTestCjConnection}
+                        disabled={cjTesting}
+                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                      >
+                        <ShieldCheck className={`w-4 h-4 ${cjTesting ? 'animate-spin text-purple-600' : 'text-slate-600'}`} />
+                        <span>{cjTesting ? 'Testing...' : 'Test Connection'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveCjConfig}
+                        disabled={savingCjConfig}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{savingCjConfig ? 'Saving...' : 'Save Settings'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Automation Toggles */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <label className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors">
+                      <div>
+                        <span className="font-bold text-slate-800 block text-xs">Automated Upload (15-min background sync)</span>
+                        <span className="text-[11px] text-slate-500">Automatically fetches new trending products from CJ</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={cjAutoUploadToggle}
+                        onChange={(e) => setCjAutoUploadToggle(e.target.checked)}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 shrink-0 ml-2"
+                      />
+                    </label>
+
+                    <label className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors">
+                      <div>
+                        <span className="font-bold text-slate-800 block text-xs">Auto-Publish as Available</span>
+                        <span className="text-[11px] text-slate-500">Make imported products immediately available for purchase</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={cjAutoPublishToggle}
+                        onChange={(e) => setCjAutoPublishToggle(e.target.checked)}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 shrink-0 ml-2"
+                      />
+                    </label>
+
+                    <label className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors">
+                      <div>
+                        <span className="font-bold text-slate-800 block text-xs">Require Admin Review</span>
+                        <span className="text-[11px] text-slate-500">Route products to Staging Queue for manual approval</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={cjRequireApprovalToggle}
+                        onChange={(e) => setCjRequireApprovalToggle(e.target.checked)}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 shrink-0 ml-2"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Currency & Markup */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">USD to RWF Exchange Rate</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="500"
+                          value={cjUsdRateInput}
+                          onChange={(e) => setCjUsdRateInput(Number(e.target.value))}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold"
+                        />
+                        <span className="absolute right-3.5 top-2.5 font-bold text-slate-400 pointer-events-none">RWF</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Standard wholesale conversion rate</span>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Default Profit Markup (%)</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="5"
+                          max="200"
+                          value={cjMarkupInput}
+                          onChange={(e) => setCjMarkupInput(Number(e.target.value))}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold"
+                        />
+                        <span className="absolute right-3.5 top-2.5 font-bold text-slate-400 pointer-events-none">%</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 mt-1 block">Added to cost when uploading new items</span>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">CJ API Key / Access Token</label>
+                      <input
+                        type="password"
+                        value={cjApiKeyInput}
+                        onChange={(e) => setCjApiKeyInput(e.target.value)}
+                        placeholder="Paste your CJ API Key or Access Token"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">Secured safely on backend</span>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">CJ Account Email</label>
+                      <input
+                        type="email"
+                        value={cjEmailInput}
+                        onChange={(e) => setCjEmailInput(e.target.value)}
+                        placeholder="your-cj-email@domain.com"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">Account notification identifier</span>
+                    </div>
+                  </div>
+
+                  {/* Categories to Import */}
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-2">Import Categories for Background Feed</label>
+                    <div className="flex flex-wrap gap-2">
+                      {categories.map(cat => {
+                        const isSelected = cjSelectedCategories.includes(cat.id);
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setCjSelectedCategories(cjSelectedCategories.filter(c => c !== cat.id));
+                              } else {
+                                setCjSelectedCategories([...cjSelectedCategories, cat.id]);
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                              isSelected
+                                ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {isSelected ? '✓ ' : '+ '} {cat.nameEn}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SUBTAB 6: INSTRUCTIONS & SETUP GUIDE */}
+              {cjSubTab === 'instructions' && (
+                <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-6 text-xs">
+                  <div>
+                    <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-purple-600" />
+                      <span>CJdropshipping Supplier Integration Setup Guide</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Follow these steps to connect your CJdropshipping supplier account and manage automated dropshipping on ContactReach Market.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Step 1 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">1</span>
+                        <span>Create or Log in to CJdropshipping</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Sign up or log in at <a href="https://cjdropshipping.com" target="_blank" rel="noreferrer" className="text-purple-700 underline font-bold">cjdropshipping.com</a>. Ensure your account email and profile are verified.
+                      </p>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">2</span>
+                        <span>Access the API Center</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Go to the CJdropshipping Developer Center at <a href="https://developers.cjdropshipping.com" target="_blank" rel="noreferrer" className="text-purple-700 underline font-bold">developers.cjdropshipping.com</a> or within your CJ dashboard navigate to <strong>My CJ &gt; Authorization &gt; API</strong>.
+                      </p>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">3</span>
+                        <span>Generate Your API Key / Token</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Click <strong>"Generate API Key"</strong> or copy your access token. This gives your website permission to query products, wholesale pricing, and stock levels.
+                      </p>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">4</span>
+                        <span>Save Credentials in Feed Settings</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Navigate to the <strong>Feed Settings</strong> subtab above. Paste your API Key and Account Email, then click <strong>"Save Settings"</strong> and <strong>"Test Connection"</strong>.
+                      </p>
+                    </div>
+
+                    {/* Step 5 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">5</span>
+                        <span>Configure Pricing & Rwandan Currency</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Set your USD to RWF exchange rate (default: 1420 RWF) and default markup percentage (e.g. 35%). The system calculates wholesale costs and retail prices automatically.
+                      </p>
+                    </div>
+
+                    {/* Step 6 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">6</span>
+                        <span>Review & Approve Products</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        When products are imported, review them in the <strong>Review & Approval Queue</strong>. Verify photos, edit Rwandan descriptions, customize your selling price, and click <strong>"Approve & Publish"</strong>.
+                      </p>
+                    </div>
+
+                    {/* Step 7 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">7</span>
+                        <span>Order Placement & Customer Payment</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Rwandan customers shop and checkout using MTN Mobile Money, Airtel Money, or Bank Transfer. Customer payments are verified by you in the <strong>Mobile Money & Payments</strong> tab.
+                      </p>
+                    </div>
+
+                    {/* Step 8 */}
+                    <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-purple-900 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] shrink-0">8</span>
+                        <span>Manual Fulfillment Approval & Tracking</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Go to the <strong>Dropshipping Orders</strong> tab. Click <strong>"Approve for CJ"</strong> to record the shipment dispatch and generate the carrier tracking number for customer order tracking.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Security Callout */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1 text-xs">
+                      <span className="font-black text-slate-900 block">Enterprise Security Guarantee</span>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        Your CJdropshipping API keys are stored securely on the server backend. Keys are never exposed in browser bundles, public API responses, or client network requests. All CJ communication proxies through the backend server.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
@@ -7323,6 +8243,137 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CJ DROPSHIPPING ORDER FULFILLMENT APPROVAL */}
+      {cjFulfillmentModalOrder && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative border border-slate-200 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">Approve CJ Dropshipping Fulfillment</h3>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Order #{cjFulfillmentModalOrder.orderNumber} · Customer: {cjFulfillmentModalOrder.customerName}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCjFulfillmentModalOrder(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-purple-50/60 rounded-2xl border border-purple-100 space-y-2">
+              <div className="text-[11px] font-bold text-purple-900">Delivery & Customer Details</div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-slate-500 block">Recipient Phone:</span>
+                  <span className="font-bold text-slate-800 font-mono">{cjFulfillmentModalOrder.customerPhone}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Payment Status:</span>
+                  <span className={`font-bold ${cjFulfillmentModalOrder.paymentStatus === 'Paid' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {cjFulfillmentModalOrder.paymentStatus} ({cjFulfillmentModalOrder.paymentMethod || 'Mobile Money'})
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-500 block">Delivery Address:</span>
+                  <span className="font-medium text-slate-800">
+                    {cjFulfillmentModalOrder.deliveryLocation} — {cjFulfillmentModalOrder.deliveryAddress}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* CJ Items List */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold text-slate-700">CJ Dropshipping Items in this Order:</div>
+              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                {(cjFulfillmentModalOrder.cjItems || cjFulfillmentModalOrder.items || []).map((item: any, idx: number) => (
+                  <div key={idx} className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      {item.imageUrl && (
+                        <img src={item.imageUrl} alt={item.productName} className="w-9 h-9 object-cover rounded-lg border border-slate-200" />
+                      )}
+                      <div>
+                        <span className="font-bold text-slate-900 block line-clamp-1">{item.productName}</span>
+                        <span className="text-[10px] text-purple-700 font-mono font-bold">
+                          SKU: {item.cjSku || item.sku || 'CJ-ITEM'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-mono font-bold text-slate-800 block">Qty: {item.quantity}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">{(item.price * item.quantity).toLocaleString()} FRW</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleApproveCjOrderFulfillment} className="space-y-3 pt-2 border-t border-slate-100">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  CJ Carrier / Dispatch Tracking Reference
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={cjTrackingInput || `CJ-RW-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`}
+                    onChange={(e) => setCjTrackingInput(e.target.value)}
+                    placeholder="e.g. CJ-RW-L7K89M-492"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-xs font-bold bg-white"
+                  />
+                  <span className="absolute right-3 top-2 text-[10px] text-purple-600 font-bold pointer-events-none">
+                    Tracking ID
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  This tracking ID will be sent to the customer for public order tracking.
+                </span>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Fulfillment Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={cjFulfillmentNotesInput}
+                  onChange={(e) => setCjFulfillmentNotesInput(e.target.value)}
+                  placeholder="e.g., Awaiting supplier air dispatch, batch #849"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setCjFulfillmentModalOrder(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={cjFulfillingLoading}
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{cjFulfillingLoading ? 'Approving...' : 'Approve for CJ Dispatch'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

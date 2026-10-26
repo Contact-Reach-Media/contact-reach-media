@@ -1153,6 +1153,9 @@ app.post('/api/orders', (req: Request, res: Response) => {
     return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
   });
 
+  const orderNumber = `CRM-${Math.floor(10000 + Math.random() * 90000)}`;
+  const trackingToken = crypto.randomBytes(16).toString('hex');
+
   const newOrder: Order = {
     id: `ord-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
     orderNumber,
