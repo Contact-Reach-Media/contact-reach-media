@@ -23,6 +23,7 @@ import {
   limit,
   setLogLevel
 } from 'firebase/firestore';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from '../../firebase-applet-config.json';
 import {
   Product,
@@ -41,6 +42,16 @@ import {
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firebase Analytics if supported in the current environment
+export let analytics: any = null;
+if (typeof window !== 'undefined') {
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+    }
+  }).catch(() => null);
+}
 
 // Suppress internal gRPC stream lifecycle noise
 setLogLevel('silent');
