@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Star, ShoppingBag, Truck, RotateCcw, Heart, Plus, Minus,
-  MessageCircle, Maximize2, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft, Tag, Camera
+  MessageCircle, Maximize2, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft, Tag, Camera,
+  Youtube, ExternalLink, Play
 } from 'lucide-react';
 import { Product, ProductReview } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, isValidYouTubeUrl, getYouTubeVideoId } from '../utils/youtube.ts';
 
 interface ProductModalProps {
   product: Product | null;
@@ -27,7 +29,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   currentLang
 }) => {
   const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState<'description' | 'reviews'>('description');
+  const [activeTab, setActiveTab] = useState<'description' | 'video' | 'reviews'>('description');
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -208,7 +210,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               </div>
 
               {/* Thumbnails Row */}
-              {galleryImages.length > 1 && (
+              {(galleryImages.length > 1 || (product.videoUrl && isValidYouTubeUrl(product.videoUrl))) && (
                 <div className="flex items-center gap-2 overflow-x-auto pb-1.5">
                   {galleryImages.map((img, idx) => (
                     <button
@@ -234,6 +236,41 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                       </span>
                     </button>
                   ))}
+
+                  {/* YouTube Video Quick Access Thumbnail */}
+                  {product.videoUrl && isValidYouTubeUrl(product.videoUrl) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('video');
+                        const videoSection = document.getElementById('product-video-section');
+                        if (videoSection) {
+                          videoSection.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      }}
+                      className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer flex flex-col items-center justify-center group ${
+                        activeTab === 'video'
+                          ? 'border-red-600 ring-2 ring-red-200 scale-102 shadow-xs bg-red-950'
+                          : 'border-red-300 bg-red-900/90 hover:border-red-500'
+                      }`}
+                      title="Watch YouTube Product Video Description"
+                    >
+                      <img
+                        src={getYouTubeThumbnailUrl(product.videoUrl) || ''}
+                        alt="YouTube Video Preview"
+                        className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-85 transition-opacity"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                      <div className="relative z-10 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                        <Play className="w-3 h-3 fill-white ml-0.5" />
+                      </div>
+                      <span className="relative z-10 text-[8px] font-black uppercase text-white bg-black/80 px-1 rounded mt-0.5 tracking-wider">
+                        Video
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -414,10 +451,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
           {/* Bottom Tabs: Description vs Reviews */}
           <div className="mt-8 border-t border-slate-200 pt-6">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-3 mb-4 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('description')}
-                className={`text-xs font-bold pb-2 relative cursor-pointer ${
+                className={`text-xs font-bold pb-2 relative cursor-pointer whitespace-nowrap ${
                   activeTab === 'description' ? 'text-[#FF5500]' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -426,9 +463,28 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF5500] rounded-full" />
                 )}
               </button>
+
+              {product.videoUrl && isValidYouTubeUrl(product.videoUrl) && (
+                <button
+                  onClick={() => setActiveTab('video')}
+                  className={`text-xs font-bold pb-2 relative cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    activeTab === 'video' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Youtube className="w-4 h-4 text-red-600" />
+                  <span>YouTube Video Description</span>
+                  <span className="text-[9px] bg-red-100 text-red-700 font-black px-1.5 py-0.2 rounded-full uppercase">
+                    Video
+                  </span>
+                  {activeTab === 'video' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-600 rounded-full" />
+                  )}
+                </button>
+              )}
+
               <button
                 onClick={() => setActiveTab('reviews')}
-                className={`text-xs font-bold pb-2 relative cursor-pointer ${
+                className={`text-xs font-bold pb-2 relative cursor-pointer whitespace-nowrap ${
                   activeTab === 'reviews' ? 'text-[#FF5500]' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -448,6 +504,86 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     <span>Delivery Details: {product.deliveryInfo}</span>
                   </div>
                 )}
+
+                {/* Inline YouTube Video Description preview in description tab */}
+                {product.videoUrl && isValidYouTubeUrl(product.videoUrl) && (
+                  <div id="product-video-section" className="mt-4 p-4 rounded-2xl bg-white border border-red-200/80 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-red-600 text-white flex items-center justify-center shadow-xs">
+                          <Youtube className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-900 text-xs block">YouTube Video Demonstration</span>
+                          <span className="text-[10px] text-slate-500">Official product showcase & unboxing</span>
+                        </div>
+                      </div>
+                      <a
+                        href={product.videoUrl.startsWith('http') ? product.videoUrl : `https://www.youtube.com/watch?v=${getYouTubeVideoId(product.videoUrl)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold flex items-center gap-1 border border-red-200 transition-colors"
+                      >
+                        <span>Watch on YouTube</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <div className="relative pt-[56.25%] rounded-xl overflow-hidden bg-black shadow-inner">
+                      <iframe
+                        src={getYouTubeEmbedUrl(product.videoUrl) || ''}
+                        title={`${product.name} Video Description`}
+                        className="absolute inset-0 w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : activeTab === 'video' ? (
+              <div id="product-video-section" className="p-4 sm:p-5 rounded-2xl bg-white border border-red-200 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center shadow-xs">
+                      <Youtube className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-slate-900">
+                        YouTube Video Description: {product.name}
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Watch how this product looks, works, and is packaged before you purchase.
+                      </p>
+                    </div>
+                  </div>
+                  {product.videoUrl && (
+                    <a
+                      href={product.videoUrl.startsWith('http') ? product.videoUrl : `https://www.youtube.com/watch?v=${getYouTubeVideoId(product.videoUrl)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+                    >
+                      <span>Open in YouTube App</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+
+                {/* Embedded Video Player */}
+                <div className="relative pt-[56.25%] rounded-2xl overflow-hidden bg-black shadow-lg border border-slate-900">
+                  <iframe
+                    src={getYouTubeEmbedUrl(product.videoUrl, true) || ''}
+                    title={`${product.name} Video Description`}
+                    className="absolute inset-0 w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100 flex-wrap gap-2">
+                  <span>Product SKU: <strong className="font-mono text-slate-700">{product.sku || 'N/A'}</strong></span>
+                  <span>ContactReach Market Video Showcase</span>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">

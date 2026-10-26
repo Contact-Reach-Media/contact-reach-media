@@ -93,8 +93,9 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errMsg = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -109,19 +110,23 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
+  if (errMsg.includes('the client is offline') || errMsg.includes('offline')) {
+    console.warn(`[Firebase] Firestore operation ${operationType} on ${path || 'unknown'} in offline mode:`, errMsg);
+    throw new Error(JSON.stringify(errInfo));
+  }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Startup connection verification
-export async function testFirestoreConnection(): Promise<boolean> {
+// Validate Connection to Firestore (Per Firebase integration guidelines)
+export async function testConnection(): Promise<boolean> {
   try {
-    await getDoc(doc(db, 'settings', 'global'));
+    await getDocFromServer(doc(db, 'test', 'connection'));
     console.log('[Firebase] Connection to Firestore verified successfully.');
     return true;
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('[Firebase] Offline or Firebase configuration issue:', error);
+      console.warn('[Firebase] Firestore client running in offline/cached mode. Local database and server APIs active.');
       return false;
     }
     // Probe acknowledged
@@ -130,7 +135,8 @@ export async function testFirestoreConnection(): Promise<boolean> {
 }
 
 // Initial probe
-testFirestoreConnection();
+testConnection();
+export const testFirestoreConnection = testConnection;
 
 // Google Sign-In via popup with OAuth Access Token capture
 export async function loginWithGoogle(): Promise<User & { accessToken?: string }> {

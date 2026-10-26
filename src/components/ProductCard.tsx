@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Star, Camera } from 'lucide-react';
+import { Heart, Star, Camera, Youtube } from 'lucide-react';
 import { Product } from '../types.ts';
 import { Language } from '../translations.ts';
 
@@ -98,6 +98,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <span className="bg-slate-900/75 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
               <Camera className="w-2.5 h-2.5 text-orange-400" />
               <span>{product.images.length} photos</span>
+            </span>
+          </div>
+        )}
+
+        {/* YouTube Video Badge */}
+        {product.videoUrl && (
+          <div className="absolute bottom-2 left-2 z-10 pointer-events-none">
+            <span className="bg-red-600/95 backdrop-blur-xs text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+              <Youtube className="w-2.5 h-2.5" />
+              <span>Video</span>
             </span>
           </div>
         )}

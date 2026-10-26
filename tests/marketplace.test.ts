@@ -1323,6 +1323,38 @@ async function runTests() {
     assert.strictEqual(driveData.fileName, 'ContactReach_Market_Products.json');
   });
 
+  await test('Product upload with YouTube video description link and retrieval', async () => {
+    const testVideoUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const uploadRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Wireless Bluetooth Earbuds with ANC',
+        sku: 'CRM-YT-ANC-01',
+        description: 'Noise cancelling earbuds with crystal clear audio and wireless charging.',
+        price: 35000,
+        costPrice: 20000,
+        category: 'electronics',
+        stock: 40,
+        videoUrl: testVideoUrl,
+        imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'
+      })
+    });
+    assert.strictEqual(uploadRes.status, 201, 'Product upload should succeed with 201 Created');
+    const createdProduct = await uploadRes.json();
+    assert(createdProduct && createdProduct.id, 'Created product should be returned');
+    assert.strictEqual(createdProduct.videoUrl, testVideoUrl, 'Uploaded product must contain the YouTube video description link');
+
+    // Retrieve via public API
+    const getRes = await fetch(`${BASE_URL}/api/products/${createdProduct.id}`);
+    assert.strictEqual(getRes.status, 200, 'Public product get should succeed');
+    const fetchedProd = await getRes.json();
+    assert.strictEqual(fetchedProd.videoUrl, testVideoUrl, 'Public product endpoint must return YouTube video link');
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

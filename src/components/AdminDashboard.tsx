@@ -7,7 +7,8 @@ import {
   AlertCircle, Clock, ChevronDown, Download, Printer, ShieldCheck,
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
-  Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders
+  Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders,
+  Youtube
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -20,6 +21,7 @@ import { api, getStoredAdminUser } from '../services/api.ts';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db, getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive } from '../services/firebase.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
+import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
 
 interface AdminDashboardProps {
@@ -167,6 +169,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     isBestSeller: boolean;
     sizes: string;
     colors: string;
+    videoUrl: string; // YouTube video link or Shorts description
   }>({
     name: '',
     sku: '',
@@ -194,7 +197,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     isNewArrival: false,
     isBestSeller: false,
     sizes: '',
-    colors: ''
+    colors: '',
+    videoUrl: ''
   });
 
   // Multiple Picture Links helper state for Product Modal
@@ -760,7 +764,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       isNewArrival: true,
       isBestSeller: false,
       sizes: '',
-      colors: ''
+      colors: '',
+      videoUrl: ''
     });
     setNewImageLink('');
     setShowBulkImagePaste(false);
@@ -800,7 +805,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       isNewArrival: Boolean(p.isNewArrival),
       isBestSeller: Boolean(p.isBestSeller),
       sizes: p.variations?.find(v => v.name.toLowerCase() === 'size')?.options.join(', ') || '',
-      colors: p.variations?.find(v => v.name.toLowerCase() === 'color')?.options.join(', ') || ''
+      colors: p.variations?.find(v => v.name.toLowerCase() === 'color')?.options.join(', ') || '',
+      videoUrl: p.videoUrl || ''
     });
     setNewImageLink('');
     setShowBulkImagePaste(false);
@@ -908,7 +914,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       isFeatured: prodForm.isFeatured,
       isNewArrival: prodForm.isNewArrival,
       isBestSeller: prodForm.isBestSeller,
-      variations: variations.length > 0 ? variations : undefined
+      variations: variations.length > 0 ? variations : undefined,
+      videoUrl: prodForm.videoUrl.trim() || undefined
     };
 
     try {
@@ -5157,6 +5164,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   placeholder="Comprehensive specifications, materials, and usage details..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
                 />
+              </div>
+
+              {/* YouTube Video Description Link */}
+              <div className="p-4 rounded-2xl bg-red-50/40 border border-red-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                    <div className="w-5 h-5 rounded-md bg-red-600 flex items-center justify-center text-white shadow-2xs">
+                      <Youtube className="w-3.5 h-3.5" />
+                    </div>
+                    <span>YouTube Video Description Link</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-red-600 bg-red-100/70 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    Interactive Video Demo
+                  </span>
+                </div>
+
+                <div>
+                  <div className="relative">
+                    <input
+                      type="url"
+                      value={prodForm.videoUrl}
+                      onChange={(e) => setProdForm({ ...prodForm, videoUrl: e.target.value })}
+                      placeholder="e.g. https://www.youtube.com/watch?v=... or https://youtu.be/... or Shorts"
+                      className="w-full pl-9 pr-20 py-2.5 rounded-xl border border-red-200 bg-white focus:bg-white text-xs font-mono placeholder:font-sans placeholder:text-slate-400"
+                    />
+                    <Youtube className="w-4 h-4 text-red-500 absolute left-3 top-3 pointer-events-none" />
+                    {prodForm.videoUrl.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setProdForm({ ...prodForm, videoUrl: '' })}
+                        className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 hover:text-slate-700 px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1.5 leading-snug">
+                    Paste a YouTube video link or Shorts URL. An interactive video player will be embedded directly on the customer's product detail page so buyers can see real product unboxings and demos.
+                  </p>
+                </div>
+
+                {/* Live YouTube Preview Card */}
+                {prodForm.videoUrl.trim() && (
+                  <div>
+                    {isValidYouTubeUrl(prodForm.videoUrl) ? (
+                      <div className="p-2.5 rounded-xl bg-white border border-red-200 flex items-center justify-between gap-3 shadow-2xs">
+                        <div className="flex items-center gap-3">
+                          <div className="w-16 h-10 rounded-lg overflow-hidden bg-black shrink-0 relative group">
+                            <img
+                              src={getYouTubeThumbnailUrl(prodForm.videoUrl) || ''}
+                              alt="YouTube Video Thumbnail"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <Youtube className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px]">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Valid YouTube Video Linked</span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Video ID: {getYouTubeVideoId(prodForm.videoUrl)}
+                            </span>
+                          </div>
+                        </div>
+                        <a
+                          href={prodForm.videoUrl.startsWith('http') ? prodForm.videoUrl : `https://www.youtube.com/watch?v=${getYouTubeVideoId(prodForm.videoUrl)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-bold text-[10px] flex items-center gap-1 shrink-0 border border-red-200 transition-colors"
+                        >
+                          <span>Test Video</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Please enter a valid YouTube URL (e.g., https://youtube.com/watch?v=... or https://youtu.be/...)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-4 pt-1">
