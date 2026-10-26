@@ -115,6 +115,7 @@ export interface Product {
   costOverriddenByAdmin?: boolean; // Admin can update product cost
   profitMargin?: number; // Calculated profit margin in RWF
   cjLastSyncAt?: string;
+  reviewStatus?: 'Pending Approval' | 'Approved' | 'Rejected';
   createdAt: string;
   updatedAt?: string;
   lastVerifiedAt?: string;
@@ -189,6 +190,11 @@ export interface Order {
   courierPhone?: string;
   internalNotes?: string;
   userId?: string;
+  // CJ Dropshipping Fulfillment Approval
+  cjFulfillmentStatus?: 'Pending Admin Approval' | 'Approved for CJ Fulfillment' | 'Fulfilled' | 'Not Applicable';
+  cjFulfillmentApprovedAt?: string;
+  cjFulfillmentApprovedBy?: string;
+  cjTrackingNumber?: string;
   statusHistory: {
     status: OrderStatus;
     paymentStatus?: PaymentStatus;
@@ -291,6 +297,7 @@ export interface CjDropshippingConfig {
   defaultMarkupPercent: number; // e.g. 35% markup over supplier cost
   usdToRwfRate: number; // e.g. 1420 RWF per USD
   autoPublish: boolean; // Available immediately vs Hidden/Draft
+  requireAdminApproval?: boolean; // Review queue before publishing to live store
   selectedCategories: string[];
   lastSyncAt?: string;
   lastSyncStats?: {

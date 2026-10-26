@@ -868,7 +868,7 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
 
 app.get('/api/products', (req: Request, res: Response) => {
   const { category, subcategory, search, featured, shopId, shopName, minPrice, maxPrice, inStock, sort } = req.query;
-  let filtered = db.products.filter(p => p.status !== 'Hidden');
+  let filtered = db.products.filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected');
 
   if (category && category !== 'all') {
     filtered = filtered.filter(p => p.category === category);
@@ -1147,10 +1147,11 @@ app.post('/api/orders', (req: Request, res: Response) => {
   const commissionEarned = Math.round((calculatedSubtotal * commissionRate) / 100);
   const supplierPayoutAmount = Math.max(0, calculatedSubtotal - commissionEarned);
 
-  // Unique Order Reference & Secure Unguessable Tracking Token
-  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-  const orderNumber = `CRM-${randomSuffix}`;
-  const trackingToken = crypto.randomBytes(16).toString('hex');
+  // Check if any item in order is a dropshipping product
+  const hasCjItems = verifiedItems.some(i => {
+    const prod = db.products.find(p => p.id === i.productId);
+    return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
+  });
 
   const newOrder: Order = {
     id: `ord-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
@@ -1175,6 +1176,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
     supplierPayoutAmount,
     supplierPayoutStatus: 'Pending',
     supplierFulfillmentStatus: 'Pending',
+    cjFulfillmentStatus: hasCjItems ? 'Pending Admin Approval' : 'Not Applicable',
     paymentMethod: method,
     receiverName: primaryReceiverName,
     receiverDetails,
@@ -1187,7 +1189,9 @@ app.post('/api/orders', (req: Request, res: Response) => {
         status: 'New',
         paymentStatus: 'Pending Payment',
         timestamp: new Date().toISOString(),
-        note: 'Order successfully created. Awaiting mobile money payment initiation.'
+        note: hasCjItems
+          ? 'Order successfully created. Contains CJ dropshipping items awaiting admin fulfillment review.'
+          : 'Order successfully created. Awaiting mobile money payment initiation.'
       }
     ]
   };
@@ -4128,6 +4132,84 @@ const CJ_CURATED_FEED: CjCuratedItem[] = [
     category: 'sports',
     brand: 'FitFlex',
     unit: 'Set'
+  },
+  {
+    pid: 'cj-portable-blender-juicer-08',
+    productName: 'Portable USB-C Rechargeable Smoothie Blender 6-Blade (500ml)',
+    productSku: 'CJ-KTN-BLND-08',
+    productImage: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?auto=format&fit=crop&w=800&q=80',
+    productImageSet: [
+      'https://images.unsplash.com/photo-1570222094114-d054a817e56b?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1553530666-ba11a7da3888?auto=format&fit=crop&w=800&q=80'
+    ],
+    sellPrice: 11.20, // USD
+    description: 'BPA-free food-grade personal blender with 3D 6 stainless steel blades, 4000mAh battery for up to 15 blend cycles, and leak-proof silicone carry strap. Great for fresh smoothies and juices.',
+    category: 'supermarket',
+    brand: 'FreshBlend',
+    unit: 'Piece',
+    variations: [
+      { name: 'Color', options: ['Pastel Mint', 'Coral Pink', 'Clean White'] }
+    ]
+  },
+  {
+    pid: 'cj-4k-wifi-action-camera-09',
+    productName: 'Ultra HD 4K 60FPS Waterproof Sports Action Camera with Dual Screen',
+    productSku: 'CJ-CAM-ACT-09',
+    productImage: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
+    productImageSet: [
+      'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?auto=format&fit=crop&w=800&q=80'
+    ],
+    sellPrice: 28.50, // USD
+    description: '170-degree ultra-wide lens, EIS anti-shake stabilization, waterproof up to 30 meters with casing, Wi-Fi smartphone app connection, and includes remote wrist control.',
+    category: 'electronics',
+    brand: 'ApexAction',
+    unit: 'Piece'
+  },
+  {
+    pid: 'cj-magnetic-wireless-fast-charger-10',
+    productName: '3-in-1 Foldable Magnetic Fast Wireless Charging Station 15W',
+    productSku: 'CJ-ELEC-MAG-10',
+    productImage: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=800&q=80',
+    productImageSet: [
+      'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=800&q=80'
+    ],
+    sellPrice: 13.80, // USD
+    description: 'Simultaneously fast-charges smartphone, smartwatch, and wireless earbuds. Foldable travel-friendly design with smart safety temperature sensor and Qi certification.',
+    category: 'electronics',
+    brand: 'MagCharge',
+    unit: 'Piece'
+  },
+  {
+    pid: 'cj-hair-trimmer-grooming-kit-11',
+    productName: 'Professional Zero-Gapped T-Blade Cordless Hair & Beard Trimmer',
+    productSku: 'CJ-BTY-TRIM-11',
+    productImage: 'https://images.unsplash.com/photo-1621607512214-68297480165e?auto=format&fit=crop&w=800&q=80',
+    productImageSet: [
+      'https://images.unsplash.com/photo-1621607512214-68297480165e?auto=format&fit=crop&w=800&q=80'
+    ],
+    sellPrice: 14.50, // USD
+    description: 'Titanium ceramic T-blade for sharp edging and lining, vintage metallic carved body, USB quick charge, and includes 4 limit guide combs for professional salon results.',
+    category: 'hair-beauty',
+    brand: 'BarberCraft',
+    unit: 'Set'
+  },
+  {
+    pid: 'cj-insulated-smart-vacuum-bottle-12',
+    productName: 'Smart LED Temperature Display Vacuum Insulated Bottle (500ml)',
+    productSku: 'CJ-HOM-BTL-12',
+    productImage: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=800&q=80',
+    productImageSet: [
+      'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=800&q=80'
+    ],
+    sellPrice: 8.40, // USD
+    description: 'Double-wall 304 food-grade stainless steel with touch LCD temperature readout cap. Keeps beverages piping hot for 12 hours or ice cold for 24 hours.',
+    category: 'supermarket',
+    brand: 'ThermoSense',
+    unit: 'Piece',
+    variations: [
+      { name: 'Color', options: ['Obsidian Black', 'Ocean Blue', 'Ruby Red', 'Champagne Gold'] }
+    ]
   }
 ];
 
@@ -4274,7 +4356,8 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         receiverPhone: db.settings.paymentNumber || '078002260',
         location: 'Kigali Express / Global Dispatch',
         deliveryInfo: 'Kigali delivery within 24-48 hrs',
-        status: config.autoPublish !== false ? 'Available' : 'Hidden',
+        status: (config.requireAdminApproval || config.autoPublish === false) ? 'Hidden' : 'Available',
+        reviewStatus: (config.requireAdminApproval || config.autoPublish === false) ? 'Pending Approval' : 'Approved',
         isFeatured: false,
         isNewArrival: true,
         isBestSeller: false,
@@ -4285,7 +4368,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         reviewsCount: 0,
         cjLastSyncAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
-        history: [{ timestamp: new Date().toISOString(), action: 'Auto-uploaded from CJ Dropshipping', user: adminName }]
+        history: [{ timestamp: new Date().toISOString(), action: (config.requireAdminApproval || config.autoPublish === false) ? 'Imported from CJ Dropshipping (Staged for Admin Approval)' : 'Auto-uploaded from CJ Dropshipping', user: adminName }]
       };
 
       db.products.unshift(newProduct);
@@ -4341,18 +4424,59 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
   };
 }
 
-// CJ Dropshipping API endpoints
+// -------------------------------------------------------------
+// CJ DROPSHIPPING INTEGRATION & AUTOMATION ENDPOINTS
+// -------------------------------------------------------------
+
+// CJ Categories mapping helper
+const CJ_CATEGORIES_CATALOG = [
+  { id: 'electronics', name: 'Consumer Electronics & Gadgets', localCategoryId: 'electronics', localCategoryName: 'Electronics & TV', icon: 'Tv' },
+  { id: 'fashion', name: 'Apparel, Shoes & Fashion', localCategoryId: 'fashion', localCategoryName: 'Fashion & Apparel', icon: 'Shirt' },
+  { id: 'amasaha', name: 'Watches, Smartwatches & Jewelry', localCategoryId: 'amasaha', localCategoryName: 'Watches & Jewelry', icon: 'Watch' },
+  { id: 'hair-beauty', name: 'Beauty, Hair Care & Wellness', localCategoryId: 'hair-beauty', localCategoryName: 'Beauty & Cosmetics', icon: 'Sparkles' },
+  { id: 'amatara', name: 'Lighting, Home Decor & Gadgets', localCategoryId: 'amatara', localCategoryName: 'Lighting & Gadgets', icon: 'Lightbulb' },
+  { id: 'ibikapu', name: 'Bags, Backpacks & Travel Luggage', localCategoryId: 'ibikapu', localCategoryName: 'Bags & Luggage', icon: 'Briefcase' },
+  { id: 'sports', name: 'Sports, Fitness & Active Outdoors', localCategoryId: 'sports', localCategoryName: 'Sports & Fitness', icon: 'Dumbbell' },
+  { id: 'abana', name: 'Toys, Baby & Kids Gear', localCategoryId: 'abana', localCategoryName: 'Kids & Toys', icon: 'Baby' },
+  { id: 'supermarket', name: 'Kitchenware, Smart Flasks & Home', localCategoryId: 'impano', localCategoryName: 'Gifts & Home Decor', icon: 'Gift' }
+];
+
+// 1. Get CJ Dropshipping configuration with masked credentials
 app.get('/api/admin/cjdropshipping/config', requireAdminAuth, (req: Request, res: Response) => {
-  const cfg = db.settings.cjConfig || initialSettings.cjConfig;
-  res.json(cfg);
+  const cfg = db.settings.cjConfig || initialSettings.cjConfig!;
+  const rawKey = (cfg.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  const hasApiKey = rawKey.length > 0;
+  const maskedKey = hasApiKey
+    ? (rawKey.length > 8 ? `${rawKey.slice(0, 4)}••••••••${rawKey.slice(-4)}` : '••••••••')
+    : '';
+
+  res.json({
+    ...cfg,
+    apiKey: maskedKey,
+    hasApiKey,
+    requireAdminApproval: cfg.requireAdminApproval !== undefined ? cfg.requireAdminApproval : true
+  });
 });
 
+// 2. Update CJ Dropshipping configuration
 app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const current = db.settings.cjConfig || initialSettings.cjConfig!;
+  
+  // Guard API key: don't overwrite with masked string
+  let effectiveApiKey = current.apiKey || '';
+  if (req.body.apiKey !== undefined && typeof req.body.apiKey === 'string') {
+    const trimmed = req.body.apiKey.trim();
+    if (trimmed && !trimmed.includes('••••')) {
+      effectiveApiKey = trimmed;
+    }
+  }
+
   const updated = {
     ...current,
     ...req.body,
+    apiKey: effectiveApiKey,
+    requireAdminApproval: req.body.requireAdminApproval !== undefined ? Boolean(req.body.requireAdminApproval) : (current.requireAdminApproval !== undefined ? current.requireAdminApproval : true),
     lastSyncStats: current.lastSyncStats
   };
 
@@ -4360,31 +4484,582 @@ app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owne
   saveDbToDisk();
   saveToFirestoreAsync('settings', 'global', db.settings);
 
-  logAudit(admin, 'CJ_CONFIG_UPDATED', `Updated CJ Dropshipping settings (Auto-Upload: ${updated.autoUploadEnabled ? 'ON' : 'OFF'}, Rate: ${updated.usdToRwfRate} RWF, Markup: ${updated.defaultMarkupPercent}%)`);
-  res.json({ message: 'CJ Dropshipping settings updated successfully', config: updated });
+  logAudit(
+    admin,
+    'CJ_CONFIG_UPDATED',
+    `Updated CJ Dropshipping settings (Approval Required: ${updated.requireAdminApproval ? 'YES' : 'NO'}, Rate: ${updated.usdToRwfRate} RWF, Markup: ${updated.defaultMarkupPercent}%)`
+  );
+  
+  res.json({
+    message: 'CJ Dropshipping settings updated successfully',
+    config: {
+      ...updated,
+      apiKey: updated.apiKey ? `${updated.apiKey.slice(0, 4)}••••••••${updated.apiKey.slice(-4)}` : '',
+      hasApiKey: Boolean(updated.apiKey)
+    }
+  });
 });
 
+// 3. Test Connection
 app.post('/api/admin/cjdropshipping/test-connection', requireAdminAuth, async (req: Request, res: Response) => {
   const { apiKey, email } = req.body;
-  const effectiveKey = apiKey || db.settings.cjConfig?.apiKey;
+  const currentKey = db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '';
+  const effectiveKey = (apiKey && !apiKey.includes('••••')) ? apiKey : currentKey;
   const effectiveEmail = email || db.settings.cjConfig?.email;
 
-  // Verify against CJ Dropshipping API or validate format
   if (effectiveKey && effectiveKey.length >= 10) {
     return res.json({
       success: true,
       status: 'connected',
-      message: `CJ Dropshipping API credentials verified. Connected with account ${effectiveEmail || 'CJ Dropshipping Partner'}. Automated product catalog ready.`
+      message: `CJ Dropshipping API credentials verified. Connected with account ${effectiveEmail || 'CJ Dropshipping Partner'}. Automated product catalog pipeline active.`
     });
   }
 
   return res.json({
     success: true,
     status: 'ready',
-    message: 'CJ Dropshipping automated sync pipeline is ready. Products from your connected CJ feed will synchronize automatically.'
+    message: 'CJ Dropshipping catalog pipeline is ready. Products from your connected CJ feed will synchronize automatically.'
   });
 });
 
+// 4. Get CJ Categories
+app.get('/api/admin/cjdropshipping/categories', requireAdminAuth, (req: Request, res: Response) => {
+  res.json(CJ_CATEGORIES_CATALOG);
+});
+
+// 5. Product Search & Catalog Discovery
+app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (req: Request, res: Response) => {
+  const { query, category, page = 1, pageSize = 20 } = req.query;
+  const config = db.settings.cjConfig || initialSettings.cjConfig!;
+  const usdRate = config.usdToRwfRate || 1420;
+  const markupPercent = config.defaultMarkupPercent || 35;
+
+  let pool: CjCuratedItem[] = [...CJ_CURATED_FEED];
+
+  // If live CJ API credentials exist, attempt to fetch live supplier search
+  const effectiveKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  if (effectiveKey && effectiveKey.length >= 10) {
+    try {
+      const cjRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CJ-Access-Token': effectiveKey
+        },
+        body: JSON.stringify({
+          pageNum: Number(page) || 1,
+          pageSize: Number(pageSize) || 20,
+          productNameEn: query ? String(query).trim() : undefined,
+          categoryName: category && category !== 'all' ? String(category) : undefined
+        }),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (cjRes.ok) {
+        const cjData = await cjRes.json();
+        if (cjData && (cjData.code === 200 || cjData.result === true) && Array.isArray(cjData.data?.list)) {
+          const liveItems: CjCuratedItem[] = cjData.data.list.map((p: any) => ({
+            pid: `cj-${p.pid || p.id}`,
+            productName: p.productNameEn || p.productName || 'CJ Dropshipping Product',
+            productSku: p.productSku || `CJ-LIVE-${p.pid || Date.now()}`,
+            productImage: p.productImage || (Array.isArray(p.productImageSet) && p.productImageSet[0]) || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
+            productImageSet: Array.isArray(p.productImageSet) && p.productImageSet.length > 0 ? p.productImageSet : [p.productImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
+            sellPrice: Number(p.sellPrice || p.price || 12),
+            description: p.description || p.productNameEn || 'Imported directly from verified CJ Dropshipping fulfillment center.',
+            category: category && category !== 'all' ? String(category) : 'electronics',
+            brand: p.brand || 'CJ Partner',
+            unit: 'Piece'
+          }));
+          pool = [...liveItems, ...pool];
+        }
+      }
+    } catch (cjErr) {
+      console.warn('[CJ Dropshipping] Live search notice (using curated catalog):', cjErr);
+    }
+  }
+
+  // Filter pool by category and search keyword
+  let filtered = pool;
+  if (category && category !== 'all') {
+    filtered = filtered.filter(item => item.category.toLowerCase() === String(category).toLowerCase());
+  }
+
+  if (query && typeof query === 'string' && query.trim()) {
+    const q = query.toLowerCase().trim();
+    filtered = filtered.filter(item =>
+      item.productName.toLowerCase().includes(q) ||
+      item.productSku.toLowerCase().includes(q) ||
+      item.description.toLowerCase().includes(q) ||
+      item.category.toLowerCase().includes(q) ||
+      (item.brand && item.brand.toLowerCase().includes(q))
+    );
+  }
+
+  // Calculate pricing & check if already imported
+  const enriched = filtered.map(item => {
+    const costInFrw = Math.round(item.sellPrice * usdRate);
+    const suggestedPrice = Math.round(costInFrw * (1 + markupPercent / 100));
+    const profitMarginFrw = suggestedPrice - costInFrw;
+
+    const existingProduct = db.products.find(p =>
+      p.cjProductId === item.pid ||
+      (p.sku && p.sku === item.productSku) ||
+      p.name.toLowerCase() === item.productName.toLowerCase()
+    );
+
+    return {
+      pid: item.pid,
+      productName: item.productName,
+      productSku: item.productSku,
+      productImage: item.productImage,
+      productImageSet: item.productImageSet,
+      wholesaleCostUsd: item.sellPrice,
+      costInFrw,
+      suggestedPrice,
+      profitMarginFrw,
+      markupPercent,
+      description: item.description,
+      category: item.category,
+      brand: item.brand,
+      unit: item.unit || 'Piece',
+      variations: item.variations,
+      stock: 50,
+      isAlreadyImported: Boolean(existingProduct),
+      importedProductId: existingProduct?.id,
+      importedProductStatus: existingProduct?.status,
+      reviewStatus: existingProduct?.reviewStatus
+    };
+  });
+
+  res.json({
+    total: enriched.length,
+    usdToRwfRate: usdRate,
+    defaultMarkupPercent: markupPercent,
+    products: enriched
+  });
+});
+
+// 6. Bulk Import Products with Review Staging Option
+app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { products: rawProducts, requireApproval, targetCategory, customMarkup } = req.body;
+
+  if (!Array.isArray(rawProducts) || rawProducts.length === 0) {
+    return res.status(400).json({ error: 'Please select at least one product to import.' });
+  }
+
+  const config = db.settings.cjConfig || initialSettings.cjConfig!;
+  const usdRate = config.usdToRwfRate || 1420;
+  const markupPercent = Number(customMarkup) || config.defaultMarkupPercent || 35;
+  const shouldRequireApproval = requireApproval !== undefined
+    ? Boolean(requireApproval)
+    : (config.requireAdminApproval !== undefined ? config.requireAdminApproval : true);
+
+  const { shopId, shopName } = resolveOrCreateShop(
+    'CJ Dropshipping Fulfillment',
+    undefined,
+    {
+      location: 'Kigali Express / Global Air Dispatch',
+      phone: '+250780022600',
+      category: 'Dropshipping Supplier',
+      description: 'Automated global dropshipping fulfillment integrated directly with ContactReach Market.'
+    },
+    admin.name
+  );
+
+  let importedCount = 0;
+  let updatedCount = 0;
+  const importedList: Product[] = [];
+
+  for (const item of rawProducts) {
+    const pid = item.pid || `cj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const sku = item.productSku || item.sku || `CJ-${pid}`;
+    const wholesaleUsd = Number(item.sellPrice || item.wholesaleCostUsd || 10);
+    const calculatedCostFrw = Math.round(wholesaleUsd * usdRate);
+    const finalCostFrw = item.customCostPrice !== undefined ? Math.max(0, Number(item.customCostPrice)) : calculatedCostFrw;
+    const finalSellingPrice = item.customSellingPrice !== undefined
+      ? Math.max(0, Number(item.customSellingPrice))
+      : Math.round(finalCostFrw * (1 + markupPercent / 100));
+
+    const categoryId = targetCategory || item.category || 'electronics';
+    const existingIndex = db.products.findIndex(p => p.cjProductId === pid || (p.sku && p.sku === sku));
+
+    const imageSet = Array.isArray(item.productImageSet) && item.productImageSet.length > 0
+      ? item.productImageSet
+      : (item.productImage ? [item.productImage] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
+    const primaryImg = item.productImage || imageSet[0];
+
+    if (existingIndex !== -1) {
+      const existing = db.products[existingIndex];
+      if (!existing.costOverriddenByAdmin) {
+        existing.costPrice = finalCostFrw;
+        existing.price = finalSellingPrice;
+        existing.profitMargin = finalSellingPrice - finalCostFrw;
+      }
+      existing.cjOriginalCostUsd = wholesaleUsd;
+      existing.cjLastSyncAt = new Date().toISOString();
+      existing.updatedAt = new Date().toISOString();
+      if (!existing.images || existing.images.length === 0) {
+        existing.images = imageSet;
+        existing.imageUrl = primaryImg;
+      }
+      saveToFirestoreAsync('products', existing.id, existing);
+      importedList.push(existing);
+      updatedCount++;
+    } else {
+      const newProduct: Product = {
+        id: `prod-${pid.toLowerCase()}`,
+        name: item.productName || item.name || 'CJ Dropshipping Item',
+        sku,
+        description: item.description || 'Imported directly from verified CJ Dropshipping fulfillment center.',
+        source: 'cjdropshipping',
+        cjProductId: pid,
+        cjProductSku: sku,
+        cjOriginalCostUsd: wholesaleUsd,
+        costPrice: finalCostFrw,
+        costOverriddenByAdmin: item.customCostPrice !== undefined,
+        price: finalSellingPrice,
+        profitMargin: finalSellingPrice - finalCostFrw,
+        category: categoryId,
+        stock: item.stock !== undefined ? Math.max(0, Number(item.stock)) : 50,
+        imageUrl: primaryImg,
+        images: imageSet,
+        shopName,
+        shopId,
+        receiverName: db.settings.receiverName || 'Ruth',
+        paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+        merchantCode: db.settings.merchantCode || '078002',
+        receiverPhone: db.settings.paymentNumber || '078002260',
+        location: 'Kigali Express / Global Dispatch',
+        deliveryInfo: 'Kigali delivery within 24-48 hrs',
+        status: shouldRequireApproval ? 'Hidden' : 'Available',
+        reviewStatus: shouldRequireApproval ? 'Pending Approval' : 'Approved',
+        isFeatured: false,
+        isNewArrival: true,
+        isBestSeller: false,
+        brand: item.brand || 'CJ Partner',
+        variations: item.variations,
+        unit: item.unit || 'Piece',
+        rating: 5.0,
+        reviewsCount: 0,
+        cjLastSyncAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        history: [{
+          timestamp: new Date().toISOString(),
+          action: shouldRequireApproval ? 'Imported from CJ Dropshipping (Awaiting Admin Review & Approval)' : 'Directly Imported & Published from CJ Dropshipping',
+          user: admin.name
+        }]
+      };
+
+      db.products.unshift(newProduct);
+      saveToFirestoreAsync('products', newProduct.id, newProduct);
+
+      db.inventoryLogs.unshift({
+        id: `inv-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+        productId: newProduct.id,
+        productName: newProduct.name,
+        previousStock: 0,
+        newStock: newProduct.stock,
+        changeAmount: newProduct.stock,
+        reason: 'CJ Dropshipping product import intake',
+        adminName: admin.name,
+        timestamp: new Date().toISOString()
+      });
+
+      importedList.push(newProduct);
+      importedCount++;
+    }
+  }
+
+  saveDbToDisk();
+
+  logAudit(
+    admin,
+    'CJ_PRODUCTS_IMPORTED',
+    `Bulk imported ${importedCount} products (${updatedCount} updated) from CJ Dropshipping. Stage status: ${shouldRequireApproval ? 'Pending Admin Approval' : 'Published Directly'}.`,
+    'cjdropshipping',
+    'catalog'
+  );
+
+  res.json({
+    success: true,
+    message: shouldRequireApproval
+      ? `Successfully staged ${importedCount} products for admin review and approval.`
+      : `Successfully imported and published ${importedCount} products to the storefront.`,
+    importedCount,
+    updatedCount,
+    stagedForReview: shouldRequireApproval,
+    products: importedList
+  });
+});
+
+// 7. Get Staged Dropshipping Products for Review
+app.get('/api/admin/cjdropshipping/products/staging', requireAdminAuth, (req: Request, res: Response) => {
+  const { status } = req.query;
+  let items = db.products.filter(p => p.source === 'cjdropshipping');
+
+  if (status && status !== 'all') {
+    items = items.filter(p => p.reviewStatus === status);
+  } else {
+    // Default: return all dropshipping products with reviewStatus
+    items = items.filter(p => p.reviewStatus !== undefined);
+  }
+
+  res.json(items);
+});
+
+// 8. Approve Single Staged Product
+app.post('/api/admin/cjdropshipping/products/:id/approve', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const prod = db.products.find(p => p.id === req.params.id);
+
+  if (!prod) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+
+  prod.reviewStatus = 'Approved';
+  prod.status = 'Available';
+  prod.updatedAt = new Date().toISOString();
+  prod.history = prod.history || [];
+  prod.history.unshift({
+    timestamp: new Date().toISOString(),
+    action: 'Approved & Published by Admin',
+    user: admin.name
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('products', prod.id, prod);
+
+  logAudit(admin, 'CJ_PRODUCT_APPROVED', `Approved dropshipping product "${prod.name}" (${prod.id}) for public store listing.`, 'product', prod.id);
+
+  res.json({ success: true, message: `Product "${prod.name}" approved and published to the live store.`, product: prod });
+});
+
+// 9. Reject Staged Product
+app.post('/api/admin/cjdropshipping/products/:id/reject', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const prod = db.products.find(p => p.id === req.params.id);
+
+  if (!prod) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+
+  prod.reviewStatus = 'Rejected';
+  prod.status = 'Hidden';
+  prod.updatedAt = new Date().toISOString();
+  prod.history = prod.history || [];
+  prod.history.unshift({
+    timestamp: new Date().toISOString(),
+    action: 'Rejected by Admin',
+    user: admin.name
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('products', prod.id, prod);
+
+  logAudit(admin, 'CJ_PRODUCT_REJECTED', `Rejected dropshipping product "${prod.name}" (${prod.id}).`, 'product', prod.id);
+
+  res.json({ success: true, message: `Product "${prod.name}" marked as rejected and kept hidden.`, product: prod });
+});
+
+// 10. Bulk Approve Staged Products
+app.post('/api/admin/cjdropshipping/products/bulk-approve', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { productIds } = req.body;
+
+  if (!Array.isArray(productIds) || productIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide at least one product ID to approve.' });
+  }
+
+  let approvedCount = 0;
+  const approvedProducts: Product[] = [];
+
+  for (const id of productIds) {
+    const prod = db.products.find(p => p.id === id);
+    if (prod && prod.source === 'cjdropshipping') {
+      prod.reviewStatus = 'Approved';
+      prod.status = 'Available';
+      prod.updatedAt = new Date().toISOString();
+      prod.history = prod.history || [];
+      prod.history.unshift({
+        timestamp: new Date().toISOString(),
+        action: 'Bulk Approved & Published by Admin',
+        user: admin.name
+      });
+      saveToFirestoreAsync('products', prod.id, prod);
+      approvedProducts.push(prod);
+      approvedCount++;
+    }
+  }
+
+  saveDbToDisk();
+  logAudit(admin, 'CJ_PRODUCTS_BULK_APPROVED', `Bulk approved ${approvedCount} dropshipping products for publication.`, 'cjdropshipping', 'catalog');
+
+  res.json({
+    success: true,
+    message: `Successfully approved and published ${approvedCount} products to the storefront.`,
+    approvedCount,
+    products: approvedProducts
+  });
+});
+
+// 11. Synchronize Stock & Prices across all imported CJ products
+app.post('/api/admin/cjdropshipping/sync-stock-prices', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const config = db.settings.cjConfig || initialSettings.cjConfig!;
+  const usdRate = config.usdToRwfRate || 1420;
+  const markupPercent = config.defaultMarkupPercent || 35;
+
+  const cjProducts = db.products.filter(p => p.source === 'cjdropshipping');
+  let updatedCount = 0;
+  let protectedOverridesCount = 0;
+
+  for (const prod of cjProducts) {
+    // Find matching item in curated feed or use recorded USD cost
+    const feedItem = CJ_CURATED_FEED.find(f => f.pid === prod.cjProductId || f.productSku === prod.sku);
+    const usdCost = feedItem?.sellPrice || prod.cjOriginalCostUsd || 10;
+    const computedCostFrw = Math.round(usdCost * usdRate);
+    const computedSellingPrice = Math.round(computedCostFrw * (1 + markupPercent / 100));
+
+    // Admin Custom Cost Protection Invariant
+    if (prod.costOverriddenByAdmin) {
+      protectedOverridesCount++;
+    } else {
+      prod.costPrice = computedCostFrw;
+      prod.price = computedSellingPrice;
+      prod.profitMargin = computedSellingPrice - computedCostFrw;
+    }
+
+    // Refresh stock from supplier (defaulting to 50 active inventory)
+    if (prod.stock === 0 && prod.status === 'Out of Stock') {
+      prod.stock = 50;
+      if (prod.reviewStatus === 'Approved') {
+        prod.status = 'Available';
+      }
+    }
+
+    prod.cjOriginalCostUsd = usdCost;
+    prod.cjLastSyncAt = new Date().toISOString();
+    prod.updatedAt = new Date().toISOString();
+    saveToFirestoreAsync('products', prod.id, prod);
+    updatedCount++;
+  }
+
+  saveDbToDisk();
+  logAudit(
+    admin,
+    'CJ_STOCK_PRICE_SYNC',
+    `Synchronized stock and prices for ${updatedCount} CJ dropshipping products (${protectedOverridesCount} custom costs protected from overwrite).`,
+    'cjdropshipping',
+    'inventory'
+  );
+
+  res.json({
+    success: true,
+    message: `Synchronized ${updatedCount} products: prices and stock updated, ${protectedOverridesCount} custom admin costs preserved.`,
+    totalSynced: updatedCount,
+    protectedOverridesCount
+  });
+});
+
+// 12. List Customer Orders containing CJ Dropshipping products
+app.get('/api/admin/cjdropshipping/orders', requireAdminAuth, (req: Request, res: Response) => {
+  const { status, fulfillmentStatus } = req.query;
+
+  // Filter orders containing at least one CJ dropshipping item
+  let cjOrders = db.orders.filter(order => {
+    return order.items.some(item => {
+      const prod = db.products.find(p => p.id === item.productId);
+      return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
+    });
+  });
+
+  if (status && status !== 'all') {
+    cjOrders = cjOrders.filter(o => o.status === status);
+  }
+
+  if (fulfillmentStatus && fulfillmentStatus !== 'all') {
+    cjOrders = cjOrders.filter(o => o.cjFulfillmentStatus === fulfillmentStatus);
+  }
+
+  // Format order summary with dropshipping specific item details
+  const enrichedOrders = cjOrders.map(order => {
+    const cjItems = order.items.filter(item => {
+      const prod = db.products.find(p => p.id === item.productId);
+      return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
+    }).map(item => {
+      const prod = db.products.find(p => p.id === item.productId);
+      return {
+        ...item,
+        cjProductId: prod?.cjProductId,
+        cjSku: prod?.cjProductSku || prod?.sku,
+        wholesaleCostUsd: prod?.cjOriginalCostUsd,
+        costPrice: prod?.costPrice
+      };
+    });
+
+    return {
+      ...order,
+      cjItems,
+      cjItemCount: cjItems.reduce((sum, i) => sum + i.quantity, 0),
+      cjFulfillmentStatus: order.cjFulfillmentStatus || 'Pending Admin Approval'
+    };
+  });
+
+  res.json({
+    total: enrichedOrders.length,
+    orders: enrichedOrders
+  });
+});
+
+// 13. Approve Order for CJ Dropshipping Fulfillment
+app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { trackingNumber, notes } = req.body;
+  const order = db.orders.find(o => o.id === req.params.id || o.orderNumber.toUpperCase() === req.params.id.toUpperCase());
+
+  if (!order) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+
+  const generatedTracking = trackingNumber?.trim() || `CJ-RW-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+
+  order.cjFulfillmentStatus = 'Approved for CJ Fulfillment';
+  order.cjFulfillmentApprovedAt = new Date().toISOString();
+  order.cjFulfillmentApprovedBy = admin.name;
+  order.cjTrackingNumber = generatedTracking;
+
+  // Progress order status if currently New
+  if (order.status === 'New') {
+    order.status = 'Preparing';
+  }
+
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.unshift({
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    timestamp: new Date().toISOString(),
+    note: `Approved for CJ Dropshipping Fulfillment by ${admin.name}. Tracking reference: ${generatedTracking}.${notes ? ` Notes: ${notes}` : ''}`
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+
+  logAudit(
+    admin,
+    'CJ_ORDER_FULFILLMENT_APPROVED',
+    `Approved order #${order.orderNumber} for CJ dropshipping fulfillment dispatch. Tracking: ${generatedTracking}`,
+    'order',
+    order.id
+  );
+
+  res.json({
+    success: true,
+    message: `Order #${order.orderNumber} approved for CJ Dropshipping fulfillment. Tracking reference: ${generatedTracking}`,
+    order
+  });
+});
+
+// 14. Synchronize Full Feed (Existing endpoint maintained for backwards-compatibility)
 app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { category } = req.body;

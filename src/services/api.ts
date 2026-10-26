@@ -2159,6 +2159,163 @@ export const api = {
     return parsed.json;
   },
 
+  async adminGetCjCategories(): Promise<Array<{ id: string; name: string; localCategoryId: string; localCategoryName: string; icon: string }>> {
+    const res = await fetch('/api/admin/cjdropshipping/categories', {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !Array.isArray(parsed.json)) {
+      return [];
+    }
+    return parsed.json;
+  },
+
+  async adminSearchCjProducts(params: {
+    query?: string;
+    category?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{
+    total: number;
+    usdToRwfRate: number;
+    defaultMarkupPercent: number;
+    products: any[];
+  }> {
+    const q = new URLSearchParams();
+    if (params.query) q.set('query', params.query);
+    if (params.category && params.category !== 'all') q.set('category', params.category);
+    if (params.page) q.set('page', String(params.page));
+    if (params.pageSize) q.set('pageSize', String(params.pageSize));
+
+    const res = await fetch(`/api/admin/cjdropshipping/products/search?${q.toString()}`, {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to search CJ Dropshipping catalog');
+    }
+    return parsed.json;
+  },
+
+  async adminImportCjProducts(payload: {
+    products: any[];
+    requireApproval?: boolean;
+    targetCategory?: string;
+    customMarkup?: number;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    importedCount: number;
+    updatedCount: number;
+    stagedForReview: boolean;
+    products: Product[];
+  }> {
+    const res = await fetch('/api/admin/cjdropshipping/import', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to import CJ Dropshipping products');
+    }
+    return parsed.json;
+  },
+
+  async adminGetCjStagingProducts(status?: string): Promise<Product[]> {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await fetch(`/api/admin/cjdropshipping/products/staging${q}`, {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !Array.isArray(parsed.json)) {
+      return [];
+    }
+    return parsed.json;
+  },
+
+  async adminApproveCjProduct(id: string): Promise<{ success: boolean; message: string; product: Product }> {
+    const res = await fetch(`/api/admin/cjdropshipping/products/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to approve product');
+    }
+    return parsed.json;
+  },
+
+  async adminRejectCjProduct(id: string): Promise<{ success: boolean; message: string; product: Product }> {
+    const res = await fetch(`/api/admin/cjdropshipping/products/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to reject product');
+    }
+    return parsed.json;
+  },
+
+  async adminBulkApproveCjProducts(productIds: string[]): Promise<{ success: boolean; message: string; approvedCount: number }> {
+    const res = await fetch('/api/admin/cjdropshipping/products/bulk-approve', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ productIds })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to bulk approve products');
+    }
+    return parsed.json;
+  },
+
+  async adminSyncCjStockAndPrices(): Promise<{
+    success: boolean;
+    message: string;
+    totalSynced: number;
+    protectedOverridesCount: number;
+  }> {
+    const res = await fetch('/api/admin/cjdropshipping/sync-stock-prices', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to synchronize stock and prices');
+    }
+    return parsed.json;
+  },
+
+  async adminGetCjOrders(params?: { status?: string; fulfillmentStatus?: string }): Promise<{ total: number; orders: any[] }> {
+    const q = new URLSearchParams();
+    if (params?.status && params.status !== 'all') q.set('status', params.status);
+    if (params?.fulfillmentStatus && params.fulfillmentStatus !== 'all') q.set('fulfillmentStatus', params.fulfillmentStatus);
+
+    const res = await fetch(`/api/admin/cjdropshipping/orders?${q.toString()}`, {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      return { total: 0, orders: [] };
+    }
+    return parsed.json;
+  },
+
+  async adminApproveCjOrderFulfillment(id: string, payload?: { trackingNumber?: string; notes?: string }): Promise<{ success: boolean; message: string; order: Order }> {
+    const res = await fetch(`/api/admin/cjdropshipping/orders/${encodeURIComponent(id)}/approve-fulfillment`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload || {})
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to approve order for fulfillment');
+    }
+    return parsed.json;
+  },
+
   // Google Drive Product Catalog Storage & Backup
   async adminGetDriveBackupStatus(): Promise<GoogleDriveBackupStatus> {
     try {

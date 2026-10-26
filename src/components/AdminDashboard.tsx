@@ -218,12 +218,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [cjMarkupInput, setCjMarkupInput] = useState(35);
   const [cjAutoUploadToggle, setCjAutoUploadToggle] = useState(false);
   const [cjAutoPublishToggle, setCjAutoPublishToggle] = useState(true);
+  const [cjRequireApprovalToggle, setCjRequireApprovalToggle] = useState(true);
   const [cjSelectedCategories, setCjSelectedCategories] = useState<string[]>([
     'electronics', 'fashion', 'amatara', 'hair-beauty', 'amasaha', 'ibikapu', 'sports'
   ]);
   const [savingCjConfig, setSavingCjConfig] = useState(false);
   const [cjProductCategoryFilter, setCjProductCategoryFilter] = useState('all');
   const [cjProductSearch, setCjProductSearch] = useState('');
+
+  // CJ Dropshipping Sub-tabs & Advanced Workflows
+  const [cjSubTab, setCjSubTab] = useState<'catalog' | 'search' | 'staging' | 'orders' | 'settings' | 'instructions'>('catalog');
+  const [cjCategoriesList, setCjCategoriesList] = useState<Array<{ id: string; name: string; localCategoryId: string; localCategoryName: string; icon: string }>>([]);
+
+  // CJ Search & Discovery state
+  const [cjSearchQuery, setCjSearchQuery] = useState('');
+  const [cjSearchCategory, setCjSearchCategory] = useState('all');
+  const [cjSearchResults, setCjSearchResults] = useState<any[]>([]);
+  const [cjSearching, setCjSearching] = useState(false);
+  const [cjSelectedItemsForImport, setCjSelectedItemsForImport] = useState<string[]>([]);
+  const [cjImporting, setCjImporting] = useState(false);
+  const [cjImportWithApproval, setCjImportWithApproval] = useState(true);
+  const [cjCustomMarkupOverride, setCjCustomMarkupOverride] = useState<number | ''>('');
+
+  // CJ Staging & Approval Queue state
+  const [cjStagingFilter, setCjStagingFilter] = useState<'all' | 'Pending Approval' | 'Approved' | 'Rejected'>('Pending Approval');
+  const [cjApprovingId, setCjApprovingId] = useState<string | null>(null);
+  const [cjRejectingId, setCjRejectingId] = useState<string | null>(null);
+  const [cjBulkApproving, setCjBulkApproving] = useState(false);
+
+  // CJ Stock & Price Sync state
+  const [cjSyncingStockPrices, setCjSyncingStockPrices] = useState(false);
+
+  // CJ Orders & Fulfillment state
+  const [cjOrders, setCjOrders] = useState<any[]>([]);
+  const [cjLoadingOrders, setCjLoadingOrders] = useState(false);
+  const [cjFulfillmentFilter, setCjFulfillmentFilter] = useState<'all' | 'Pending Admin Approval' | 'Approved for CJ Fulfillment' | 'Fulfilled'>('all');
+  const [cjFulfillmentModalOrder, setCjFulfillmentModalOrder] = useState<any | null>(null);
+  const [cjTrackingInput, setCjTrackingInput] = useState('');
+  const [cjFulfillmentNotesInput, setCjFulfillmentNotesInput] = useState('');
+  const [cjFulfillingLoading, setCjFulfillingLoading] = useState(false);
 
   // Inline Product Cost Editor states (Admin can update cost directly!)
   const [editingCostProductId, setEditingCostProductId] = useState<string | null>(null);
@@ -556,10 +589,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setCjMarkupInput(prev => prev || fetchedCjConfig.defaultMarkupPercent || 35);
         setCjAutoUploadToggle(fetchedCjConfig.autoUploadEnabled);
         setCjAutoPublishToggle(fetchedCjConfig.autoPublish !== false);
+        setCjRequireApprovalToggle(fetchedCjConfig.requireAdminApproval !== undefined ? fetchedCjConfig.requireAdminApproval : true);
         if (fetchedCjConfig.selectedCategories && fetchedCjConfig.selectedCategories.length > 0) {
           setCjSelectedCategories(fetchedCjConfig.selectedCategories);
         }
       }
+      // Populate CJ categories & dropshipping orders in background
+      api.adminGetCjCategories().then(cats => { if (Array.isArray(cats) && cats.length > 0) setCjCategoriesList(cats); }).catch(() => {});
+      api.adminGetCjOrders().then(res => { if (res && Array.isArray(res.orders)) setCjOrders(res.orders); }).catch(() => {});
       if (fetchedDriveStatus) {
         setDriveStatus(fetchedDriveStatus);
       }
@@ -993,7 +1030,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // CJ Dropshipping Sync Handlers
+  // CJ Dropshipping Handlers
   const handleSaveCjConfig = async () => {
     setSavingCjConfig(true);
     try {
@@ -1002,6 +1039,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         email: cjEmailInput.trim(),
         autoUploadEnabled: cjAutoUploadToggle,
         autoPublish: cjAutoPublishToggle,
+        requireAdminApproval: cjRequireApprovalToggle,
         usdToRwfRate: Number(cjUsdRateInput) || 1420,
         defaultMarkupPercent: Number(cjMarkupInput) || 35,
         selectedCategories: cjSelectedCategories
@@ -1038,6 +1076,173 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       showToast(err.message || 'CJ automated upload failed', 'error');
     } finally {
       setCjSyncing(false);
+    }
+  };
+
+  // Search products across CJ Supplier catalog
+  const handleSearchCjProducts = async () => {
+    setCjSearching(true);
+    try {
+      const res = await api.adminSearchCjProducts({
+        query: cjSearchQuery.trim() || undefined,
+        category: cjSearchCategory !== 'all' ? cjSearchCategory : undefined
+      });
+      setCjSearchResults(res.products || []);
+      setCjSelectedItemsForImport([]);
+      showToast(`Found ${res.products?.length || 0} matching wholesale products in CJ catalog`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to search CJ products', 'error');
+    } finally {
+      setCjSearching(false);
+    }
+  };
+
+  // Bulk Import selected products from search
+  const handleBulkImportCjSelected = async (forceApproval?: boolean) => {
+    if (cjSelectedItemsForImport.length === 0) {
+      showToast('Please select at least one product using the checkboxes', 'error');
+      return;
+    }
+
+    const selectedItems = cjSearchResults.filter(p => cjSelectedItemsForImport.includes(p.pid));
+    if (selectedItems.length === 0) return;
+
+    setCjImporting(true);
+    try {
+      const stageApproval = forceApproval !== undefined ? forceApproval : cjImportWithApproval;
+      const res = await api.adminImportCjProducts({
+        products: selectedItems,
+        requireApproval: stageApproval,
+        customMarkup: cjCustomMarkupOverride !== '' ? Number(cjCustomMarkupOverride) : undefined
+      });
+
+      showToast(res.message);
+      setCjSelectedItemsForImport([]);
+
+      // Update imported state in search results
+      setCjSearchResults(prev => prev.map(item => {
+        if (selectedItems.some(s => s.pid === item.pid)) {
+          return {
+            ...item,
+            isAlreadyImported: true,
+            reviewStatus: stageApproval ? 'Pending Approval' : 'Approved'
+          };
+        }
+        return item;
+      }));
+
+      fetchAllData();
+      onRefreshPublicData();
+
+      if (stageApproval) {
+        setCjSubTab('staging');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Bulk import failed', 'error');
+    } finally {
+      setCjImporting(false);
+    }
+  };
+
+  // Staging Review Actions
+  const handleApproveCjProduct = async (id: string) => {
+    setCjApprovingId(id);
+    try {
+      const res = await api.adminApproveCjProduct(id);
+      showToast(res.message);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to approve product', 'error');
+    } finally {
+      setCjApprovingId(null);
+    }
+  };
+
+  const handleRejectCjProduct = async (id: string) => {
+    setCjRejectingId(id);
+    try {
+      const res = await api.adminRejectCjProduct(id);
+      showToast(res.message);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to reject product', 'error');
+    } finally {
+      setCjRejectingId(null);
+    }
+  };
+
+  const handleBulkApproveCj = async () => {
+    const pendingProds = products.filter(p => p.source === 'cjdropshipping' && p.reviewStatus === 'Pending Approval');
+    if (pendingProds.length === 0) {
+      showToast('No pending products to approve', 'error');
+      return;
+    }
+
+    setCjBulkApproving(true);
+    try {
+      const res = await api.adminBulkApproveCjProducts(pendingProds.map(p => p.id));
+      showToast(res.message);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Bulk approve failed', 'error');
+    } finally {
+      setCjBulkApproving(false);
+    }
+  };
+
+  // Stock and Price Synchronization
+  const handleSyncCjStockAndPrices = async () => {
+    setCjSyncingStockPrices(true);
+    try {
+      const res = await api.adminSyncCjStockAndPrices();
+      showToast(res.message);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Stock and price sync failed', 'error');
+    } finally {
+      setCjSyncingStockPrices(false);
+    }
+  };
+
+  // Dropshipping Order Fulfillment Handlers
+  const handleLoadCjOrders = async () => {
+    setCjLoadingOrders(true);
+    try {
+      const res = await api.adminGetCjOrders({
+        fulfillmentStatus: cjFulfillmentFilter !== 'all' ? cjFulfillmentFilter : undefined
+      });
+      setCjOrders(res.orders || []);
+    } catch (err: any) {
+      console.warn('Failed to load CJ orders:', err);
+    } finally {
+      setCjLoadingOrders(false);
+    }
+  };
+
+  const handleApproveCjOrderFulfillment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cjFulfillmentModalOrder) return;
+
+    setCjFulfillingLoading(true);
+    try {
+      const res = await api.adminApproveCjOrderFulfillment(cjFulfillmentModalOrder.id, {
+        trackingNumber: cjTrackingInput.trim() || undefined,
+        notes: cjFulfillmentNotesInput.trim() || undefined
+      });
+      showToast(res.message);
+      setCjFulfillmentModalOrder(null);
+      setCjTrackingInput('');
+      setCjFulfillmentNotesInput('');
+      handleLoadCjOrders();
+      fetchAllData();
+    } catch (err: any) {
+      showToast(err.message || 'Fulfillment approval failed', 'error');
+    } finally {
+      setCjFulfillingLoading(false);
     }
   };
 
