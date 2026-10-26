@@ -4379,7 +4379,8 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         }
       }
     } catch (cjApiErr: any) {
-      console.warn('[CJ Dropshipping] Live API connect notice (using verified catalog feed):', cjApiErr.message || cjApiErr);
+      console.error('[CJ Dropshipping] Live API sync failed:', cjApiErr.message || cjApiErr);
+      throw new Error('Live CJ sync failed. Curated catalog was not treated as a successful supplier sync.');
     }
   }
 
