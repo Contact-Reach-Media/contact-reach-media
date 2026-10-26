@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   LayoutDashboard, Package, FolderTree, Store, ShoppingBag, CreditCard,
   Layers, Users, Mail, AlertTriangle, Tag, FileText, Settings, Shield,
-  LogOut, Search, Plus, Edit, Trash2, Copy, Check, X, Eye, Phone,
+  LogOut, Search, Plus, Edit, Trash2, Copy, Check, X, Eye, EyeOff, Phone,
   MapPin, Truck, RefreshCw, Filter, ArrowUpRight, CheckCircle2, XCircle,
   AlertCircle, Clock, ChevronDown, Download, Printer, ShieldCheck,
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
@@ -19,7 +19,7 @@ import {
 } from '../types.ts';
 import { api, getStoredAdminUser } from '../services/api.ts';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db, getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/firebase.ts';
+import { db, getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive, isFirestoreConnected } from '../services/firebase.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
@@ -213,6 +213,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [cjSyncing, setCjSyncing] = useState(false);
   const [cjTesting, setCjTesting] = useState(false);
   const [cjApiKeyInput, setCjApiKeyInput] = useState('');
+  const [showCjApiKey, setShowCjApiKey] = useState(false);
   const [cjEmailInput, setCjEmailInput] = useState('');
   const [cjUsdRateInput, setCjUsdRateInput] = useState(1420);
   const [cjMarkupInput, setCjMarkupInput] = useState(35);
@@ -618,9 +619,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       fetchAllData(true);
     }, 4000);
 
-    // Live Firestore onSnapshot listeners for instant push updates
+    // Live Firestore onSnapshot listeners for instant push updates (only if Firestore is active and provisioned)
     const unsubs: (() => void)[] = [];
-    try {
+    if (isFirestoreConnected()) {
+      try {
       // 1. Orders
       const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
         if (!snapshot.empty) {
@@ -710,8 +712,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         console.warn('[Firestore] Live audit logs subscription notice:', err.message);
       });
       unsubs.push(unsubAudit);
-    } catch (e) {
-      console.warn('[Firestore] Realtime subscription init error:', e);
+      } catch (e) {
+        console.warn('[Firestore] Realtime subscription init error:', e);
+      }
     }
 
     return () => {
@@ -1045,9 +1048,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         selectedCategories: cjSelectedCategories
       });
       setCjConfig(updated);
-      showToast('CJ Dropshipping settings saved successfully!');
+      if (updated.apiKey) {
+        setCjApiKeyInput(updated.apiKey);
+      }
+      if (updated.email) {
+        setCjEmailInput(updated.email);
+      }
+      showToast('CJ Dropshipping credentials and settings saved successfully!');
+      fetchAllData(true);
     } catch (err: any) {
-      showToast(err.message || 'Failed to save CJ configuration', 'error');
+      console.error('CJ config save error:', err);
+      showToast(err.message || 'Failed to save CJ configuration. Please check your credentials.', 'error');
     } finally {
       setSavingCjConfig(false);
     }
@@ -5531,25 +5542,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">CJ API Key / Access Token</label>
-                      <input
-                        type="password"
-                        value={cjApiKeyInput}
-                        onChange={(e) => setCjApiKeyInput(e.target.value)}
-                        placeholder="Paste your CJ API Key or Access Token"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700">CJ API Key / Access Token</label>
+                        {cjConfig?.hasApiKey && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            Key Saved
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showCjApiKey ? 'text' : 'password'}
+                          value={cjApiKeyInput}
+                          onChange={(e) => setCjApiKeyInput(e.target.value)}
+                          placeholder="Paste your CJ API Key or Access Token"
+                          className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 font-mono text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCjApiKey(!showCjApiKey)}
+                          className="absolute right-2.5 top-2.5 p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                          title={showCjApiKey ? 'Hide API key' : 'Show API key'}
+                        >
+                          {showCjApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                       <span className="text-[10px] text-slate-400 mt-1 block">Secured safely on backend</span>
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">CJ Account Email</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700">CJ Account Email</label>
+                        {cjConfig?.email && (
+                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                            Connected
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="email"
                         value={cjEmailInput}
                         onChange={(e) => setCjEmailInput(e.target.value)}
                         placeholder="your-cj-email@domain.com"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
                       />
                       <span className="text-[10px] text-slate-400 mt-1 block">Account notification identifier</span>
                     </div>
