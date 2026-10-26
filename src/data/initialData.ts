@@ -35,13 +35,15 @@ export const initialSettings: AppSettings = {
   maintenanceMessage: "ContactReach Market is currently undergoing planned system upgrades to improve your shopping experience. All existing customer orders, accounts, and payments are safe. We will be back online shortly!",
   maintenanceEstimatedTime: "",
   cjConfig: {
-    apiKey: 'CJ5955548@api@7600932f7a6b4f3ea4e6dcfaaaa996a3',
+    // Secret must be supplied via server environment; never commit credentials.
+    apiKey: '',
     email: 'contactreachmedialimited@gmail.com',
     autoUploadEnabled: false,
     syncFrequency: 'daily',
     defaultMarkupPercent: 35,
     usdToRwfRate: 1420,
-    autoPublish: true,
+    autoPublish: false,
+    requireAdminApproval: true,
     selectedCategories: ['electronics', 'fashion', 'amatara', 'hair-beauty', 'amasaha', 'ibikapu', 'sports'],
     lastSyncStats: {
       uploadedCount: 0,

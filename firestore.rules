@@ -35,9 +35,7 @@ service cloud.firestore {
             request.auth.token.email == 'inzozilink@gmail.com' ||
             request.auth.token.email == 'manirihothierry11@gmail.com' ||
             request.auth.token.email == 'umuhuzamarket@gmail.com' ||
-            request.auth.token.email == 'admin@contactreachmedia.rw' ||
-            request.auth.token.email.matches('.*@contactreachmedia\\.rw$') ||
-            request.auth.token.email.matches('manirihothierry.*@gmail\\.com$')
+            request.auth.token.email == 'admin@contactreachmedia.rw'
           ) && request.auth.token.email_verified == true
         ) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
@@ -122,8 +120,7 @@ service cloud.firestore {
 
     // Orders collection
     match /orders/{orderId} {
-      allow get: if true;
-      allow list: if isVerifiedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get, list: if isVerifiedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(orderId) && isValidOrder(incoming()) && incoming().status == 'New' && incoming().paymentStatus == 'Pending Payment';
       allow update: if isVerifiedAdmin() && isValidId(orderId) && isValidOrder(incoming());
       allow delete: if isVerifiedAdmin() && isValidId(orderId);
