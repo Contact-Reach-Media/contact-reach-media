@@ -753,14 +753,11 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   const token = authHeader.split(' ')[1];
   let session = db.adminTokens.get(token);
 
-  // Fallback: If client token was issued from authorized Firebase session or persistent admin token
+  // Fallback: If client token was issued from authorized Firebase session
   if (!session && token) {
     const isRecognizedToken =
       token.startsWith('fb_client_token_') ||
-      token.startsWith('crm_admin_') ||
-      token.startsWith('crm_token_') ||
-      token.startsWith('adm-tok-') ||
-      token.length >= 16;
+      token.startsWith('crm_admin_');
 
     if (isRecognizedToken) {
       const fallbackOwner =
@@ -2707,7 +2704,11 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'a
 // Export all products for spreadsheet generation
 app.get('/api/admin/products/export', requireAdminAuth, (req: Request, res: Response) => {
   const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
-  const totalStockValuation = activeProducts.reduce((sum, p) => sum + (p.price * (p.stock || 0)), 0);
+  const totalStockValuation = activeProducts.reduce((sum, p) => {
+    const price = (typeof p.price === 'number' && !isNaN(p.price)) ? p.price : 0;
+    const stock = (typeof p.stock === 'number' && !isNaN(p.stock)) ? p.stock : 0;
+    return sum + (price * stock);
+  }, 0);
 
   res.json({
     totalProducts: activeProducts.length,
@@ -4249,6 +4250,62 @@ const CJ_CURATED_FEED: CjCuratedItem[] = [
   }
 ];
 
+// Robust parser for CJ Dropshipping product prices which may be numbers, numeric strings, or ranges (e.g. "1.20 -- 4.04")
+function parseCjPrice(rawPrice: any, fallback: number = 12): number {
+  if (typeof rawPrice === 'number' && !isNaN(rawPrice) && rawPrice > 0) return rawPrice;
+  if (typeof rawPrice === 'string') {
+    const match = rawPrice.match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (match) {
+      const parsed = parseFloat(match[1]);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+  }
+  return fallback;
+}
+
+// Cache CJ access token to prevent redundant token exchanges
+let cjTokenCache: { token: string; expiresAt: number; key: string } | null = null;
+
+async function getCjAccessToken(rawKey?: string, email?: string): Promise<string | null> {
+  const effectiveKey = (rawKey || db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  if (!effectiveKey || effectiveKey.length < 10) return null;
+
+  // Already a full JWT / CJ Access Token
+  if (effectiveKey.startsWith('API@') || effectiveKey.includes('eyJ')) {
+    return effectiveKey;
+  }
+
+  // Check cache
+  if (cjTokenCache && cjTokenCache.key === effectiveKey && Date.now() < cjTokenCache.expiresAt) {
+    return cjTokenCache.token;
+  }
+
+  const targetEmail = (email || db.settings.cjConfig?.email || 'contactreachmedialimited@gmail.com').trim();
+  try {
+    const authRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: targetEmail,
+        apiKey: effectiveKey
+      }),
+      signal: AbortSignal.timeout(6000)
+    });
+    if (authRes.ok) {
+      const data = await authRes.json();
+      if (data && (data.code === 200 || data.result === true) && data.data?.accessToken) {
+        const token = data.data.accessToken;
+        cjTokenCache = { token, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, key: effectiveKey };
+        return token;
+      }
+    }
+  } catch (err: any) {
+    console.warn('[CJ Dropshipping] Failed to exchange API key for access token:', err.message || err);
+  }
+
+  return effectiveKey;
+}
+
 // Helper to perform automated product upload from CJ Dropshipping
 async function syncCjDropshippingProducts(categoryFilter?: string, adminName: string = 'System Automation'): Promise<{
   uploadedCount: number;
@@ -4266,19 +4323,30 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
   const effectiveCjKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (effectiveCjKey && effectiveCjKey.length >= 10) {
     try {
-      const cjRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
-        method: 'POST',
+      const liveToken = (await getCjAccessToken(effectiveCjKey, config.email)) || effectiveCjKey;
+      const url = `https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=1&pageSize=20${categoryFilter && categoryFilter !== 'all' ? `&categoryName=${encodeURIComponent(categoryFilter)}` : ''}`;
+      let cjRes = await fetch(url, {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-          'CJ-Access-Token': effectiveCjKey
+          'CJ-Access-Token': liveToken
         },
-        body: JSON.stringify({
-          pageNum: 1,
-          pageSize: 20,
-          categoryName: categoryFilter && categoryFilter !== 'all' ? categoryFilter : undefined
-        }),
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(6000)
       });
+      if (!cjRes.ok) {
+        cjRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'CJ-Access-Token': liveToken
+          },
+          body: JSON.stringify({
+            pageNum: 1,
+            pageSize: 20,
+            categoryName: categoryFilter && categoryFilter !== 'all' ? categoryFilter : undefined
+          }),
+          signal: AbortSignal.timeout(6000)
+        });
+      }
       if (cjRes.ok) {
         const cjData = await cjRes.json();
         if (cjData && (cjData.code === 200 || cjData.result === true) && cjData.data?.list?.length > 0) {
@@ -4288,7 +4356,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
             productSku: p.productSku || `CJ-LIVE-${p.pid || Date.now()}`,
             productImage: p.productImage || (Array.isArray(p.productImageSet) && p.productImageSet[0]) || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
             productImageSet: Array.isArray(p.productImageSet) && p.productImageSet.length > 0 ? p.productImageSet : [p.productImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
-            sellPrice: Number(p.sellPrice || p.price || 12),
+            sellPrice: parseCjPrice(p.sellPrice || p.price, 12),
             description: p.description || p.productNameEn || 'Imported directly from verified CJ Dropshipping fulfillment center.',
             category: categoryFilter && categoryFilter !== 'all' ? categoryFilter : 'electronics',
             brand: p.brand || 'CJ Partner',
@@ -4592,20 +4660,41 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
   const effectiveKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (effectiveKey && effectiveKey.length >= 10) {
     try {
-      const cjRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'CJ-Access-Token': effectiveKey
-        },
-        body: JSON.stringify({
-          pageNum: Number(page) || 1,
-          pageSize: Number(pageSize) || 20,
-          productNameEn: query ? String(query).trim() : undefined,
-          categoryName: category && category !== 'all' ? String(category) : undefined
-        }),
-        signal: AbortSignal.timeout(5000)
+      const liveToken = (await getCjAccessToken(effectiveKey, config.email)) || effectiveKey;
+      const queryParams = new URLSearchParams({
+        pageNum: String(Number(page) || 1),
+        pageSize: String(Number(pageSize) || 20)
       });
+      if (query && String(query).trim()) {
+        queryParams.set('productNameEn', String(query).trim());
+      }
+      if (category && category !== 'all') {
+        queryParams.set('categoryName', String(category));
+      }
+
+      let cjRes = await fetch(`https://developers.cjdropshipping.com/api2.0/v1/product/list?${queryParams.toString()}`, {
+        method: 'GET',
+        headers: {
+          'CJ-Access-Token': liveToken
+        },
+        signal: AbortSignal.timeout(6000)
+      });
+      if (!cjRes.ok) {
+        cjRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'CJ-Access-Token': liveToken
+          },
+          body: JSON.stringify({
+            pageNum: Number(page) || 1,
+            pageSize: Number(pageSize) || 20,
+            productNameEn: query ? String(query).trim() : undefined,
+            categoryName: category && category !== 'all' ? String(category) : undefined
+          }),
+          signal: AbortSignal.timeout(6000)
+        });
+      }
       if (cjRes.ok) {
         const cjData = await cjRes.json();
         if (cjData && (cjData.code === 200 || cjData.result === true) && Array.isArray(cjData.data?.list)) {
@@ -4615,7 +4704,7 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
             productSku: p.productSku || `CJ-LIVE-${p.pid || Date.now()}`,
             productImage: p.productImage || (Array.isArray(p.productImageSet) && p.productImageSet[0]) || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
             productImageSet: Array.isArray(p.productImageSet) && p.productImageSet.length > 0 ? p.productImageSet : [p.productImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
-            sellPrice: Number(p.sellPrice || p.price || 12),
+            sellPrice: parseCjPrice(p.sellPrice || p.price, 12),
             description: p.description || p.productNameEn || 'Imported directly from verified CJ Dropshipping fulfillment center.',
             category: category && category !== 'all' ? String(category) : 'electronics',
             brand: p.brand || 'CJ Partner',
