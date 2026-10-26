@@ -4332,7 +4332,10 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
   let candidateFeed = [...CJ_CURATED_FEED];
 
   // If live CJ API key or access token is configured, attempt to fetch live product feed
-  const effectiveCjKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  const effectiveCjKey = (process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  if (!effectiveCjKey || effectiveCjKey.length < 10) {
+    throw new Error('CJ server API key is not configured. Curated catalog data is not a live supplier sync.');
+  }
   if (effectiveCjKey && effectiveCjKey.length >= 10) {
     try {
       const liveToken = await getCjAccessToken(effectiveCjKey, config.email);
