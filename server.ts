@@ -5256,19 +5256,13 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
       stats: result
     });
   } catch (err: any) {
-    console.error('[CJ Dropshipping] Sync notice:', err);
-    try {
-      const fallbackResult = await syncCjDropshippingProducts(undefined, admin?.name || 'Administrator');
-      res.json({
-        success: true,
-        message: `Catalog synchronized successfully (${fallbackResult.uploadedCount} products added, ${fallbackResult.updatedCount} updated). All product costs are fully editable by admin.`,
-        uploadedCount: fallbackResult.uploadedCount,
-        updatedCount: fallbackResult.updatedCount,
-        stats: fallbackResult
-      });
-    } catch (fallbackErr: any) {
-      res.status(500).json({ error: err.message || 'Failed to sync CJ Dropshipping products' });
-    }
+    console.error('[CJ Dropshipping] Sync failed:', err?.message || err);
+    return res.status(502).json({
+      success: false,
+      source: 'live_cj',
+      message: 'CJ sync failed. No successful live sync is being reported.',
+      error: err?.message || 'Unknown CJ sync error'
+    });
   }
 });
 
