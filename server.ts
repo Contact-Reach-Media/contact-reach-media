@@ -4279,7 +4279,7 @@ function parseCjPrice(rawPrice: any, fallback: number = 12): number {
 let cjTokenCache: { token: string; expiresAt: number; key: string } | null = null;
 
 async function getCjAccessToken(rawKey?: string, email?: string): Promise<string | null> {
-  const effectiveKey = (rawKey || db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  const effectiveKey = (rawKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (!effectiveKey || effectiveKey.length < 10) return null;
 
   // Already a full JWT / CJ Access Token
@@ -4584,12 +4584,11 @@ app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owne
   const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1];
   const current = db.settings.cjConfig || initialSettings.cjConfig!;
   
-  // Guard API key: don't overwrite with masked string
-  let effectiveApiKey = current.apiKey || '';
+  // Credentials are never persisted to local JSON or Firestore.
+  // For durable production configuration, set CJ_DROPSHIPPING_API_KEY in deployment secrets.
   if (req.body.apiKey !== undefined && typeof req.body.apiKey === 'string') {
     const trimmed = req.body.apiKey.trim();
     if (trimmed && !trimmed.includes('••••')) {
-      effectiveApiKey = trimmed;
       process.env.CJ_DROPSHIPPING_API_KEY = trimmed;
     }
   }
@@ -4601,7 +4600,7 @@ app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owne
   const updated: CjDropshippingConfig = {
     ...current,
     ...req.body,
-    apiKey: effectiveApiKey,
+    apiKey: '',
     email: effectiveEmail,
     usdToRwfRate: Number(req.body.usdToRwfRate) || current.usdToRwfRate || 1420,
     defaultMarkupPercent: req.body.defaultMarkupPercent !== undefined ? Number(req.body.defaultMarkupPercent) : (current.defaultMarkupPercent || 35),
@@ -4622,7 +4621,7 @@ app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owne
     `Updated CJ Dropshipping settings (Email: ${updated.email || 'N/A'}, Approval Required: ${updated.requireAdminApproval ? 'YES' : 'NO'}, Rate: ${updated.usdToRwfRate} RWF, Markup: ${updated.defaultMarkupPercent}%)`
   );
 
-  const rawKey = updated.apiKey || '';
+  const rawKey = process.env.CJ_DROPSHIPPING_API_KEY || '';
   const maskedKey = rawKey.length > 8
     ? `${rawKey.slice(0, 4)}••••••••${rawKey.slice(-4)}`
     : (rawKey ? '••••••••' : '');
@@ -4646,7 +4645,6 @@ app.post('/api/admin/cjdropshipping/test-connection', requireAdminAuth, async (r
   const effectiveKey =
     submittedKey ||
     process.env.CJ_DROPSHIPPING_API_KEY?.trim() ||
-    db.settings.cjConfig?.apiKey?.trim() ||
     '';
   const effectiveEmail =
     (typeof req.body?.email === 'string' && req.body.email.trim()) ||
@@ -4701,7 +4699,7 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
   let pool: CjCuratedItem[] = [...CJ_CURATED_FEED];
 
   // If live CJ API credentials exist, attempt to fetch live supplier search
-  const effectiveKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  const effectiveKey = (process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (effectiveKey && effectiveKey.length >= 10) {
     try {
       const liveToken = await getCjAccessToken(effectiveKey, config.email);
