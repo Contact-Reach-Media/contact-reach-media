@@ -1495,6 +1495,66 @@ async function runTests() {
     assert(newProds.some((p: any) => p.sku === 'CRM-NYUNGWE-HONEY'), 'New spreadsheet product must be retrievable');
   });
 
+  // TEST 40: Admin CJ Dropshipping API Key, Account Email Persistence & Security
+  await test('Admin can update and persist CJ Dropshipping API credentials and email with masked responses', async () => {
+    // 1. Unauthenticated update must fail with 401
+    const unauthPut = await fetch(`${BASE_URL}/api/admin/cjdropshipping/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: 'some-fake-key-1234567890', email: 'test@domain.com' })
+    });
+    assert.strictEqual(unauthPut.status, 401, 'Unauthenticated config update must fail');
+
+    // 2. Authenticated update with API key and email
+    const saveRes = await fetch(`${BASE_URL}/api/admin/cjdropshipping/config`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        apiKey: 'cj_live_secret_key_998877665544332211',
+        email: 'supplier-ops@contactreachmedia.rw',
+        usdToRwfRate: 1435,
+        defaultMarkupPercent: 40,
+        requireAdminApproval: true,
+        autoUploadEnabled: false
+      })
+    });
+    assert.strictEqual(saveRes.status, 200, 'Saving CJ config should succeed with 200');
+    const saveData = await saveRes.json();
+    assert.strictEqual(saveData.config.email, 'supplier-ops@contactreachmedia.rw', 'Email should be saved');
+    assert.strictEqual(saveData.config.usdToRwfRate, 1435, 'USD rate should be saved');
+    assert.strictEqual(saveData.config.defaultMarkupPercent, 40, 'Markup should be saved');
+    assert.strictEqual(saveData.config.hasApiKey, true, 'hasApiKey flag should be true');
+    assert(saveData.config.apiKey.includes('••••'), 'Returned API key should be masked for security');
+
+    // 3. GET config returns masked key and stored email
+    const getRes = await fetch(`${BASE_URL}/api/admin/cjdropshipping/config`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(getRes.status, 200, 'GET config should succeed with 200');
+    const getData = await getRes.json();
+    assert.strictEqual(getData.email, 'supplier-ops@contactreachmedia.rw', 'GET config should return saved email');
+    assert.strictEqual(getData.hasApiKey, true, 'GET config should show hasApiKey: true');
+
+    // 4. Test connection endpoint accepts credentials
+    const testConnRes = await fetch(`${BASE_URL}/api/admin/cjdropshipping/test-connection`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        apiKey: 'cj_live_secret_key_998877665544332211',
+        email: 'supplier-ops@contactreachmedia.rw'
+      })
+    });
+    assert.strictEqual(testConnRes.status, 200, 'Test connection endpoint should return 200');
+    const testConnData = await testConnRes.json();
+    assert.strictEqual(testConnData.success, true, 'Connection test should report success');
+  });
+
 
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
