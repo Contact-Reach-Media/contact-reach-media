@@ -3,7 +3,7 @@ import {
   VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority,
-  CjDropshippingConfig, GoogleDriveBackupStatus
+  CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig
 } from '../types.ts';
 import { initialProducts, initialCategories, initialSettings, initialShops } from '../data/initialData.ts';
 import {
@@ -2444,6 +2444,85 @@ export const api = {
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson) {
       throw new Error(parsed.json?.error || 'Failed to export products catalog');
+    }
+    return parsed.json;
+  },
+
+  async getGoogleSheetConfig(): Promise<{
+    config: GoogleSheetSyncConfig;
+    totalProducts: number;
+  }> {
+    const res = await fetch('/api/admin/google-sheet', {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to fetch Google Sheet configuration');
+    }
+    return parsed.json;
+  },
+
+  async updateGoogleSheetConfig(config: Partial<GoogleSheetSyncConfig>): Promise<{
+    success: boolean;
+    config: GoogleSheetSyncConfig;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/google-sheet', {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(config)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to update Google Sheet settings');
+    }
+    return parsed.json;
+  },
+
+  async syncPullFromGoogleSheet(sheetId?: string, tabName?: string, accessToken?: string): Promise<{
+    success: boolean;
+    message: string;
+    createdCount: number;
+    updatedCount: number;
+    unchangedCount: number;
+    totalSheetRows: number;
+    totalProducts: number;
+    products: Product[];
+    config?: GoogleSheetSyncConfig;
+  }> {
+    const res = await fetch('/api/admin/google-sheet/sync-pull', {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        ...(accessToken ? { 'X-Google-Access-Token': accessToken } : {})
+      },
+      body: JSON.stringify({ sheetId, tabName, accessToken })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to sync edits from Google Sheet');
+    }
+    return parsed.json;
+  },
+
+  async syncPushToGoogleSheet(accessToken: string, sheetId?: string, tabName?: string): Promise<{
+    success: boolean;
+    message: string;
+    updatedRows: number;
+    spreadsheetUrl: string;
+    config?: GoogleSheetSyncConfig;
+  }> {
+    const res = await fetch('/api/admin/google-sheet/sync-push', {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'X-Google-Access-Token': accessToken
+      },
+      body: JSON.stringify({ accessToken, sheetId, tabName })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to save products to Google Sheet');
     }
     return parsed.json;
   }

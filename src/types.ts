@@ -287,6 +287,27 @@ export interface AppSettings {
   cjConfig?: CjDropshippingConfig;
   // Google Drive & Cloud Backup
   driveBackupStatus?: GoogleDriveBackupStatus;
+  // Google Sheets Direct Product Sync
+  googleSheetConfig?: GoogleSheetSyncConfig;
+}
+
+export interface GoogleSheetSyncConfig {
+  sheetUrl: string;
+  sheetId: string;
+  sheetTabName?: string;
+  autoSyncEnabled?: boolean;
+  syncDirection?: 'two_way' | 'pull_from_sheet' | 'push_to_sheet';
+  lastSyncAt?: string;
+  connectedAt?: string;
+  lastSyncStats?: {
+    totalProducts?: number;
+    syncedCount?: number;
+    createdCount?: number;
+    updatedCount?: number;
+    timestamp: string;
+    status: 'success' | 'failed' | 'idle';
+    message?: string;
+  };
 }
 
 export interface CjDropshippingConfig {

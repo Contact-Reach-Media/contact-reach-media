@@ -55,6 +55,19 @@ export const initialSettings: AppSettings = {
     status: 'idle',
     fileName: 'ContactReach_Market_Products.json',
     autoSyncEnabled: true
+  },
+  googleSheetConfig: {
+    sheetUrl: 'https://docs.google.com/spreadsheets/d/1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk/edit?usp=sharing',
+    sheetId: '1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk',
+    sheetTabName: 'Sheet1',
+    autoSyncEnabled: true,
+    syncDirection: 'two_way',
+    connectedAt: new Date().toISOString(),
+    lastSyncStats: {
+      status: 'idle',
+      timestamp: new Date().toISOString(),
+      message: 'Connected to Google Sheet'
+    }
   }
 };
 

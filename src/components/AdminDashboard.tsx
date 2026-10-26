@@ -1351,6 +1351,60 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  // Google Sheets Direct Live Sync Handlers
+  const [syncingFromSheet, setSyncingFromSheet] = useState(false);
+  const [syncingToSheet, setSyncingToSheet] = useState(false);
+
+  const handleSyncPullFromGoogleSheet = async () => {
+    setSyncingFromSheet(true);
+    try {
+      const token = getGoogleAccessToken();
+      const res = await api.syncPullFromGoogleSheet(undefined, undefined, token || undefined);
+      showToast(res.message, 'success');
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to sync edits from Google Sheet', 'error');
+    } finally {
+      setSyncingFromSheet(false);
+    }
+  };
+
+  const handleSyncPushToGoogleSheet = async () => {
+    let token = getGoogleAccessToken();
+    if (!token) {
+      try {
+        const authRes = await loginWithGoogle();
+        token = authRes.accessToken || getGoogleAccessToken();
+      } catch (err: any) {
+        showToast('Google authorization required to save to Google Sheet', 'error');
+        return;
+      }
+    }
+
+    if (!token) {
+      showToast('Please authorize your Google account to save products to Google Sheet', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Save all ${products.length} store products to your linked Google Sheet (1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk)? This will update the rows in the spreadsheet.`
+    );
+    if (!confirmed) return;
+
+    setSyncingToSheet(true);
+    try {
+      const res = await api.syncPushToGoogleSheet(token);
+      showToast(res.message, 'success');
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save products to Google Sheet', 'error');
+    } finally {
+      setSyncingToSheet(false);
+    }
+  };
+
   // Stock Adjustment
   const handleSaveStockAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2279,6 +2333,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Plus className="w-4 h-4" />
                     <span>Add New Product</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Google Sheets Direct Live Sync Banner */}
+              <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-3xl p-5 shadow-sm text-white">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <FileSpreadsheet className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-bold text-white tracking-tight">Google Sheet Live Connected</h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          Saved & Edited in Real-Time
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-1.5">
+                        <span>Spreadsheet Link:</span>
+                        <a
+                          href="https://docs.google.com/spreadsheets/d/1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk/edit?usp=sharing"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-300 hover:text-emerald-200 underline font-mono text-[11px] inline-flex items-center gap-1 font-semibold"
+                        >
+                          docs.google.com/spreadsheets/d/1kaLUCemqV6... <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </p>
+                      <div className="text-[11px] text-emerald-400/80 mt-1 flex flex-wrap items-center gap-2">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {settings?.googleSheetConfig?.lastSyncAt
+                            ? `Last Synced: ${new Date(settings.googleSheetConfig.lastSyncAt).toLocaleString()} (${settings.googleSheetConfig.lastSyncStats?.message || 'Up to date'})`
+                            : 'Connected & ready to sync'}
+                        </span>
+                        <span className="text-slate-500">·</span>
+                        <span>{products.length} products in store catalog</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
+                    <button
+                      onClick={handleSyncPullFromGoogleSheet}
+                      disabled={syncingFromSheet}
+                      className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-95"
+                      title="Pull and update website products with latest edits from your Google Sheet"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncingFromSheet ? 'animate-spin' : ''}`} />
+                      <span>{syncingFromSheet ? 'Syncing...' : 'Sync from Google Sheet (Pull Edits)'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleSyncPushToGoogleSheet}
+                      disabled={syncingToSheet}
+                      className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                      title="Save current website products to the Google Sheet"
+                    >
+                      <Upload className={`w-3.5 h-3.5 ${syncingToSheet ? 'animate-bounce text-emerald-400' : 'text-slate-300'}`} />
+                      <span>{syncingToSheet ? 'Saving...' : 'Save to Google Sheet (Push)'}</span>
+                    </button>
+
+                    <a
+                      href="https://docs.google.com/spreadsheets/d/1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk/edit?usp=sharing"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Open Sheet ↗</span>
+                    </a>
+                  </div>
                 </div>
               </div>
 

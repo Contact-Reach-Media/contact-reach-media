@@ -1555,6 +1555,51 @@ async function runTests() {
     assert.strictEqual(testConnData.success, true, 'Connection test should report success');
   });
 
+  // TEST 41: Google Sheet Direct Product Connection & Synchronization
+  await test('Google Sheet direct product sync pulls edits and maintains live connection', async () => {
+    // 1. GET connected Google Sheet config
+    const sheetRes = await fetch(`${BASE_URL}/api/admin/google-sheet`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(sheetRes.status, 200, 'GET /api/admin/google-sheet should return 200');
+    const sheetData = await sheetRes.json();
+    assert.strictEqual(sheetData.config.sheetId, '1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk', 'Should link to the designated Google Sheet');
+    assert(sheetData.config.sheetUrl.includes('1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk'), 'URL should match spreadsheet ID');
+
+    // 2. PUT config updates settings
+    const updateRes = await fetch(`${BASE_URL}/api/admin/google-sheet`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        autoSyncEnabled: true,
+        sheetTabName: 'Sheet1'
+      })
+    });
+    assert.strictEqual(updateRes.status, 200, 'PUT /api/admin/google-sheet should return 200');
+    const updateData = await updateRes.json();
+    assert.strictEqual(updateData.config.autoSyncEnabled, true);
+
+    // 3. POST /api/admin/google-sheet/sync-pull executes live pull from Google Sheet
+    const pullRes = await fetch(`${BASE_URL}/api/admin/google-sheet/sync-pull`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        sheetId: '1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk',
+        tabName: 'Sheet1'
+      })
+    });
+    assert.strictEqual(pullRes.status, 200, 'Sync pull should succeed with 200');
+    const pullData = await pullRes.json();
+    assert.strictEqual(pullData.success, true);
+    assert(pullData.totalSheetRows > 0, 'Should have processed sheet rows');
+  });
+
 
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);

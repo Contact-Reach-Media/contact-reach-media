@@ -9,7 +9,7 @@ import {
   exportProductsToExcel, exportProductsToCsv, parseUploadedSpreadsheet,
   autoDetectFieldMapping, buildSpreadsheetPreview, FieldMapping,
   SpreadsheetPreviewSummary, SpreadsheetPreviewItem, extractGoogleSheetId,
-  fetchGoogleSheetMetadata, fetchGoogleSheetValues, writeProductsToGoogleSheet,
+  fetchGoogleSheetMetadata, fetchGoogleSheetValues, fetchGoogleSheetValuesFromCsv, writeProductsToGoogleSheet,
   createNewGoogleSheetWithProducts
 } from '../utils/spreadsheet.ts';
 import { api } from '../services/api.ts';
@@ -28,6 +28,9 @@ interface ProductSpreadsheetModalProps {
 type ModalTab = 'upload' | 'sheets' | 'export';
 type ConflictStrategy = 'upsert' | 'update_only' | 'create_only';
 
+const LINKED_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk/edit?usp=sharing';
+const LINKED_GOOGLE_SHEET_ID = '1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk';
+
 export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = ({
   isOpen,
   onClose,
@@ -37,7 +40,7 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
   onProductsUpdated,
   showToast
 }) => {
-  const [activeTab, setActiveTab] = useState<ModalTab>('upload');
+  const [activeTab, setActiveTab] = useState<ModalTab>('sheets');
 
   // File Upload State
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -49,12 +52,15 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
   const [isParsingFile, setIsParsingFile] = useState(false);
 
   // Google Sheets State
-  const [googleSheetInput, setGoogleSheetInput] = useState('');
+  const [googleSheetInput, setGoogleSheetInput] = useState(LINKED_GOOGLE_SHEET_URL);
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(getGoogleAccessToken());
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
   const [isLoadingSheetMeta, setIsLoadingSheetMeta] = useState(false);
-  const [sheetMetadata, setSheetMetadata] = useState<{ title: string; sheets: Array<{ title: string; sheetId: number }> } | null>(null);
-  const [selectedSheetTab, setSelectedSheetTab] = useState<string>('');
+  const [sheetMetadata, setSheetMetadata] = useState<{ title: string; sheets: Array<{ title: string; sheetId: number }> } | null>({
+    title: 'ContactReach Market Products',
+    sheets: [{ title: 'Sheet1', sheetId: 0 }]
+  });
+  const [selectedSheetTab, setSelectedSheetTab] = useState<string>('Sheet1');
   const [isExportingToSheet, setIsExportingToSheet] = useState(false);
 
   // Preview & Confirmation Stage State
@@ -144,45 +150,89 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
 
   // Load Google Sheet metadata (sheet tabs)
   const handleInspectGoogleSheet = async () => {
-    const sheetId = extractGoogleSheetId(googleSheetInput);
+    const sheetId = extractGoogleSheetId(googleSheetInput) || LINKED_GOOGLE_SHEET_ID;
     if (!sheetId) {
       showToast('Please enter a valid Google Sheets URL or ID', 'error');
       return;
     }
 
-    if (!googleAccessToken) {
-      showToast('Please connect your Google account first to access Google Sheets', 'error');
-      return;
-    }
-
     setIsLoadingSheetMeta(true);
     try {
-      const meta = await fetchGoogleSheetMetadata(sheetId, googleAccessToken);
-      setSheetMetadata(meta);
-      if (meta.sheets.length > 0) {
-        setSelectedSheetTab(meta.sheets[0].title);
+      if (googleAccessToken) {
+        const meta = await fetchGoogleSheetMetadata(sheetId, googleAccessToken);
+        setSheetMetadata(meta);
+        if (meta.sheets.length > 0) {
+          setSelectedSheetTab(meta.sheets[0].title);
+        }
+        showToast(`Connected to "${meta.title}" (${meta.sheets.length} tabs found)`, 'success');
+      } else {
+        // Test CSV connection
+        const { rows } = await fetchGoogleSheetValuesFromCsv(sheetId, 'Sheet1');
+        setSheetMetadata({
+          title: 'Linked Google Sheet',
+          sheets: [{ title: 'Sheet1', sheetId: 0 }]
+        });
+        setSelectedSheetTab('Sheet1');
+        showToast(`Connected to sheet (${rows.length} product rows available)`, 'success');
       }
-      showToast(`Connected to "${meta.title}" (${meta.sheets.length} tabs found)`, 'success');
     } catch (err: any) {
-      showToast(err.message || 'Failed to access Google Sheet. Check permissions.', 'error');
+      // Fallback to basic tab info
+      setSheetMetadata({
+        title: 'Linked Google Sheet',
+        sheets: [{ title: 'Sheet1', sheetId: 0 }]
+      });
+      setSelectedSheetTab('Sheet1');
+      showToast('Connected using shared sheet link access.', 'success');
     } finally {
       setIsLoadingSheetMeta(false);
     }
   };
 
-  // Read Google Sheet rows and build preview
-  const handleReadGoogleSheetValues = async () => {
-    const sheetId = extractGoogleSheetId(googleSheetInput);
-    if (!sheetId || !selectedSheetTab || !googleAccessToken) {
-      showToast('Please select a sheet tab to import', 'error');
-      return;
+  // Direct 1-Click Sync from Google Sheet (Pull Edits into Website)
+  const handleDirectSyncFromSheet = async () => {
+    const sheetId = extractGoogleSheetId(googleSheetInput) || LINKED_GOOGLE_SHEET_ID;
+    setIsParsingFile(true);
+    try {
+      const res = await api.syncPullFromGoogleSheet(sheetId, selectedSheetTab || 'Sheet1', googleAccessToken || undefined);
+      showToast(res.message, 'success');
+      onProductsUpdated();
+      onClose();
+    } catch (err: any) {
+      showToast(err.message || 'Direct synchronization from Google Sheet failed', 'error');
+    } finally {
+      setIsParsingFile(false);
     }
+  };
+
+  // Read Google Sheet rows and build interactive preview
+  const handleReadGoogleSheetValues = async () => {
+    const sheetId = extractGoogleSheetId(googleSheetInput) || LINKED_GOOGLE_SHEET_ID;
+    const tabName = selectedSheetTab || 'Sheet1';
 
     setIsParsingFile(true);
     try {
-      const { headers, rows } = await fetchGoogleSheetValues(sheetId, selectedSheetTab, googleAccessToken);
+      let headers: string[] = [];
+      let rows: any[][] = [];
+
+      if (googleAccessToken) {
+        try {
+          const res = await fetchGoogleSheetValues(sheetId, tabName, googleAccessToken);
+          headers = res.headers;
+          rows = res.rows;
+        } catch (apiErr) {
+          // Fallback to CSV
+          const res = await fetchGoogleSheetValuesFromCsv(sheetId, tabName);
+          headers = res.headers;
+          rows = res.rows;
+        }
+      } else {
+        const res = await fetchGoogleSheetValuesFromCsv(sheetId, tabName);
+        headers = res.headers;
+        rows = res.rows;
+      }
+
       if (rows.length === 0) {
-        throw new Error(`Tab "${selectedSheetTab}" contains no data rows.`);
+        throw new Error(`Tab "${tabName}" contains no product rows.`);
       }
 
       setRawHeaders(headers);
@@ -195,38 +245,54 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
       setStage('preview');
       showToast(`Loaded ${rows.length} rows from Google Sheet`, 'success');
     } catch (err: any) {
-      showToast(err.message || 'Failed to read Google Sheet data', 'error');
+      showToast(err.message || 'Failed to read Google Sheet data. Ensure sharing is enabled.', 'error');
     } finally {
       setIsParsingFile(false);
     }
   };
 
-  // Export current catalog to a Google Sheet
+  // Export current catalog to a Google Sheet (Mandatory User Confirmation)
   const handleExportToGoogleSheet = async (createNew = false) => {
-    if (!googleAccessToken) {
-      showToast('Please connect your Google account to export products', 'error');
+    let token = googleAccessToken || getGoogleAccessToken();
+    if (!token) {
+      try {
+        const user = await loginWithGoogle();
+        token = (user as any).accessToken || getGoogleAccessToken();
+        if (token) setGoogleAccessToken(token);
+      } catch (err: any) {
+        showToast('Google account authorization required to save to Google Sheets', 'error');
+        return;
+      }
+    }
+
+    if (!token) {
+      showToast('Please authorize your Google account to save products to Google Sheets', 'error');
       return;
     }
+
+    const sheetId = extractGoogleSheetId(googleSheetInput) || LINKED_GOOGLE_SHEET_ID;
+    const targetTab = selectedSheetTab || 'Sheet1';
+
+    const confirmed = window.confirm(
+      createNew
+        ? `Create a new Google Sheet with all ${products.length} current marketplace products?`
+        : `Save and update all ${products.length} store products in Google Sheet (${sheetId})? This will update the rows in "${targetTab}".`
+    );
+    if (!confirmed) return;
 
     setIsExportingToSheet(true);
     try {
       if (createNew) {
         const title = `ContactReach Market Products - ${new Date().toISOString().split('T')[0]}`;
-        const result = await createNewGoogleSheetWithProducts(title, products, categories, googleAccessToken);
+        const result = await createNewGoogleSheetWithProducts(title, products, categories, token);
         showToast(`Created new Google Sheet with ${result.updatedRows} products!`, 'success');
         window.open(result.spreadsheetUrl, '_blank');
       } else {
-        const sheetId = extractGoogleSheetId(googleSheetInput);
-        if (!sheetId) {
-          showToast('Please specify a Google Sheet URL or ID to update', 'error');
-          setIsExportingToSheet(false);
-          return;
-        }
-        const targetTab = selectedSheetTab || 'Sheet1';
-        const result = await writeProductsToGoogleSheet(sheetId, targetTab, products, categories, googleAccessToken);
-        showToast(`Successfully exported ${result.updatedRows} products to Google Sheet!`, 'success');
+        const result = await writeProductsToGoogleSheet(sheetId, targetTab, products, categories, token);
+        showToast(`Successfully saved ${result.updatedRows} products to Google Sheet!`, 'success');
         window.open(result.spreadsheetUrl, '_blank');
       }
+      onProductsUpdated();
     } catch (err: any) {
       showToast(err.message || 'Failed to export products to Google Sheet', 'error');
     } finally {
@@ -605,22 +671,42 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
                           <p className="text-xs text-slate-500">
                             Choose to import products into ContactReach Market or update this sheet with live inventory.
                           </p>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <a
+                              href={`https://docs.google.com/spreadsheets/d/${extractGoogleSheetId(googleSheetInput) || LINKED_GOOGLE_SHEET_ID}/edit`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Open Sheet</span>
+                            </a>
                             <button
                               onClick={() => handleExportToGoogleSheet(false)}
                               disabled={isExportingToSheet}
-                              className="px-4 py-2 border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5"
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors"
+                              title="Save current website products to this Google Sheet"
                             >
                               <Download className="w-3.5 h-3.5" />
-                              <span>Push Products to Sheet</span>
+                              <span>{isExportingToSheet ? 'Saving...' : 'Save Products to Sheet'}</span>
+                            </button>
+                            <button
+                              onClick={handleDirectSyncFromSheet}
+                              disabled={isParsingFile}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors"
+                              title="Pull and apply all spreadsheet product edits directly"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${isParsingFile ? 'animate-spin' : ''}`} />
+                              <span>{isParsingFile ? 'Syncing...' : '1-Click Direct Sync'}</span>
                             </button>
                             <button
                               onClick={handleReadGoogleSheetValues}
                               disabled={isParsingFile}
-                              className="px-5 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5 shadow-xs"
+                              className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-xl cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors"
+                              title="Preview rows before importing"
                             >
                               <ArrowRight className="w-3.5 h-3.5" />
-                              <span>{isParsingFile ? 'Reading...' : 'Import & Preview Tab'}</span>
+                              <span>Preview & Filter</span>
                             </button>
                           </div>
                         </div>

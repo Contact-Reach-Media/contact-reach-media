@@ -17,12 +17,13 @@ import {
   collection as firestoreCollection
 } from 'firebase/firestore/lite';
 import { initialProducts, initialCategories, initialSettings, initialShops } from './src/data/initialData.ts';
+import * as XLSX from 'xlsx';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
   PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   AdminUser, AdminRole, PaymentMethodConfig, ProductReview, ProductVariation,
-  CjDropshippingConfig
+  CjDropshippingConfig, GoogleSheetSyncConfig
 } from './src/types.ts';
 
 const app = express();
@@ -353,7 +354,18 @@ function loadDbFromDisk() {
       if (parsed.reviews && Array.isArray(parsed.reviews)) db.reviews = parsed.reviews;
       if (parsed.supplierApplications && Array.isArray(parsed.supplierApplications)) db.supplierApplications = parsed.supplierApplications;
       if (parsed.supplierPayouts && Array.isArray(parsed.supplierPayouts)) db.supplierPayouts = parsed.supplierPayouts;
-      if (parsed.settings) db.settings = { ...initialSettings, ...parsed.settings, email: 'contactreachmedialimited@gmail.com', phone: '0780022600' };
+      if (parsed.settings) {
+        db.settings = {
+          ...initialSettings,
+          ...parsed.settings,
+          email: 'contactreachmedialimited@gmail.com',
+          phone: '0780022600',
+          googleSheetConfig: {
+            ...initialSettings.googleSheetConfig,
+            ...(parsed.settings.googleSheetConfig || {})
+          }
+        };
+      }
       if (parsed.deletedRecordIds && Array.isArray(parsed.deletedRecordIds)) db.deletedRecordIds = parsed.deletedRecordIds;
       if (parsed.adminTokens && Array.isArray(parsed.adminTokens)) {
         const now = Date.now();
@@ -5675,6 +5687,518 @@ app.post('/api/admin/drive/import-products', requireAdminAuth, requireRole(['own
 });
 
 // -------------------------------------------------------------
+// GOOGLE SHEETS DIRECT PRODUCT SYNC & EDITING
+// -------------------------------------------------------------
+
+const DEFAULT_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk/edit?usp=sharing';
+const DEFAULT_GOOGLE_SHEET_ID = '1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk';
+
+function getEffectiveSheetConfig(): GoogleSheetSyncConfig {
+  if (!db.settings.googleSheetConfig || !db.settings.googleSheetConfig.sheetId) {
+    db.settings.googleSheetConfig = {
+      sheetUrl: DEFAULT_GOOGLE_SHEET_URL,
+      sheetId: DEFAULT_GOOGLE_SHEET_ID,
+      sheetTabName: 'Sheet1',
+      autoSyncEnabled: true,
+      syncDirection: 'two_way',
+      connectedAt: new Date().toISOString(),
+      lastSyncStats: {
+        status: 'idle',
+        timestamp: new Date().toISOString(),
+        message: 'Connected to ContactReach Market Google Sheet'
+      }
+    };
+  }
+  return db.settings.googleSheetConfig;
+}
+
+// Extract Google Sheet ID from input URL or string
+function parseGoogleSheetId(input: string): string {
+  if (!input) return DEFAULT_GOOGLE_SHEET_ID;
+  const trimmed = input.trim();
+  if (/^[a-zA-Z0-9_-]{25,}$/.test(trimmed)) {
+    return trimmed;
+  }
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : DEFAULT_GOOGLE_SHEET_ID;
+}
+
+// Pull and parse rows from Google Sheet
+async function pullRowsFromGoogleSheet(sheetId: string, tabName = 'Sheet1', accessToken?: string): Promise<{ headers: string[]; rows: any[]; rawData: any[] }> {
+  let csvBuffer: Buffer | null = null;
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+
+  try {
+    const fetchHeaders: Record<string, string> = {};
+    if (accessToken) {
+      fetchHeaders['Authorization'] = `Bearer ${accessToken}`;
+    }
+    const res = await fetch(csvUrl, { headers: fetchHeaders });
+    if (res.ok) {
+      const arrayBuf = await res.arrayBuffer();
+      csvBuffer = Buffer.from(arrayBuf);
+    }
+  } catch (err) {
+    console.warn('[Google Sheets] CSV export notice:', err);
+  }
+
+  // If CSV export failed or returned empty and we have an accessToken, try Google Sheets API v4
+  if (!csvBuffer && accessToken) {
+    const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A1:Z2000`;
+    const apiRes = await fetch(apiUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (apiRes.ok) {
+      const apiData = await apiRes.json();
+      const values: any[][] = apiData.values || [];
+      if (values.length > 0) {
+        const headers = values[0].map((h: any) => String(h || '').trim());
+        const dataRows = values.slice(1).map((r: any[]) => {
+          const obj: Record<string, any> = {};
+          headers.forEach((h, idx) => {
+            obj[h] = r[idx] !== undefined ? r[idx] : '';
+          });
+          return obj;
+        });
+        return { headers, rows: values.slice(1), rawData: dataRows };
+      }
+    }
+  }
+
+  if (!csvBuffer) {
+    throw new Error('Unable to read Google Sheet data. Ensure the spreadsheet is shared with link access or Google account is authorized.');
+  }
+
+  const workbook = XLSX.read(csvBuffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+  const headerMatrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  const headers: string[] = (headerMatrix[0] || []).map((h: any) => String(h || '').trim());
+
+  return { headers, rows: headerMatrix.slice(1), rawData };
+}
+
+// Function to process sheet rows and update/create products in database
+async function applyGoogleSheetEdits(
+  rawData: any[],
+  adminUser?: { name: string; email?: string }
+): Promise<{
+  createdCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  totalSheetRows: number;
+  processedProducts: Product[];
+}> {
+  let createdCount = 0;
+  let updatedCount = 0;
+  let unchangedCount = 0;
+  const processedProducts: Product[] = [];
+  const adminName = adminUser?.name || 'Google Sheet Live Sync';
+
+  for (const row of rawData) {
+    const rawId = String(row['ID'] || row['id'] || row['Id'] || '').trim();
+    const rawName = String(row['Product Name'] || row['Name'] || row['name'] || row['Title'] || '').trim();
+    const rawSku = String(row['SKU'] || row['Sku'] || row['sku'] || row['Code'] || '').trim();
+
+    if (!rawName && !rawId) continue; // Skip blank rows
+
+    const rawCategory = String(row['Category'] || row['category'] || 'supermarket').trim();
+    const rawPrice = parseFloat(String(row['Price (RWF)'] || row['Price'] || row['price'] || 0));
+    const rawDiscountPercent = parseFloat(String(row['Discount %'] || row['Discount Percent'] || row['discountPercent'] || 0));
+    const rawDiscountPrice = parseFloat(String(row['Discount Price (RWF)'] || row['Promo Price (RWF)'] || row['discountPrice'] || 0));
+    const rawCostPrice = row['Cost Price (RWF)'] || row['Cost Price'] || row['costPrice'];
+    const rawStock = parseInt(String(row['Stock'] || row['stock'] || row['Quantity'] || 0), 10);
+    const rawStatus = String(row['Status'] || row['status'] || 'Available').trim();
+    const rawShop = String(row['Shop'] || row['Shop Name'] || row['Supplier'] || 'ContactReach Market').trim();
+    const rawImageUrl = String(row['Image URL'] || row['Image'] || row['ImageUrl'] || '').trim();
+    const rawDescription = String(row['Description'] || row['description'] || '').trim();
+    const rawVideoUrl = String(row['Video URL'] || row['Video'] || row['videoUrl'] || '').trim();
+
+    // Match existing product
+    const existing = db.products.find(p => {
+      if (rawId && p.id.toLowerCase() === rawId.toLowerCase()) return true;
+      if (rawSku && p.sku && p.sku.toLowerCase() === rawSku.toLowerCase()) return true;
+      if (rawName && p.name.trim().toLowerCase() === rawName.toLowerCase()) return true;
+      return false;
+    });
+
+    if (existing) {
+      let changed = false;
+
+      if (rawName && existing.name !== rawName) {
+        existing.name = rawName;
+        changed = true;
+      }
+      if (!isNaN(rawPrice) && rawPrice > 0 && existing.price !== rawPrice) {
+        existing.price = rawPrice;
+        changed = true;
+      }
+      if (!isNaN(rawStock) && rawStock >= 0 && existing.stock !== rawStock) {
+        existing.stock = rawStock;
+        changed = true;
+      }
+      if (rawSku && existing.sku !== rawSku) {
+        existing.sku = rawSku;
+        changed = true;
+      }
+      if (rawDescription && existing.description !== rawDescription) {
+        existing.description = rawDescription;
+        changed = true;
+      }
+      if (rawCategory && existing.category !== rawCategory) {
+        existing.category = rawCategory;
+        changed = true;
+      }
+      if (rawStatus && existing.status !== rawStatus) {
+        existing.status = rawStatus as ProductStatus;
+        changed = true;
+      }
+      if (rawShop && existing.shopName !== rawShop) {
+        existing.shopName = rawShop;
+        changed = true;
+      }
+      if (rawImageUrl && existing.imageUrl !== rawImageUrl) {
+        existing.imageUrl = rawImageUrl;
+        if (!existing.images || existing.images.length === 0) {
+          existing.images = [rawImageUrl];
+        } else if (!existing.images.includes(rawImageUrl)) {
+          existing.images.unshift(rawImageUrl);
+        }
+        changed = true;
+      }
+      if (rawVideoUrl && existing.videoUrl !== rawVideoUrl) {
+        existing.videoUrl = rawVideoUrl;
+        changed = true;
+      }
+      if (!isNaN(rawDiscountPercent) && rawDiscountPercent >= 0) {
+        if (existing.discountPercent !== rawDiscountPercent) {
+          existing.discountPercent = rawDiscountPercent > 0 ? rawDiscountPercent : undefined;
+          existing.discountPrice = rawDiscountPercent > 0 ? Math.round(existing.price * (1 - rawDiscountPercent / 100)) : undefined;
+          changed = true;
+        }
+      } else if (!isNaN(rawDiscountPrice) && rawDiscountPrice > 0) {
+        if (existing.discountPrice !== rawDiscountPrice) {
+          existing.discountPrice = rawDiscountPrice;
+          existing.discountPercent = existing.price > 0 ? Math.round(((existing.price - rawDiscountPrice) / existing.price) * 100) : undefined;
+          changed = true;
+        }
+      }
+      if (rawCostPrice !== undefined && rawCostPrice !== '' && !isNaN(Number(rawCostPrice))) {
+        const parsedCost = Number(rawCostPrice);
+        if (existing.costPrice !== parsedCost) {
+          existing.costPrice = parsedCost;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        existing.updatedAt = new Date().toISOString();
+        if (!existing.history) existing.history = [];
+        existing.history.unshift({
+          timestamp: new Date().toISOString(),
+          action: 'Updated from Google Sheet Live Sync',
+          user: adminName
+        });
+        saveToFirestoreAsync('products', existing.id, existing);
+        processedProducts.push(existing);
+        updatedCount++;
+      } else {
+        unchangedCount++;
+      }
+    } else if (rawName) {
+      // Create new product from sheet
+      const targetId = rawId || `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+      const targetSku = rawSku || `CRM-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const effectivePrice = !isNaN(rawPrice) && rawPrice > 0 ? rawPrice : 1000;
+      const effectiveStock = !isNaN(rawStock) && rawStock >= 0 ? rawStock : 10;
+      const discPct = !isNaN(rawDiscountPercent) && rawDiscountPercent > 0 ? rawDiscountPercent : undefined;
+      const discPrice = discPct ? Math.round(effectivePrice * (1 - discPct / 100)) : (!isNaN(rawDiscountPrice) && rawDiscountPrice > 0 ? rawDiscountPrice : undefined);
+
+      const newProduct: Product = {
+        id: targetId,
+        name: rawName,
+        sku: targetSku,
+        description: rawDescription || `Imported from Google Sheet: ${rawName}`,
+        price: effectivePrice,
+        discountPercent: discPct,
+        discountPrice: discPrice,
+        costPrice: rawCostPrice && !isNaN(Number(rawCostPrice)) ? Number(rawCostPrice) : undefined,
+        category: rawCategory,
+        stock: effectiveStock,
+        imageUrl: rawImageUrl || '/src/assets/images/product_street_sneakers_1791966366958.jpg',
+        images: rawImageUrl ? [rawImageUrl] : ['/src/assets/images/product_street_sneakers_1791966366958.jpg'],
+        shopName: rawShop || 'ContactReach Market',
+        shopId: 'crm-main',
+        receiverName: 'Ruth',
+        paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+        merchantCode: '078002',
+        receiverPhone: '078002260',
+        location: 'Kigali, Rwanda',
+        deliveryInfo: 'Same-day Kigali delivery',
+        status: (rawStatus as any) || 'Available',
+        isFeatured: false,
+        isNewArrival: true,
+        isBestSeller: false,
+        rating: 5,
+        reviewsCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        videoUrl: rawVideoUrl || undefined,
+        history: [{
+          timestamp: new Date().toISOString(),
+          action: 'Added from Google Sheet Live Sync',
+          user: adminName
+        }]
+      };
+
+      db.products.unshift(newProduct);
+      saveToFirestoreAsync('products', newProduct.id, newProduct);
+      processedProducts.push(newProduct);
+      createdCount++;
+    }
+  }
+
+  if (createdCount > 0 || updatedCount > 0) {
+    saveDbToDisk();
+  }
+
+  return { createdCount, updatedCount, unchangedCount, totalSheetRows: rawData.length, processedProducts };
+}
+
+// Function to push full catalog to Google Sheet
+async function pushCatalogToGoogleSheet(
+  sheetId: string,
+  tabName = 'Sheet1',
+  accessToken: string
+): Promise<{ updatedRows: number; spreadsheetUrl: string }> {
+  const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
+  const categoryMap = new Map((db.categories || []).map(c => [c.id, c.nameEn || c.id]));
+
+  const headers = [
+    'ID',
+    'Product Name',
+    'SKU',
+    'Category',
+    'Price (RWF)',
+    'Discount %',
+    'Discount Price (RWF)',
+    'Cost Price (RWF)',
+    'Stock',
+    'Status',
+    'Shop',
+    'Image URL',
+    'Description',
+    'Video URL',
+    'Last Updated'
+  ];
+
+  const rows = activeProducts.map(p => [
+    p.id,
+    p.name,
+    p.sku || `CRM-${p.id.slice(-6).toUpperCase()}`,
+    categoryMap.get(p.category) || p.category,
+    p.price,
+    p.discountPercent || 0,
+    p.discountPrice || p.price,
+    p.costPrice !== undefined ? p.costPrice : '',
+    p.stock,
+    p.status || 'Available',
+    p.shopName || 'ContactReach Market',
+    p.imageUrl || (p.images && p.images[0]) || '',
+    (p.description || '').replace(/[\r\n]+/g, ' '),
+    p.videoUrl || '',
+    p.updatedAt || new Date().toISOString()
+  ]);
+
+  const allValues = [headers, ...rows];
+  const encodedTitle = encodeURIComponent(tabName);
+  const range = `${encodedTitle}!A1:O${allValues.length + 5}`;
+
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      range,
+      majorDimension: 'ROWS',
+      values: allValues
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Google Sheets API returned error (${res.status}): ${errText}`);
+  }
+
+  return {
+    updatedRows: activeProducts.length,
+    spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
+  };
+}
+
+// GET Google Sheet config
+app.get('/api/admin/google-sheet', requireAdminAuth, (req: Request, res: Response) => {
+  const config = getEffectiveSheetConfig();
+  res.json({
+    config,
+    totalProducts: db.products.filter(p => !db.deletedRecordIds?.includes(p.id)).length
+  });
+});
+
+// UPDATE Google Sheet config
+app.put('/api/admin/google-sheet', requireAdminAuth, (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const current = getEffectiveSheetConfig();
+  const { sheetUrl, sheetId, sheetTabName, autoSyncEnabled, syncDirection } = req.body;
+
+  const targetUrl = sheetUrl ? String(sheetUrl).trim() : current.sheetUrl;
+  const targetId = sheetId ? parseGoogleSheetId(sheetId) : (sheetUrl ? parseGoogleSheetId(sheetUrl) : current.sheetId);
+
+  db.settings.googleSheetConfig = {
+    ...current,
+    sheetUrl: targetUrl,
+    sheetId: targetId,
+    sheetTabName: sheetTabName ? String(sheetTabName).trim() : (current.sheetTabName || 'Sheet1'),
+    autoSyncEnabled: autoSyncEnabled !== undefined ? Boolean(autoSyncEnabled) : current.autoSyncEnabled,
+    syncDirection: syncDirection || current.syncDirection || 'two_way'
+  };
+
+  saveDbToDisk();
+  saveToFirestoreAsync('settings', 'global', db.settings);
+
+  logAudit(
+    admin,
+    'GOOGLE_SHEET_CONFIG_UPDATED',
+    `Updated connected Google Sheet configuration: ID=${targetId}, AutoSync=${db.settings.googleSheetConfig.autoSyncEnabled}`
+  );
+
+  res.json({
+    success: true,
+    message: 'Google Sheet configuration updated successfully',
+    config: db.settings.googleSheetConfig
+  });
+});
+
+// PULL / SYNC EDITS from Google Sheet to Website
+app.post('/api/admin/google-sheet/sync-pull', requireAdminAuth, async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const config = getEffectiveSheetConfig();
+  const targetId = req.body.sheetId ? parseGoogleSheetId(req.body.sheetId) : config.sheetId;
+  const targetTab = req.body.tabName || config.sheetTabName || 'Sheet1';
+  const tokenHeader = req.headers['x-google-access-token'] as string;
+  const authHeader = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : '';
+  const accessToken = tokenHeader || req.body.accessToken || (authHeader && authHeader.startsWith('ya29.') ? authHeader : undefined);
+
+  try {
+    const { rawData } = await pullRowsFromGoogleSheet(targetId, targetTab, accessToken);
+    const syncRes = await applyGoogleSheetEdits(rawData, admin);
+
+    const nowIso = new Date().toISOString();
+    config.lastSyncAt = nowIso;
+    config.lastSyncStats = {
+      status: 'success',
+      timestamp: nowIso,
+      createdCount: syncRes.createdCount,
+      updatedCount: syncRes.updatedCount,
+      totalProducts: db.products.length,
+      syncedCount: syncRes.totalSheetRows,
+      message: `Pulled ${syncRes.totalSheetRows} rows (${syncRes.createdCount} new, ${syncRes.updatedCount} updated, ${syncRes.unchangedCount} unchanged)`
+    };
+
+    saveDbToDisk();
+    saveToFirestoreAsync('settings', 'global', db.settings);
+
+    logAudit(
+      admin,
+      'GOOGLE_SHEET_SYNC_PULL',
+      `Synchronized products from Google Sheet (${targetId}): ${syncRes.createdCount} created, ${syncRes.updatedCount} updated, ${syncRes.unchangedCount} unchanged out of ${syncRes.totalSheetRows} sheet rows.`
+    );
+
+    res.json({
+      success: true,
+      message: `Synced with Google Sheet: ${syncRes.createdCount} created, ${syncRes.updatedCount} updated.`,
+      createdCount: syncRes.createdCount,
+      updatedCount: syncRes.updatedCount,
+      unchangedCount: syncRes.unchangedCount,
+      totalSheetRows: syncRes.totalSheetRows,
+      totalProducts: db.products.length,
+      products: syncRes.processedProducts,
+      config
+    });
+  } catch (err: any) {
+    console.error('[Google Sheet Sync Pull Error]:', err);
+    config.lastSyncStats = {
+      status: 'failed',
+      timestamp: new Date().toISOString(),
+      message: err.message || 'Failed to pull products from Google Sheet'
+    };
+    saveDbToDisk();
+    res.status(500).json({ error: err.message || 'Failed to synchronize with Google Sheet' });
+  }
+});
+
+// PUSH / SAVE Website Products to Google Sheet
+app.post('/api/admin/google-sheet/sync-push', requireAdminAuth, async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const config = getEffectiveSheetConfig();
+  const targetId = req.body.sheetId ? parseGoogleSheetId(req.body.sheetId) : config.sheetId;
+  const targetTab = req.body.tabName || config.sheetTabName || 'Sheet1';
+  const tokenHeader = req.headers['x-google-access-token'] as string;
+  const authHeader = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : '';
+  const accessToken = tokenHeader || req.body.accessToken || (authHeader && authHeader.startsWith('ya29.') ? authHeader : undefined);
+
+  if (!accessToken) {
+    return res.status(401).json({
+      error: 'Google authorization required. Please authorize your Google account with Google Sheets permissions.'
+    });
+  }
+
+  try {
+    const pushResult = await pushCatalogToGoogleSheet(targetId, targetTab, accessToken);
+
+    const nowIso = new Date().toISOString();
+    config.lastSyncAt = nowIso;
+    config.lastSyncStats = {
+      status: 'success',
+      timestamp: nowIso,
+      syncedCount: pushResult.updatedRows,
+      totalProducts: db.products.length,
+      message: `Successfully saved ${pushResult.updatedRows} products to Google Sheet`
+    };
+
+    saveDbToDisk();
+    saveToFirestoreAsync('settings', 'global', db.settings);
+
+    logAudit(
+      admin,
+      'GOOGLE_SHEET_SYNC_PUSH',
+      `Saved ${pushResult.updatedRows} products to Google Sheet (${targetId}) at ${pushResult.spreadsheetUrl}`
+    );
+
+    res.json({
+      success: true,
+      message: `Successfully saved ${pushResult.updatedRows} products to Google Sheet!`,
+      updatedRows: pushResult.updatedRows,
+      spreadsheetUrl: pushResult.spreadsheetUrl,
+      config
+    });
+  } catch (err: any) {
+    console.error('[Google Sheet Sync Push Error]:', err);
+    config.lastSyncStats = {
+      status: 'failed',
+      timestamp: new Date().toISOString(),
+      message: err.message || 'Failed to save products to Google Sheet'
+    };
+    saveDbToDisk();
+    res.status(500).json({ error: err.message || 'Failed to save products to Google Sheet' });
+  }
+});
+
+
+// -------------------------------------------------------------
 // API 404 & ERROR HANDLER (ENSURES JSON, NEVER HTML)
 // -------------------------------------------------------------
 
@@ -5716,6 +6240,34 @@ async function startServer() {
       });
     }
   }, 15 * 60 * 1000);
+
+  // Automated Google Sheet periodic sync runner (every 10 mins)
+  setInterval(() => {
+    if (db.settings.googleSheetConfig?.autoSyncEnabled) {
+      const cfg = getEffectiveSheetConfig();
+      pullRowsFromGoogleSheet(cfg.sheetId, cfg.sheetTabName || 'Sheet1')
+        .then(result => applyGoogleSheetEdits(result.rawData, { name: 'Google Sheet Auto-Sync Worker' }))
+        .then(syncRes => {
+          if (syncRes.createdCount > 0 || syncRes.updatedCount > 0) {
+            console.log(`[Google Sheet Auto-Sync] Pulled ${syncRes.totalSheetRows} rows: ${syncRes.createdCount} new, ${syncRes.updatedCount} updated.`);
+            cfg.lastSyncAt = new Date().toISOString();
+            cfg.lastSyncStats = {
+              status: 'success',
+              timestamp: new Date().toISOString(),
+              createdCount: syncRes.createdCount,
+              updatedCount: syncRes.updatedCount,
+              totalProducts: db.products.length,
+              syncedCount: syncRes.totalSheetRows,
+              message: `Auto-sync: ${syncRes.createdCount} added, ${syncRes.updatedCount} updated`
+            };
+            saveDbToDisk();
+          }
+        })
+        .catch(err => {
+          console.warn('[Google Sheet] Auto-sync periodic notice:', err.message || err);
+        });
+    }
+  }, 10 * 60 * 1000);
 
   if (!isProduction) {
     const vite = await createViteServer({

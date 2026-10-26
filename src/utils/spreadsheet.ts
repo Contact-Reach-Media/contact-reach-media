@@ -525,6 +525,29 @@ export async function fetchGoogleSheetValues(
   return { headers, rows };
 }
 
+export async function fetchGoogleSheetValuesFromCsv(
+  spreadsheetId: string,
+  sheetTitle = 'Sheet1'
+): Promise<{ headers: string[]; rows: any[][] }> {
+  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch spreadsheet CSV (${res.status}). Ensure the sheet link is shared.`);
+  }
+  const arrayBuf = await res.arrayBuffer();
+  const workbook = XLSX.read(new Uint8Array(arrayBuf), { type: 'array' });
+  const sheetName = workbook.SheetNames[0] || sheetTitle;
+  const worksheet = workbook.Sheets[sheetName];
+  if (!worksheet) {
+    return { headers: [], rows: [] };
+  }
+  const matrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  if (matrix.length === 0) return { headers: [], rows: [] };
+  const headers = (matrix[0] || []).map((h: any) => String(h || '').trim());
+  const rows = matrix.slice(1).filter((r: any[]) => r && r.some(c => String(c || '').trim().length > 0));
+  return { headers, rows };
+}
+
 export async function writeProductsToGoogleSheet(
   spreadsheetId: string,
   sheetTitle: string,
