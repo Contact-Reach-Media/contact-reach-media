@@ -1355,6 +1355,133 @@ async function runTests() {
     assert.strictEqual(fetchedProd.videoUrl, testVideoUrl, 'Public product endpoint must return YouTube video link');
   });
 
+  // TEST 37: Excel/Spreadsheet Product Catalog Export with Valuation & Fields
+  await test('Admin can export full product catalog with inventory valuation and metadata', async () => {
+    // Unauthenticated export must be blocked
+    const unauthRes = await fetch(`${BASE_URL}/api/admin/products/export`);
+    assert.strictEqual(unauthRes.status, 401, 'Unauthenticated export should be rejected with 401');
+
+    // Authorized export
+    const exportRes = await fetch(`${BASE_URL}/api/admin/products/export`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(exportRes.status, 200, 'Admin product export must succeed');
+    const data = await exportRes.json();
+    assert(Array.isArray(data.products) && data.products.length > 0, 'Products should be returned as non-empty array');
+    assert(typeof data.totalStockValuationFrw === 'number' && data.totalStockValuationFrw > 0, 'Stock valuation must be positive number');
+    assert(Array.isArray(data.categories), 'Categories metadata must be returned');
+    assert(Array.isArray(data.shops), 'Shops metadata must be returned');
+  });
+
+  // TEST 38: Spreadsheet Bulk Preview & Automatic Duplicate/Difference Detection
+  await test('Spreadsheet preview accurately maps fields, detects existing matches, and calculates price/stock diffs', async () => {
+    const previewRes = await fetch(`${BASE_URL}/api/admin/products/bulk-preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            name: 'Wireless Studio Bluetooth Headphones', // Existing product from Test 7
+            sku: 'CRM-TEST-MATCH-01',
+            price: 40000, // Price updated from 35000 -> 40000
+            stock: 25, // Stock updated
+            category: 'electronics',
+            shopName: 'Inziza Sound Studio Lab'
+          },
+          {
+            name: 'New Rwandan Specialty Arabica Coffee Beans 500g',
+            sku: 'CRM-COFFEE-RW-01',
+            price: 8500,
+            stock: 50,
+            category: 'supermarket',
+            shopName: 'Kigali Fresh Market'
+          },
+          {
+            name: '', // Invalid product without name
+            price: -500,
+            stock: -1
+          }
+        ]
+      })
+    });
+    assert.strictEqual(previewRes.status, 200, 'Bulk preview should succeed with 200');
+    const previewData = await previewRes.json();
+    assert.strictEqual(previewData.totalRows, 3, 'Should analyze all 3 rows');
+    assert.strictEqual(previewData.updateCount, 1, 'Should detect 1 existing product match');
+    assert.strictEqual(previewData.newCount, 2, 'Should identify 2 new/unmatched items');
+    assert.strictEqual(previewData.errorCount, 1, 'Should flag 1 row with validation errors');
+
+    const matchedItem = previewData.items.find((i: any) => i.name === 'Wireless Studio Bluetooth Headphones');
+    assert(matchedItem, 'Matched product should be present in preview');
+    assert.strictEqual(matchedItem.matchType, 'update');
+    assert.strictEqual(matchedItem.hasPriceChange, true, 'Price change should be flagged');
+    assert.strictEqual(matchedItem.priceDifference, 5000, 'Price diff should be +5000 FRW');
+  });
+
+  // TEST 39: Spreadsheet Bulk Import with Upsert, Stock & Price Updates, and Security Guards
+  await test('Admin can bulk import validated products with atomic persistence, stock updates, and audit logging', async () => {
+    // 1. Unauthenticated import must fail with 401
+    const unauthImport = await fetch(`${BASE_URL}/api/admin/products/bulk-import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ products: [] })
+    });
+    assert.strictEqual(unauthImport.status, 401, 'Unauthenticated bulk import must be rejected');
+
+    // 2. Perform bulk import with upsert strategy
+    const importRes = await fetch(`${BASE_URL}/api/admin/products/bulk-import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        conflictStrategy: 'upsert',
+        products: [
+          {
+            name: 'Wireless Studio Bluetooth Headphones',
+            price: 38000,
+            stock: 28,
+            category: 'electronics',
+            shopName: 'Inziza Sound Studio Lab',
+            description: 'Updated studio headphones description via spreadsheet import.'
+          },
+          {
+            name: 'Pure Organic Honey from Nyungwe Forest 500ml',
+            sku: 'CRM-NYUNGWE-HONEY',
+            price: 7000,
+            stock: 60,
+            category: 'supermarket',
+            shopName: 'Inziza Crafts & Provisions',
+            description: 'Raw mountain honey harvested sustainably in Rwanda.'
+          }
+        ]
+      })
+    });
+    assert.strictEqual(importRes.status, 200, 'Bulk import should succeed');
+    const importData = await importRes.json();
+    assert.strictEqual(importData.success, true);
+    assert.strictEqual(importData.updatedCount, 1, 'Should update 1 existing product');
+    assert.strictEqual(importData.createdCount, 1, 'Should create 1 new product');
+
+    // 3. Verify database reflects the updated price and stock
+    const verifyProdRes = await fetch(`${BASE_URL}/api/products/${createdProductId}`);
+    assert.strictEqual(verifyProdRes.status, 200);
+    const verifiedProd = await verifyProdRes.json();
+    assert.strictEqual(verifiedProd.price, 38000, 'Price should be updated to 38000 FRW');
+    assert.strictEqual(verifiedProd.stock, 28, 'Stock should be updated to 28');
+
+    // 4. Verify new product is accessible publicly
+    const newProdRes = await fetch(`${BASE_URL}/api/products?search=Nyungwe`);
+    assert.strictEqual(newProdRes.status, 200);
+    const newProds = await newProdRes.json();
+    assert(newProds.some((p: any) => p.sku === 'CRM-NYUNGWE-HONEY'), 'New spreadsheet product must be retrievable');
+  });
+
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

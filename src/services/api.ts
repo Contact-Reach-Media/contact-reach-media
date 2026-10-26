@@ -2217,5 +2217,67 @@ export const api = {
       throw new Error(parsed.json?.error || 'Failed to auto-fill products from Google Drive');
     }
     return parsed.json;
+  },
+
+  async adminBulkPreviewProducts(items: any[]): Promise<{
+    totalRows: number;
+    validCount: number;
+    newCount: number;
+    updateCount: number;
+    priceChangesCount: number;
+    stockChangesCount: number;
+    errorCount: number;
+    items: any[];
+  }> {
+    const res = await fetch('/api/admin/products/bulk-preview', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ items })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to generate spreadsheet preview');
+    }
+    return parsed.json;
+  },
+
+  async adminBulkImportProducts(products: any[], conflictStrategy: 'upsert' | 'update_only' | 'create_only' = 'upsert'): Promise<{
+    success: boolean;
+    message: string;
+    createdCount: number;
+    updatedCount: number;
+    skippedCount: number;
+    totalProducts: number;
+    products: Product[];
+  }> {
+    const res = await fetch('/api/admin/products/bulk-import', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ products, conflictStrategy })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to import spreadsheet products');
+    }
+    return parsed.json;
+  },
+
+  async adminExportProducts(): Promise<{
+    totalProducts: number;
+    totalStockValuationFrw: number;
+    exportedAt: string;
+    categories: Category[];
+    shops: VendorShop[];
+    products: Product[];
+  }> {
+    const res = await fetch('/api/admin/products/export', {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to export products catalog');
+    }
+    return parsed.json;
   }
 };
+

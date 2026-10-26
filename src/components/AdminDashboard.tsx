@@ -8,7 +8,7 @@ import {
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders,
-  Youtube
+  Youtube, FileSpreadsheet
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -23,6 +23,8 @@ import { db, getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, i
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
+import { ProductSpreadsheetModal } from './ProductSpreadsheetModal.tsx';
+import { exportProductsToExcel, exportProductsToCsv } from '../utils/spreadsheet.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -140,6 +142,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Product Editor Modal
   const [productModalOpen, setProductModalOpen] = useState(false);
+  const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState<{
     name: string;
@@ -2017,23 +2020,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
+                    onClick={() => setIsSpreadsheetModalOpen(true)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Excel download, auto Excel/CSV upload, and Google Sheets integration"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Excel / Google Sheets</span>
+                  </button>
+
+                  <button
+                    onClick={() => exportProductsToExcel(products, categories)}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Quick download complete catalog as Excel (.xlsx)"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Export (.xlsx)</span>
+                  </button>
+
+                  <button
                     onClick={handleSyncToGoogleDrive}
                     disabled={syncingToDrive}
                     className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                     title="Store & backup all products to Google Drive (ContactReach_Market_Products.json)"
                   >
                     <CloudUpload className={`w-4 h-4 ${syncingToDrive ? 'animate-bounce text-blue-600' : 'text-blue-500'}`} />
-                    <span>{syncingToDrive ? 'Backing up to Drive...' : 'Backup to Google Drive'}</span>
-                  </button>
-
-                  <button
-                    onClick={handleOpenDriveFilePicker}
-                    disabled={importingFromDrive}
-                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
-                    title="Auto-fill products into ContactReach Market directly from your Google Drive files"
-                  >
-                    <Zap className={`w-4 h-4 ${importingFromDrive ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
-                    <span>{importingFromDrive ? 'Auto-filling...' : '⚡ Auto-Fill from Drive'}</span>
+                    <span>{syncingToDrive ? 'Backing up...' : 'Google Drive Backup'}</span>
                   </button>
 
                   <button
@@ -7110,6 +7121,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Product Spreadsheet & Google Sheets Modal */}
+      <ProductSpreadsheetModal
+        isOpen={isSpreadsheetModalOpen}
+        onClose={() => setIsSpreadsheetModalOpen(false)}
+        products={products}
+        categories={categories}
+        shops={shops}
+        onProductsUpdated={() => {
+          fetchAllData(true);
+          onRefreshPublicData();
+        }}
+        showToast={showToast}
+      />
     </div>
   );
 };

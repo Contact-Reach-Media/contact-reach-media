@@ -430,28 +430,55 @@ function sanitizeForFirestore(data: any): any {
   return clone;
 }
 
+let firestoreAvailable = true;
+
+function isFirestoreUnavailableError(err: any): boolean {
+  const msg = (err?.message || String(err || '')).toLowerCase();
+  return (
+    msg.includes('does not exist') ||
+    msg.includes('not_found') ||
+    msg.includes('cloud datastore or cloud firestore database') ||
+    msg.includes('the client is offline')
+  );
+}
+
 // Fire-and-forget safe async writer to Cloud Firestore with error handling
 function saveToFirestoreAsync(collectionName: string, docId: string, data: any) {
-  if (!firestoreDb || !data || !docId) return;
+  if (!firestoreDb || !firestoreAvailable || !data || !docId) return;
 
   const cleanData = sanitizeForFirestore(data);
   firestoreSetDoc(firestoreDoc(firestoreDb, collectionName, docId), cleanData, { merge: true }).catch(err => {
+    if (isFirestoreUnavailableError(err)) {
+      if (firestoreAvailable) {
+        firestoreAvailable = false;
+        firestoreDb = null;
+        console.info('[Firebase] Cloud Firestore database is unprovisioned on this project. Seamlessly falling back to local persistent atomic storage.');
+      }
+      return;
+    }
     console.warn(`[Firebase] Async write notice (${collectionName}/${docId}):`, err.message || err);
   });
 }
 
 function deleteFromFirestoreAsync(collectionName: string, docId: string) {
-  if (!firestoreDb || !docId) return;
+  if (!firestoreDb || !firestoreAvailable || !docId) return;
   firestoreDeleteDoc(firestoreDoc(firestoreDb, collectionName, docId)).catch(err => {
+    if (isFirestoreUnavailableError(err)) {
+      if (firestoreAvailable) {
+        firestoreAvailable = false;
+        firestoreDb = null;
+      }
+      return;
+    }
     console.warn(`[Firebase] Async delete notice (${collectionName}/${docId}):`, err.message || err);
   });
 }
 
 // Background startup sync with Cloud Firestore: ensures Firestore is authoritative for catalog, orders & settings
 async function syncWithFirestore() {
-  if (!firestoreDb) return;
+  if (!firestoreDb || !firestoreAvailable) return;
   try {
-    // 1. Sync global settings if present in Firestore (or seed if not yet present)
+    // 1. Probe Firestore global settings first to verify database availability before querying multiple collections
     try {
       const settingsDocRef = firestoreDoc(firestoreDb, 'settings', 'global');
       const settingsSnap = await firestoreGetDoc(settingsDocRef);
@@ -461,6 +488,12 @@ async function syncWithFirestore() {
         saveToFirestoreAsync('settings', 'global', db.settings);
       }
     } catch (err: any) {
+      if (isFirestoreUnavailableError(err)) {
+        firestoreAvailable = false;
+        firestoreDb = null;
+        console.info('[Firebase] Cloud Firestore is unprovisioned for this GCP project. Operating on persistent local storage.');
+        return;
+      }
       console.warn('[Firebase] Settings sync notice:', err.message || err);
     }
 
@@ -2625,6 +2658,314 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'a
   saveDbToDisk();
   deleteFromFirestoreAsync('products', removed.id);
   res.json({ message: 'Product deleted successfully', removed });
+});
+
+// -------------------------------------------------------------
+// SPREADSHEET (EXCEL / CSV / GOOGLE SHEETS) BULK OPERATIONS
+// -------------------------------------------------------------
+
+// Export all products for spreadsheet generation
+app.get('/api/admin/products/export', requireAdminAuth, (req: Request, res: Response) => {
+  const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
+  const totalStockValuation = activeProducts.reduce((sum, p) => sum + (p.price * (p.stock || 0)), 0);
+
+  res.json({
+    totalProducts: activeProducts.length,
+    totalStockValuationFrw: totalStockValuation,
+    exportedAt: new Date().toISOString(),
+    categories: db.categories,
+    shops: db.shops,
+    products: activeProducts
+  });
+});
+
+// Preview and validate uploaded spreadsheet items before committing changes
+app.post('/api/admin/products/bulk-preview', requireAdminAuth, (req: Request, res: Response) => {
+  const { items } = req.body;
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ error: 'Items array is required for preview.' });
+  }
+
+  const existingProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
+  const seenSkus = new Set<string>();
+  const seenNames = new Set<string>();
+
+  const analyzed = items.map((rawItem: any, idx: number) => {
+    const name = String(rawItem.name || '').trim();
+    const sku = String(rawItem.sku || '').trim();
+    const price = typeof rawItem.price === 'number' ? rawItem.price : parseFloat(String(rawItem.price || 0));
+    const stock = typeof rawItem.stock === 'number' ? rawItem.stock : parseInt(String(rawItem.stock || 0), 10);
+    const category = String(rawItem.category || 'electronics').trim();
+    const shopName = String(rawItem.shopName || 'ContactReach Market').trim();
+
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
+    if (!name) errors.push('Product name is required.');
+    if (isNaN(price) || price < 0) errors.push('Price must be a non-negative number.');
+    if (isNaN(stock) || stock < 0) errors.push('Stock quantity must be a non-negative number.');
+
+    const normSku = sku.toLowerCase();
+    const normName = name.toLowerCase();
+
+    // Check duplicate in payload
+    if (normSku && seenSkus.has(normSku)) {
+      warnings.push(`Duplicate SKU "${sku}" detected multiple times in this batch.`);
+    } else if (normSku) {
+      seenSkus.add(normSku);
+    }
+
+    if (normName && seenNames.has(normName)) {
+      warnings.push(`Product name "${name}" appears multiple times in this batch.`);
+    } else if (normName) {
+      seenNames.add(normName);
+    }
+
+    // Match against database
+    let matchedProduct: Product | undefined = undefined;
+    let matchedBy: 'id' | 'sku' | 'name' | undefined = undefined;
+
+    if (rawItem.id) {
+      matchedProduct = existingProducts.find(p => p.id === rawItem.id);
+      if (matchedProduct) matchedBy = 'id';
+    }
+
+    if (!matchedProduct && sku) {
+      matchedProduct = existingProducts.find(p => p.sku && p.sku.toLowerCase() === normSku);
+      if (matchedProduct) matchedBy = 'sku';
+    }
+
+    if (!matchedProduct && name) {
+      matchedProduct = existingProducts.find(p =>
+        p.name.toLowerCase() === normName &&
+        (!rawItem.shopName || (p.shopName || '').toLowerCase() === shopName.toLowerCase())
+      );
+      if (matchedProduct) matchedBy = 'name';
+    }
+
+    const isUpdate = Boolean(matchedProduct);
+    const priceDiff = isUpdate ? price - matchedProduct!.price : 0;
+    const stockDiff = isUpdate ? stock - matchedProduct!.stock : 0;
+
+    return {
+      index: idx,
+      name: name || `Product #${idx + 1}`,
+      sku: sku || matchedProduct?.sku || `CRM-GD-${1000 + idx}`,
+      price: isNaN(price) ? 0 : price,
+      oldPrice: matchedProduct?.price,
+      stock: isNaN(stock) ? 0 : stock,
+      oldStock: matchedProduct?.stock,
+      costPrice: rawItem.costPrice !== undefined ? Number(rawItem.costPrice) : matchedProduct?.costPrice,
+      oldCostPrice: matchedProduct?.costPrice,
+      discountPercent: rawItem.discountPercent || 0,
+      category,
+      shopName,
+      description: rawItem.description || matchedProduct?.description || '',
+      imageUrl: rawItem.imageUrl || matchedProduct?.imageUrl || '',
+      status: rawItem.status || 'Available',
+      matchType: isUpdate ? 'update' : 'new',
+      matchedExistingId: matchedProduct?.id,
+      matchedBy,
+      priceDifference: priceDiff,
+      stockDifference: stockDiff,
+      hasPriceChange: priceDiff !== 0,
+      hasStockChange: stockDiff !== 0,
+      warnings,
+      errors,
+      isValid: errors.length === 0
+    };
+  });
+
+  res.json({
+    totalRows: analyzed.length,
+    validCount: analyzed.filter(i => i.isValid).length,
+    newCount: analyzed.filter(i => i.matchType === 'new').length,
+    updateCount: analyzed.filter(i => i.matchType === 'update').length,
+    priceChangesCount: analyzed.filter(i => i.hasPriceChange).length,
+    stockChangesCount: analyzed.filter(i => i.hasStockChange).length,
+    errorCount: analyzed.filter(i => !i.isValid).length,
+    items: analyzed
+  });
+});
+
+// Commit validated products to the database with conflict resolution
+app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { products, conflictStrategy = 'upsert' } = req.body;
+
+  if (!Array.isArray(products) || products.length === 0) {
+    return res.status(400).json({ error: 'No products provided for import.' });
+  }
+
+  let createdCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+  const processedProducts: Product[] = [];
+
+  for (let i = 0; i < products.length; i++) {
+    const item = products[i];
+    const targetName = String(item.name || '').trim();
+    if (!targetName) {
+      skippedCount++;
+      continue;
+    }
+
+    const targetSku = String(item.sku || `CRM-${Date.now().toString().slice(-4)}${i}`).trim();
+    const price = Math.max(0, parseInt(String(item.price || 0), 10));
+    const stock = Math.max(0, parseInt(String(item.stock || 0), 10));
+    const category = String(item.category || 'electronics').trim();
+    const targetShop = String(item.shopName || 'ContactReach Market').trim();
+
+    // Resolve or create shop
+    const { shopId, shopName } = resolveOrCreateShop(
+      targetShop,
+      item.shopId,
+      {
+        location: item.location,
+        phone: item.receiverPhone || item.phone,
+        category: item.category,
+        description: item.shopDescription
+      },
+      admin.name
+    );
+
+    // Primary image logic
+    const rawImages: string[] = Array.isArray(item.images) && item.images.length > 0
+      ? item.images.map((img: any) => String(img).trim()).filter(Boolean)
+      : (item.imageUrl ? [String(item.imageUrl).trim()] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
+    const primaryImg = String(item.imageUrl || rawImages[0] || '').trim() || rawImages[0];
+    const finalImages = rawImages.includes(primaryImg) ? rawImages : [primaryImg, ...rawImages];
+
+    // Check if product exists in database
+    const existingIdx = db.products.findIndex(p =>
+      (item.id && p.id === item.id) ||
+      (p.sku && p.sku.toLowerCase() === targetSku.toLowerCase()) ||
+      (p.name.toLowerCase() === targetName.toLowerCase() && p.shopName?.toLowerCase() === shopName.toLowerCase())
+    );
+
+    if (existingIdx !== -1) {
+      // Existing match
+      if (conflictStrategy === 'create_only') {
+        skippedCount++;
+        continue;
+      }
+
+      const existing = db.products[existingIdx];
+      const oldStock = existing.stock;
+      const oldPrice = existing.price;
+
+      existing.name = targetName;
+      existing.sku = targetSku;
+      existing.price = price;
+      existing.stock = stock;
+      existing.category = category;
+      existing.shopName = shopName;
+      existing.shopId = shopId;
+      if (item.discountPercent !== undefined) {
+        existing.discountPercent = Number(item.discountPercent);
+        existing.discountPrice = existing.discountPercent > 0
+          ? Math.round(price * (1 - existing.discountPercent / 100))
+          : price;
+      }
+      if (item.costPrice !== undefined && !existing.costOverriddenByAdmin) {
+        existing.costPrice = Number(item.costPrice);
+      }
+      if (item.description) existing.description = item.description;
+      if (primaryImg) {
+        existing.imageUrl = primaryImg;
+        existing.images = finalImages;
+      }
+      if (item.status) existing.status = item.status;
+      existing.updatedAt = new Date().toISOString();
+
+      // Log stock change if changed
+      if (oldStock !== stock) {
+        db.inventoryLogs.unshift({
+          id: `inv-${Date.now()}-${i}`,
+          productId: existing.id,
+          productName: existing.name,
+          previousStock: oldStock,
+          newStock: stock,
+          changeAmount: stock - oldStock,
+          reason: `Spreadsheet Batch Update (${oldStock} -> ${stock})`,
+          adminName: admin.name,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      saveToFirestoreAsync('products', existing.id, existing);
+      processedProducts.push(existing);
+      updatedCount++;
+    } else {
+      // New product
+      if (conflictStrategy === 'update_only') {
+        skippedCount++;
+        continue;
+      }
+
+      const discountPercent = Number(item.discountPercent || 0);
+      const discountPrice = discountPercent > 0
+        ? Math.round(price * (1 - discountPercent / 100))
+        : price;
+
+      const newProduct: Product = {
+        id: item.id || `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+        name: targetName,
+        sku: targetSku,
+        description: item.description || `Imported product: ${targetName}`,
+        price,
+        discountPercent: discountPercent > 0 ? discountPercent : undefined,
+        discountPrice: discountPercent > 0 ? discountPrice : undefined,
+        costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined,
+        category,
+        stock,
+        imageUrl: primaryImg,
+        images: finalImages,
+        shopName,
+        shopId,
+        receiverName: item.receiverName || 'Ruth',
+        paymentMethods: item.paymentMethods || ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+        merchantCode: item.merchantCode || '078002',
+        receiverPhone: item.receiverPhone || '078002260',
+        location: item.location || 'Kigali, Rwanda',
+        deliveryInfo: item.deliveryInfo || 'Same-day Kigali delivery',
+        status: (item.status as any) || 'Available',
+        isFeatured: Boolean(item.isFeatured),
+        isNewArrival: item.isNewArrival !== undefined ? Boolean(item.isNewArrival) : true,
+        isBestSeller: Boolean(item.isBestSeller),
+        brand: item.brand,
+        unit: item.unit || 'Piece',
+        videoUrl: item.videoUrl,
+        rating: 5,
+        reviewsCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        history: [{ timestamp: new Date().toISOString(), action: 'Imported from Spreadsheet', user: admin.name }]
+      };
+
+      db.products.unshift(newProduct);
+      saveToFirestoreAsync('products', newProduct.id, newProduct);
+      processedProducts.push(newProduct);
+      createdCount++;
+    }
+  }
+
+  saveDbToDisk();
+  logAudit(
+    admin,
+    'SPREADSHEET_IMPORT',
+    `Bulk imported spreadsheet: ${createdCount} created, ${updatedCount} updated, ${skippedCount} skipped. (Strategy: ${conflictStrategy})`
+  );
+
+  res.json({
+    success: true,
+    message: `Spreadsheet synchronization successful: ${createdCount} created, ${updatedCount} updated.`,
+    createdCount,
+    updatedCount,
+    skippedCount,
+    totalProducts: db.products.length,
+    products: processedProducts
+  });
 });
 
 // -------------------------------------------------------------

@@ -50,9 +50,10 @@ export const db = (firebaseConfig as any).firestoreDatabaseId
   : getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-// Google Drive scopes for reading, auto-filling, and backing up product catalog
+// Google Drive and Google Sheets scopes for reading, syncing, and backing up product catalog
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
 
 // In-memory access token cache for Google Workspace APIs
 let cachedAccessToken: string | null = null;
@@ -112,8 +113,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  if (errMsg.includes('the client is offline') || errMsg.includes('offline')) {
-    console.warn(`[Firebase] Firestore operation ${operationType} on ${path || 'unknown'} in offline mode:`, errMsg);
+  if (errMsg.includes('the client is offline') || errMsg.includes('offline') || errMsg.includes('does not exist') || errMsg.includes('NOT_FOUND')) {
+    console.info(`[Firebase] Firestore operation ${operationType} on ${path || 'unknown'} in local fallback mode`);
     throw new Error(JSON.stringify(errInfo));
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
@@ -127,8 +128,9 @@ export async function testConnection(): Promise<boolean> {
     console.log('[Firebase] Connection to Firestore verified successfully.');
     return true;
   } catch (error: any) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('[Firebase] Firestore client running in offline/cached mode. Local database and server APIs active.');
+    const msg = error instanceof Error ? error.message : String(error || '');
+    if (msg.includes('the client is offline') || msg.includes('does not exist') || msg.includes('NOT_FOUND')) {
+      console.info('[Firebase] Firestore database running in local fallback mode. Local atomic database active.');
       return false;
     }
     // Probe acknowledged
