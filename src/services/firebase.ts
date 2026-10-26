@@ -49,6 +49,22 @@ setLogLevel('error');
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+// Google Drive scope for backing up product catalog
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+
+// In-memory access token cache for Google Workspace APIs
+let cachedAccessToken: string | null = null;
+export const getGoogleAccessToken = (): string | null => cachedAccessToken;
+export const setGoogleAccessToken = (token: string | null): void => {
+  cachedAccessToken = token;
+};
+
+// Clear cached token on sign-out
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    cachedAccessToken = null;
+  }
+});
 
 export enum OperationType {
   CREATE = 'create',
@@ -116,11 +132,16 @@ export async function testFirestoreConnection(): Promise<boolean> {
 // Initial probe
 testFirestoreConnection();
 
-// Google Sign-In via popup
-export async function loginWithGoogle(): Promise<User> {
+// Google Sign-In via popup with OAuth Access Token capture
+export async function loginWithGoogle(): Promise<User & { accessToken?: string }> {
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      cachedAccessToken = credential.accessToken;
+    }
+    const userWithToken = Object.assign(result.user, { accessToken: cachedAccessToken || undefined });
+    return userWithToken;
   } catch (error) {
     console.error('Google Sign-in failed:', error);
     throw error;
@@ -131,8 +152,148 @@ export async function loginWithGoogle(): Promise<User> {
 export async function logoutUser(): Promise<void> {
   try {
     await signOut(auth);
+    cachedAccessToken = null;
   } catch (error) {
     console.error('Sign-out failed:', error);
+    throw error;
+  }
+}
+
+// -------------------------------------------------------------
+// GOOGLE DRIVE PRODUCT CATALOG SYNC
+// -------------------------------------------------------------
+
+export interface GoogleDriveSyncResult {
+  success: boolean;
+  fileId?: string;
+  fileName?: string;
+  webViewLink?: string;
+  productCount: number;
+  syncedAt: string;
+  error?: string;
+}
+
+export async function syncProductsToGoogleDrive(
+  productsList: Product[],
+  explicitToken?: string
+): Promise<GoogleDriveSyncResult> {
+  const token = explicitToken || cachedAccessToken;
+  if (!token) {
+    throw new Error('Google Drive access token not available. Please sign in with Google to authorize Drive backup.');
+  }
+
+  const fileName = 'ContactReach_Market_Products.json';
+  const fileContent = JSON.stringify(
+    {
+      app: 'ContactReach Market',
+      version: '2.0',
+      exportedAt: new Date().toISOString(),
+      totalProducts: productsList.length,
+      company: 'ContactReach Media Ltd (Kigali, Rwanda)',
+      products: productsList
+    },
+    null,
+    2
+  );
+
+  try {
+    // 1. Check if file already exists in user's Drive
+    const searchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${fileName}'+and+trashed=false&fields=files(id,name,webViewLink)`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    let fileId: string | null = null;
+    let webViewLink: string | undefined = undefined;
+
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      if (searchData.files && searchData.files.length > 0) {
+        fileId = searchData.files[0].id;
+        webViewLink = searchData.files[0].webViewLink;
+      }
+    }
+
+    if (fileId) {
+      // 2a. Update existing file
+      const updateRes = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: fileContent
+        }
+      );
+
+      if (!updateRes.ok) {
+        const errText = await updateRes.text();
+        throw new Error(`Failed to update Drive file: ${errText}`);
+      }
+
+      const updateData = await updateRes.json();
+      return {
+        success: true,
+        fileId: updateData.id || fileId,
+        fileName,
+        webViewLink: webViewLink || `https://drive.google.com/file/d/${fileId}/view`,
+        productCount: productsList.length,
+        syncedAt: new Date().toISOString()
+      };
+    } else {
+      // 2b. Create new file with metadata using multipart upload
+      const boundary = '-------314159265358979323846';
+      const delimiter = `\r\n--${boundary}\r\n`;
+      const closeDelim = `\r\n--${boundary}--`;
+
+      const metadata = {
+        name: fileName,
+        mimeType: 'application/json',
+        description: 'Automated backup of ContactReach Market products & prices in RWF'
+      };
+
+      const multipartRequestBody =
+        delimiter +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify(metadata) +
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        fileContent +
+        closeDelim;
+
+      const createRes = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': `multipart/related; boundary=${boundary}`
+          },
+          body: multipartRequestBody
+        }
+      );
+
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        throw new Error(`Failed to upload products to Drive: ${errText}`);
+      }
+
+      const createData = await createRes.json();
+      return {
+        success: true,
+        fileId: createData.id,
+        fileName,
+        webViewLink: createData.webViewLink || `https://drive.google.com/file/d/${createData.id}/view`,
+        productCount: productsList.length,
+        syncedAt: new Date().toISOString()
+      };
+    }
+  } catch (error: any) {
+    console.error('Google Drive backup error:', error);
     throw error;
   }
 }

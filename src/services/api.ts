@@ -2,7 +2,8 @@ import {
   Product, Order, PaymentConfirmation, AppSettings, Category, OrderStatus,
   VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
-  PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority
+  PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority,
+  CjDropshippingConfig, GoogleDriveBackupStatus
 } from '../types.ts';
 import { initialProducts, initialCategories, initialSettings, initialShops } from '../data/initialData.ts';
 import {
@@ -2074,6 +2075,103 @@ export const api = {
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson || !parsed.json) {
       throw new Error(parsed.json?.error || 'System health check failed');
+    }
+    return parsed.json;
+  },
+
+  // Product Cost & Pricing Management (Admin Cost Controls)
+  async adminUpdateProductCost(id: string, payload: {
+    costPrice?: number;
+    price?: number;
+    discountPrice?: number;
+    discountPercent?: number;
+  }): Promise<Product> {
+    const res = await fetch(`/api/admin/products/${id}/cost`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.product) {
+      throw new Error(parsed.json?.error || 'Failed to update product cost');
+    }
+    return parsed.json.product;
+  },
+
+  // CJ Dropshipping API
+  async adminGetCjConfig(): Promise<CjDropshippingConfig> {
+    const res = await fetch('/api/admin/cjdropshipping/config', {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<CjDropshippingConfig>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error('Failed to load CJ Dropshipping configuration');
+    }
+    return parsed.json;
+  },
+
+  async adminUpdateCjConfig(config: Partial<CjDropshippingConfig>): Promise<CjDropshippingConfig> {
+    const res = await fetch('/api/admin/cjdropshipping/config', {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(config)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.config) {
+      throw new Error(parsed.json?.error || 'Failed to update CJ Dropshipping settings');
+    }
+    return parsed.json.config;
+  },
+
+  async adminTestCjConnection(apiKey?: string, email?: string): Promise<{ success: boolean; status: string; message: string }> {
+    const res = await fetch('/api/admin/cjdropshipping/test-connection', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ apiKey, email })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to connect to CJ Dropshipping');
+    }
+    return parsed.json;
+  },
+
+  async adminSyncCjProductsNow(category?: string): Promise<{ success: boolean; message: string; stats: any }> {
+    const res = await fetch('/api/admin/cjdropshipping/sync-now', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ category })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to sync CJ Dropshipping products');
+    }
+    return parsed.json;
+  },
+
+  // Google Drive Product Catalog Storage & Backup
+  async adminGetDriveBackupStatus(): Promise<GoogleDriveBackupStatus> {
+    try {
+      const res = await fetch('/api/admin/drive/status', {
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<GoogleDriveBackupStatus>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { status: 'idle', fileName: 'ContactReach_Market_Products.json', autoSyncEnabled: true };
+  },
+
+  async adminSyncProductsToDrive(accessToken?: string): Promise<any> {
+    const res = await fetch('/api/admin/drive/sync-products', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ accessToken })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to save products to Google Drive');
     }
     return parsed.json;
   }

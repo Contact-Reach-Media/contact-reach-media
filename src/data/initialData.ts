@@ -33,7 +33,29 @@ export const initialSettings: AppSettings = {
   isMaintenanceMode: false,
   maintenanceTitle: "We'll Be Back Soon",
   maintenanceMessage: "ContactReach Market is currently undergoing planned system upgrades to improve your shopping experience. All existing customer orders, accounts, and payments are safe. We will be back online shortly!",
-  maintenanceEstimatedTime: ""
+  maintenanceEstimatedTime: "",
+  cjConfig: {
+    apiKey: '',
+    email: '',
+    autoUploadEnabled: false,
+    syncFrequency: 'daily',
+    defaultMarkupPercent: 35,
+    usdToRwfRate: 1420,
+    autoPublish: true,
+    selectedCategories: ['electronics', 'fashion', 'amatara', 'hair-beauty', 'amasaha', 'ibikapu', 'sports'],
+    lastSyncStats: {
+      uploadedCount: 0,
+      updatedCount: 0,
+      totalCjProducts: 0,
+      timestamp: new Date().toISOString(),
+      status: 'idle'
+    }
+  },
+  driveBackupStatus: {
+    status: 'idle',
+    fileName: 'ContactReach_Market_Products.json',
+    autoSyncEnabled: true
+  }
 };
 
 export const initialCategories: Category[] = [

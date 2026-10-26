@@ -7,17 +7,18 @@ import {
   AlertCircle, Clock, ChevronDown, Download, Printer, ShieldCheck,
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
-  Star, ArrowLeft, ArrowRight, Camera
+  Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
   PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
-  AdminUser, AdminRole, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority
+  AdminUser, AdminRole, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority,
+  CjDropshippingConfig, GoogleDriveBackupStatus
 } from '../types.ts';
 import { api, getStoredAdminUser } from '../services/api.ts';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../services/firebase.ts';
+import { db, getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive } from '../services/firebase.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
 
@@ -43,7 +44,8 @@ type TabType =
   | 'coupons'
   | 'audit'
   | 'team'
-  | 'settings';
+  | 'settings'
+  | 'cjdropshipping';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
@@ -142,6 +144,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     sku: string;
     description: string;
     price: number | string;
+    costPrice: number | string; // Product / Supplier Cost in RWF
     discountPercent: number | string;
     discountPrice: number | string;
     category: string;
@@ -169,6 +172,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     sku: '',
     description: '',
     price: 15000,
+    costPrice: '',
     discountPercent: '',
     discountPrice: '',
     category: 'hair-beauty',
@@ -196,6 +200,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Multiple Picture Links helper state for Product Modal
   const [newImageLink, setNewImageLink] = useState('');
   const [showBulkImagePaste, setShowBulkImagePaste] = useState(false);
+
+  // CJ Dropshipping state
+  const [cjConfig, setCjConfig] = useState<CjDropshippingConfig | null>(null);
+  const [cjSyncing, setCjSyncing] = useState(false);
+  const [cjTesting, setCjTesting] = useState(false);
+  const [cjApiKeyInput, setCjApiKeyInput] = useState('');
+  const [cjEmailInput, setCjEmailInput] = useState('');
+  const [cjUsdRateInput, setCjUsdRateInput] = useState(1420);
+  const [cjMarkupInput, setCjMarkupInput] = useState(35);
+  const [cjAutoUploadToggle, setCjAutoUploadToggle] = useState(false);
+  const [cjAutoPublishToggle, setCjAutoPublishToggle] = useState(true);
+  const [cjSelectedCategories, setCjSelectedCategories] = useState<string[]>([
+    'electronics', 'fashion', 'amatara', 'hair-beauty', 'amasaha', 'ibikapu', 'sports'
+  ]);
+  const [savingCjConfig, setSavingCjConfig] = useState(false);
+  const [cjProductCategoryFilter, setCjProductCategoryFilter] = useState('all');
+  const [cjProductSearch, setCjProductSearch] = useState('');
+
+  // Inline Product Cost Editor states (Admin can update cost directly!)
+  const [editingCostProductId, setEditingCostProductId] = useState<string | null>(null);
+  const [editingCostPriceValue, setEditingCostPriceValue] = useState<number | string>('');
+  const [editingSellingPriceValue, setEditingSellingPriceValue] = useState<number | string>('');
+  const [savingProductCostId, setSavingProductCostId] = useState<string | null>(null);
+
+  // Google Drive state
+  const [driveStatus, setDriveStatus] = useState<GoogleDriveBackupStatus | null>(null);
+  const [syncingToDrive, setSyncingToDrive] = useState(false);
   const [bulkImageInput, setBulkImageInput] = useState('');
 
   // Quick Manage Picture Links Modal for any product directly from table
@@ -466,7 +497,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         fetchedAdminUsers,
         fetchedSupplierApps,
         fetchedSupplierPayouts,
-        fetchedSettings
+        fetchedSettings,
+        fetchedCjConfig,
+        fetchedDriveStatus
       ] = await Promise.all([
         api.adminGetStats().catch(() => null),
         api.adminGetOrders().catch(() => []),
@@ -483,7 +516,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         api.adminGetUsers().catch(() => []),
         api.adminGetSupplierApplications().catch(() => []),
         api.adminGetSupplierPayouts().catch(() => []),
-        api.getSettings().catch(() => null)
+        api.getSettings().catch(() => null),
+        api.adminGetCjConfig().catch(() => null),
+        api.adminGetDriveBackupStatus().catch(() => null)
       ]);
 
       if (fetchedStats) setStats(fetchedStats);
@@ -502,6 +537,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedSupplierApps) setSupplierApplications(fetchedSupplierApps);
       if (fetchedSupplierPayouts) setSupplierPayouts(fetchedSupplierPayouts);
       if (fetchedSettings) setSettings(fetchedSettings);
+      if (fetchedCjConfig) {
+        setCjConfig(fetchedCjConfig);
+        setCjApiKeyInput(prev => prev || fetchedCjConfig.apiKey || '');
+        setCjEmailInput(prev => prev || fetchedCjConfig.email || '');
+        setCjUsdRateInput(prev => prev || fetchedCjConfig.usdToRwfRate || 1420);
+        setCjMarkupInput(prev => prev || fetchedCjConfig.defaultMarkupPercent || 35);
+        setCjAutoUploadToggle(fetchedCjConfig.autoUploadEnabled);
+        setCjAutoPublishToggle(fetchedCjConfig.autoPublish !== false);
+        if (fetchedCjConfig.selectedCategories && fetchedCjConfig.selectedCategories.length > 0) {
+          setCjSelectedCategories(fetchedCjConfig.selectedCategories);
+        }
+      }
+      if (fetchedDriveStatus) {
+        setDriveStatus(fetchedDriveStatus);
+      }
       setLastSyncTime(new Date());
     } catch (err) {
       console.error('Error fetching admin data:', err);
@@ -688,6 +738,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       sku: `CRM-${(categories[0]?.id || 'PROD').toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
       description: '',
       price: 15000,
+      costPrice: '',
       discountPercent: '',
       discountPrice: '',
       category: categories[0]?.id || 'hair-beauty',
@@ -727,6 +778,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       sku: p.sku || '',
       description: p.description,
       price: p.price,
+      costPrice: p.costPrice !== undefined ? p.costPrice : '',
       discountPercent: existingPercent,
       discountPrice: p.discountPrice || '',
       category: p.category,
@@ -836,6 +888,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       sku: prodForm.sku.trim(),
       description: prodForm.description.trim(),
       price: finalPrice,
+      costPrice: prodForm.costPrice !== '' && !isNaN(Number(prodForm.costPrice)) ? Math.max(0, Number(prodForm.costPrice)) : undefined,
+      costOverriddenByAdmin: prodForm.costPrice !== '' ? true : (editingProduct?.costOverriddenByAdmin ?? false),
       discountPercent: numPercent,
       discountPrice: finalDiscountPrice,
       category: prodForm.category,
@@ -893,6 +947,120 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onRefreshPublicData();
     } catch (err: any) {
       showToast(err.message, 'error');
+    }
+  };
+
+  // Quick Product Cost & Selling Price Update (Admin Cost Controls)
+  const handleQuickUpdateProductCost = async (productId: string, customCost?: number, customPrice?: number) => {
+    const finalCost = customCost !== undefined ? customCost : (editingCostPriceValue !== '' ? Math.max(0, Number(editingCostPriceValue)) : undefined);
+    const finalPrice = customPrice !== undefined ? customPrice : (editingSellingPriceValue !== '' ? Math.max(0, Number(editingSellingPriceValue)) : undefined);
+
+    if (finalCost === undefined && finalPrice === undefined) {
+      setEditingCostProductId(null);
+      return;
+    }
+    setSavingProductCostId(productId);
+    try {
+      const payload: { costPrice?: number; price?: number } = {};
+      if (finalCost !== undefined) payload.costPrice = finalCost;
+      if (finalPrice !== undefined) payload.price = finalPrice;
+
+      await api.adminUpdateProductCost(productId, payload);
+      showToast('Product cost and pricing updated successfully!');
+      setEditingCostProductId(null);
+      setEditingCostPriceValue('');
+      setEditingSellingPriceValue('');
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update product cost', 'error');
+    } finally {
+      setSavingProductCostId(null);
+    }
+  };
+
+  // CJ Dropshipping Sync Handlers
+  const handleSaveCjConfig = async () => {
+    setSavingCjConfig(true);
+    try {
+      const updated = await api.adminUpdateCjConfig({
+        apiKey: cjApiKeyInput.trim(),
+        email: cjEmailInput.trim(),
+        autoUploadEnabled: cjAutoUploadToggle,
+        autoPublish: cjAutoPublishToggle,
+        usdToRwfRate: Number(cjUsdRateInput) || 1420,
+        defaultMarkupPercent: Number(cjMarkupInput) || 35,
+        selectedCategories: cjSelectedCategories
+      });
+      setCjConfig(updated);
+      showToast('CJ Dropshipping settings saved successfully!');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save CJ configuration', 'error');
+    } finally {
+      setSavingCjConfig(false);
+    }
+  };
+
+  const handleTestCjConnection = async () => {
+    setCjTesting(true);
+    try {
+      const res = await api.adminTestCjConnection(cjApiKeyInput.trim(), cjEmailInput.trim());
+      showToast(res.message, res.success ? 'success' : 'error');
+    } catch (err: any) {
+      showToast(err.message || 'Connection test failed', 'error');
+    } finally {
+      setCjTesting(false);
+    }
+  };
+
+  const handleSyncCjNow = async (categoryFilter?: string) => {
+    setCjSyncing(true);
+    try {
+      const res = await api.adminSyncCjProductsNow(categoryFilter);
+      showToast(res.message);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'CJ automated upload failed', 'error');
+    } finally {
+      setCjSyncing(false);
+    }
+  };
+
+  // Google Drive Catalog Backup Handler
+  const handleSyncToGoogleDrive = async () => {
+    setSyncingToDrive(true);
+    try {
+      let token = getGoogleAccessToken();
+      if (!token) {
+        const authRes = await loginWithGoogle();
+        token = authRes.accessToken || getGoogleAccessToken();
+      }
+
+      if (!token) {
+        throw new Error('Please authorize Google Drive access to save your catalog.');
+      }
+
+      const result = await syncProductsToGoogleDrive(products, token);
+      await api.adminSyncProductsToDrive(token).catch(() => null);
+
+      setDriveStatus({
+        status: 'success',
+        lastBackupAt: result.syncedAt,
+        fileId: result.fileId,
+        fileName: result.fileName,
+        webViewLink: result.webViewLink,
+        productCount: result.productCount,
+        autoSyncEnabled: true,
+        message: `Successfully stored ${result.productCount} products in Google Drive.`
+      });
+
+      showToast(`Products catalog (${result.productCount} items) backed up to Google Drive & Firebase!`);
+      fetchAllData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to backup to Google Drive', 'error');
+    } finally {
+      setSyncingToDrive(false);
     }
   };
 
@@ -1422,6 +1590,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('cjdropshipping')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'cjdropshipping' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <RefreshCw className="w-4 h-4 text-purple-600" />
+                <span>CJ Dropshipping</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'cjdropshipping' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700'
+              }`}>
+                {products.filter(p => p.source === 'cjdropshipping').length}
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('orders')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'orders' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
@@ -1758,16 +1943,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <h1 className="text-xl font-black text-slate-900 tracking-tight">Products Management</h1>
-                  <p className="text-xs text-slate-500">Add, edit, duplicate, archive, and manage stock & variations</p>
+                  <p className="text-xs text-slate-500">
+                    Authoritative Cloud Firestore storage & Google Drive sync · CJ Dropshipping integration · Custom Admin Cost controls
+                  </p>
                 </div>
-                <button
-                  onClick={handleOpenAddProduct}
-                  className="px-4 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-2xl shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add New Product</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleSyncToGoogleDrive}
+                    disabled={syncingToDrive}
+                    className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                    title="Store & backup all products to Google Drive (ContactReach_Market_Products.json)"
+                  >
+                    <CloudUpload className={`w-4 h-4 ${syncingToDrive ? 'animate-bounce text-blue-600' : 'text-blue-500'}`} />
+                    <span>{syncingToDrive ? 'Backing up to Drive...' : 'Backup to Google Drive'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('cjdropshipping')}
+                    className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Configure CJ Dropshipping automated upload feed"
+                  >
+                    <RefreshCw className="w-4 h-4 text-purple-600" />
+                    <span>CJ Dropshipping</span>
+                  </button>
+
+                  <button
+                    onClick={handleOpenAddProduct}
+                    className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add New Product</span>
+                  </button>
+                </div>
               </div>
+
+              {/* Google Drive & Storage Sync Banner */}
+              {driveStatus?.lastBackupAt && (
+                <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-blue-900">
+                    <CloudUpload className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span className="font-semibold">
+                      Google Drive Backup Active: Stored <strong>{driveStatus.productCount ?? products.length} products</strong> in <code className="bg-blue-100 px-1 py-0.5 rounded text-[11px] font-mono">ContactReach_Market_Products.json</code>
+                    </span>
+                    <span className="text-[11px] text-blue-600 font-mono">
+                      (Last synced: {new Date(driveStatus.lastBackupAt).toLocaleString()})
+                    </span>
+                  </div>
+                  {driveStatus.webViewLink && (
+                    <a
+                      href={driveStatus.webViewLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 underline"
+                    >
+                      <span>Open in Drive</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* Filters */}
               <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 flex flex-wrap gap-2.5 items-center justify-between text-xs">
@@ -1814,7 +2048,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
                         <th className="py-3 px-4">Product / SKU</th>
                         <th className="py-3 px-3">Category</th>
-                        <th className="py-3 px-3">Shop</th>
+                        <th className="py-3 px-3">Shop / Source</th>
+                        <th className="py-3 px-3">Cost (FRW)</th>
                         <th className="py-3 px-3">Price (FRW)</th>
                         <th className="py-3 px-3">Stock</th>
                         <th className="py-3 px-3">Status</th>
@@ -1865,10 +2100,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {p.category}
                           </td>
                           <td className="py-3 px-3 font-semibold text-slate-700">
-                            {p.shopName || 'ContactReach Market'}
+                            <div>{p.shopName || 'ContactReach Market'}</div>
+                            {p.source === 'cjdropshipping' && (
+                              <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 text-[9px] font-black uppercase tracking-wider">
+                                CJ Dropshipping
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            {p.costPrice !== undefined ? (
+                              <div>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono font-bold text-slate-900">{p.costPrice.toLocaleString()} FRW</span>
+                                  {p.costOverriddenByAdmin && (
+                                    <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 text-[8px] font-black" title="Admin custom cost - protected from CJ auto-sync overwrite">
+                                      Admin
+                                    </span>
+                                  )}
+                                </div>
+                                {p.source === 'cjdropshipping' && p.cjOriginalCostUsd && (
+                                  <div className="text-[10px] text-purple-600 font-mono">CJ: ${p.cjOriginalCostUsd}</div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = window.prompt(`Update product cost for "${p.name}" (FRW):`, String(p.costPrice ?? ''));
+                                    if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
+                                      handleQuickUpdateProductCost(p.id, Number(val));
+                                    }
+                                  }}
+                                  className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                >
+                                  Edit Cost
+                                </button>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-slate-400 italic text-[11px]">—</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = window.prompt(`Set cost price for "${p.name}" (FRW):`, '');
+                                    if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
+                                      handleQuickUpdateProductCost(p.id, Number(val));
+                                    }
+                                  }}
+                                  className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                >
+                                  + Set Cost
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 px-3">
                             <span className="font-mono font-bold text-slate-900">{p.price.toLocaleString()} FRW</span>
+                            {p.costPrice && p.price > p.costPrice && (
+                              <div className="text-[10px] font-bold text-emerald-600 font-mono">
+                                +{Math.round(((p.price - p.costPrice) / p.price) * 100)}% margin
+                              </div>
+                            )}
                             {((p.discountPercent && p.discountPercent > 0) || (p.discountPrice && p.discountPrice < p.price)) && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 text-[10px] font-black">
@@ -3678,6 +3968,517 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* Cloud Firestore & Google Drive Persistence Status Card */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4 text-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <CloudUpload className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <h3 className="font-black text-sm text-slate-900">Database Storage & Google Drive Backup</h3>
+                      <p className="text-[11px] text-slate-500">Products are stored live in Cloud Firestore and can be synchronized to Google Drive</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Cloud Firestore Active</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                    <span className="font-bold text-slate-700 block">Authoritative Firestore Database:</span>
+                    <code className="text-[11px] font-mono text-slate-600 block bg-white p-2 rounded-lg border border-slate-200 break-all">
+                      ai-studio-contactreachmark-e7c8fa82-d820-4699-9810-672e9d5a0b74
+                    </code>
+                    <p className="text-[10px] text-slate-500">
+                      Real-time live listeners sync orders, products, audit logs, and payments across all devices.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2">
+                    <span className="font-bold text-blue-900 block">Google Drive Catalog Backup:</span>
+                    <div className="text-[11px] text-blue-800 space-y-1">
+                      <div>File: <strong className="font-mono">ContactReach_Market_Products.json</strong></div>
+                      {driveStatus?.lastBackupAt ? (
+                        <div>Last Synced: <strong>{new Date(driveStatus.lastBackupAt).toLocaleString()}</strong> ({driveStatus.productCount || products.length} products)</div>
+                      ) : (
+                        <div className="text-slate-500 italic">No backup performed yet in this session.</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleSyncToGoogleDrive}
+                        disabled={syncingToDrive}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        <CloudUpload className={`w-3.5 h-3.5 ${syncingToDrive ? 'animate-bounce' : ''}`} />
+                        <span>{syncingToDrive ? 'Syncing...' : 'Backup Now to Google Drive'}</span>
+                      </button>
+                      {driveStatus?.webViewLink && (
+                        <a
+                          href={driveStatus.webViewLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 font-bold rounded-xl text-xs flex items-center gap-1"
+                        >
+                          <span>Open in Drive</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: CJ DROPSHIPPING & AUTOMATED PRODUCT FEED */}
+          {activeTab === 'cjdropshipping' && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <RefreshCw className="w-5 h-5 text-purple-600" />
+                    <span>CJ Dropshipping Integration & Auto-Upload</span>
+                  </h1>
+                  <p className="text-xs text-slate-500">
+                    Automatically synchronize and upload wholesale products. Admin can directly update product cost anytime.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={handleTestCjConnection}
+                    disabled={cjTesting}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                  >
+                    <ShieldCheck className={`w-4 h-4 ${cjTesting ? 'animate-spin text-purple-600' : 'text-slate-600'}`} />
+                    <span>{cjTesting ? 'Testing...' : 'Test Connection'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleSyncCjNow(cjProductCategoryFilter !== 'all' ? cjProductCategoryFilter : undefined)}
+                    disabled={cjSyncing}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${cjSyncing ? 'animate-spin' : ''}`} />
+                    <span>{cjSyncing ? 'Syncing Products...' : '⚡ Sync Feed Now'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>CJ Products in Catalog</span>
+                    <Package className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 font-mono">
+                    {products.filter(p => p.source === 'cjdropshipping').length}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Active dropshipping products</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>Admin Cost Overrides</span>
+                    <DollarSign className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="text-2xl font-black text-amber-600 font-mono">
+                    {products.filter(p => p.source === 'cjdropshipping' && p.costOverriddenByAdmin).length}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Custom costs protected from overwrite</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>Automated Upload</span>
+                    <Clock className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="text-sm font-black text-slate-800 mt-1">
+                    {cjAutoUploadToggle ? (
+                      <span className="text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4" /> Auto (Every 15 mins)
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">Manual Sync Only</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-slate-400">Background feed scheduler</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>Pricing Formula</span>
+                    <Percent className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="text-sm font-black text-slate-900 font-mono mt-1">
+                    1 USD = {cjUsdRateInput || 1420} FRW
+                  </div>
+                  <span className="text-[10px] text-emerald-600 font-semibold">+{cjMarkupInput || 35}% default markup</span>
+                </div>
+              </div>
+
+              {/* Admin Cost Override Protection Guarantee Callout */}
+              <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-purple-600 text-white shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-black text-purple-950 block text-xs">
+                      Admin Cost & Selling Price Protection Active
+                    </span>
+                    <span className="text-purple-800 text-[11px] leading-relaxed">
+                      You can edit and customize the product cost (<code className="bg-white/80 px-1 py-0.2 rounded font-mono">costPrice</code>) and selling price for any product.
+                      When cost is modified by an admin, automated CJ syncs will update stock and pictures but will <strong>never overwrite your custom cost</strong>.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Configuration Form Card */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-5 text-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-purple-600" />
+                    <span>CJ Dropshipping Feed Settings</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={handleSaveCjConfig}
+                    disabled={savingCjConfig}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{savingCjConfig ? 'Saving...' : 'Save Settings'}</span>
+                  </button>
+                </div>
+
+                {/* Automation Toggles */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors">
+                    <div>
+                      <span className="font-bold text-slate-800 block text-xs">Automated Upload (15-min background sync)</span>
+                      <span className="text-[11px] text-slate-500">Automatically fetches new trending products from CJ and uploads to your catalog</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={cjAutoUploadToggle}
+                      onChange={(e) => setCjAutoUploadToggle(e.target.checked)}
+                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                    />
+                  </label>
+
+                  <label className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors">
+                    <div>
+                      <span className="font-bold text-slate-800 block text-xs">Auto-Publish as Available</span>
+                      <span className="text-[11px] text-slate-500">Set newly imported products to "Available" immediately for public shoppers</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={cjAutoPublishToggle}
+                      onChange={(e) => setCjAutoPublishToggle(e.target.checked)}
+                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                    />
+                  </label>
+                </div>
+
+                {/* Currency & Markup */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">USD to RWF Exchange Rate</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="500"
+                        value={cjUsdRateInput}
+                        onChange={(e) => setCjUsdRateInput(Number(e.target.value))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold"
+                      />
+                      <span className="absolute right-3.5 top-2.5 font-bold text-slate-400 pointer-events-none">RWF</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Standard wholesale conversion rate</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Default Profit Markup (%)</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="5"
+                        max="200"
+                        value={cjMarkupInput}
+                        onChange={(e) => setCjMarkupInput(Number(e.target.value))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold"
+                      />
+                      <span className="absolute right-3.5 top-2.5 font-bold text-slate-400 pointer-events-none">%</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Added to cost when uploading new items</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">CJ API Key / Access Token</label>
+                    <input
+                      type="password"
+                      value={cjApiKeyInput}
+                      onChange={(e) => setCjApiKeyInput(e.target.value)}
+                      placeholder="Optional API token (pre-configured)"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block">Default connected feed active</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">CJ Account Email</label>
+                    <input
+                      type="email"
+                      value={cjEmailInput}
+                      onChange={(e) => setCjEmailInput(e.target.value)}
+                      placeholder="contactreachmedialimited@gmail.com"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block">Account notification identifier</span>
+                  </div>
+                </div>
+
+                {/* Categories to Import */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-2">Import Categories</label>
+                  <div className="flex flex-wrap gap-2">
+                    {categories.map(cat => {
+                      const isSelected = cjSelectedCategories.includes(cat.id);
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setCjSelectedCategories(cjSelectedCategories.filter(c => c !== cat.id));
+                            } else {
+                              setCjSelectedCategories([...cjSelectedCategories, cat.id]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                            isSelected
+                              ? 'bg-purple-100 text-purple-900 border-purple-300'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '} {cat.nameEn}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* CJ Products Catalog Table with Inline Cost Update */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-black text-slate-900">Imported CJ Dropshipping Products</h2>
+                    <p className="text-xs text-slate-500">Edit product cost, selling prices, and review margins</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        value={cjProductSearch}
+                        onChange={(e) => setCjProductSearch(e.target.value)}
+                        placeholder="Search CJ products..."
+                        className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs w-48"
+                      />
+                    </div>
+
+                    <select
+                      value={cjProductCategoryFilter}
+                      onChange={(e) => setCjProductCategoryFilter(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
+                    >
+                      <option value="all">All Categories</option>
+                      {categories.map(c => (
+                        <option key={c.id} value={c.id}>{c.nameEn}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="py-3 px-4">Product / SKU</th>
+                          <th className="py-3 px-3">Category</th>
+                          <th className="py-3 px-3">CJ Wholesale (USD)</th>
+                          <th className="py-3 px-3">Product Cost (RWF)</th>
+                          <th className="py-3 px-3">Selling Price (RWF)</th>
+                          <th className="py-3 px-3">Profit Margin</th>
+                          <th className="py-3 px-3">Stock</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {products
+                          .filter(p => p.source === 'cjdropshipping')
+                          .filter(p => cjProductCategoryFilter === 'all' || p.category === cjProductCategoryFilter)
+                          .filter(p => !cjProductSearch.trim() || p.name.toLowerCase().includes(cjProductSearch.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(cjProductSearch.toLowerCase())))
+                          .map(p => {
+                            const isEditing = editingCostProductId === p.id;
+                            const currentCost = p.costPrice ?? Math.round((p.cjOriginalCostUsd || 10) * (cjConfig?.usdToRwfRate || 1420));
+                            const profit = Math.max(0, p.price - currentCost);
+                            const marginPct = p.price > 0 ? Math.round((profit / p.price) * 100) : 0;
+
+                            return (
+                              <tr key={p.id} className="hover:bg-slate-50/60">
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <img
+                                      src={p.imageUrl}
+                                      alt={p.name}
+                                      className="w-10 h-10 object-cover rounded-xl border border-slate-200 shrink-0"
+                                    />
+                                    <div>
+                                      <span className="font-bold text-slate-900 block line-clamp-1">{p.name}</span>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1 py-0.2 rounded font-bold">
+                                          {p.cjProductSku || p.sku}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-slate-600 font-medium capitalize">
+                                  {p.category}
+                                </td>
+                                <td className="py-3 px-3 font-mono font-bold text-purple-900">
+                                  {p.cjOriginalCostUsd ? `$${p.cjOriginalCostUsd.toFixed(2)}` : '—'}
+                                </td>
+                                <td className="py-3 px-3">
+                                  {isEditing ? (
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={editingCostPriceValue}
+                                        onChange={(e) => setEditingCostPriceValue(e.target.value)}
+                                        className="w-24 px-2 py-1 rounded border border-purple-400 font-mono font-bold text-xs"
+                                        placeholder="Cost FRW"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-mono font-bold text-slate-900">
+                                          {(p.costPrice ?? currentCost).toLocaleString()} FRW
+                                        </span>
+                                        {p.costOverriddenByAdmin && (
+                                          <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 text-[8px] font-black" title="Admin Custom Cost Override">
+                                            Admin
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3">
+                                  {isEditing ? (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={editingSellingPriceValue}
+                                      onChange={(e) => setEditingSellingPriceValue(e.target.value)}
+                                      className="w-24 px-2 py-1 rounded border border-purple-400 font-mono font-bold text-xs"
+                                      placeholder="Price FRW"
+                                    />
+                                  ) : (
+                                    <span className="font-mono font-bold text-slate-900">{p.price.toLocaleString()} FRW</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-extrabold ${
+                                    marginPct >= 30 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    +{marginPct}% ({profit.toLocaleString()} FRW)
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 font-mono font-bold text-slate-700">
+                                  {p.stock}
+                                </td>
+                                <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                                  {isEditing ? (
+                                    <div className="inline-flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickUpdateProductCost(p.id)}
+                                        disabled={savingProductCostId === p.id}
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] cursor-pointer"
+                                      >
+                                        {savingProductCostId === p.id ? 'Saving...' : 'Save Cost'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingCostProductId(null)}
+                                        className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg font-bold text-[10px] cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="inline-flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingCostProductId(p.id);
+                                          setEditingCostPriceValue(p.costPrice !== undefined ? p.costPrice : currentCost);
+                                          setEditingSellingPriceValue(p.price);
+                                        }}
+                                        className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-bold text-[10px] cursor-pointer border border-purple-200"
+                                      >
+                                        Update Cost
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditProduct(p)}
+                                        className="p-1 rounded text-slate-500 hover:text-slate-800 cursor-pointer"
+                                        title="Full Edit"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+
+                    {products.filter(p => p.source === 'cjdropshipping').length === 0 && (
+                      <div className="p-8 text-center space-y-3">
+                        <Package className="w-8 h-8 text-slate-300 mx-auto" />
+                        <div className="text-slate-600 font-bold">No CJ Dropshipping products imported yet</div>
+                        <p className="text-slate-400 text-xs">
+                          Click <strong>"⚡ Sync Feed Now"</strong> above to instantly upload curated dropshipping products.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleSyncCjNow()}
+                          disabled={cjSyncing}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs cursor-pointer"
+                        >
+                          Import Initial Feed Now
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </main>
@@ -3838,9 +4639,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Price (FRW) *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">Cost Price (FRW)</label>
+                    <span className="text-[10px] text-blue-600 font-semibold">Admin Override</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    value={prodForm.costPrice}
+                    onChange={(e) => setProdForm({ ...prodForm, costPrice: e.target.value })}
+                    placeholder="e.g. 8000"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold bg-blue-50/20"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Wholesale cost. Admin can override anytime.
+                  </span>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Selling Price (FRW) *</label>
                   <input
                     type="number"
                     required
@@ -3944,6 +4762,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                 </div>
               </div>
+
+              {prodForm.costPrice !== '' && Number(prodForm.costPrice) > 0 && Number(prodForm.price) > 0 && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-950 font-bold">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      Estimated Profit: {(Number(prodForm.price) - Number(prodForm.costPrice)).toLocaleString()} FRW / unit
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded-lg font-mono">
+                    {Math.round(((Number(prodForm.price) - Number(prodForm.costPrice)) / Number(prodForm.price)) * 100)}% Margin
+                  </span>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

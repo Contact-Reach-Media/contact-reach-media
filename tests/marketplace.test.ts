@@ -82,6 +82,16 @@ async function runTests() {
     assert(data.token, 'Session token should be returned');
     assert.strictEqual(data.admin.role, 'owner', 'Role should be owner');
     adminToken = data.token;
+
+    // Reset maintenance mode to false for initial tests
+    await fetch(`${BASE_URL}/api/admin/maintenance`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ isMaintenanceMode: false })
+    });
   });
 
   // TEST 3B: Admin Google Firebase Authentication Success
@@ -1229,6 +1239,88 @@ async function runTests() {
     const tokenEntry = dbContent.adminTokens.find(([k]: any) => k === token);
     assert(tokenEntry, 'The login session token must be persisted in database file on disk');
     assert(tokenEntry[1].expiresAt > Date.now(), 'Token must have future expiry date');
+  });
+
+  await test('CJ Dropshipping Integration: Sync feed, verify automated upload, and admin cost override', async () => {
+    // 1. Fetch CJ config
+    const cfgRes = await fetch(`${BASE_URL}/api/admin/cjdropshipping/config`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(cfgRes.status, 200, 'Should fetch CJ config');
+    const cjCfg = await cfgRes.json();
+    assert.strictEqual(typeof cjCfg.autoUploadEnabled, 'boolean');
+
+    // 2. Trigger CJ automated upload sync
+    const syncRes = await fetch(`${BASE_URL}/api/admin/cjdropshipping/sync-now`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(syncRes.status, 200, 'CJ sync should succeed');
+    const syncData = await syncRes.json();
+    assert(syncData.success, 'Sync response should indicate success');
+    assert(syncData.uploadedCount > 0 || syncData.updatedCount > 0, 'Should have imported or updated CJ dropshipping products');
+
+    // 3. Verify products in catalog have source: cjdropshipping
+    const prodRes = await fetch(`${BASE_URL}/api/products`);
+    const allProds = await prodRes.json();
+    const cjProds = allProds.filter((p: any) => p.source === 'cjdropshipping');
+    assert(cjProds.length > 0, 'Products catalog should contain CJ products');
+
+    const sampleCj = cjProds[0];
+    assert(sampleCj.cjProductId, 'CJ product should have cjProductId');
+    assert(sampleCj.costPrice !== undefined, 'CJ product should have costPrice in RWF');
+    const originalCost = sampleCj.costPrice;
+
+    // 4. Admin updates product cost directly
+    const newCustomCost = 9999;
+    const newCustomPrice = 18999;
+    const costUpdateRes = await fetch(`${BASE_URL}/api/admin/products/${sampleCj.id}/cost`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        costPrice: newCustomCost,
+        price: newCustomPrice
+      })
+    });
+    assert.strictEqual(costUpdateRes.status, 200, 'Admin cost update should succeed');
+    const updatedProdData = await costUpdateRes.json();
+    assert.strictEqual(updatedProdData.product.costPrice, newCustomCost, 'Cost should be updated to custom admin cost');
+    assert.strictEqual(updatedProdData.product.price, newCustomPrice, 'Price should be updated to custom admin price');
+    assert.strictEqual(updatedProdData.product.costOverriddenByAdmin, true, 'costOverriddenByAdmin must be true');
+
+    // 5. Re-run CJ sync and verify custom admin cost is NEVER overwritten
+    const reSyncRes = await fetch(`${BASE_URL}/api/admin/cjdropshipping/sync-now`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(reSyncRes.status, 200);
+
+    const checkProdsRes = await fetch(`${BASE_URL}/api/products`);
+    const checkProds = await checkProdsRes.json();
+    const checkedProd = checkProds.find((p: any) => p.id === sampleCj.id);
+    assert.strictEqual(checkedProd.costPrice, newCustomCost, 'Subsequent automated CJ sync MUST NOT overwrite admin custom cost');
+    assert.strictEqual(checkedProd.price, newCustomPrice, 'Subsequent automated CJ sync MUST NOT overwrite admin custom selling price');
+    assert.strictEqual(checkedProd.costOverriddenByAdmin, true, 'Product must remain flagged as costOverriddenByAdmin');
+  });
+
+  await test('Google Drive Backup Status endpoint is functional', async () => {
+    const driveRes = await fetch(`${BASE_URL}/api/admin/drive/status`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(driveRes.status, 200, 'Should fetch Drive backup status');
+    const driveData = await driveRes.json();
+    assert.strictEqual(driveData.fileName, 'ContactReach_Market_Products.json');
   });
 
   console.log('\n====================================================');

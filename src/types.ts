@@ -107,6 +107,14 @@ export interface Product {
   rating?: number;
   reviewsCount?: number;
   unit?: string;
+  // CJ Dropshipping & Supplier Cost Automation
+  source?: 'local' | 'cjdropshipping';
+  cjProductId?: string;
+  cjProductSku?: string;
+  cjOriginalCostUsd?: number;
+  costOverriddenByAdmin?: boolean; // Admin can update product cost
+  profitMargin?: number; // Calculated profit margin in RWF
+  cjLastSyncAt?: string;
   createdAt: string;
   updatedAt?: string;
   lastVerifiedAt?: string;
@@ -269,6 +277,42 @@ export interface AppSettings {
   maintenanceMessage?: string;
   maintenanceEstimatedTime?: string;
   maintenanceUpdatedAt?: string;
+  // CJ Dropshipping & Automation
+  cjConfig?: CjDropshippingConfig;
+  // Google Drive & Cloud Backup
+  driveBackupStatus?: GoogleDriveBackupStatus;
+}
+
+export interface CjDropshippingConfig {
+  apiKey?: string;
+  email?: string;
+  autoUploadEnabled: boolean; // Auto product upload
+  syncFrequency: 'hourly' | 'daily' | 'manual';
+  defaultMarkupPercent: number; // e.g. 35% markup over supplier cost
+  usdToRwfRate: number; // e.g. 1420 RWF per USD
+  autoPublish: boolean; // Available immediately vs Hidden/Draft
+  selectedCategories: string[];
+  lastSyncAt?: string;
+  lastSyncStats?: {
+    uploadedCount: number;
+    updatedCount: number;
+    totalCjProducts: number;
+    timestamp: string;
+    status: 'success' | 'failed' | 'idle';
+    message?: string;
+  };
+}
+
+export interface GoogleDriveBackupStatus {
+  lastBackupAt?: string;
+  fileId?: string;
+  fileName?: string;
+  webViewLink?: string;
+  fileSize?: number;
+  productCount?: number;
+  autoSyncEnabled?: boolean;
+  status: 'idle' | 'syncing' | 'success' | 'failed';
+  message?: string;
 }
 
 export interface VendorShop {
