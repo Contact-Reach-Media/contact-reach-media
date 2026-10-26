@@ -1,11 +1,11 @@
 {
-  "projectId": "gen-lang-client-0517064392",
-  "appId": "1:452510424455:web:3c1ade4c7f5be595708722",
-  "apiKey": "AIzaSyDP9ivPcXg2ALUxoS8Z943vmfe5FIJ9SgM",
-  "authDomain": "gen-lang-client-0517064392.firebaseapp.com",
-  "storageBucket": "gen-lang-client-0517064392.firebasestorage.app",
-  "messagingSenderId": "452510424455",
-  "measurementId": "",
-  "oAuthClientId": "452510424455-qtpa9o7aud8nbrbncf7213l34svflfse.apps.googleusercontent.com",
+  "projectId": "contactreachmarket",
+  "appId": "1:462974891704:web:155af7b96b6522acb7264d",
+  "apiKey": "AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU",
+  "authDomain": "contactreachmarket.firebaseapp.com",
+  "storageBucket": "contactreachmarket.firebasestorage.app",
+  "messagingSenderId": "462974891704",
+  "measurementId": "G-BHQ1SSGYCR",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
