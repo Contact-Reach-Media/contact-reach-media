@@ -291,6 +291,7 @@ export interface AppSettings {
 
 export interface CjDropshippingConfig {
   apiKey?: string;
+  hasApiKey?: boolean;
   email?: string;
   autoUploadEnabled: boolean; // Auto product upload
   syncFrequency: 'hourly' | 'daily' | 'manual';
