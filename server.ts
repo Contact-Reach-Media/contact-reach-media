@@ -4315,7 +4315,7 @@ async function getCjAccessToken(rawKey?: string, email?: string): Promise<string
     console.warn('[CJ Dropshipping] Failed to exchange API key for access token:', err.message || err);
   }
 
-  return effectiveKey;
+  return null;
 }
 
 // Helper to perform automated product upload from CJ Dropshipping
@@ -4335,7 +4335,8 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
   const effectiveCjKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (effectiveCjKey && effectiveCjKey.length >= 10) {
     try {
-      const liveToken = (await getCjAccessToken(effectiveCjKey, config.email)) || effectiveCjKey;
+      const liveToken = await getCjAccessToken(effectiveCjKey, config.email);
+      if (!liveToken) throw new Error('CJ authentication failed; live product sync was not performed.');
       const url = `https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=1&pageSize=20${categoryFilter && categoryFilter !== 'all' ? `&categoryName=${encodeURIComponent(categoryFilter)}` : ''}`;
       let cjRes = await fetch(url, {
         method: 'GET',
@@ -4461,7 +4462,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         price: suggestedSellingPrice,
         profitMargin: suggestedSellingPrice - costInFrw,
         category: item.category,
-        stock: 50,
+        stock: 0,
         imageUrl: item.productImage,
         images: item.productImageSet,
         shopName,
@@ -4470,8 +4471,8 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
         merchantCode: db.settings.merchantCode || '078002',
         receiverPhone: db.settings.paymentNumber || '078002260',
-        location: 'Kigali Express / Global Dispatch',
-        deliveryInfo: 'Kigali delivery within 24-48 hrs',
+        location: 'Supplier fulfillment — origin to be confirmed',
+        deliveryInfo: 'Delivery cost and estimated arrival must be confirmed before customer payment.',
         status: (config.requireAdminApproval || config.autoPublish === false) ? 'Hidden' : 'Available',
         reviewStatus: (config.requireAdminApproval || config.autoPublish === false) ? 'Pending Approval' : 'Approved',
         isFeatured: false,
@@ -4480,7 +4481,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         brand: item.brand,
         variations: item.variations,
         unit: item.unit || 'Piece',
-        rating: 5.0,
+        rating: 0,
         reviewsCount: 0,
         cjLastSyncAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
@@ -4634,24 +4635,51 @@ app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owne
 
 // 3. Test Connection
 app.post('/api/admin/cjdropshipping/test-connection', requireAdminAuth, async (req: Request, res: Response) => {
-  const { apiKey, email } = req.body;
-  const currentKey = db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '';
-  const effectiveKey = (apiKey && !apiKey.includes('••••')) ? apiKey : currentKey;
-  const effectiveEmail = email || db.settings.cjConfig?.email;
+  const submittedKey =
+    typeof req.body?.apiKey === 'string' && !req.body.apiKey.includes('••••')
+      ? req.body.apiKey.trim()
+      : '';
+  const effectiveKey =
+    submittedKey ||
+    process.env.CJ_DROPSHIPPING_API_KEY?.trim() ||
+    db.settings.cjConfig?.apiKey?.trim() ||
+    '';
+  const effectiveEmail =
+    (typeof req.body?.email === 'string' && req.body.email.trim()) ||
+    db.settings.cjConfig?.email?.trim() ||
+    '';
 
-  if (effectiveKey && effectiveKey.length >= 10) {
-    return res.json({
-      success: true,
-      status: 'connected',
-      message: `CJ Dropshipping API credentials verified. Connected with account ${effectiveEmail || 'CJ Dropshipping Partner'}. Automated product catalog pipeline active.`
+  if (!effectiveKey || !effectiveEmail) {
+    return res.status(400).json({
+      success: false,
+      status: 'not_configured',
+      message: 'CJ API key and account email must be configured.'
     });
   }
 
-  return res.json({
-    success: true,
-    status: 'ready',
-    message: 'CJ Dropshipping catalog pipeline is ready. Products from your connected CJ feed will synchronize automatically.'
-  });
+  try {
+    const token = await getCjAccessToken(effectiveKey, effectiveEmail);
+    if (!token) {
+      return res.status(502).json({
+        success: false,
+        status: 'authentication_failed',
+        message: 'CJ did not confirm authentication. Verify the API key and account email.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      status: 'connected',
+      message: 'CJ authentication succeeded.'
+    });
+  } catch (error: any) {
+    console.error('[CJ] Connection test failed:', error?.message || error);
+    return res.status(502).json({
+      success: false,
+      status: 'connection_error',
+      message: 'Could not complete CJ authentication. Check network access and CJ API availability.'
+    });
+  }
 });
 
 // 4. Get CJ Categories
@@ -4672,7 +4700,10 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
   const effectiveKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (effectiveKey && effectiveKey.length >= 10) {
     try {
-      const liveToken = (await getCjAccessToken(effectiveKey, config.email)) || effectiveKey;
+      const liveToken = await getCjAccessToken(effectiveKey, config.email);
+      if (!liveToken) {
+        return res.status(502).json({ success: false, source: 'live_cj', message: 'CJ authentication failed; live product search was not performed.' });
+      }
       const queryParams = new URLSearchParams({
         pageNum: String(Number(page) || 1),
         pageSize: String(Number(pageSize) || 20)
@@ -5082,14 +5113,7 @@ app.post('/api/admin/cjdropshipping/sync-stock-prices', requireAdminAuth, requir
       prod.profitMargin = computedSellingPrice - computedCostFrw;
     }
 
-    // Refresh stock from supplier (defaulting to 50 active inventory)
-    if (prod.stock === 0 && prod.status === 'Out of Stock') {
-      prod.stock = 50;
-      if (prod.reviewStatus === 'Approved') {
-        prod.status = 'Available';
-      }
-    }
-
+    // Do not invent supplier inventory. Stock must come from a verified live inventory response.
     prod.cjOriginalCostUsd = usdCost;
     prod.cjLastSyncAt = new Date().toISOString();
     prod.updatedAt = new Date().toISOString();
@@ -5174,12 +5198,16 @@ app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdmi
     return res.status(404).json({ error: 'Order not found' });
   }
 
-  const generatedTracking = trackingNumber?.trim() || `CJ-RW-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+  const suppliedTracking = typeof trackingNumber === 'string' ? trackingNumber.trim() : '';
 
-  order.cjFulfillmentStatus = 'Approved for CJ Fulfillment';
+  order.cjFulfillmentStatus = 'Approved - Awaiting Supplier Submission';
   order.cjFulfillmentApprovedAt = new Date().toISOString();
   order.cjFulfillmentApprovedBy = admin.name;
-  order.cjTrackingNumber = generatedTracking;
+  if (suppliedTracking) {
+    order.cjTrackingNumber = suppliedTracking;
+  } else {
+    delete (order as any).cjTrackingNumber;
+  }
 
   // Progress order status if currently New
   if (order.status === 'New') {
@@ -5191,7 +5219,7 @@ app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdmi
     status: order.status,
     paymentStatus: order.paymentStatus,
     timestamp: new Date().toISOString(),
-    note: `Approved for CJ Dropshipping Fulfillment by ${admin.name}. Tracking reference: ${generatedTracking}.${notes ? ` Notes: ${notes}` : ''}`
+    note: `Approved for CJ Dropshipping review by ${admin.name}; awaiting actual supplier submission/confirmation.${notes ? ` Notes: ${notes}` : ''}`
   });
 
   saveDbToDisk();
@@ -5200,14 +5228,14 @@ app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdmi
   logAudit(
     admin,
     'CJ_ORDER_FULFILLMENT_APPROVED',
-    `Approved order #${order.orderNumber} for CJ dropshipping fulfillment dispatch. Tracking: ${generatedTracking}`,
+    `Approved order #${order.orderNumber} for CJ dropshipping review; supplier submission and tracking are not yet confirmed.`,
     'order',
     order.id
   );
 
   res.json({
     success: true,
-    message: `Order #${order.orderNumber} approved for CJ Dropshipping fulfillment. Tracking reference: ${generatedTracking}`,
+    message: `Order #${order.orderNumber} approved internally. Supplier submission and tracking are not yet confirmed.`,
     order
   });
 });
