@@ -193,7 +193,17 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
     const sheetId = extractGoogleSheetId(googleSheetInput) || LINKED_GOOGLE_SHEET_ID;
     setIsParsingFile(true);
     try {
-      const res = await api.syncPullFromGoogleSheet(sheetId, selectedSheetTab || 'Sheet1', googleAccessToken || undefined);
+      let res;
+      try {
+        res = await api.syncPullFromGoogleSheet(sheetId, selectedSheetTab || 'Sheet1', googleAccessToken || undefined);
+      } catch (firstErr: any) {
+        if (googleAccessToken) {
+          console.warn('[Google Sheet Sync] Retrying pull with public link access...');
+          res = await api.syncPullFromGoogleSheet(sheetId, selectedSheetTab || 'Sheet1', undefined);
+        } else {
+          throw firstErr;
+        }
+      }
       showToast(res.message, 'success');
       onProductsUpdated();
       onClose();
