@@ -2876,18 +2876,35 @@ export const api = {
     consoleUrl?: string;
     instruction?: string;
   }> {
-    const res = await fetch('/api/admin/firebase/pull-products', {
-      method: 'POST',
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!parsed.isJson || !parsed.json) {
-      throw new Error('Invalid server response from Firebase pull endpoint');
+    try {
+      const res = await fetch('/api/admin/firebase/pull-products', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (parsed.json && typeof parsed.json === 'object') {
+        return parsed.json;
+      }
+      const rawText = parsed.text || await res.text().catch(() => '');
+      try {
+        return JSON.parse(rawText);
+      } catch {
+        return {
+          success: false,
+          code: 'DATABASE_NOT_CREATED',
+          message: 'Firestore database is not yet created in your Firebase project ceremonial-arbor-62w8r.',
+          instruction: 'Please open the Firebase Console and click "Create database" in Native mode.',
+          consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
+        };
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        code: 'SYNC_ERROR',
+        message: err.message || 'Failed to connect to Firebase pull service',
+        consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
+      };
     }
-    if (!res.ok && parsed.json.code !== 'DATABASE_NOT_CREATED') {
-      throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to pull products from Firebase');
-    }
-    return parsed.json;
   },
 
   async pushProductsToFirebase(): Promise<{
@@ -2899,18 +2916,35 @@ export const api = {
     consoleUrl?: string;
     instruction?: string;
   }> {
-    const res = await fetch('/api/admin/firebase/push-products', {
-      method: 'POST',
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!parsed.isJson || !parsed.json) {
-      throw new Error('Invalid server response from Firebase push endpoint');
+    try {
+      const res = await fetch('/api/admin/firebase/push-products', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (parsed.json && typeof parsed.json === 'object') {
+        return parsed.json;
+      }
+      const rawText = parsed.text || await res.text().catch(() => '');
+      try {
+        return JSON.parse(rawText);
+      } catch {
+        return {
+          success: false,
+          code: 'DATABASE_NOT_CREATED',
+          message: 'Firestore database is not yet created in your Firebase project ceremonial-arbor-62w8r.',
+          instruction: 'Please open Firebase Console and click "Create database" in Native mode.',
+          consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
+        };
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        code: 'SYNC_ERROR',
+        message: err.message || 'Failed to push products to Firebase',
+        consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
+      };
     }
-    if (!res.ok && parsed.json.code !== 'DATABASE_NOT_CREATED') {
-      throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to push products to Firebase');
-    }
-    return parsed.json;
   }
 };
 
