@@ -655,10 +655,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setMakingAllReady(true);
     try {
       const res = await api.adminMakeAllProductsReady();
-      showToast(res.message);
-      await fetchAllData(true);
-      await fetchDbDiagnostics();
-      onRefreshPublicData();
+      showToast(res.message || 'All products are now 100% Ready, Approved, and Available on ContactReach Market!');
+      try {
+        await fetchAllData(true);
+      } catch (e) {
+        console.warn('Silent refresh error after making ready:', e);
+      }
+      try {
+        await fetchDbDiagnostics();
+      } catch (e) {
+        console.warn('Silent diagnostics error after making ready:', e);
+      }
+      try {
+        onRefreshPublicData();
+      } catch (e) {
+        console.warn('Silent public data refresh error after making ready:', e);
+      }
     } catch (err: any) {
       showToast(err.message || 'Failed to make all products ready', 'error');
     } finally {
