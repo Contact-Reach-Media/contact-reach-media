@@ -55,7 +55,9 @@ export const initialSettings: AppSettings = {
   driveBackupStatus: {
     status: 'idle',
     fileName: 'ContactReach_Market_Products.json',
-    autoSyncEnabled: true
+    autoSyncEnabled: true,
+    connectedEmail: 'contactreachmedialimited@gmail.com',
+    accountEmail: 'contactreachmedialimited@gmail.com'
   },
   googleSheetConfig: {
     sheetUrl: 'https://docs.google.com/spreadsheets/d/1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk/edit?usp=sharing',
@@ -63,6 +65,8 @@ export const initialSettings: AppSettings = {
     sheetTabName: 'Sheet1',
     autoSyncEnabled: true,
     syncDirection: 'two_way',
+    connectedAccountEmail: 'contactreachmedialimited@gmail.com',
+    linkedEmail: 'contactreachmedialimited@gmail.com',
     connectedAt: new Date().toISOString(),
     lastSyncStats: {
       status: 'idle',

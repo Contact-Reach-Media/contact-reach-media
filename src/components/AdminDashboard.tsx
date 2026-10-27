@@ -230,7 +230,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [cjTesting, setCjTesting] = useState(false);
   const [cjApiKeyInput, setCjApiKeyInput] = useState('');
   const [showCjApiKey, setShowCjApiKey] = useState(false);
-  const [cjEmailInput, setCjEmailInput] = useState('');
+  const [cjEmailInput, setCjEmailInput] = useState('contactreachmedialimited@gmail.com');
   const [cjUsdRateInput, setCjUsdRateInput] = useState(1420);
   const [cjMarkupInput, setCjMarkupInput] = useState(35);
   const [cjAutoUploadToggle, setCjAutoUploadToggle] = useState(false);
@@ -601,7 +601,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedCjConfig) {
         setCjConfig(fetchedCjConfig);
         setCjApiKeyInput(prev => prev || fetchedCjConfig.apiKey || '');
-        setCjEmailInput(prev => prev || fetchedCjConfig.email || '');
+        setCjEmailInput(prev => prev || fetchedCjConfig.email || 'contactreachmedialimited@gmail.com');
         setCjUsdRateInput(prev => prev || fetchedCjConfig.usdToRwfRate || 1420);
         setCjMarkupInput(prev => prev || fetchedCjConfig.defaultMarkupPercent || 35);
         setCjAutoUploadToggle(fetchedCjConfig.autoUploadEnabled);
@@ -2522,6 +2522,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             : 'Connected & ready to sync'}
                         </span>
                         <span className="text-slate-500">·</span>
+                        <span>Account: <strong className="text-emerald-300 font-mono">{settings?.googleSheetConfig?.connectedAccountEmail || 'contactreachmedialimited@gmail.com'}</strong></span>
+                        <span className="text-slate-500">·</span>
                         <span>{products.length} products in store catalog</span>
                       </div>
                     </div>
@@ -2570,7 +2572,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       Google Drive Backup Active: Stored <strong>{driveStatus.productCount ?? products.length} products</strong> in <code className="bg-blue-100 px-1 py-0.5 rounded text-[11px] font-mono">ContactReach_Market_Products.json</code>
                     </span>
                     <span className="text-[11px] text-blue-600 font-mono">
-                      (Last synced: {new Date(driveStatus.lastBackupAt).toLocaleString()})
+                      (Account: {driveStatus.connectedEmail || driveStatus.accountEmail || 'contactreachmedialimited@gmail.com'} · Last synced: {new Date(driveStatus.lastBackupAt).toLocaleString()})
                     </span>
                   </div>
                   {driveStatus.webViewLink && (

@@ -4057,7 +4057,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.218Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-27T09:14:43.790Z",
       "history": [
         {
@@ -4086,7 +4086,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:00.218Z"
+      "updatedAt": "2026-10-27T10:24:28.172Z"
     },
     {
       "id": "prod-cj-cj-magsafe-car-mount-charger-16",
@@ -4137,7 +4137,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.218Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-27T09:14:43.790Z",
       "history": [
         {
@@ -4146,7 +4146,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:00.218Z"
+      "updatedAt": "2026-10-27T10:24:28.172Z"
     },
     {
       "id": "prod-cj-cj-solar-security-wall-light-15",
@@ -4188,7 +4188,7 @@
       "unit": "Pack",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.218Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-27T09:14:43.789Z",
       "history": [
         {
@@ -4197,7 +4197,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:00.218Z"
+      "updatedAt": "2026-10-27T10:24:28.172Z"
     },
     {
       "id": "prod-1793092482943-77cc8b",
@@ -19542,7 +19542,7 @@
       "unit": "Set",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.218Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -19746,7 +19746,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.112Z"
+      "updatedAt": "2026-10-27T10:24:28.172Z"
     },
     {
       "id": "prod-cj-cj-magnetic-wireless-fast-charger-10",
@@ -19757,9 +19757,9 @@
       "cjProductId": "cj-magnetic-wireless-fast-charger-10",
       "cjProductSku": "CJ-ELEC-MAG-10",
       "cjOriginalCostUsd": 13.8,
-      "costPrice": 19596,
+      "costPrice": 19803,
       "costOverriddenByAdmin": false,
-      "price": 26455,
+      "price": 27724,
       "profitMargin": 7921,
       "category": "Electronics & TV",
       "stock": 50,
@@ -19788,7 +19788,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.218Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -19882,7 +19882,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.113Z"
+      "updatedAt": "2026-10-27T10:24:28.172Z"
     },
     {
       "id": "prod-cj-cj-4k-wifi-action-camera-09",
@@ -19893,9 +19893,9 @@
       "cjProductId": "cj-4k-wifi-action-camera-09",
       "cjProductSku": "CJ-CAM-ACT-09",
       "cjOriginalCostUsd": 28.5,
-      "costPrice": 40470,
+      "costPrice": 40898,
       "costOverriddenByAdmin": false,
-      "price": 54635,
+      "price": 57257,
       "profitMargin": 16359,
       "category": "Electronics & TV",
       "stock": 50,
@@ -19925,7 +19925,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.218Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -20019,7 +20019,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.113Z"
+      "updatedAt": "2026-10-27T10:24:28.172Z"
     },
     {
       "id": "prod-1793005340213-808bb0",
@@ -24116,7 +24116,7 @@
       "unit": "Set",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.218Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -24290,7 +24290,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.115Z",
+      "updatedAt": "2026-10-27T10:24:28.172Z",
       "reviewStatus": "Approved"
     },
     {
@@ -24302,9 +24302,9 @@
       "cjProductId": "cj-athletic-knit-sneakers-06",
       "cjProductSku": "CJ-FSH-SNK-06",
       "cjOriginalCostUsd": 19.5,
-      "costPrice": 27690,
+      "costPrice": 27983,
       "costOverriddenByAdmin": false,
-      "price": 37382,
+      "price": 39176,
       "profitMargin": 11193,
       "category": "Fashion & Apparel",
       "stock": 50,
@@ -24354,7 +24354,7 @@
       "unit": "Pair",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.217Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -24448,7 +24448,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.116Z",
+      "updatedAt": "2026-10-27T10:24:28.172Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
@@ -24464,9 +24464,9 @@
       "cjProductId": "cj-sonic-facial-cleansing-brush-05",
       "cjProductSku": "CJ-BTY-BRUSH-05",
       "cjOriginalCostUsd": 7.9,
-      "costPrice": 11218,
+      "costPrice": 11337,
       "costOverriddenByAdmin": false,
-      "price": 15144,
+      "price": 15872,
       "profitMargin": 4535,
       "category": "Beauty & Cosmetics",
       "stock": 50,
@@ -24505,7 +24505,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.217Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -24599,7 +24599,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.116Z",
+      "updatedAt": "2026-10-27T10:24:28.172Z",
       "reviewStatus": "Approved"
     },
     {
@@ -24611,9 +24611,9 @@
       "cjProductId": "cj-anti-theft-laptop-backpack-04",
       "cjProductSku": "CJ-BAG-TRV-04",
       "cjOriginalCostUsd": 15.6,
-      "costPrice": 22152,
+      "costPrice": 22386,
       "costOverriddenByAdmin": false,
-      "price": 29905,
+      "price": 31340,
       "profitMargin": 8954,
       "category": "Bags & Luggage",
       "stock": 50,
@@ -24652,7 +24652,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.217Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -24746,7 +24746,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.116Z",
+      "updatedAt": "2026-10-27T10:24:28.172Z",
       "reviewStatus": "Approved"
     },
     {
@@ -24758,9 +24758,9 @@
       "cjProductId": "cj-sport-fitness-smartwatch-03",
       "cjProductSku": "CJ-WCH-FIT-03",
       "cjOriginalCostUsd": 18.2,
-      "costPrice": 25844,
+      "costPrice": 26117,
       "costOverriddenByAdmin": false,
-      "price": 34889,
+      "price": 36564,
       "profitMargin": 10447,
       "category": "Watches & Jewelry",
       "stock": 50,
@@ -24799,7 +24799,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.217Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -24893,7 +24893,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.116Z",
+      "updatedAt": "2026-10-27T10:24:28.172Z",
       "reviewStatus": "Approved"
     },
     {
@@ -24905,9 +24905,9 @@
       "cjProductId": "cj-smart-rgb-sunset-lamp-02",
       "cjProductSku": "CJ-LGT-SUNSET-02",
       "cjOriginalCostUsd": 12.5,
-      "costPrice": 17750,
+      "costPrice": 17938,
       "costOverriddenByAdmin": false,
-      "price": 23963,
+      "price": 25113,
       "profitMargin": 7175,
       "category": "Lighting & Gadgets",
       "stock": 50,
@@ -24936,7 +24936,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.217Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -25030,7 +25030,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.117Z",
+      "updatedAt": "2026-10-27T10:24:28.172Z",
       "reviewStatus": "Approved"
     },
     {
@@ -25042,9 +25042,9 @@
       "cjProductId": "cj-tws-pro-earbuds-01",
       "cjProductSku": "CJ-ELEC-TWS-01",
       "cjOriginalCostUsd": 9.8,
-      "costPrice": 13916,
+      "costPrice": 14063,
       "costOverriddenByAdmin": false,
-      "price": 18787,
+      "price": 19688,
       "profitMargin": 5625,
       "category": "Electronics & TV",
       "stock": 50,
@@ -25084,7 +25084,7 @@
       "unit": "Pair",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T10:07:00.217Z",
+      "cjLastSyncAt": "2026-10-27T10:24:28.172Z",
       "createdAt": "2026-10-26T06:35:13.379Z",
       "history": [
         {
@@ -25178,7 +25178,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T10:07:02.117Z",
+      "updatedAt": "2026-10-27T10:24:28.172Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005006294819201.html",
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
@@ -98647,6 +98647,16 @@
   ],
   "auditLogs": [
     {
+      "id": "aud-1793096668236-710b",
+      "timestamp": "2026-10-27T10:24:28.237Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "administrator",
+      "action": "CJ_DROPSHIPPING_SYNC",
+      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
+      "entityType": "cjdropshipping",
+      "entityId": "catalog"
+    },
+    {
       "id": "aud-1793095623078-42df",
       "timestamp": "2026-10-27T10:07:03.078Z",
       "adminName": "Ruth (System Owner)",
@@ -103427,16 +103437,6 @@
       "adminRole": "owner",
       "action": "ADMIN_LOGIN",
       "details": "Admin signed in successfully from 127.0.0.1"
-    },
-    {
-      "id": "aud-1793025305390-ac64",
-      "timestamp": "2026-10-26T14:35:05.390Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_SUPPLIER_MAPPED",
-      "details": "Product \"Pure Organic Honey from Nyungwe Forest 500ml\" (CRM-NYUNGWE-HONEY) supplier mapping updated",
-      "entityType": "product",
-      "entityId": "prod-1793025304214-a3a2da"
     }
   ],
   "customers": [
@@ -108106,8 +108106,8 @@
     "maintenanceEstimatedTime": "",
     "cjConfig": {
       "apiKey": "cj_live_secret_key_998877665544332211",
-      "email": "supplier-ops@contactreachmedia.rw",
-      "autoUploadEnabled": false,
+      "email": "contactreachmedialimited@gmail.com",
+      "autoUploadEnabled": true,
       "syncFrequency": "daily",
       "defaultMarkupPercent": 40,
       "usdToRwfRate": 1435,
@@ -108125,17 +108125,19 @@
         "uploadedCount": 0,
         "updatedCount": 13,
         "totalCjProducts": 13,
-        "timestamp": "2026-10-27T10:07:00.218Z",
+        "timestamp": "2026-10-27T10:24:28.173Z",
         "status": "success",
         "message": "Successfully synchronized 13 CJ dropshipping products (0 newly uploaded, 13 updated)."
       },
-      "lastSyncAt": "2026-10-27T10:07:00.218Z",
-      "requireAdminApproval": true
+      "lastSyncAt": "2026-10-27T10:24:28.173Z",
+      "requireAdminApproval": false
     },
     "driveBackupStatus": {
       "status": "idle",
       "fileName": "ContactReach_Market_Products.json",
-      "autoSyncEnabled": true
+      "autoSyncEnabled": true,
+      "connectedEmail": "contactreachmedialimited@gmail.com",
+      "accountEmail": "contactreachmedialimited@gmail.com"
     },
     "googleSheetConfig": {
       "sheetUrl": "https://docs.google.com/spreadsheets/d/1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk/edit?usp=sharing",
@@ -108143,6 +108145,8 @@
       "sheetTabName": "Sheet1",
       "autoSyncEnabled": true,
       "syncDirection": "two_way",
+      "connectedAccountEmail": "contactreachmedialimited@gmail.com",
+      "linkedEmail": "contactreachmedialimited@gmail.com",
       "connectedAt": "2026-10-26T11:14:16.530Z",
       "lastSyncStats": {
         "status": "success",
@@ -110911,6 +110915,21 @@
           "lastLogin": "2026-10-27T10:06:58.913Z"
         },
         "expiresAt": 1795687618913
+      }
+    ],
+    [
+      "fb_client_token_test",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-27T10:06:58.913Z"
+        },
+        "expiresAt": 1795688667485
       }
     ]
   ],

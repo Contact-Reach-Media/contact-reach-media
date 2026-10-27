@@ -603,7 +603,7 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
                           )}
                         </div>
                         <p className="text-xs text-blue-700">
-                          Connect online spreadsheets to import, update catalog, or push inventory to Google Sheets
+                          Account: <strong className="font-semibold text-blue-900 font-mono">contactreachmedialimited@gmail.com</strong> · Connect online spreadsheets to import, update catalog, or push inventory to Google Sheets
                         </p>
                       </div>
                     </div>

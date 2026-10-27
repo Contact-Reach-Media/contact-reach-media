@@ -318,6 +318,8 @@ export interface GoogleSheetSyncConfig {
   syncDirection?: 'two_way' | 'pull_from_sheet' | 'push_to_sheet';
   lastSyncAt?: string;
   connectedAt?: string;
+  connectedAccountEmail?: string;
+  linkedEmail?: string;
   lastSyncStats?: {
     totalProducts?: number;
     syncedCount?: number;
@@ -359,6 +361,8 @@ export interface GoogleDriveBackupStatus {
   fileSize?: number;
   productCount?: number;
   autoSyncEnabled?: boolean;
+  connectedEmail?: string;
+  accountEmail?: string;
   status: 'idle' | 'syncing' | 'success' | 'failed';
   message?: string;
 }
