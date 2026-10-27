@@ -8,7 +8,8 @@ import {
   Send, Calendar, DollarSign, Archive, ExternalLink, Upload, Percent,
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders,
-  Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles
+  Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles,
+  Database
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -24,6 +25,7 @@ import { getCategoryCoverImage, getCategoryImageSource } from '../utils/category
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
 import { ProductSpreadsheetModal } from './ProductSpreadsheetModal.tsx';
+import { FirebaseSyncModal } from './FirebaseSyncModal.tsx';
 import { DsersFulfillmentTab } from './DsersFulfillmentTab.tsx';
 import {
   exportProductsToExcel,
@@ -150,6 +152,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Product Editor Modal
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState<{
     name: string;
@@ -2347,6 +2350,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setIsFirebaseModalOpen(true)}
+                    className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-[#FF6000] hover:from-amber-600 hover:to-[#e05500] text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Pull products from Firebase Firestore or push current catalog (ceremonial-arbor-62w8r)"
+                  >
+                    <Database className="w-4 h-4" />
+                    <span>Firebase Sync</span>
+                  </button>
+
                   <button
                     onClick={() => setIsSpreadsheetModalOpen(true)}
                     className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -8684,6 +8696,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         products={products}
         categories={categories}
         shops={shops}
+        onProductsUpdated={() => {
+          fetchAllData(true);
+          onRefreshPublicData();
+        }}
+        showToast={showToast}
+      />
+
+      {/* Firebase Firestore Database & Products Sync Modal */}
+      <FirebaseSyncModal
+        isOpen={isFirebaseModalOpen}
+        onClose={() => setIsFirebaseModalOpen(false)}
+        productsCount={products.length}
         onProductsUpdated={() => {
           fetchAllData(true);
           onRefreshPublicData();
