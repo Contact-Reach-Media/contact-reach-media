@@ -74,7 +74,7 @@ export const db = db1; // Primary default alias
 export const auth = getAuth(app1);
 export const auth2 = getAuth(app2);
 
-// Initialize Firebase Analytics on contactreachmarket (measurementId: G-B4XV4ZWX1D)
+// Initialize Firebase Analytics if supported in the current environment
 export let analytics: any = null;
 if (typeof window !== 'undefined') {
   isSupported().then((supported) => {

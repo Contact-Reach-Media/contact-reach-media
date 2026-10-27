@@ -985,6 +985,11 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 app.get('/api/products', (req: Request, res: Response) => {
+  // Non-blocking background sync with ceremonial-arbor-62w8r every 60s
+  if (Date.now() - lastFirebaseSyncTime > 60 * 1000 && !isFirebaseSyncing) {
+    syncProductsFromFirebase('both').catch(() => {});
+  }
+
   const { category, subcategory, search, featured, shopId, shopName, minPrice, maxPrice, inStock, sort } = req.query;
   let filtered = db.products.filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected');
 
@@ -1044,7 +1049,22 @@ app.get('/api/products', (req: Request, res: Response) => {
   res.json(filtered);
 });
 
-app.get('/api/products/:id', (req: Request, res: Response) => {
+app.get('/api/products/:id', async (req: Request, res: Response) => {
+  if (req.params.id === 'sync-firebase' || req.params.id === 'sync') {
+    try {
+      const result = await syncProductsFromFirebase('both');
+      return res.json({
+        success: result.success,
+        message: result.message,
+        totalWebsiteProducts: db.products.length,
+        importedCount: result.importedCount,
+        updatedCount: result.updatedCount
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Failed to sync with Firebase' });
+    }
+  }
+
   const product = db.products.find(p => p.id === req.params.id);
   if (!product || product.status === 'Hidden') {
     return res.status(404).json({ error: 'Product not found or currently unavailable' });
@@ -6836,16 +6856,61 @@ app.get('/api/admin/firebase/status', requireAdminAuth, async (req: Request, res
   }
 });
 
-// 2. Pull products from Firebase Firestore (supports both databases or specific database)
-app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
+// -------------------------------------------------------------
+// REUSABLE FIREBASE FIRESTORE SYNC & AUTO-PUBLISH FUNCTION
+// -------------------------------------------------------------
+
+let lastFirebaseSyncTime = 0;
+let isFirebaseSyncing = false;
+
+async function syncProductsFromFirebase(
+  targetDb = 'both',
+  adminUser?: { name: string; role?: string }
+): Promise<{
+  success: boolean;
+  code?: string;
+  importedCount: number;
+  updatedCount: number;
+  totalCount: number;
+  totalWebsiteProducts: number;
+  message: string;
+  resultsByDb: any[];
+  instruction?: string;
+  consoleUrl?: string;
+  targetDb: string;
+  products?: Product[];
+}> {
+  if (isFirebaseSyncing) {
+    return {
+      success: true,
+      importedCount: 0,
+      updatedCount: 0,
+      totalCount: 0,
+      totalWebsiteProducts: db.products.length,
+      message: 'A Firebase sync operation is already in progress.',
+      resultsByDb: [],
+      targetDb
+    };
+  }
+
+  isFirebaseSyncing = true;
+  lastFirebaseSyncTime = Date.now();
+
   try {
     const fbConfigPath = path.resolve('firebase-applet-config.json');
     if (!fs.existsSync(fbConfigPath)) {
-      return res.status(400).json({ error: 'firebase-applet-config.json not found' });
+      return {
+        success: false,
+        importedCount: 0,
+        updatedCount: 0,
+        totalCount: 0,
+        totalWebsiteProducts: db.products.length,
+        message: 'firebase-applet-config.json not found.',
+        resultsByDb: [],
+        targetDb
+      };
     }
     const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
-    const targetDb = req.body?.targetDb || 'both'; // 'both' | 'db1' | 'db2' | projectId
 
     const config1 = {
       id: 'db1',
@@ -6868,10 +6933,11 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
     } else if (targetDb === 'db2' || targetDb === config2.projectId) {
       targetConfigs = [config2];
     } else {
+      // Default: Check primary ceremonial-arbor-62w8r first, then contactreachmarket
       targetConfigs = [config1, config2];
     }
 
-    const candidateCollections = ['products', 'items', 'catalog', 'inventory', 'cjProducts'];
+    const candidateCollections = ['products', 'items', 'catalog', 'inventory', 'cjProducts', 'goods', 'listings'];
     const resultsByDb: any[] = [];
     const allFetchedDocs: { doc: any; projectId: string; collectionName: string }[] = [];
 
@@ -6937,32 +7003,37 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
       }
     }
 
-    // If both databases are unprovisioned and 0 documents returned
     const anyDatabaseCreated = resultsByDb.some(r => r.code !== 'DATABASE_NOT_CREATED');
     if (!anyDatabaseCreated && allFetchedDocs.length === 0) {
-      return res.json({
+      return {
         success: false,
         code: 'DATABASE_NOT_CREATED',
         targetDb,
         resultsByDb,
+        importedCount: 0,
+        updatedCount: 0,
+        totalCount: 0,
+        totalWebsiteProducts: db.products.length,
         message: 'The Firestore database is not yet created in your Firebase Console for the requested project(s).',
-        instruction: 'Please open the Firebase Console and click "Create database" in Native mode (choose your region). After creating, click "Pull Products from Firebase" again.',
+        instruction: 'Please open the Firebase Console and click "Create database" in Native mode (choose your region). After creating, products will automatically sync.',
         consoleUrl: config1.consoleUrl
-      });
+      };
     }
 
     if (allFetchedDocs.length === 0) {
-      return res.json({
+      return {
         success: true,
-        count: 0,
+        importedCount: 0,
+        updatedCount: 0,
+        totalCount: 0,
         targetDb,
         resultsByDb,
-        message: `Connected to Firebase, but no product documents were found in collections (${candidateCollections.join(', ')}). Use "Push Products to Firebase" to populate with website products.`,
-        totalProducts: db.products.length
-      });
+        message: `Connected to Firebase (${targetDb}), but no products found in collections (${candidateCollections.join(', ')}).`,
+        totalWebsiteProducts: db.products.length
+      };
     }
 
-    // Normalize imported Firestore documents into ContactReach Market Product schema
+    // Automatically normalize and PUBLISH products so they appear live on the storefront immediately
     let importedCount = 0;
     let updatedCount = 0;
     const importedProducts: Product[] = [];
@@ -6971,33 +7042,46 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
       const docId = doc.name ? doc.name.split('/').pop() : `prod-fb-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const raw = parseFirestoreRestFields(doc.fields || {});
 
-      const images: string[] = Array.isArray(raw.images) && raw.images.length > 0
-        ? raw.images
-        : (raw.imageUrl ? [raw.imageUrl] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
+      const rawImages: any = raw.images || raw.pictures || raw.gallery || raw.photos;
+      let images: string[] = [];
+      if (Array.isArray(rawImages) && rawImages.length > 0) {
+        images = rawImages.map(img => typeof img === 'string' ? img : (img.url || img.src || '')).filter(Boolean);
+      } else if (raw.imageUrl || raw.image_url || raw.image || raw.photo) {
+        images = [raw.imageUrl || raw.image_url || raw.image || raw.photo];
+      }
+      if (images.length === 0) {
+        images = ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'];
+      }
+
+      const prodName = raw.name || raw.productName || raw.product_name || raw.title || raw.item_name || `Product ${docId}`;
+      const rawPrice = raw.price || raw.sellingPrice || raw.selling_price || raw.cost || raw.amount || 10000;
+      const parsedPrice = Math.max(0, parseInt(String(rawPrice), 10) || 10000);
 
       const normalized: Product = {
         id: raw.id || docId,
-        name: raw.name || raw.title || `Imported Firebase Product ${docId}`,
-        sku: raw.sku || `CRM-FB-${docId.slice(-6).toUpperCase()}`,
-        description: raw.description || `Imported from Firebase (${projectId}).`,
-        price: Math.max(0, parseInt(String(raw.price || raw.sellingPrice || 10000), 10) || 10000),
+        name: prodName,
+        sku: raw.sku || raw.productSku || raw.code || `CRM-FB-${docId.slice(-6).toUpperCase()}`,
+        description: raw.description || raw.desc || raw.details || `Product from Firebase database (${projectId}).`,
+        price: parsedPrice,
         discountPrice: raw.discountPrice ? Math.max(0, parseInt(String(raw.discountPrice), 10)) : undefined,
         costPrice: raw.costPrice ? Math.max(0, parseInt(String(raw.costPrice), 10)) : undefined,
         costOverriddenByAdmin: Boolean(raw.costOverriddenByAdmin),
         profitMargin: raw.profitMargin,
-        category: raw.category || 'electronics',
-        subcategory: raw.subcategory,
-        stock: raw.stock !== undefined ? Math.max(0, parseInt(String(raw.stock), 10)) : 30,
-        imageUrl: raw.imageUrl || images[0],
+        category: raw.category || raw.cat || 'electronics',
+        subcategory: raw.subcategory || raw.sub_category,
+        stock: raw.stock !== undefined ? Math.max(0, parseInt(String(raw.stock), 10)) : (raw.quantity !== undefined ? Math.max(0, parseInt(String(raw.quantity), 10)) : 30),
+        imageUrl: raw.imageUrl || raw.image_url || raw.image || images[0],
         images,
-        shopName: raw.shopName || 'ContactReach Market',
-        shopId: raw.shopId,
+        shopName: raw.shopName || raw.shop || raw.supplier || 'ContactReach Market',
+        shopId: raw.shopId || raw.supplierId,
         receiverName: raw.receiverName || 'Ruth',
         receiverPhone: raw.receiverPhone || '078002260',
         merchantCode: raw.merchantCode || '078002',
         location: raw.location || 'Kigali, Rwanda',
         deliveryInfo: raw.deliveryInfo || 'Same-day Kigali delivery',
+        // Automatically published with Available status and Approved review status so shoppers can see and purchase immediately
         status: (raw.status as ProductStatus) || 'Available',
+        reviewStatus: 'Approved',
         isFeatured: Boolean(raw.isFeatured),
         isNewArrival: raw.isNewArrival !== undefined ? Boolean(raw.isNewArrival) : true,
         isBestSeller: Boolean(raw.isBestSeller),
@@ -7007,7 +7091,7 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
         variations: Array.isArray(raw.variations) ? raw.variations : undefined,
         rating: raw.rating || 5.0,
         reviewsCount: raw.reviewsCount || 0,
-        source: raw.source || 'cjdropshipping',
+        source: raw.source || 'firebase',
         cjProductId: raw.cjProductId,
         cjProductSku: raw.cjProductSku,
         cjOriginalCostUsd: raw.cjOriginalCostUsd,
@@ -7027,17 +7111,22 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
     }
 
     saveDbToDisk();
-    logAudit(
-      admin,
-      'FIREBASE_PRODUCTS_PULLED',
-      `Pulled ${importedProducts.length} products from Firebase (${targetDb}) - ${importedCount} new, ${updatedCount} updated.`,
-      'firebase',
-      targetDb
-    );
 
-    res.json({
+    if (adminUser) {
+      logAudit(
+        adminUser,
+        'FIREBASE_PRODUCTS_PULLED',
+        `Pulled and auto-published ${importedProducts.length} products from Firebase (${targetDb}) - ${importedCount} new, ${updatedCount} updated.`,
+        'firebase',
+        targetDb
+      );
+    }
+
+    console.log(`[Firebase Auto-Sync] Successfully published ${importedCount} new products (${updatedCount} updated) from Firebase (${targetDb}) to website catalog.`);
+
+    return {
       success: true,
-      message: `Successfully imported ${importedCount} new products (${updatedCount} updated) from Firebase!`,
+      message: `Successfully published ${importedCount} new products (${updatedCount} updated) from Firebase!`,
       targetDb,
       resultsByDb,
       importedCount,
@@ -7045,10 +7134,38 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
       totalCount: importedProducts.length,
       totalWebsiteProducts: db.products.length,
       products: importedProducts
-    });
+    };
+  } finally {
+    isFirebaseSyncing = false;
+  }
+}
+
+// 2. Admin Pull & Publish products from Firebase Firestore
+app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
+  try {
+    const targetDb = req.body?.targetDb || 'both';
+    const result = await syncProductsFromFirebase(targetDb, admin);
+    res.json(result);
   } catch (err: any) {
     console.error('[Firebase Pull Error]:', err);
     res.status(500).json({ error: err.message || 'Failed to pull products from Firebase' });
+  }
+});
+
+// 2b. Public refresh endpoint for instant catalog re-synchronization with ceremonial-arbor-62w8r
+app.get('/api/products/sync-firebase', async (req: Request, res: Response) => {
+  try {
+    const result = await syncProductsFromFirebase('both');
+    res.json({
+      success: result.success,
+      message: result.message,
+      totalWebsiteProducts: db.products.length,
+      importedCount: result.importedCount,
+      updatedCount: result.updatedCount
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to sync with Firebase' });
   }
 });
 
@@ -7630,6 +7747,18 @@ async function startServer() {
       console.warn('[Firebase] Background sync notice:', syncErr);
     }
   }
+
+  // Automated Firebase Firestore periodic sync runner (every 2 mins)
+  // Ensures products in user's Firebase (ceremonial-arbor-62w8r) are automatically pulled and published to the website
+  syncProductsFromFirebase('both').catch(err => {
+    console.info('[Firebase Auto-Sync] Startup initial probe notice:', err.message || err);
+  });
+
+  setInterval(() => {
+    syncProductsFromFirebase('both').catch(err => {
+      console.warn('[Firebase Auto-Sync] Scheduled pull notice:', err.message || err);
+    });
+  }, 2 * 60 * 1000);
 
   // Automated CJ Dropshipping periodic sync runner (every 15 mins)
   setInterval(() => {
