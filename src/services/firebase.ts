@@ -87,11 +87,15 @@ if (typeof window !== 'undefined') {
 // Suppress internal gRPC stream lifecycle noise
 setLogLevel('silent');
 
+// Clean identity provider for reliable standard authentication without restricted scope errors
 export const googleProvider = new GoogleAuthProvider();
-// Google Drive and Google Sheets scopes for reading, syncing, and backing up product catalog
-googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
-googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+// Dedicated provider specifically for Google Workspace integrations (Drive & Sheets)
+export const workspaceProvider = new GoogleAuthProvider();
+workspaceProvider.addScope('https://www.googleapis.com/auth/drive.file');
+workspaceProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+workspaceProvider.setCustomParameters({ prompt: 'consent' });
 
 // In-memory access token cache for Google Workspace APIs
 let cachedAccessToken: string | null = null;
@@ -196,17 +200,38 @@ testConnection().catch(() => {});
 export const testFirestoreConnection = testConnection;
 
 // Google Sign-In via popup with OAuth Access Token capture
-export async function loginWithGoogle(): Promise<User & { accessToken?: string }> {
+export async function loginWithGoogle(requestWorkspaceAccess = false): Promise<User & { accessToken?: string }> {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    const provider = requestWorkspaceAccess ? workspaceProvider : googleProvider;
+    const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential?.accessToken) {
       cachedAccessToken = credential.accessToken;
     }
     const userWithToken = Object.assign(result.user, { accessToken: cachedAccessToken || undefined });
     return userWithToken;
-  } catch (error) {
+  } catch (error: any) {
+    if (requestWorkspaceAccess) {
+      console.warn('[Firebase Auth] Workspace scope sign-in failed, falling back to standard login:', error?.message);
+      const fallbackResult = await signInWithPopup(auth, googleProvider);
+      return Object.assign(fallbackResult.user, { accessToken: undefined });
+    }
     console.error('Google Sign-in failed:', error);
+    throw error;
+  }
+}
+
+export async function authorizeGoogleWorkspace(): Promise<string | null> {
+  try {
+    const result = await signInWithPopup(auth, workspaceProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      cachedAccessToken = credential.accessToken;
+      return credential.accessToken;
+    }
+    return null;
+  } catch (error: any) {
+    console.warn('[Workspace Auth] Notice during Workspace authorization:', error?.message);
     throw error;
   }
 }

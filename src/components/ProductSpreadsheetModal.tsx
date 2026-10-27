@@ -134,7 +134,7 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
   const handleAuthorizeGoogle = async () => {
     setIsConnectingGoogle(true);
     try {
-      const user = await loginWithGoogle();
+      const user = await loginWithGoogle(true);
       const token = (user as any).accessToken || getGoogleAccessToken();
       if (!token) {
         throw new Error('Could not retrieve Google authorization token');
@@ -266,7 +266,7 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
     let token = googleAccessToken || getGoogleAccessToken();
     if (!token) {
       try {
-        const user = await loginWithGoogle();
+        const user = await loginWithGoogle(true);
         token = (user as any).accessToken || getGoogleAccessToken();
         if (token) setGoogleAccessToken(token);
       } catch (err: any) {

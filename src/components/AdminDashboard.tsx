@@ -1350,7 +1350,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       let token = getGoogleAccessToken();
       if (!token) {
-        const authRes = await loginWithGoogle();
+        const authRes = await loginWithGoogle(true);
         token = authRes.accessToken || getGoogleAccessToken();
       }
 
@@ -1387,7 +1387,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       let token = getGoogleAccessToken();
       if (!token) {
-        const authRes = await loginWithGoogle();
+        const authRes = await loginWithGoogle(true);
         token = authRes.accessToken || getGoogleAccessToken();
       }
 
@@ -1423,7 +1423,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       let token = getGoogleAccessToken();
       if (!token) {
-        const authRes = await loginWithGoogle();
+        const authRes = await loginWithGoogle(true);
         token = authRes.accessToken || getGoogleAccessToken();
       }
 
@@ -1471,7 +1471,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     let token = getGoogleAccessToken();
     if (!token) {
       try {
-        const authRes = await loginWithGoogle();
+        const authRes = await loginWithGoogle(true);
         token = authRes.accessToken || getGoogleAccessToken();
       } catch (err: any) {
         showToast('Google authorization required to save to Google Sheet', 'error');
