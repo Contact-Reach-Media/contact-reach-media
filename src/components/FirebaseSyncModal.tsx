@@ -54,10 +54,12 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
     setErrorMsg(null);
     try {
       const res = await api.pullProductsFromFirebase();
-      if (res.code === 'DATABASE_NOT_CREATED') {
+      if (!res.success || res.code === 'DATABASE_NOT_CREATED') {
         showToast(res.message, 'error');
         setErrorMsg(`${res.message} ${res.instruction || ''}`);
-        setStatus((prev: any) => ({ ...prev, databaseExists: false }));
+        if (res.code === 'DATABASE_NOT_CREATED') {
+          setStatus((prev: any) => ({ ...prev, databaseExists: false }));
+        }
       } else {
         showToast(res.message);
         onProductsUpdated();
@@ -77,10 +79,12 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
     setErrorMsg(null);
     try {
       const res = await api.pushProductsToFirebase();
-      if (res.code === 'DATABASE_NOT_CREATED') {
+      if (!res.success || res.code === 'DATABASE_NOT_CREATED') {
         showToast(res.message, 'error');
         setErrorMsg(`${res.message} ${res.instruction || ''}`);
-        setStatus((prev: any) => ({ ...prev, databaseExists: false }));
+        if (res.code === 'DATABASE_NOT_CREATED') {
+          setStatus((prev: any) => ({ ...prev, databaseExists: false }));
+        }
       } else {
         showToast(res.message);
         fetchStatus();
