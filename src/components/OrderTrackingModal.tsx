@@ -8,6 +8,7 @@ import { Order, OrderStatus } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
+import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
 interface OrderTrackingModalProps {
   isOpen: boolean;
@@ -15,6 +16,8 @@ interface OrderTrackingModalProps {
   initialOrderNumber?: string;
   onOpenConfirmation: (order: Order) => void;
   currentLang: Language;
+  currentCurrency?: CurrencyCode;
+  exchangeRates?: Record<string, number>;
 }
 
 const ORDER_STEPS: OrderStatus[] = [
@@ -31,9 +34,11 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
   onClose,
   initialOrderNumber = '',
   onOpenConfirmation,
-  currentLang
+  currentLang,
+  currentCurrency = 'RWF',
+  exchangeRates
 }) => {
-  const t = translations[currentLang];
+  const t = translations[currentLang] || translations.en;
   const [searchQuery, setSearchQuery] = useState(initialOrderNumber);
   const [phoneQuery, setPhoneQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -413,16 +418,29 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
 
                 <div className="mt-3 p-3 bg-slate-50 rounded-xl space-y-1 text-xs">
                   <div className="flex justify-between text-slate-600">
-                    <span>Subtotal:</span>
-                    <span className="font-mono tabular-nums font-semibold">{trackedOrder.subtotal.toLocaleString()} FRW</span>
+                    <span>{t.subtotal}:</span>
+                    <span className="font-mono tabular-nums font-semibold">
+                      {formatCurrencyPrice(trackedOrder.subtotal, currentCurrency, exchangeRates).primary}
+                    </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
-                    <span>Delivery Fee:</span>
-                    <span className="font-mono tabular-nums font-semibold">{trackedOrder.deliveryFee.toLocaleString()} FRW</span>
+                    <span>{t.deliveryFee}:</span>
+                    <span className="font-mono tabular-nums font-semibold">
+                      {trackedOrder.deliveryFee === 0 ? '0' : formatCurrencyPrice(trackedOrder.deliveryFee, currentCurrency, exchangeRates).primary}
+                    </span>
                   </div>
-                  <div className="flex justify-between font-extrabold text-slate-900 pt-1 border-t border-slate-200">
-                    <span>Grand Total:</span>
-                    <span className="text-[#EA580C] font-mono tabular-nums">{trackedOrder.totalAmount.toLocaleString()} FRW</span>
+                  <div className="flex justify-between items-baseline font-extrabold text-slate-900 pt-1 border-t border-slate-200">
+                    <span>{t.totalAmount}:</span>
+                    <div className="text-end">
+                      <span className="text-[#EA580C] font-mono tabular-nums text-sm block">
+                        {formatCurrencyPrice(trackedOrder.totalAmount, currentCurrency, exchangeRates).primary}
+                      </span>
+                      {currentCurrency !== 'RWF' && (
+                        <span className="text-[10px] text-slate-500 font-mono block">
+                          (~ {trackedOrder.totalAmount.toLocaleString()} FRW)
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

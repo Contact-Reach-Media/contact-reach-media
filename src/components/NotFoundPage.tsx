@@ -1,6 +1,7 @@
 import React from 'react';
 import { Product, AppSettings } from '../types.ts';
 import { Language } from '../translations.ts';
+import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
 interface NotFoundPageProps {
   currentLang: Language;
@@ -11,6 +12,8 @@ interface NotFoundPageProps {
   onOpenTracking?: () => void;
   onSearch?: (query: string) => void;
   settings?: AppSettings;
+  currentCurrency?: CurrencyCode;
+  exchangeRates?: Record<string, number>;
 }
 
 export function NotFoundPage({
@@ -21,7 +24,9 @@ export function NotFoundPage({
   onOpenAdminLogin,
   onOpenTracking,
   onSearch,
-  settings
+  settings,
+  currentCurrency = 'RWF',
+  exchangeRates
 }: NotFoundPageProps) {
   const isRw = currentLang === 'rw';
   const currentYear = new Date().getFullYear();
@@ -295,7 +300,19 @@ export function NotFoundPage({
                       {item.name}
                     </h5>
                     <p className="text-xs font-extrabold text-[#ff6500] mt-0.5">
-                      {item.price.toLocaleString()} FRW
+                      {(() => {
+                        const formatted = formatCurrencyPrice(item.price, currentCurrency, exchangeRates, { showBaseSecondary: true });
+                        return (
+                          <span>
+                            <span>{formatted.primary}</span>
+                            {formatted.secondary && (
+                              <span className="text-[9px] text-slate-400 font-normal block">
+                                {formatted.secondary}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </p>
                     <span className="text-[10px] text-[#65758b] font-medium">
                       {item.category}

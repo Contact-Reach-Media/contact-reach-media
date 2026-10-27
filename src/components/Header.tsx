@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   ShoppingBag, Search, Phone, ShieldCheck, Heart, Menu, X,
-  Globe, Camera, Smartphone, MoreVertical, Instagram, Facebook, Youtube, ExternalLink, Tag, User
+  Globe, Camera, Smartphone, MoreVertical, Instagram, Facebook, Youtube,
+  ExternalLink, Tag, User, ChevronDown, Check, Coins
 } from 'lucide-react';
-import { Language, translations } from '../translations.ts';
+import { Language, translations, SUPPORTED_LANGUAGES, LanguageOption } from '../translations.ts';
+import { CurrencyCode, SUPPORTED_CURRENCIES, CurrencyOption } from '../utils/currency.ts';
 import { Product, CustomerUser } from '../types.ts';
 
 interface HeaderProps {
   currentLang: Language;
   onLanguageChange: (lang: Language) => void;
+  currentCurrency?: CurrencyCode;
+  onCurrencyChange?: (curr: CurrencyCode) => void;
   activeView: string;
   onNavigate: (view: string) => void;
   cartCount: number;
@@ -30,6 +34,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   currentLang,
   onLanguageChange,
+  currentCurrency = 'RWF',
+  onCurrencyChange,
   activeView,
   onNavigate,
   cartCount,
@@ -49,16 +55,25 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [currDropdownOpen, setCurrDropdownOpen] = useState(false);
   const [showLiveSuggestions, setShowLiveSuggestions] = useState(false);
+
   const searchContainerRef = useRef<HTMLDivElement>(null);
-  const t = translations[currentLang];
+  const langDropdownRef = useRef<HTMLDivElement>(null);
+  const currDropdownRef = useRef<HTMLDivElement>(null);
+
+  const t = translations[currentLang] || translations.en;
+
+  const currentLangObj = SUPPORTED_LANGUAGES.find(l => l.code === currentLang) || SUPPORTED_LANGUAGES[0];
+  const currentCurrObj = SUPPORTED_CURRENCIES.find(c => c.code === currentCurrency) || SUPPORTED_CURRENCIES[0];
 
   const navLinks = [
-    { id: 'home', labelEn: 'Home', labelRw: 'Ahabanza' },
-    { id: 'shop', labelEn: 'All Products', labelRw: 'Ibicuruzwa' },
-    { id: 'shops', labelEn: 'Stores', labelRw: 'Amaduka' },
-    { id: 'contact', labelEn: 'Contact & Support', labelRw: 'Twandikire' },
-    { id: 'how-to-buy', labelEn: 'How To Buy', labelRw: 'Uko Bagura' }
+    { id: 'home', label: t.home },
+    { id: 'shop', label: t.shop },
+    { id: 'shops', label: t.shops },
+    { id: 'contact', label: t.contact },
+    { id: 'how-to-buy', label: t.howToBuy }
   ];
 
   // Automatic Live Search Filter
@@ -77,11 +92,18 @@ export const Header: React.FC<HeaderProps> = ({
       .slice(0, 5);
   }, [searchQuery, products]);
 
-  // Handle outside click to close live suggestions
+  // Handle outside click to close dropdowns
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
         setShowLiveSuggestions(false);
+      }
+      if (langDropdownRef.current && !langDropdownRef.current.contains(target)) {
+        setLangDropdownOpen(false);
+      }
+      if (currDropdownRef.current && !currDropdownRef.current.contains(target)) {
+        setCurrDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -99,7 +121,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-40 w-full shadow-xs bg-white">
       {/* 1. TOP NOTICE / HELPLINE ORANGE BAR */}
       <div className="bg-[#FF6000] text-white text-xs py-1.5 px-4 sm:px-8 border-b border-orange-600/30">
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3 flex-wrap">
           {/* Left: Help Line & Administrator top entry */}
           <div className="flex items-center gap-2.5">
             <a
@@ -107,7 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-1.5 hover:underline font-bold tracking-tight whitespace-nowrap"
             >
               <Phone className="w-3.5 h-3.5" />
-              <span>HELP LINE : +250 780 022 600</span>
+              <span>{t.helpLine}</span>
             </a>
 
             {isAdminLoggedIn && (
@@ -117,21 +139,114 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Administrator Active - Click to enter Admin Control Panel"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>Admin Panel</span>
+                <span>{t.adminLogin}</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               </button>
             )}
           </div>
 
-          {/* Center: Language Switcher Pill */}
-          <div className="flex items-center">
-            <button
-              onClick={() => onLanguageChange(currentLang === 'en' ? 'rw' : 'en')}
-              className="flex items-center gap-1.5 bg-white text-slate-800 hover:bg-slate-100 px-3 py-0.5 rounded-md font-bold text-xs shadow-2xs transition-transform transform active:scale-95 cursor-pointer"
-            >
-              <span className="text-orange-600 font-extrabold text-[11px]">文A</span>
-              <span>{currentLang === 'en' ? 'Ikinyarwanda' : 'English'}</span>
-            </button>
+          {/* Center: Language & Currency Selectors */}
+          <div className="flex items-center gap-2">
+            {/* Language Selector Dropdown */}
+            <div className="relative" ref={langDropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setLangDropdownOpen(!langDropdownOpen);
+                  setCurrDropdownOpen(false);
+                }}
+                className="flex items-center gap-1.5 bg-white text-slate-800 hover:bg-slate-100 px-2.5 py-1 rounded-md font-bold text-xs shadow-2xs transition-all active:scale-95 cursor-pointer border border-white/40"
+                title={t.selectLanguage}
+                aria-label={t.selectLanguage}
+              >
+                <span className="text-sm leading-none">{currentLangObj.flag}</span>
+                <span className="max-w-[90px] truncate">{currentLangObj.nativeName}</span>
+                <ChevronDown className="w-3 h-3 text-slate-500" />
+              </button>
+
+              {langDropdownOpen && (
+                <div className="absolute top-full mt-1.5 z-50 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1 max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-1 text-slate-800 start-0">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                    {t.selectLanguage} (10)
+                  </div>
+                  {SUPPORTED_LANGUAGES.map((langItem) => {
+                    const isSelected = currentLang === langItem.code;
+                    return (
+                      <button
+                        key={langItem.code}
+                        type="button"
+                        onClick={() => {
+                          onLanguageChange(langItem.code);
+                          setLangDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-start hover:bg-orange-50 hover:text-[#FF6000] transition-colors cursor-pointer ${
+                          isSelected ? 'bg-orange-50 text-[#FF6000] font-bold' : 'text-slate-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="text-base leading-none">{langItem.flag}</span>
+                          <span className="font-medium">{langItem.nativeName}</span>
+                          <span className="text-[10px] text-slate-400">({langItem.name})</span>
+                        </span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[#FF6000] shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Currency Selector Dropdown */}
+            <div className="relative" ref={currDropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrDropdownOpen(!currDropdownOpen);
+                  setLangDropdownOpen(false);
+                }}
+                className="flex items-center gap-1.5 bg-black/20 hover:bg-black/30 text-white px-2.5 py-1 rounded-md font-bold text-xs shadow-2xs transition-all active:scale-95 cursor-pointer border border-white/20"
+                title={t.selectCurrency}
+                aria-label={t.selectCurrency}
+              >
+                <span className="text-sm leading-none">{currentCurrObj.flag}</span>
+                <span className="font-mono">{currentCurrObj.code}</span>
+                <span className="text-[10px] text-orange-200 font-mono">({currentCurrObj.symbol})</span>
+                <ChevronDown className="w-3 h-3 text-orange-200" />
+              </button>
+
+              {currDropdownOpen && (
+                <div className="absolute top-full mt-1.5 z-50 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1 max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-1 text-slate-800 start-0">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                    <span>{t.selectCurrency} (10)</span>
+                    <span className="text-[9px] text-[#FF6000] font-bold">Base: RWF</span>
+                  </div>
+                  {SUPPORTED_CURRENCIES.map((currItem) => {
+                    const isSelected = currentCurrency === currItem.code;
+                    return (
+                      <button
+                        key={currItem.code}
+                        type="button"
+                        onClick={() => {
+                          if (onCurrencyChange) onCurrencyChange(currItem.code);
+                          setCurrDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-start hover:bg-orange-50 hover:text-[#FF6000] transition-colors cursor-pointer ${
+                          isSelected ? 'bg-orange-50 text-[#FF6000] font-bold' : 'text-slate-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="text-base leading-none">{currItem.flag}</span>
+                          <span className="font-mono font-bold">{currItem.code}</span>
+                          <span className="text-slate-500 font-mono text-[11px]">({currItem.symbol})</span>
+                          <span className="text-[10px] text-slate-400 truncate max-w-[90px]">{currItem.name}</span>
+                        </span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[#FF6000] shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right: Mobile App + Social Media Links */}
@@ -141,7 +256,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="hidden md:flex items-center gap-1 text-white hover:text-white/80 font-bold transition-colors cursor-pointer whitespace-nowrap text-xs"
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span>Get the Mobile App</span>
+              <span>{t.getMobileApp}</span>
             </button>
 
             <div className="hidden lg:flex items-center gap-2 text-white/90">
@@ -193,7 +308,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100"
+              className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer"
               aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -225,7 +340,6 @@ export const Header: React.FC<HeaderProps> = ({
           <nav className="hidden lg:flex items-center gap-6 xl:gap-8 shrink-0">
             {navLinks.map((link) => {
               const isActive = activeView === link.id;
-              const label = currentLang === 'en' ? link.labelEn : link.labelRw;
               return (
                 <button
                   key={link.id}
@@ -236,7 +350,7 @@ export const Header: React.FC<HeaderProps> = ({
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
-                  {label}
+                  {link.label}
                   {isActive && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF6000] rounded-full" />
                   )}
@@ -248,10 +362,10 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Search Input Bar with Automatic Live Search */}
           <div ref={searchContainerRef} className="flex-1 max-w-md relative hidden sm:block">
             <div className="relative flex items-center">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
+              <Search className="w-4 h-4 text-slate-400 absolute start-3.5 pointer-events-none" />
               <input
                 type="text"
-                placeholder={currentLang === 'en' ? 'Search by name, SKU, brand, store...' : 'Shakisha ibicuruzwa...'}
+                placeholder={t.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => {
                   onSearchChange(e.target.value);
@@ -259,7 +373,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 onFocus={() => setShowLiveSuggestions(true)}
                 onKeyDown={handleSearchKeyDown}
-                className="w-full pl-9 pr-14 py-2 rounded-full border border-slate-300 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF6000] focus:border-transparent bg-slate-50/60"
+                className="w-full ps-9 pe-14 py-2 rounded-full border border-slate-300 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF6000] focus:border-transparent bg-slate-50/60"
               />
               {searchQuery && (
                 <button
@@ -268,7 +382,7 @@ export const Header: React.FC<HeaderProps> = ({
                     onSearchChange('');
                     setShowLiveSuggestions(false);
                   }}
-                  className="absolute right-8 p-1 text-slate-400 hover:text-slate-700"
+                  className="absolute end-8 p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
                   title="Clear search"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -277,7 +391,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onSearchSubmit}
-                className="absolute right-2 p-1 rounded-full text-slate-400 hover:text-[#FF6000] hover:bg-slate-100 transition-colors"
+                className="absolute end-2 p-1 rounded-full text-slate-400 hover:text-[#FF6000] hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Search"
               >
                 <Search className="w-4 h-4 text-[#FF6000]" />
@@ -294,7 +408,7 @@ export const Header: React.FC<HeaderProps> = ({
                       setShowLiveSuggestions(false);
                       onSearchSubmit();
                     }}
-                    className="text-[#FF6000] hover:underline"
+                    className="text-[#FF6000] hover:underline cursor-pointer"
                   >
                     View All in Catalog
                   </button>
@@ -319,18 +433,13 @@ export const Header: React.FC<HeaderProps> = ({
                           <p className="text-xs font-bold text-slate-900 truncate">
                             {product.name}
                           </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs font-extrabold text-[#FF6000]">
+                          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
+                            <span className="text-[#FF6000] font-bold font-mono">
                               {product.price.toLocaleString()} FRW
                             </span>
-                            {product.sku && (
-                              <span className="text-[10px] font-mono text-slate-400">
-                                {product.sku}
-                              </span>
+                            {product.shopName && (
+                              <span>• {product.shopName}</span>
                             )}
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">
-                              {product.shopName || 'ContactReach'}
-                            </span>
                           </div>
                         </div>
                       </div>
@@ -338,45 +447,40 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 ) : (
                   <div className="p-4 text-center text-xs text-slate-500">
-                    No products matching "{searchQuery}". Try different keywords.
+                    No items match &quot;{searchQuery}&quot;
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* Right Controls: Cart & More Menu */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Search Trigger for mobile */}
+          {/* Right Action Icons & Profile Zone */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Wishlist Button with Badge */}
             <button
-              onClick={onOpenSearch}
-              className="sm:hidden p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100"
-              aria-label="Search"
+              onClick={() => {
+                onNavigate('shop');
+              }}
+              className="relative p-2 text-slate-700 hover:text-[#FF6000] hover:bg-slate-50 rounded-xl transition-colors cursor-pointer hidden sm:flex"
+              title={t.wishlist}
+              aria-label="Wishlist"
             >
-              <Search className="w-5 h-5" />
+              <Heart className="w-5 h-5" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+                  {wishlistCount}
+                </span>
+              )}
             </button>
 
-            {/* Administrator Direct Access Button when logged in */}
-            {isAdminLoggedIn && (
-              <button
-                onClick={() => onNavigate('admin')}
-                className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 bg-slate-950 text-amber-300 hover:bg-slate-900 hover:text-amber-200 rounded-xl transition-all cursor-pointer border border-amber-400/40 text-xs font-black shadow-xs active:scale-95 shrink-0"
-                title="Enter Administrator Dashboard"
-              >
-                <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="hidden md:inline">Administrator</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              </button>
-            )}
-
-            {/* Buyer Account Button */}
+            {/* Buyer Account Button or Sign In */}
             {buyerUser ? (
               <button
                 onClick={onOpenBuyerAccount}
-                className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 text-slate-700 hover:text-[#FF6000] hover:bg-orange-50/70 rounded-xl transition-colors cursor-pointer border border-slate-200/80 text-xs font-bold"
-                title="My Account"
+                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 text-slate-800 hover:text-[#FF6000] hover:bg-slate-50 rounded-xl transition-colors cursor-pointer border border-slate-200 text-xs font-bold"
+                title="Buyer Account"
               >
-                <div className="w-5 h-5 rounded-full bg-[#FF6000] text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                <div className="w-6 h-6 rounded-full bg-orange-100 text-[#FF6000] flex items-center justify-center font-black text-xs">
                   {buyerUser.name.charAt(0).toUpperCase()}
                 </div>
                 <span className="hidden sm:inline max-w-[100px] truncate">
@@ -391,7 +495,7 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <User className="w-4 h-4 text-[#FF6000]" />
                 <span className="hidden sm:inline">
-                  {currentLang === 'en' ? 'Sign In' : 'Injira'}
+                  {t.signIn}
                 </span>
               </button>
             )}
@@ -400,7 +504,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenCart}
               className="relative p-2 text-slate-700 hover:text-[#FF6000] hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
-              title="Shopping Cart"
+              title={t.cart}
               aria-label="Cart"
             >
               <ShoppingBag className="w-5 h-5" />
@@ -422,17 +526,17 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               {moreMenuOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-semibold text-slate-700">
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-semibold text-slate-700">
                   {isAdminLoggedIn && (
                     <button
                       onClick={() => {
                         onNavigate('admin');
                         setMoreMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 bg-slate-950 text-amber-300 hover:bg-slate-900 transition-colors font-black flex items-center gap-2 border-b border-slate-800"
+                      className="w-full text-left px-4 py-2 bg-slate-950 text-amber-300 hover:bg-slate-900 transition-colors font-black flex items-center gap-2 border-b border-slate-800 cursor-pointer"
                     >
                       <ShieldCheck className="w-4 h-4 text-amber-400" />
-                      <span>Administrator Panel</span>
+                      <span>{t.adminLogin}</span>
                       <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     </button>
                   )}
@@ -442,10 +546,10 @@ export const Header: React.FC<HeaderProps> = ({
                         if (onOpenBuyerAccount) onOpenBuyerAccount();
                         setMoreMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors font-bold flex items-center gap-2 border-b border-slate-100"
+                      className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors font-bold flex items-center gap-2 border-b border-slate-100 cursor-pointer"
                     >
                       <User className="w-3.5 h-3.5 text-[#FF6000]" />
-                      <span>{currentLang === 'en' ? 'My Account' : 'Konti Yanjye'}</span>
+                      <span>{t.myAccount}</span>
                     </button>
                   ) : (
                     <button
@@ -453,10 +557,10 @@ export const Header: React.FC<HeaderProps> = ({
                         if (onOpenBuyerAuth) onOpenBuyerAuth();
                         setMoreMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors font-bold flex items-center gap-2 border-b border-slate-100"
+                      className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors font-bold flex items-center gap-2 border-b border-slate-100 cursor-pointer"
                     >
                       <User className="w-3.5 h-3.5 text-[#FF6000]" />
-                      <span>{currentLang === 'en' ? 'Sign In / Register' : 'Kwinjira / Kwiyandikisha'}</span>
+                      <span>{t.signInRegister}</span>
                     </button>
                   )}
                   <button
@@ -464,36 +568,27 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('track-order');
                       setMoreMenuOpen(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors"
+                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors cursor-pointer"
                   >
-                    Track Order (CRM-...)
+                    {t.trackOrder}
                   </button>
                   <button
                     onClick={() => {
                       onNavigate('contact');
                       setMoreMenuOpen(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors"
+                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors cursor-pointer"
                   >
-                    Report an Issue / Complaint
+                    {t.contact}
                   </button>
                   <button
                     onClick={() => {
                       onOpenMobileAppModal();
                       setMoreMenuOpen(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors"
+                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors cursor-pointer"
                   >
-                    Get the Mobile App
-                  </button>
-                  <button
-                    onClick={() => {
-                      onNavigate('contact');
-                      setMoreMenuOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors"
-                  >
-                    Payment Help & WhatsApp
+                    {t.getMobileApp}
                   </button>
                 </div>
               )}
@@ -503,22 +598,61 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden pt-3 pb-2 border-t border-slate-100 mt-2 animate-in fade-in">
+          <div className="lg:hidden pt-3 pb-2 border-t border-slate-100 mt-2 animate-in fade-in space-y-3">
             {isAdminLoggedIn && (
               <button
                 onClick={() => {
                   onNavigate('admin');
                   setMobileMenuOpen(false);
                 }}
-                className="w-full text-left px-3.5 py-2.5 mb-2.5 rounded-xl text-xs font-black bg-slate-950 text-amber-300 hover:bg-slate-900 flex items-center gap-2 border border-amber-400/30 shadow-xs cursor-pointer"
+                className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-black bg-slate-950 text-amber-300 hover:bg-slate-900 flex items-center gap-2 border border-amber-400/30 shadow-xs cursor-pointer"
               >
                 <ShieldCheck className="w-4 h-4 text-amber-400" />
-                <span>Administrator Control Panel</span>
+                <span>{t.adminLogin}</span>
                 <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </button>
             )}
 
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            {/* Mobile Language and Currency Selectors in Drawer */}
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span className="flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[#FF6000]" />
+                  <span>{t.language}:</span>
+                </span>
+                <select
+                  value={currentLang}
+                  onChange={(e) => onLanguageChange(e.target.value as Language)}
+                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800"
+                >
+                  {SUPPORTED_LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.flag} {l.nativeName} ({l.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span className="flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-[#FF6000]" />
+                  <span>{t.currency}:</span>
+                </span>
+                <select
+                  value={currentCurrency}
+                  onChange={(e) => onCurrencyChange && onCurrencyChange(e.target.value as CurrencyCode)}
+                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 font-mono"
+                >
+                  {SUPPORTED_CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.code} ({c.symbol})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               {navLinks.map((link) => (
                 <button
                   key={link.id}
@@ -526,13 +660,13 @@ export const Header: React.FC<HeaderProps> = ({
                     onNavigate(link.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+                  className={`text-start px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                     activeView === link.id
                       ? 'bg-orange-50 text-[#FF6000]'
                       : 'text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  {currentLang === 'en' ? link.labelEn : link.labelRw}
+                  {link.label}
                 </button>
               ))}
             </div>
@@ -540,16 +674,16 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative">
               <input
                 type="text"
-                placeholder="Shakisha ibicuruzwa..."
+                placeholder={t.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => {
                   onSearchChange(e.target.value);
                   setShowLiveSuggestions(true);
                 }}
                 onKeyDown={handleSearchKeyDown}
-                className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500 bg-slate-50"
+                className="w-full ps-8 pe-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500 bg-slate-50"
               />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute start-2.5 top-2.5" />
             </div>
           </div>
         )}

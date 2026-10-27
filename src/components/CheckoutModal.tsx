@@ -9,6 +9,7 @@ import { CartItem, Order, PaymentMethod, AppSettings, CustomerUser, PaymentConfi
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '../utils/ussd.ts';
+import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -19,6 +20,8 @@ interface CheckoutModalProps {
   onOpenConfirmation?: (order: Order) => void;
   onOpenTracking?: (orderNumber: string) => void;
   currentLang: Language;
+  currentCurrency?: CurrencyCode;
+  exchangeRates?: Record<string, number>;
   buyerUser?: CustomerUser | null;
   onOpenBuyerAuth?: () => void;
 }
@@ -34,10 +37,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onOpenConfirmation,
   onOpenTracking,
   currentLang,
+  currentCurrency = 'RWF',
+  exchangeRates,
   buyerUser,
   onOpenBuyerAuth
 }) => {
-  const t = translations[currentLang];
+  const t = translations[currentLang] || translations.en;
 
   // Seamless 4-stage flow inside ONE modal
   const [step, setStep] = useState<CheckoutStep>('details');
@@ -436,13 +441,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         />
                         <div className="truncate">
                           <p className="font-bold text-slate-900 truncate">{item.product.name}</p>
-                          <p className="text-[11px] text-slate-500">
-                            {item.quantity} × {item.product.price.toLocaleString()} RWF
+                          <p className="text-[11px] text-slate-500 font-mono">
+                            {item.quantity} × {formatCurrencyPrice(item.product.price, currentCurrency, exchangeRates).primary}
                           </p>
                         </div>
                       </div>
                       <span className="font-mono font-bold text-slate-900 shrink-0">
-                        {(item.product.price * item.quantity).toLocaleString()} RWF
+                        {formatCurrencyPrice(item.product.price * item.quantity, currentCurrency, exchangeRates).primary}
                       </span>
                     </div>
                   ))}
@@ -451,13 +456,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {/* Subtotal & Delivery Line items */}
                 <div className="pt-2 border-t border-slate-200 text-xs space-y-1.5 font-medium text-slate-600">
                   <div className="flex justify-between">
-                    <span>{currentLang === 'en' ? 'Subtotal' : 'Amafaranga yose hamwe'}</span>
-                    <span className="font-mono text-slate-900">{subtotal.toLocaleString()} RWF</span>
+                    <span>{t.subtotal}</span>
+                    <span className="font-mono text-slate-900 font-bold">
+                      {formatCurrencyPrice(subtotal, currentCurrency, exchangeRates).primary}
+                    </span>
                   </div>
 
                   <div className="flex justify-between items-center">
                     <span className="flex items-center gap-1">
-                      <span>{currentLang === 'en' ? 'Delivery Fee' : 'Amafaranga yo kugezaho'}</span>
+                      <span>{t.deliveryFee}</span>
                       {qualifiesForFreeDelivery && (
                         <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold uppercase">
                           Free
@@ -465,21 +472,42 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       )}
                     </span>
                     <span className="font-mono text-slate-900">
-                      {deliveryFee === 0 ? '0 RWF' : `${deliveryFee.toLocaleString()} RWF`}
+                      {deliveryFee === 0 ? '0' : formatCurrencyPrice(deliveryFee, currentCurrency, exchangeRates).primary}
                     </span>
                   </div>
 
                   {appliedDiscount > 0 && (
                     <div className="flex justify-between text-emerald-600 font-bold">
                       <span>Promo Discount ({discountCode})</span>
-                      <span className="font-mono">-{appliedDiscount.toLocaleString()} RWF</span>
+                      <span className="font-mono">-{formatCurrencyPrice(appliedDiscount, currentCurrency, exchangeRates).primary}</span>
                     </div>
                   )}
 
-                  <div className="pt-2 border-t border-slate-200 flex justify-between text-sm sm:text-base font-black text-slate-900">
-                    <span>{currentLang === 'en' ? 'Grand Total to Pay' : 'Ayose hamwe yo kwishyura'}</span>
-                    <span className="font-mono text-[#FF5500]">{grandTotal.toLocaleString()} RWF</span>
+                  <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline text-sm sm:text-base font-black text-slate-900">
+                    <span>{t.totalAmount}</span>
+                    <div className="text-end">
+                      <span className="font-mono text-[#FF5500]">
+                        {formatCurrencyPrice(grandTotal, currentCurrency, exchangeRates).primary}
+                      </span>
+                      {currentCurrency !== 'RWF' && (
+                        <span className="block text-[11px] text-slate-500 font-mono font-medium">
+                          {t.baseSettlementNotice}<strong>{grandTotal.toLocaleString()} FRW</strong>
+                        </span>
+                      )}
+                    </div>
                   </div>
+
+                  {currentCurrency !== 'RWF' && (
+                    <div className="mt-2 p-2.5 rounded-xl bg-orange-50 border border-orange-200 text-[11px] text-orange-950 font-medium space-y-1">
+                      <div className="font-bold flex items-center gap-1.5 text-orange-900">
+                        <Info className="w-3.5 h-3.5 text-[#FF6000]" />
+                        <span>{t.currencyNotice}</span>
+                      </div>
+                      <p className="text-[10px] text-orange-800 leading-normal">
+                        Rwandan Mobile Money (MTN MoMo, Airtel Money) and bank transfers process payments in Rwandan Francs. Your phone prompt will request <strong>{grandTotal.toLocaleString()} FRW</strong>.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

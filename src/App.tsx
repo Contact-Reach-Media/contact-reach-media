@@ -9,7 +9,8 @@ import {
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
 import { initialProducts, initialCategories, initialSettings, initialShops } from './data/initialData.ts';
 import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
-import { Language, translations } from './translations.ts';
+import { Language, translations, getCategoryTitle } from './translations.ts';
+import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
 
 import { Header } from './components/Header.tsx';
 import { ProductCard } from './components/ProductCard.tsx';
@@ -30,6 +31,9 @@ import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
 import { MaintenancePage } from './components/MaintenancePage.tsx';
 import { NotFoundPage } from './components/NotFoundPage.tsx';
 
+const SUPPORTED_LANG_CODES: Language[] = ['en', 'fr', 'rw', 'sw', 'es', 'pt', 'ar', 'zh', 'de', 'hi'];
+const SUPPORTED_CURR_CODES: CurrencyCode[] = ['RWF', 'USD', 'EUR', 'GBP', 'KES', 'TZS', 'UGX', 'NGN', 'ZAR', 'CNY'];
+
 // Client-side URL route parser for Vercel, Netlify & direct browser reloads
 function parseRouteFromLocation() {
   if (typeof window === 'undefined') {
@@ -40,6 +44,7 @@ function parseRouteFromLocation() {
       orderRef: '',
       productId: '',
       lang: 'en' as Language,
+      currency: 'RWF' as CurrencyCode,
     };
   }
 
@@ -49,6 +54,7 @@ function parseRouteFromLocation() {
   const searchParam = searchParams.get('search') || searchParams.get('q');
   const orderParam = searchParams.get('order') || searchParams.get('ref');
   const langParam = searchParams.get('lang');
+  const currParam = searchParams.get('currency');
 
   let view = 'home';
   let productId = '';
@@ -74,19 +80,34 @@ function parseRouteFromLocation() {
     view = '404';
   }
 
+  // Persisted language preference
+  const storedLang = localStorage.getItem('crm_lang') as Language | null;
+  const resolvedLang = (langParam && SUPPORTED_LANG_CODES.includes(langParam as Language))
+    ? (langParam as Language)
+    : (storedLang && SUPPORTED_LANG_CODES.includes(storedLang) ? storedLang : 'en');
+
+  // Persisted currency preference
+  const storedCurr = localStorage.getItem('crm_currency') as CurrencyCode | null;
+  const resolvedCurr = (currParam && SUPPORTED_CURR_CODES.includes(currParam.toUpperCase() as CurrencyCode))
+    ? (currParam.toUpperCase() as CurrencyCode)
+    : (storedCurr && SUPPORTED_CURR_CODES.includes(storedCurr) ? storedCurr : 'RWF');
+
   return {
     view,
     category: catParam || 'all',
     search: searchParam || '',
     orderRef: orderParam || '',
     productId,
-    lang: (langParam === 'en' || langParam === 'rw' ? langParam : 'en') as Language,
+    lang: resolvedLang,
+    currency: resolvedCurr,
   };
 }
 
 export default function App() {
   const initialRoute = React.useMemo(() => parseRouteFromLocation(), []);
   const [currentLang, setCurrentLang] = useState<Language>(initialRoute.lang);
+  const [currentCurrency, setCurrentCurrency] = useState<CurrencyCode>(initialRoute.currency);
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
   // Core Data
@@ -224,6 +245,37 @@ export default function App() {
   useEffect(() => {
     refreshAllData();
   }, []);
+
+  // Fetch live exchange rates from backend (/api/exchange-rates)
+  useEffect(() => {
+    api.getExchangeRates().then(res => {
+      if (res && res.rates && Object.keys(res.rates).length > 0) {
+        setExchangeRates(res.rates);
+      }
+    }).catch(err => {
+      console.warn('Using baseline currency rates:', err);
+    });
+  }, []);
+
+  // Sync document language, direction, and persistence
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('crm_lang', currentLang);
+        document.documentElement.lang = currentLang;
+        document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+      } catch {}
+    }
+  }, [currentLang]);
+
+  // Sync currency persistence
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('crm_currency', currentCurrency);
+      } catch {}
+    }
+  }, [currentCurrency]);
 
   // Listen to browser Back/Forward (popstate)
   useEffect(() => {
@@ -414,10 +466,12 @@ export default function App() {
 
           {/* Main Header */}
           <Header
-        currentLang={currentLang}
-        onLanguageChange={setCurrentLang}
-        activeView={activeView}
-        onNavigate={(view) => handleNavigate(view)}
+            currentLang={currentLang}
+            onLanguageChange={setCurrentLang}
+            currentCurrency={currentCurrency}
+            onCurrencyChange={setCurrentCurrency}
+            activeView={activeView}
+            onNavigate={(view) => handleNavigate(view)}
         cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenSearch={() => {
@@ -483,6 +537,8 @@ export default function App() {
       ) : activeView === '404' ? (
         <NotFoundPage
           currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
           products={products}
           onNavigate={handleNavigate}
           onSelectProduct={(p) => setSelectedProduct(p)}
@@ -518,15 +574,17 @@ export default function App() {
         /* VIEW: TRACK ORDER DIRECT PAGE */
         <div className="py-12 px-4 max-w-4xl mx-auto flex-1 w-full">
           <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm text-center space-y-4">
-            <h2 className="text-2xl font-black text-slate-900">Track Your Order Status</h2>
+            <h2 className="text-2xl font-black text-slate-900">{t.trackOrder || 'Track Your Order Status'}</h2>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Enter your unique ContactReach order reference (e.g. CRM-78291) to check payment verification and delivery courier updates.
+              {currentLang === 'en'
+                ? 'Enter your unique ContactReach order reference (e.g. CRM-78291) to check payment verification and delivery courier updates.'
+                : 'Shyiramo nimero ya komande yawe (urugero CRM-78291) kugira ngo urebe aho igeze n\'itangizwa ry\'ubwishyu.'}
             </p>
             <button
               onClick={() => setIsTrackingOpen(true)}
               className="py-3 px-6 bg-[#FF6000] text-white font-bold text-xs rounded-xl shadow-sm hover:bg-orange-600 transition-all cursor-pointer"
             >
-              Open Order Tracking Search
+              {t.trackOrder || 'Open Order Tracking Search'}
             </button>
           </div>
         </div>
@@ -536,7 +594,7 @@ export default function App() {
           {/* Top Bar matching Screenshot 6 */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <h1 className="text-2xl font-black text-slate-900">
-              {currentLang === 'en' ? 'All Products' : 'Ibicuruzwa Byose'}
+              {t.allProducts || (currentLang === 'en' ? 'All Products' : 'Ibicuruzwa Byose')}
             </h1>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -545,7 +603,7 @@ export default function App() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Shakisha ibicuruzwa..."
+                  placeholder={t.searchPlaceholder || "Shakisha ibicuruzwa..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-3.5 py-1.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500 bg-white"
@@ -558,7 +616,7 @@ export default function App() {
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="py-1.5 px-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-orange-500 cursor-pointer"
               >
-                <option value="featured">Sor: Recommend</option>
+                <option value="featured">Sort: Recommend</option>
                 <option value="price-asc">Price: Low to High</option>
                 <option value="price-desc">Price: High to Low</option>
                 <option value="newest">Newest First</option>
@@ -569,7 +627,7 @@ export default function App() {
                 className="py-1.5 px-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
               >
                 <Filter className="w-3.5 h-3.5" />
-                <span>All filters</span>
+                <span>{t.allFilters || 'All filters'}</span>
               </button>
             </div>
           </div>
@@ -584,7 +642,7 @@ export default function App() {
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
               }`}
             >
-              All Products ({products.length})
+              {t.allProducts || 'All Products'} ({products.length})
             </button>
             {categories.map((c) => (
               <button
@@ -596,7 +654,7 @@ export default function App() {
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                {currentLang === 'en' ? c.nameEn : c.nameRw}
+                {getCategoryTitle(c.id, currentLang) || (currentLang === 'en' ? c.nameEn : c.nameRw)}
               </button>
             ))}
           </div>
@@ -605,7 +663,7 @@ export default function App() {
           {sortedProducts.length === 0 ? (
             <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center text-slate-500">
               <ShoppingBag className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-              <h3 className="font-bold text-base text-slate-800">No products found</h3>
+              <h3 className="font-bold text-base text-slate-800">{t.noProductsFound || 'No products found'}</h3>
               <p className="text-xs text-slate-400 mt-1">Try resetting search keywords or category filters.</p>
               <button
                 onClick={() => {
@@ -629,6 +687,8 @@ export default function App() {
                   isWishlisted={wishlist.includes(product.id)}
                   onToggleWishlist={handleToggleWishlist}
                   currentLang={currentLang}
+                  currentCurrency={currentCurrency}
+                  exchangeRates={exchangeRates}
                 />
               ))}
             </div>
@@ -651,7 +711,7 @@ export default function App() {
           {/* 2. CATEGORIES HORIZONTAL SLIDER (Matching Screenshot 2: "Ibyiciro bihari") */}
           <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-6">
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">
-              Ibyiciro bihari
+              {t.categories || 'Categories'}
             </h2>
 
             <div className="relative">
@@ -672,8 +732,8 @@ export default function App() {
                         className="w-full h-full object-contain group-hover:scale-110 transition-transform"
                       />
                     </div>
-                    <span className="text-xs font-bold text-slate-800 group-hover:text-[#FF6000] transition-colors">
-                      {currentLang === 'en' ? cat.nameEn : cat.nameRw}
+                    <span className="text-xs font-bold text-slate-800 group-hover:text-[#FF6000] transition-colors text-center px-1 truncate max-w-full">
+                      {getCategoryTitle(cat.id, currentLang) || (currentLang === 'en' ? cat.nameEn : cat.nameRw)}
                     </span>
                   </button>
                 ))}
@@ -702,11 +762,11 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-xl sm:text-2xl font-black text-slate-900">
-                    {currentLang === 'en' ? 'Products Coming Soon' : 'Ibicuruzwa Biri Gutegurwa'}
+                    {t.productsComingSoon || 'Products Coming Soon'}
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 mt-2 max-w-lg mx-auto leading-relaxed">
                     {currentLang === 'en'
-                      ? 'ContactReach Market connects Rwandan customers with vetted local suppliers and wholesalers without holding physical inventory. New verified products are being added shortly.'
+                      ? 'ContactReach Market connects customers with vetted suppliers and wholesalers. New verified products are being added shortly.'
                       : "ContactReach Market ihuza abaguzi n'abacuruzi nyabo i Kigali no mu Rwanda hose. Ibicuruzwa bishya byizewe biri kongerwamo."}
                   </p>
                 </div>
@@ -715,13 +775,13 @@ export default function App() {
                     onClick={() => setIsSellerModalOpen(true)}
                     className="py-2.5 px-6 rounded-full bg-[#FF6000] hover:bg-[#E54D00] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                   >
-                    {currentLang === 'en' ? 'Register as Supplier' : 'Curuza kuri ContactReach'}
+                    {t.sellerCta || 'Register as Supplier'}
                   </button>
                   <button
                     onClick={() => handleNavigate('contact')}
                     className="py-2.5 px-5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
                   >
-                    {currentLang === 'en' ? 'Contact Support' : 'Twandikire'}
+                    {t.contact || 'Contact Support'}
                   </button>
                 </div>
               </div>
@@ -732,7 +792,7 @@ export default function App() {
               {recentProducts.length > 0 && (
                 <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-6">
                   <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">
-                    {currentLang === 'en' ? 'Recent Arrivals' : 'Ibije vuba'}
+                    {t.recentArrivals || (currentLang === 'en' ? 'Recent Arrivals' : 'Ibije vuba')}
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {recentProducts.map((product) => (
@@ -745,6 +805,8 @@ export default function App() {
                         isWishlisted={wishlist.includes(product.id)}
                         onToggleWishlist={handleToggleWishlist}
                         currentLang={currentLang}
+                        currentCurrency={currentCurrency}
+                        exchangeRates={exchangeRates}
                       />
                     ))}
                   </div>
@@ -755,7 +817,7 @@ export default function App() {
               {recommendedProducts.length > 0 && (
                 <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-6">
                   <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">
-                    {currentLang === 'en' ? 'Recommended for You' : 'Ibindi Ukunda'}
+                    {t.recommendedForYou || (currentLang === 'en' ? 'Recommended for You' : 'Ibindi Ukunda')}
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {recommendedProducts.map((product) => (
@@ -768,6 +830,8 @@ export default function App() {
                         isWishlisted={wishlist.includes(product.id)}
                         onToggleWishlist={handleToggleWishlist}
                         currentLang={currentLang}
+                        currentCurrency={currentCurrency}
+                        exchangeRates={exchangeRates}
                       />
                     ))}
                   </div>
@@ -778,7 +842,7 @@ export default function App() {
                         onClick={() => setVisibleRecommendedCount(prev => Math.min(products.length, prev + 5))}
                         className="py-2.5 px-6 rounded-full bg-[#18191C] hover:bg-black text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
                       >
-                        {currentLang === 'en' ? 'Show More' : 'Reba ibindi'}
+                        {t.showMore || (currentLang === 'en' ? 'Show More' : 'Reba ibindi')}
                       </button>
                     </div>
                   )}
@@ -792,10 +856,30 @@ export default function App() {
             <div className="rounded-3xl bg-[#23150D] p-6 sm:p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xs border border-orange-950/40">
               <div className="space-y-1 text-center md:text-left">
                 <h3 className="text-xl sm:text-2xl font-black">
-                  Ufite ibicuruzwa ushaka kugurisha?
+                  {currentLang === 'en'
+                    ? 'Do you have products you want to sell?'
+                    : currentLang === 'rw'
+                    ? 'Ufite ibicuruzwa ushaka kugurisha?'
+                    : currentLang === 'fr'
+                    ? 'Vous avez des produits à vendre ?'
+                    : currentLang === 'sw'
+                    ? 'Je, una bidhaa unazotaka kuuza?'
+                    : currentLang === 'ar'
+                    ? 'هل لديك منتجات ترغب في بيعها؟'
+                    : currentLang === 'zh'
+                    ? '您有优质商品想要入驻销售吗？'
+                    : currentLang === 'es'
+                    ? '¿Tienes productos que quieras vender?'
+                    : currentLang === 'pt'
+                    ? 'Tem produtos que deseja vender?'
+                    : currentLang === 'de'
+                    ? 'Haben Sie Produkte zu verkaufen?'
+                    : 'क्या आपके पास बेचने के लिए उत्पाद हैं?'}
                 </h3>
                 <p className="text-xs text-orange-200/80">
-                  Injira kuri ContactReach Market nk'umucuruzi ugere ku baguzi benshi.
+                  {currentLang === 'en'
+                    ? 'Join ContactReach Market as a verified supplier and reach buyers nationwide.'
+                    : "Injira kuri ContactReach Market nk'umucuruzi ugere ku baguzi benshi."}
                 </p>
               </div>
 
@@ -803,7 +887,7 @@ export default function App() {
                 onClick={() => setIsSellerModalOpen(true)}
                 className="py-3 px-6 rounded-xl font-black text-xs sm:text-sm bg-[#FF6000] hover:bg-[#E54D00] text-white shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"
               >
-                Gurisha kuri ContactReach →
+                {t.sellerCta || 'Gurisha kuri ContactReach →'}
               </button>
             </div>
           </section>
@@ -909,6 +993,8 @@ export default function App() {
             }
           }}
           currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
         />
       )}
 
@@ -922,6 +1008,8 @@ export default function App() {
           onRemoveItem={handleRemoveFromCart}
           onProceedToCheckout={() => setIsCheckoutOpen(true)}
           currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
         />
       )}
 
@@ -946,6 +1034,8 @@ export default function App() {
             setIsTrackingOpen(true);
           }}
           currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
           buyerUser={buyerUser}
           onOpenBuyerAuth={() => setIsBuyerAuthOpen(true)}
         />
@@ -981,6 +1071,8 @@ export default function App() {
             setIsConfirmationOpen(true);
           }}
           currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
         />
       )}
 
@@ -1220,6 +1312,8 @@ export default function App() {
             setIsTrackingOpen(true);
           }}
           currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
         />
       )}
     </div>

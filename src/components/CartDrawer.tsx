@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight } from 'lucide-react';
 import { CartItem } from '../types.ts';
 import { Language, translations } from '../translations.ts';
+import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface CartDrawerProps {
   onRemoveItem: (productId: string) => void;
   onProceedToCheckout: () => void;
   currentLang: Language;
+  currentCurrency?: CurrencyCode;
+  exchangeRates?: Record<string, number>;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -20,12 +23,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onUpdateQuantity,
   onRemoveItem,
   onProceedToCheckout,
-  currentLang
+  currentLang,
+  currentCurrency = 'RWF',
+  exchangeRates
 }) => {
   if (!isOpen) return null;
 
-  const t = translations[currentLang];
-  const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const t = translations[currentLang] || translations.en;
+  const subtotalRwf = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const subtotalFormat = formatCurrencyPrice(subtotalRwf, currentCurrency, exchangeRates, { showBaseSecondary: true });
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
@@ -57,62 +63,74 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="w-16 h-16 rounded-full bg-orange-50 text-[#EA580C] mx-auto flex items-center justify-center">
                 <ShoppingBag className="w-8 h-8 opacity-60" />
               </div>
-              <h3 className="font-bold text-slate-700 text-base">Your cart is currently empty</h3>
+              <h3 className="font-bold text-slate-700 text-base">{t.emptyCart}</h3>
               <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                Explore our catalog of genuine hair products, smartphones, televisions, and fashion items.
+                {t.continueShopping}
               </p>
             </div>
           ) : (
-            cart.map(({ product, quantity }) => (
-              <div
-                key={product.id}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80"
-              >
-                <img
-                  src={product.imageUrl}
-                  alt={product.name}
-                  referrerPolicy="no-referrer"
-                  className="w-16 h-16 rounded-xl object-cover bg-white shrink-0 border border-slate-100"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/src/assets/images/product_street_sneakers_1791966366958.jpg';
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-xs sm:text-sm text-slate-900 truncate">
-                    {product.name}
-                  </h4>
-                  <div className="text-xs font-bold text-[#EA580C] font-mono tabular-nums mt-0.5">
-                    {(product.price * quantity).toLocaleString()} FRW
-                  </div>
+            cart.map(({ product, quantity }) => {
+              const itemTotalRwf = product.price * quantity;
+              const itemPriceFormat = formatCurrencyPrice(itemTotalRwf, currentCurrency, exchangeRates, { showBaseSecondary: true });
 
-                  {/* Quantity Stepper */}
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => onUpdateQuantity(product.id, -1)}
-                      className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 cursor-pointer"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="text-xs font-bold font-mono px-1">{quantity}</span>
-                    <button
-                      onClick={() => onUpdateQuantity(product.id, 1)}
-                      disabled={quantity >= product.stock}
-                      className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => onRemoveItem(product.id)}
-                  className="p-2 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-white transition-colors cursor-pointer"
-                  title="Remove item"
+              return (
+                <div
+                  key={product.id}
+                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80"
                 >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-16 rounded-xl object-cover bg-white shrink-0 border border-slate-100"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/src/assets/images/product_street_sneakers_1791966366958.jpg';
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-xs sm:text-sm text-slate-900 truncate">
+                      {product.name}
+                    </h4>
+                    <div className="flex items-baseline gap-1.5 flex-wrap mt-0.5">
+                      <span className="text-xs font-bold text-[#EA580C] font-mono tabular-nums">
+                        {itemPriceFormat.primary}
+                      </span>
+                      {currentCurrency !== 'RWF' && itemPriceFormat.secondary && (
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {itemPriceFormat.secondary}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Quantity Stepper */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => onUpdateQuantity(product.id, -1)}
+                        className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="text-xs font-bold font-mono px-1">{quantity}</span>
+                      <button
+                        onClick={() => onUpdateQuantity(product.id, 1)}
+                        disabled={quantity >= product.stock}
+                        className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => onRemoveItem(product.id)}
+                    className="p-2 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-white transition-colors cursor-pointer"
+                    title="Remove item"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
 
@@ -120,16 +138,28 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {cart.length > 0 && (
           <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/50 space-y-4">
             <div className="space-y-1.5 text-xs text-slate-600">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-baseline">
                 <span>{t.subtotal}</span>
-                <span className="font-bold text-slate-900 font-mono tabular-nums text-sm">
-                  {subtotal.toLocaleString()} FRW
-                </span>
+                <div className="text-end">
+                  <span className="font-bold text-slate-900 font-mono tabular-nums text-sm block">
+                    {subtotalFormat.primary}
+                  </span>
+                  {currentCurrency !== 'RWF' && subtotalFormat.secondary && (
+                    <span className="text-[10px] text-slate-400 font-mono block">
+                      {subtotalFormat.secondary}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex justify-between text-[11px] text-slate-500">
                 <span>{t.deliveryFee}</span>
-                <span>Calculated at checkout (Kigali 1,500 FRW)</span>
+                <span>{t.freeDeliveryNote}</span>
               </div>
+              {currentCurrency !== 'RWF' && (
+                <div className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                  {t.currencyNotice}
+                </div>
+              )}
             </div>
 
             <button
@@ -139,7 +169,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               }}
               className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-[#EA580C] hover:bg-[#D94F04] text-white shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
-              <span>{t.checkoutTitle}</span>
+              <span>{t.proceedToCheckout}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

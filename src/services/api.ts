@@ -246,6 +246,35 @@ export const api = {
     return initialSettings;
   },
 
+  // Live Exchange Rates
+  async getExchangeRates(): Promise<{ base: string; rates: Record<string, number>; source?: string; updatedAt?: string }> {
+    try {
+      const res = await fetch('/api/exchange-rates');
+      const parsed = await safeParseResponse<{ base: string; rates: Record<string, number>; source?: string; updatedAt?: string }>(res);
+      if (res.ok && parsed.isJson && parsed.json && parsed.json.rates) {
+        return parsed.json;
+      }
+    } catch {}
+
+    return {
+      base: 'RWF',
+      rates: {
+        RWF: 1,
+        USD: 1 / 1478.24,
+        EUR: 0.8939 / 1478.24,
+        GBP: 0.7492 / 1478.24,
+        KES: 129.91 / 1478.24,
+        TZS: 2642.58 / 1478.24,
+        UGX: 4229.34 / 1478.24,
+        NGN: 1359.91 / 1478.24,
+        ZAR: 16.635 / 1478.24,
+        CNY: 6.6837 / 1478.24
+      },
+      source: 'fallback',
+      updatedAt: new Date().toISOString()
+    };
+  },
+
   // Public Categories
   async getCategories(): Promise<Category[]> {
     try {

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Heart, Star, Camera, Youtube } from 'lucide-react';
 import { Product } from '../types.ts';
-import { Language } from '../translations.ts';
+import { Language, translations } from '../translations.ts';
+import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
 interface ProductCardProps {
   product: Product;
@@ -11,6 +12,8 @@ interface ProductCardProps {
   isWishlisted?: boolean;
   onToggleWishlist?: (product: Product) => void;
   currentLang: Language;
+  currentCurrency?: CurrencyCode;
+  exchangeRates?: Record<string, number>;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -20,8 +23,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onQuickBuy,
   isWishlisted = false,
   onToggleWishlist,
-  currentLang
+  currentLang,
+  currentCurrency = 'RWF',
+  exchangeRates
 }) => {
+  const t = translations[currentLang] || translations.en;
+
   const hasDiscount = Boolean(
     (product.discountPercent !== undefined && product.discountPercent > 0) ||
     (product.discountPrice !== undefined && product.discountPrice < product.price)
@@ -31,18 +38,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
     : 0);
 
-  const currentPrice = (product.discountPrice !== undefined && product.discountPrice < product.price)
+  const currentPriceRwf = (product.discountPrice !== undefined && product.discountPrice < product.price)
     ? product.discountPrice
     : (discountPercent > 0 ? Math.round(product.price * (1 - discountPercent / 100)) : product.price);
+
+  const priceFormat = formatCurrencyPrice(currentPriceRwf, currentCurrency, exchangeRates, { showBaseSecondary: true });
+  const originalFormat = hasDiscount ? formatCurrencyPrice(product.price, currentCurrency, exchangeRates) : null;
 
   return (
     <div
       onClick={() => onViewProduct(product)}
-      className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer relative hover:-translate-y-0.5"
+      className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer relative hover:-translate-y-0.5 text-start"
     >
       {/* Top Floating Discount % Badge */}
       {hasDiscount && discountPercent > 0 && (
-        <div className="absolute top-2.5 left-2.5 z-10">
+        <div className="absolute top-2.5 start-2.5 z-10">
           <span className="bg-[#FF6000] text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center gap-0.5 tracking-tight">
             -{discountPercent}%
           </span>
@@ -50,7 +60,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       )}
 
       {/* Top Floating Wishlist Button */}
-      <div className="absolute top-2.5 right-2.5 z-10">
+      <div className="absolute top-2.5 end-2.5 z-10">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -59,7 +69,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           className={`w-7 h-7 rounded-full bg-white/90 backdrop-blur-xs border border-slate-200 flex items-center justify-center transition-all shadow-2xs hover:scale-110 cursor-pointer ${
             isWishlisted ? 'text-rose-500 border-rose-200' : 'text-slate-400 hover:text-rose-500'
           }`}
-          title="Save item"
+          title={t.wishlist}
           aria-label="Wishlist"
         >
           <Heart className={`w-3.5 h-3.5 ${isWishlisted ? 'fill-rose-500' : ''}`} />
@@ -94,20 +104,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Multiple Photos Badge */}
         {product.images && product.images.length > 1 && (
-          <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+          <div className="absolute bottom-2 end-2 z-10 pointer-events-none">
             <span className="bg-slate-900/75 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
               <Camera className="w-2.5 h-2.5 text-orange-400" />
-              <span>{product.images.length} photos</span>
+              <span>{product.images.length} {t.photos}</span>
             </span>
           </div>
         )}
 
         {/* YouTube Video Badge */}
         {product.videoUrl && (
-          <div className="absolute bottom-2 left-2 z-10 pointer-events-none">
+          <div className="absolute bottom-2 start-2 z-10 pointer-events-none">
             <span className="bg-red-600/95 backdrop-blur-xs text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
               <Youtube className="w-2.5 h-2.5" />
-              <span>Video</span>
+              <span>{t.video}</span>
             </span>
           </div>
         )}
@@ -115,9 +125,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {(product.status === 'Out of Stock' || product.stock <= 0) && (
           <div className="absolute inset-0 bg-white/85 backdrop-blur-2xs flex flex-col items-center justify-center p-2 text-center z-10">
             <span className="bg-rose-600 text-white text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider shadow-xs">
-              Out of stock
+              {t.outOfStock}
             </span>
-            <span className="text-[10px] text-slate-500 mt-1 font-semibold">Ntibikiri mu bubiko</span>
+            <span className="text-[10px] text-slate-500 mt-1 font-semibold">{t.soldOut}</span>
           </div>
         )}
       </div>
@@ -126,14 +136,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="p-3.5 flex flex-col justify-between flex-1">
         <div>
           {/* Price Tag in Bold Orange with % percentage badge */}
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+          <div className="flex items-baseline gap-1.5 mb-1 flex-wrap">
             <span className="text-xs sm:text-sm font-extrabold text-[#FF5500] font-mono tabular-nums leading-none">
-              {currentPrice.toLocaleString()} frw
+              {priceFormat.primary}
             </span>
-            {hasDiscount && (
+            {hasDiscount && originalFormat && (
               <>
                 <span className="text-[10px] text-slate-400 line-through font-mono">
-                  {product.price.toLocaleString()} frw
+                  {originalFormat.primary}
                 </span>
                 <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-1 py-0.2 rounded border border-rose-100 font-mono">
                   -{discountPercent}%
@@ -141,6 +151,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               </>
             )}
           </div>
+
+          {/* Secondary Base Currency Notation (When non-RWF currency selected) */}
+          {currentCurrency !== 'RWF' && priceFormat.secondary && (
+            <div className="text-[10px] text-slate-400 font-mono font-medium -mt-0.5 mb-1">
+              {priceFormat.secondary}
+            </div>
+          )}
 
           {/* Shop label */}
           {product.shopName && (
@@ -167,10 +184,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <span className="text-[10px] text-slate-400 font-normal">({product.reviewsCount})</span>
             </div>
           ) : (
-            <span className="text-[10px] text-slate-400 font-medium">New listing</span>
+            <span className="text-[10px] text-slate-400 font-medium">{t.similarProducts ? 'Verified' : 'New'}</span>
           )}
           <span className={`text-[10px] font-bold ${product.status === 'Out of Stock' || product.stock <= 0 ? 'text-rose-600' : 'text-slate-500'}`}>
-            {product.status === 'Out of Stock' || product.stock <= 0 ? 'Sold out' : `${product.stock} in stock`}
+            {product.status === 'Out of Stock' || product.stock <= 0 ? t.soldOut : `${product.stock} ${t.inStock}`}
           </span>
         </div>
       </div>

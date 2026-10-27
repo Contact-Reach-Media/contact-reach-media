@@ -4,7 +4,7 @@ import {
   ArrowRight, ShieldCheck, ShoppingBag, Sparkles, Smartphone,
   Home, CreditCard, User, Layers
 } from 'lucide-react';
-import { Language } from '../translations.ts';
+import { Language, translations } from '../translations.ts';
 
 interface HeroCarouselProps {
   currentLang: Language;
@@ -12,6 +12,69 @@ interface HeroCarouselProps {
   onNavigateHowToBuy: () => void;
   onShowToast: (msg: string) => void;
 }
+
+const slideTexts: Record<number, Record<Language, { tag?: string; title: string; subtitle: string; cta: string }>> = {
+  0: {
+    en: { title: 'Start shopping, pay with ease', subtitle: 'Love it, we deliver it quickly to your doorstep.', cta: 'Shop Now' },
+    fr: { title: 'Commencez vos achats, payez facilement', subtitle: 'Commandez en ligne, nous livrons rapidement chez vous.', cta: 'Acheter' },
+    rw: { title: 'Tangira kugura, wishyure nyuma', subtitle: 'Urabikunda, turabizana, wishyure nyuma.', cta: 'Gura ubu' },
+    sw: { title: 'Anza kununua, lipa kwa urahisi', subtitle: 'Chagua unachopenda, tutakuletea haraka mlangoni pako.', cta: 'Nunua Sasa' },
+    es: { title: 'Empieza a comprar, paga con facilidad', subtitle: 'Elige lo que te gusta, lo entregamos rápido en tu puerta.', cta: 'Comprar Ya' },
+    pt: { title: 'Comece a comprar, pague com facilidade', subtitle: 'Escolha o que gosta, entregamos rápido à sua porta.', cta: 'Comprar Já' },
+    ar: { title: 'ابدأ التسوق، وادفع بكل سهولة', subtitle: 'اختر ما يعجبك، ونحن نوصله سريعاً إلى باب منزلك.', cta: 'تسوق الآن' },
+    zh: { title: '精选优品 极速直达', subtitle: '正品保障，便捷移动支付，轻松送货上门。', cta: '立即选购' },
+    de: { title: 'Jetzt einkaufen, bequem bezahlen', subtitle: 'Wählen Sie Ihre Lieblingsartikel, wir liefern schnell.', cta: 'Jetzt einkaufen' },
+    hi: { title: 'खरीदारी शुरू करें, आसानी से भुगतान करें', subtitle: 'उत्पाद चुनें, हम तेजी से आपके दरवाजे पर पहुंचाएंगे।', cta: 'अभी खरीदें' }
+  },
+  1: {
+    en: { tag: 'Bestsellers in Kigali', title: 'Gifts, Lifestyle & Gadgets', subtitle: 'Explore premium collections of watches, bags, cosmetics, and accessories delivered directly to your doorstep.', cta: 'Shop Catalog' },
+    fr: { tag: 'Meilleures ventes à Kigali', title: 'Cadeaux, Mode & Accessoires', subtitle: 'Découvrez des collections de montres, sacs, cosmétiques et accessoires livrés chez vous.', cta: 'Catalogue' },
+    rw: { tag: 'Ibicuruzwa bikunzwe i Kigali', title: "Impano n'ibindi byiza", subtitle: "Gura impano, ibikoresho byo mu rugo, ibikoresho by'abana, amasaha, n'ibikapu byizewe ku biciro byiza.", cta: 'Gura ubu' },
+    sw: { tag: 'Zinazouzwa zaidi Kigali', title: 'Zawadi, Mitindo na Vifaa', subtitle: 'Gundua mikusanyiko ya saa, mikoba, vipodozi na vifaa vinavyoletwa mlangoni pako.', cta: 'Katalogi' },
+    es: { tag: 'Más vendidos en Kigali', title: 'Regalos, Moda y Gadgets', subtitle: 'Explora colecciones de relojes, bolsos, cosméticos y accesorios directo a tu puerta.', cta: 'Catálogo' },
+    pt: { tag: 'Mais vendidos em Kigali', title: 'Presentes, Moda e Acessórios', subtitle: 'Explore coleções de relógios, bolsas, cosméticos e utilidades entregues na sua porta.', cta: 'Catálogo' },
+    ar: { tag: 'الأكثر مبيعاً في كيغالي', title: 'الهدايا والأزياء والإلكترونيات', subtitle: 'استكشف تشكيلات الساعات والحقائب ومستحضرات التجميل الموصلة مباشرة لبابك.', cta: 'تصفح الكتالوج' },
+    zh: { tag: '基加利热销榜', title: '精选数码、家居与潮流礼品', subtitle: '甄选腕表箱包、正品美妆护肤与生活好物，尊享极速送达体验。', cta: '浏览商城' },
+    de: { tag: 'Bestseller in Kigali', title: 'Geschenke, Lifestyle & Gadgets', subtitle: 'Entdecken Sie Uhren, Taschen, Kosmetik und Zubehör direkt zu Ihnen nach Hause.', cta: 'Katalog ansehen' },
+    hi: { tag: 'किगाली में बेस्टसेलर', title: 'उपहार, लाइफस्टाइल और गैजेट्स', subtitle: 'सीधे आपके दरवाजे तक घड़ियों, बैग, सौंदर्य प्रसाधनों और एक्सेसरीज़ का संग्रह।', cta: 'कैटलॉग देखें' }
+  },
+  2: {
+    en: { tag: 'MTN MoMo & Airtel Money', title: 'Pay Easily with Mobile Money', subtitle: 'Convenient automated USSD codes for MTN and Airtel. Receiver: Ruth (078002260). Submit payment proof for swift approval.', cta: 'Start Shopping' },
+    fr: { tag: 'MTN MoMo & Airtel Money', title: 'Payez par Mobile Money', subtitle: 'Codes USSD automatisés pratiques pour MTN et Airtel avec vérification rapide.', cta: 'Commencer' },
+    rw: { tag: 'MTN MoMo na Airtel Money', title: 'Ishyura Byoroshye kuri MoMo', subtitle: 'Koresha kode ya USSD ya MTN cyangwa Airtel Money. Nyirubwishyu: Ruth (078002260). Emeza ubwishyu bwawe ako kanya.', cta: 'Gura ubu' },
+    sw: { tag: 'MTN MoMo na Airtel Money', title: 'Lipa kwa Urahisi kwa Simu', subtitle: 'Nambari za USSD za haraka za MTN na Airtel kwa ukaguzi na uthibitisho wa haraka.', cta: 'Anza Kununua' },
+    es: { tag: 'MTN MoMo y Airtel Money', title: 'Paga Fácil con Dinero Móvil', subtitle: 'Códigos USSD automáticos para MTN y Airtel con verificación y aprobación rápida.', cta: 'Empezar a Comprar' },
+    pt: { tag: 'MTN MoMo e Airtel Money', title: 'Pague com Mobile Money', subtitle: 'Códigos USSD automatizados práticos para MTN e Airtel com confirmação imediata.', cta: 'Iniciar Compras' },
+    ar: { tag: 'MTN MoMo و Airtel Money', title: 'ادفع بسهولة عبر المحفظة الإلكترونية', subtitle: 'رموز USSD سريعة لشبكات MTN و Airtel مع تأكيد الدفع الفوري.', cta: 'ابدأ التسوق' },
+    zh: { tag: 'MTN MoMo 与 Airtel 手机支付', title: '手机钱包 快捷安全支付', subtitle: '支持极速 USSD 快捷拨号指令，轻松输入流水号核实出库。', cta: '开始购物' },
+    de: { tag: 'MTN MoMo & Airtel Money', title: 'Bequem mit Mobile Money zahlen', subtitle: 'Praktische automatisierte USSD-Codes für MTN und Airtel mit schneller Bestätigung.', cta: 'Jetzt starten' },
+    hi: { tag: 'MTN MoMo और Airtel Money', title: 'मोबाइल मनी से आसान भुगतान', subtitle: 'MTN और Airtel के लिए स्वचालित USSD कोड और त्वरित अनुमोदन।', cta: 'खरीदारी शुरू करें' }
+  },
+  3: {
+    en: { tag: 'Fast Delivery Kigali', title: 'Speedy Delivery to Your Hands', subtitle: 'Orders confirmed by our dispatch team arrive safely and quickly anywhere in Kigali and surrounding sectors.', cta: 'Browse Products' },
+    fr: { tag: 'Livraison Rapide à Kigali', title: 'Livraison Rapide entre vos Mains', subtitle: 'Vos commandes confirmées arrivent rapidement et en toute sécurité partout à Kigali.', cta: 'Explorer' },
+    rw: { tag: 'Kugezwaho vuba i Kigali', title: 'Kugerwaho n’Ibicuruzwa Byihuse', subtitle: 'Ubwishyu bwawe bumaze kwemezwa, ibicuruzwa bikugeraho mu masaha make nta gutinda.', cta: 'Gura ubu' },
+    sw: { tag: 'Uwasilishaji wa Haraka Kigali', title: 'Uwasilishaji wa Haraka Mikononi Mwako', subtitle: 'Maagizo yaliyothibitishwa huwasilishwa haraka na kwa usalama popote Kigali.', cta: 'Tazama Bidhaa' },
+    es: { tag: 'Entrega Rápida en Kigali', title: 'Entrega Rápida en tus Manos', subtitle: 'Los pedidos confirmados llegan rápido y seguros a cualquier zona de Kigali.', cta: 'Ver Productos' },
+    pt: { tag: 'Entrega Rápida em Kigali', title: 'Entrega Ágil em suas Mãos', subtitle: 'Pedidos confirmados chegam com rapidez e segurança a qualquer local em Kigali.', cta: 'Explorar' },
+    ar: { tag: 'توصيل سريع في كيغالي', title: 'توصيل سريع وموثوق إلى يديك', subtitle: 'تصل الطلبات المؤكدة بسرعة وأمان إلى أي مكان في كيغالي والمناطق المحيطة.', cta: 'تصفح المنتجات' },
+    zh: { tag: '基加利全境极速配送', title: '贴心出库 极速送达手中', subtitle: '订单核验后由专车专员安全配送，基加利各区最快2-4小时到达。', cta: '发现好物' },
+    de: { tag: 'Schnelle Lieferung in Kigali', title: 'Schnelle Lieferung direkt zu Ihnen', subtitle: 'Bestellungen kommen schnell und sicher überall in Kigali und Umgebung an.', cta: 'Produkte durchsuchen' },
+    hi: { tag: 'किगाली में त्वरित डिलीवरी', title: 'सीधे आपके हाथों में तेज़ डिलीवरी', subtitle: 'सत्यापित ऑर्डर किगाली और आसपास के क्षेत्रों में सुरक्षित और तेजी से पहुंचते हैं।', cta: 'उत्पाद देखें' }
+  },
+  4: {
+    en: { tag: '100% Authentic Quality', title: 'Shop with Complete Confidence', subtitle: 'Every item on ContactReach Market is inspected and verified by ContactReach Media Ltd for quality assurance.', cta: 'Shop Now' },
+    fr: { tag: '100% Qualité Authentique', title: 'Achetez en Toute Confiance', subtitle: 'Chaque article sur ContactReach Market est inspecté et garanti par ContactReach Media Ltd.', cta: 'Acheter' },
+    rw: { tag: 'Ibicuruzwa by’umwimerere', title: 'Ibicuruzwa byizewe 100%', subtitle: 'Buri gicuruzwa cyose kiri kuri ContactReach Market kigenzurwa ku rwego rwo hejuru.', cta: 'Gura ubu' },
+    sw: { tag: 'Ubora Asilia 100%', title: 'Nunua kwa Kujiamini Kabisa', subtitle: 'Kila bidhaa kwenye ContactReach Market inakaguliwa na kuthibitishwa kwa ubora.', cta: 'Nunua Sasa' },
+    es: { tag: 'Calidad 100% Auténtica', title: 'Compra con Total Confianza', subtitle: 'Cada producto en ContactReach Market es inspeccionado para garantizar su calidad.', cta: 'Comprar Ya' },
+    pt: { tag: 'Qualidade 100% Autêntica', title: 'Compre com Total Confiança', subtitle: 'Todos os produtos no ContactReach Market são inspecionados para máxima qualidade.', cta: 'Comprar Já' },
+    ar: { tag: 'جودة أصلية 100%', title: 'تسوق بثقة وأمان تام', subtitle: 'يتم فحص وتدقيق كل منتج على ContactReach Market لضمان أعلى معايير الجودة.', cta: 'تسوق الآن' },
+    zh: { tag: '100% 正品保障 假一赔十', title: '安心选购 官方品质验真', subtitle: '商城所有上架商品均经过 ContactReach Media Ltd 严格检验合规。', cta: '立即选购' },
+    de: { tag: '100% Echte Qualität', title: 'Einkaufen mit vollem Vertrauen', subtitle: 'Jeder Artikel auf ContactReach Market wird auf Qualität geprüft und zertifiziert.', cta: 'Jetzt einkaufen' },
+    hi: { tag: '100% प्रामाणिक गुणवत्ता', title: 'पूरे विश्वास के साथ खरीदारी करें', subtitle: 'ContactReach Market पर हर उत्पाद की गुणवत्ता की जांच की जाती है।', cta: 'अभी खरीदें' }
+  }
+};
 
 export const HeroCarousel: React.FC<HeroCarouselProps> = ({
   currentLang,
@@ -225,14 +288,10 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
             <div className="absolute bottom-6 sm:bottom-8 left-6 sm:left-12 right-6 sm:right-12 z-30 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
               <div className="max-w-xl text-white space-y-1 sm:space-y-1.5 drop-shadow-md">
                 <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight leading-none text-white">
-                  {currentLang === 'en'
-                    ? 'Start shopping, pay with ease'
-                    : 'Tangira kugura, wishyure nyuma'}
+                  {(slideTexts[0][currentLang] || slideTexts[0].en).title}
                 </h2>
                 <p className="text-xs sm:text-sm text-sky-100 font-medium">
-                  {currentLang === 'en'
-                    ? 'Love it, we deliver it quickly to your doorstep.'
-                    : 'Urabikunda, turabizana, wishyure nyuma.'}
+                  {(slideTexts[0][currentLang] || slideTexts[0].en).subtitle}
                 </p>
               </div>
 
@@ -241,7 +300,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
                 onClick={onNavigateShop}
                 className="py-2.5 sm:py-3 px-6 sm:px-8 rounded-full bg-[#FF6000] hover:bg-[#E54D00] text-white font-black text-xs sm:text-sm shadow-xl transition-transform transform active:scale-95 cursor-pointer shrink-0 border border-orange-400/30"
               >
-                {currentLang === 'en' ? 'Shop Now' : 'Gura ubu'}
+                {(slideTexts[0][currentLang] || slideTexts[0].en).cta}
               </button>
             </div>
           </div>
@@ -270,15 +329,13 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-1.5 bg-amber-400 text-slate-950 text-[11px] font-extrabold px-3 py-1 rounded-full shadow-xs">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>{currentLang === 'en' ? 'Bestsellers in Kigali' : 'Ibicuruzwa bikunzwe i Kigali'}</span>
+                  <span>{(slideTexts[1][currentLang] || slideTexts[1].en).tag}</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight tracking-tight">
-                  {currentLang === 'en' ? 'Gifts, Lifestyle & Gadgets' : "Impano n'ibindi byiza"}
+                  {(slideTexts[1][currentLang] || slideTexts[1].en).title}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-200 leading-relaxed max-w-md">
-                  {currentLang === 'en'
-                    ? 'Explore premium collections of watches, bags, cosmetics, and accessories delivered directly to your doorstep.'
-                    : "Gura impano, ibikoresho byo mu rugo, ibikoresho by'abana, amasaha, n'ibikapu byizewe ku biciro byiza."}
+                  {(slideTexts[1][currentLang] || slideTexts[1].en).subtitle}
                 </p>
               </div>
 
@@ -287,13 +344,13 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
                   onClick={onNavigateShop}
                   className="py-3 px-8 rounded-full bg-[#FF6000] hover:bg-orange-600 text-white font-black text-xs sm:text-sm shadow-xl transition-all cursor-pointer transform active:scale-95"
                 >
-                  {currentLang === 'en' ? 'Shop Catalog' : 'Gura ubu'}
+                  {(slideTexts[1][currentLang] || slideTexts[1].en).cta}
                 </button>
                 <button
                   onClick={onNavigateHowToBuy}
                   className="py-3 px-6 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs backdrop-blur-xs transition-colors cursor-pointer border border-white/20"
                 >
-                  {currentLang === 'en' ? 'How to Buy' : 'Uko Bagura'}
+                  {translations[currentLang]?.howToBuy || 'How to Buy'}
                 </button>
               </div>
             </div>
@@ -316,17 +373,13 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-1.5 bg-[#FFCC00] text-slate-900 text-[11px] font-black px-3 py-1 rounded-full shadow-xs">
                   <Smartphone className="w-3.5 h-3.5" />
-                  <span>MTN MoMo & Airtel Money</span>
+                  <span>{(slideTexts[2][currentLang] || slideTexts[2].en).tag}</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight tracking-tight">
-                  {currentLang === 'en'
-                    ? 'Pay Easily with Mobile Money'
-                    : 'Ishyura Byoroshye kuri MoMo'}
+                  {(slideTexts[2][currentLang] || slideTexts[2].en).title}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-200 leading-relaxed max-w-md">
-                  {currentLang === 'en'
-                    ? 'Convenient automated USSD codes for MTN and Airtel. Receiver: Ruth (078002260). Submit payment proof for swift approval.'
-                    : 'Koresha kode ya USSD ya MTN cyangwa Airtel Money. Nyirubwishyu: Ruth (078002260). Emeza ubwishyu bwawe uhite wakirwa.'}
+                  {(slideTexts[2][currentLang] || slideTexts[2].en).subtitle}
                 </p>
               </div>
 
@@ -335,7 +388,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
                   onClick={onNavigateShop}
                   className="py-3 px-8 rounded-full bg-[#FF6000] hover:bg-orange-600 text-white font-black text-xs sm:text-sm shadow-xl transition-all cursor-pointer transform active:scale-95"
                 >
-                  {currentLang === 'en' ? 'Start Shopping' : 'Gura ubu'}
+                  {(slideTexts[2][currentLang] || slideTexts[2].en).cta}
                 </button>
               </div>
             </div>
@@ -356,17 +409,13 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-1.5 bg-emerald-400 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full shadow-xs">
                   <Truck className="w-3.5 h-3.5" />
-                  <span>{currentLang === 'en' ? 'Fast Delivery Kigali' : 'Kugezwaho vuba i Kigali'}</span>
+                  <span>{(slideTexts[3][currentLang] || slideTexts[3].en).tag}</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight tracking-tight">
-                  {currentLang === 'en'
-                    ? 'Speedy Delivery to Your Hands'
-                    : 'Kugerwaho n’Ibicuruzwa Byihuse'}
+                  {(slideTexts[3][currentLang] || slideTexts[3].en).title}
                 </h2>
                 <p className="text-xs sm:text-sm text-emerald-100 leading-relaxed max-w-md">
-                  {currentLang === 'en'
-                    ? 'Orders confirmed by our dispatch team arrive safely and quickly anywhere in Kigali and surrounding sectors.'
-                    : 'Ubwishyu bwawe bumaze kwemezwa, ibicuruzwa bikugeraho mu masaha make nta gutinda.'}
+                  {(slideTexts[3][currentLang] || slideTexts[3].en).subtitle}
                 </p>
               </div>
 
@@ -375,7 +424,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
                   onClick={onNavigateShop}
                   className="py-3 px-8 rounded-full bg-[#FF6000] hover:bg-orange-600 text-white font-black text-xs sm:text-sm shadow-xl transition-all cursor-pointer transform active:scale-95"
                 >
-                  {currentLang === 'en' ? 'Browse Products' : 'Gura ubu'}
+                  {(slideTexts[3][currentLang] || slideTexts[3].en).cta}
                 </button>
               </div>
             </div>
@@ -394,17 +443,13 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-1.5 bg-purple-400 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full shadow-xs">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>{currentLang === 'en' ? '100% Authentic Quality' : 'Ibicuruzwa by’umwimerere'}</span>
+                  <span>{(slideTexts[4][currentLang] || slideTexts[4].en).tag}</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight tracking-tight">
-                  {currentLang === 'en'
-                    ? 'Shop with Complete Confidence'
-                    : 'Ibicuruzwa byizewe 100%'}
+                  {(slideTexts[4][currentLang] || slideTexts[4].en).title}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-200 leading-relaxed max-w-md">
-                  {currentLang === 'en'
-                    ? 'Every item on ContactReach Market is inspected and verified by ContactReach Media Ltd for quality assurance.'
-                    : 'Buri gicuruzwa cyose kiri kuri ContactReach Market kigenzurwa ku rwego rwo hejuru kugira ngo kiguhe umunezero.'}
+                  {(slideTexts[4][currentLang] || slideTexts[4].en).subtitle}
                 </p>
               </div>
 
@@ -413,7 +458,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
                   onClick={onNavigateShop}
                   className="py-3 px-8 rounded-full bg-[#FF6000] hover:bg-orange-600 text-white font-black text-xs sm:text-sm shadow-xl transition-all cursor-pointer transform active:scale-95"
                 >
-                  {currentLang === 'en' ? 'Shop Now' : 'Gura ubu'}
+                  {(slideTexts[4][currentLang] || slideTexts[4].en).cta}
                 </button>
               </div>
             </div>

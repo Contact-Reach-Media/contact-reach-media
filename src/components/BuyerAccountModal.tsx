@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import { CustomerUser, Order } from '../types.ts';
 import { api } from '../services/api.ts';
-import { Language } from '../translations.ts';
+import { Language, translations } from '../translations.ts';
+import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
 interface BuyerAccountModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ interface BuyerAccountModalProps {
   onLogout: () => void;
   onTrackOrder: (orderNumber: string) => void;
   currentLang: Language;
+  currentCurrency?: CurrencyCode;
+  exchangeRates?: Record<string, number>;
 }
 
 export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
@@ -22,8 +25,12 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   user,
   onLogout,
   onTrackOrder,
-  currentLang
+  currentLang,
+  currentCurrency = 'RWF',
+  exchangeRates
 }) => {
+  const t = translations[currentLang] || translations.en;
+  const isRTL = currentLang === 'ar';
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [activeTab, setActiveTab] = useState<'profile' | 'orders'>('profile');
@@ -172,8 +179,21 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
                   {currentLang === 'en' ? 'Total Spent' : 'Amafaranga Yose'}
                 </span>
-                <span className="text-lg font-black text-[#FF6000] mt-1 block">
-                  {orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0).toLocaleString()} FRW
+                <span className="text-base font-black text-[#FF6000] mt-1 block">
+                  {(() => {
+                    const totalRwf = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+                    const formatted = formatCurrencyPrice(totalRwf, currentCurrency, exchangeRates, { showBaseSecondary: true });
+                    return (
+                      <span>
+                        {formatted.primary}
+                        {formatted.secondary && (
+                          <span className="text-[10px] text-slate-400 block font-normal mt-0.5">
+                            {formatted.secondary}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </span>
               </div>
             </div>
@@ -333,8 +353,20 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
 
                   <div className="text-[11px] text-slate-500 flex items-center justify-between">
                     <span>{new Date(ord.createdAt).toLocaleDateString()}</span>
-                    <span className="font-extrabold text-[#FF6000]">
-                      {ord.totalAmount.toLocaleString()} FRW
+                    <span className="font-extrabold text-[#FF6000] text-right">
+                      {(() => {
+                        const formatted = formatCurrencyPrice(ord.totalAmount, currentCurrency, exchangeRates, { showBaseSecondary: true });
+                        return (
+                          <span>
+                            <span>{formatted.primary}</span>
+                            {formatted.secondary && (
+                              <span className="text-[9px] text-slate-400 block font-normal">
+                                {formatted.secondary}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </span>
                   </div>
 

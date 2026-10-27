@@ -59,10 +59,10 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-10 border-b border-slate-800/80">
           <div className="space-y-2">
             <h4 className="font-extrabold text-sm sm:text-base text-white">
-              Customer care
+              {t.customerCare}
             </h4>
             <p className="text-xs text-slate-400">
-              Need help? Our support team is available Mon–Sun, 9am–9pm.
+              {t.support24Sub}
             </p>
             <div className="pt-1">
               <a
@@ -72,13 +72,13 @@ export const Footer: React.FC<FooterProps> = ({
                 className="inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold py-2.5 px-4 rounded-full shadow-xs transition-all cursor-pointer"
               >
                 <MessageCircle className="w-4 h-4 fill-white" />
-                <span>Twandikire kuri WhatsApp</span>
+                <span>{t.whatsappAssistance || 'WhatsApp'}</span>
               </a>
             </div>
           </div>
 
           <div className="space-y-2 md:text-right">
-            <span className="text-xs font-bold text-slate-400 block">Follow us</span>
+            <span className="text-xs font-bold text-slate-400 block">{currentLang === 'rw' ? 'Dukurikire' : currentLang === 'fr' ? 'Suivez-nous' : currentLang === 'ar' ? 'تابعنا' : currentLang === 'zh' ? '关注我们' : currentLang === 'es' ? 'Síguenos' : currentLang === 'pt' ? 'Siga-nos' : currentLang === 'de' ? 'Folgen Sie uns' : currentLang === 'hi' ? 'हमें फॉलो करें' : 'Follow us'}</span>
             <div className="flex items-center gap-3 text-slate-300">
               <a
                 href="https://instagram.com/@contactreachmedia"
@@ -124,31 +124,31 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="grid grid-cols-2 md:grid-cols-3 gap-8 py-10 text-xs">
           {/* Column 1: Company */}
           <div className="space-y-3">
-            <h4 className="font-extrabold text-sm text-white">Company</h4>
+            <h4 className="font-extrabold text-sm text-white">{t.company}</h4>
             <ul className="space-y-2 text-slate-400 font-medium">
               <li>
                 <button onClick={() => onNavigate('home')} className="hover:text-white transition-colors cursor-pointer">
-                  Home
+                  {t.home}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  About Us
+                  {t.aboutUs}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  Contact Us
+                  {t.contact}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('how-to-buy')} className="hover:text-white transition-colors cursor-pointer">
-                  How To Buy
+                  {t.howToBuy}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  Returns & Refunds Policy
+                  {t.returnDelivery}
                 </button>
               </li>
             </ul>
@@ -156,36 +156,36 @@ export const Footer: React.FC<FooterProps> = ({
 
           {/* Column 2: Shop */}
           <div className="space-y-3">
-            <h4 className="font-extrabold text-sm text-white">Shop</h4>
+            <h4 className="font-extrabold text-sm text-white">{t.shop}</h4>
             <ul className="space-y-2 text-slate-400 font-medium">
               <li>
                 <button onClick={() => onNavigate('shop')} className="hover:text-white transition-colors cursor-pointer">
-                  Products
+                  {t.featuredProducts}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('shops')} className="hover:text-white transition-colors cursor-pointer">
-                  Shops
+                  {t.shops}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('shop')} className="hover:text-white transition-colors cursor-pointer">
-                  Cart
+                  {t.cart}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('track-order')} className="hover:text-white transition-colors cursor-pointer">
-                  Orders
+                  {t.trackOrder}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('shop')} className="hover:text-white transition-colors cursor-pointer">
-                  Wishlist
+                  {t.wishlist}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  Customer Problems & Reports
+                  {t.contact}
                 </button>
               </li>
             </ul>
@@ -193,7 +193,7 @@ export const Footer: React.FC<FooterProps> = ({
 
           {/* Column 3: Customer Service & SABA Card (Matching Screenshot 5) */}
           <div className="space-y-4 col-span-2 md:col-span-1">
-            <h4 className="font-extrabold text-sm text-white">Customer Service</h4>
+            <h4 className="font-extrabold text-sm text-white">{t.customerCare}</h4>
 
             {/* Special "SABA" Help Search Card from Screenshot 5 */}
             <div
@@ -207,10 +207,10 @@ export const Footer: React.FC<FooterProps> = ({
                 </div>
                 <div>
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
-                    Ntiwabonye igicuruzwa kuri ContactReach?
+                    {currentLang === 'rw' ? 'Ntiwabonye igicuruzwa kuri ContactReach?' : 'Looking for a specific product?'}
                   </span>
                   <span className="text-xs font-extrabold text-slate-900 block leading-tight">
-                    Tubwire icyo ukeneye
+                    {currentLang === 'rw' ? 'Tubwire icyo ukeneye' : 'Tell us what you need'}
                   </span>
                 </div>
               </div>
@@ -222,27 +222,22 @@ export const Footer: React.FC<FooterProps> = ({
             <ul className="space-y-2 text-slate-400 font-medium">
               <li>
                 <button onClick={() => onNavigate('track-order')} className="hover:text-white transition-colors cursor-pointer">
-                  Profile & Orders
+                  {t.trackOrder}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  Customer Support
+                  {t.customerCare}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  Returns & Refunds
+                  {t.termsConditions}
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  Terms of Service
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onNavigate('contact')} className="hover:text-white transition-colors cursor-pointer">
-                  Privacy Policy
+                  {t.privacyPolicy}
                 </button>
               </li>
             </ul>
@@ -251,26 +246,26 @@ export const Footer: React.FC<FooterProps> = ({
 
         {/* Bottom Bar: Copyright & Legal (Matching Screenshot 5) */}
         <div className="pt-8 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 font-medium">
-          <p>© 2026 ContactReach Market. Powered by ContactReach Media Ltd. All rights reserved.</p>
+          <p>© 2026 ContactReach Market. {t.allRightsReserved}</p>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setLegalModal({
-                title: 'Privacy Policy',
+                title: t.privacyPolicy,
                 content: 'All customer data, payment transaction IDs, and delivery addresses are encrypted and handled privately by ContactReach Media Ltd.'
               })}
               className="hover:text-white transition-colors cursor-pointer"
             >
-              Privacy Policy
+              {t.privacyPolicy}
             </button>
             <span>|</span>
             <button
               onClick={() => setLegalModal({
-                title: 'Terms of Service',
+                title: t.termsConditions,
                 content: 'ContactReach Market provides genuine products with official MTN Mobile Money and Airtel verification by Ruth. All deliveries are coordinated directly in Kigali and provincial centers.'
               })}
               className="hover:text-white transition-colors cursor-pointer"
             >
-              Terms of Service
+              {t.termsConditions}
             </button>
           </div>
         </div>

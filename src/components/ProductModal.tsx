@@ -8,6 +8,7 @@ import { Product, ProductReview } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, isValidYouTubeUrl, getYouTubeVideoId } from '../utils/youtube.ts';
+import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
 interface ProductModalProps {
   product: Product | null;
@@ -17,6 +18,8 @@ interface ProductModalProps {
   allProducts: Product[];
   onSelectSimilar: (product: Product) => void;
   currentLang: Language;
+  currentCurrency?: CurrencyCode;
+  exchangeRates?: Record<string, number>;
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({
@@ -26,7 +29,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   onBuyNow,
   allProducts,
   onSelectSimilar,
-  currentLang
+  currentLang,
+  currentCurrency = 'RWF',
+  exchangeRates
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'video' | 'reviews'>('description');
@@ -307,32 +312,34 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
               {/* Price & Stock */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-y border-slate-100 py-3">
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="text-2xl sm:text-3xl font-black text-[#FF5500] font-mono tabular-nums">
-                    {unitPrice.toLocaleString()} frw
+                    {formatCurrencyPrice(unitPrice, currentCurrency, exchangeRates, { showBaseSecondary: true }).primary}
                   </span>
                   {hasDiscount && (
                     <>
                       <span className="text-xs sm:text-sm text-slate-400 line-through font-mono">
-                        {product.price.toLocaleString()} frw
+                        {formatCurrencyPrice(product.price, currentCurrency, exchangeRates).primary}
                       </span>
                       <span className="text-xs font-black text-white bg-[#FF6000] px-2 py-0.5 rounded-md shadow-2xs">
                         -{discountPercent}% OFF
                       </span>
-                      <span className="text-xs font-semibold text-emerald-600">
-                        (Save {(product.price - unitPrice).toLocaleString()} frw)
-                      </span>
                     </>
+                  )}
+                  {currentCurrency !== 'RWF' && (
+                    <span className="text-xs text-slate-400 font-mono font-medium block w-full">
+                      {formatCurrencyPrice(unitPrice, currentCurrency, exchangeRates, { showBaseSecondary: true }).secondary}
+                    </span>
                   )}
                 </div>
                 {isOutOfStock ? (
                   <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200">
-                    Out of Stock
+                    {t.outOfStock}
                   </span>
                 ) : (
                   <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Available ({product.stock} in stock)
+                    {t.inStock} ({product.stock})
                   </span>
                 )}
               </div>
@@ -421,7 +428,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   className="py-2.5 px-4 rounded-xl font-bold text-xs border border-[#FF5500] text-[#FF5500] hover:bg-orange-50 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>Add to Cart</span>
+                  <span>{t.addToCart}</span>
                 </button>
 
                 <button
@@ -429,7 +436,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   disabled={isOutOfStock}
                   className="py-2.5 px-6 rounded-xl font-extrabold text-xs bg-[#FF5500] hover:bg-[#E54D00] text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  <span>Gura Nonaha</span>
+                  <span>{t.buyNow}</span>
                 </button>
               </div>
 
