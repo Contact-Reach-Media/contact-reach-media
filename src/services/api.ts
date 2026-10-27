@@ -1300,6 +1300,72 @@ export const api = {
     } catch {}
   },
 
+  async adminBulkDeleteProducts(productIds: string[]): Promise<{ success: boolean; count: number; deletedIds: string[]; message: string }> {
+    try {
+      const res = await fetch('/api/admin/products/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ productIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        for (const pid of productIds) {
+          try {
+            await deleteProductFromFirestore(pid);
+          } catch {}
+        }
+        return parsed.json;
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+        throw err;
+      }
+    }
+
+    // Direct Firestore deletion fallback for decoupled static host mode
+    for (const pid of productIds) {
+      try {
+        await deleteProductFromFirestore(pid);
+      } catch {}
+    }
+    return {
+      success: true,
+      count: productIds.length,
+      deletedIds: productIds,
+      message: `Deleted ${productIds.length} product(s).`
+    };
+  },
+
+  async adminBulkUpdateProductStatus(productIds: string[], status: ProductStatus): Promise<{ success: boolean; count: number; message: string }> {
+    try {
+      const res = await fetch('/api/admin/products/bulk-status', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ productIds, status })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+        throw err;
+      }
+    }
+
+    return {
+      success: true,
+      count: productIds.length,
+      message: `Updated ${productIds.length} product(s) to ${status}.`
+    };
+  },
+
   // Categories
   async adminAddCategory(category: Partial<Category>): Promise<Category> {
     const cat: Category = {

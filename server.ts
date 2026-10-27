@@ -2963,6 +2963,91 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'a
   res.json({ message: 'Product deleted successfully', removed });
 });
 
+// Bulk delete products simultaneously
+app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { productIds } = req.body;
+
+  if (!Array.isArray(productIds) || productIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of product IDs to delete.' });
+  }
+
+  const idsToDelete = new Set(productIds.map(id => String(id)));
+  db.deletedRecordIds = db.deletedRecordIds || [];
+
+  const deletedProducts: Product[] = [];
+  db.products = db.products.filter(p => {
+    if (idsToDelete.has(p.id)) {
+      deletedProducts.push(p);
+      if (!db.deletedRecordIds.includes(p.id)) {
+        db.deletedRecordIds.push(p.id);
+      }
+      deleteFromFirestoreAsync('products', p.id);
+      return false;
+    }
+    return true;
+  });
+
+  saveDbToDisk();
+  logAudit(
+    admin,
+    'BULK_PRODUCTS_DELETED',
+    `Bulk deleted ${deletedProducts.length} product(s) at the same time (${deletedProducts.map(p => p.name).slice(0, 5).join(', ')}${deletedProducts.length > 5 ? '...' : ''})`,
+    'product',
+    deletedProducts.map(p => p.id).join(',')
+  );
+
+  res.json({
+    success: true,
+    message: `Successfully deleted ${deletedProducts.length} product(s).`,
+    count: deletedProducts.length,
+    deletedIds: deletedProducts.map(p => p.id)
+  });
+});
+
+// Bulk status update for products
+app.post('/api/admin/products/bulk-status', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { productIds, status } = req.body;
+
+  if (!Array.isArray(productIds) || productIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of product IDs.' });
+  }
+
+  const allowedStatuses = ['Available', 'Out of Stock', 'Hidden', 'Draft'];
+  if (!status || !allowedStatuses.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` });
+  }
+
+  const idsToUpdate = new Set(productIds.map(id => String(id)));
+  let updatedCount = 0;
+
+  db.products.forEach(p => {
+    if (idsToUpdate.has(p.id)) {
+      p.status = status;
+      p.updatedAt = new Date().toISOString();
+      updatedCount++;
+      saveToFirestoreAsync('products', p.id, p);
+    }
+  });
+
+  saveDbToDisk();
+  logAudit(
+    admin,
+    'BULK_PRODUCTS_STATUS_UPDATED',
+    `Updated status to "${status}" for ${updatedCount} product(s)`,
+    'product',
+    Array.from(idsToUpdate).join(',')
+  );
+
+  res.json({
+    success: true,
+    message: `Successfully updated ${updatedCount} product(s) to ${status}.`,
+    count: updatedCount
+  });
+});
+
+
 // -------------------------------------------------------------
 // SPREADSHEET (EXCEL / CSV / GOOGLE SHEETS) BULK OPERATIONS
 // -------------------------------------------------------------

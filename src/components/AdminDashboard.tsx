@@ -132,6 +132,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all');
 
+  // Product Row Selection & Bulk Actions
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
   // Modals & Selected items
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderStatusModal, setOrderStatusModal] = useState<Order | null>(null);
@@ -1066,12 +1072,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       await api.adminDeleteProduct(id);
       showToast('Product removed.');
+      setSelectedProductIds(prev => prev.filter(x => x !== id));
       fetchAllData();
       onRefreshPublicData();
     } catch (err: any) {
       showToast(err.message, 'error');
     }
   };
+
+  // Product Row Selection & Bulk Action Handlers
+  const handleToggleSelectProduct = (id: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const isAllFilteredSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedProductIds.includes(p.id));
+  const isSomeFilteredSelected = filteredProducts.length > 0 && filteredProducts.some(p => selectedProductIds.includes(p.id));
+
+  const handleToggleSelectAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      const filteredIdSet = new Set(filteredProducts.map(p => p.id));
+      setSelectedProductIds(prev => prev.filter(id => !filteredIdSet.has(id)));
+    } else {
+      const newSelected = new Set(selectedProductIds);
+      filteredProducts.forEach(p => newSelected.add(p.id));
+      setSelectedProductIds(Array.from(newSelected));
+    }
+  };
+
+  const handleClearProductSelection = () => {
+    setSelectedProductIds([]);
+  };
+
+  const handleBulkDeleteProducts = async () => {
+    if (selectedProductIds.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const countToDelete = selectedProductIds.length;
+      const res = await api.adminBulkDeleteProducts(selectedProductIds);
+      showToast(res.message || `Successfully deleted ${countToDelete} product(s) at the same time!`);
+      setSelectedProductIds([]);
+      setShowBulkDeleteModal(false);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete selected products', 'error');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleBulkChangeStatus = async (status: ProductStatus) => {
+    if (selectedProductIds.length === 0) return;
+    setBulkUpdatingStatus(true);
+    try {
+      const res = await api.adminBulkUpdateProductStatus(selectedProductIds, status);
+      showToast(res.message || `Updated ${selectedProductIds.length} product(s) to "${status}"!`);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update products status', 'error');
+    } finally {
+      setBulkUpdatingStatus(false);
+    }
+  };
+
 
   // Quick Product Cost & Selling Price Update (Admin Cost Controls)
   const handleQuickUpdateProductCost = async (productId: string, customCost?: number, customPrice?: number) => {
@@ -2626,12 +2692,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+              {/* Bulk Action Bar when rows are selected */}
+              {selectedProductIds.length > 0 && (
+                <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border-2 border-[#FF6000]/40 rounded-2xl p-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-xl bg-[#FF6000] text-white text-xs font-black shadow-xs">
+                      {selectedProductIds.length}
+                    </span>
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">
+                        {selectedProductIds.length} Product{selectedProductIds.length > 1 ? 's' : ''} Selected
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Perform bulk actions on all selected products at the same time
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Delete Selected Products Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      disabled={bulkDeleting}
+                      className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-95"
+                      title="Permanently delete all selected products at the same time"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Selected ({selectedProductIds.length})</span>
+                    </button>
+
+                    {/* Bulk Change Status Options */}
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-400 px-1.5 uppercase">Set Status:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkChangeStatus('Available')}
+                        disabled={bulkUpdatingStatus}
+                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
+                        title="Set selected to Available"
+                      >
+                        Available
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkChangeStatus('Out of Stock')}
+                        disabled={bulkUpdatingStatus}
+                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
+                        title="Set selected to Out of Stock"
+                      >
+                        Out of Stock
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkChangeStatus('Hidden')}
+                        disabled={bulkUpdatingStatus}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
+                        title="Set selected to Hidden"
+                      >
+                        Hidden
+                      </button>
+                    </div>
+
+                    {/* Deselect All */}
+                    <button
+                      type="button"
+                      onClick={handleClearProductSelection}
+                      className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Clear selection"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Deselect All</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Products Table */}
               <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
+                        <th className="py-3 px-3 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isAllFilteredSelected}
+                            ref={el => {
+                              if (el) el.indeterminate = isSomeFilteredSelected && !isAllFilteredSelected;
+                            }}
+                            onChange={handleToggleSelectAllFiltered}
+                            title={isAllFilteredSelected ? "Deselect all products" : "Select all filtered products"}
+                            className="w-4 h-4 rounded border-slate-300 text-[#FF6000] focus:ring-orange-500 cursor-pointer accent-[#FF6000]"
+                          />
+                        </th>
                         <th className="py-3 px-4">Product / SKU</th>
                         <th className="py-3 px-3">Category</th>
                         <th className="py-3 px-3">Shop / Source</th>
@@ -2643,172 +2797,205 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredProducts.map(p => (
-                        <tr key={p.id} className="hover:bg-slate-50/60">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className="relative group shrink-0">
-                                <img
-                                  src={p.imageUrl}
-                                  alt={p.name}
-                                  className="w-12 h-12 object-cover rounded-xl border border-slate-200"
+                      {filteredProducts.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-12 text-center text-slate-400">
+                            <Package className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                            <p className="font-semibold text-sm text-slate-600">No products found</p>
+                            <p className="text-xs mt-1">Try adjusting your search query or category filters</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredProducts.map(p => {
+                          const isSelected = selectedProductIds.includes(p.id);
+                          return (
+                            <tr
+                              key={p.id}
+                              onClick={() => handleToggleSelectProduct(p.id)}
+                              className={`transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'bg-orange-50/80 hover:bg-orange-100/70 border-l-4 border-l-[#FF6000]'
+                                  : 'hover:bg-slate-50/60'
+                              }`}
+                            >
+                              <td className="py-3 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleToggleSelectProduct(p.id)}
+                                  title={`Select "${p.name}"`}
+                                  className="w-4 h-4 rounded border-slate-300 text-[#FF6000] focus:ring-orange-500 cursor-pointer accent-[#FF6000]"
                                 />
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="relative group shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <img
+                                      src={p.imageUrl}
+                                      alt={p.name}
+                                      className="w-12 h-12 object-cover rounded-xl border border-slate-200"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenManageImages(p)}
+                                      className="absolute inset-0 bg-black/60 text-white rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                                      title="Manage picture links"
+                                    >
+                                      <Camera className="w-4 h-4 text-orange-400" />
+                                    </button>
+                                  </div>
+                                  <div className="max-w-xs">
+                                    <span className="font-bold text-slate-900 block line-clamp-1">{p.name}</span>
+                                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                      <span className="text-[10px] font-mono text-slate-400 font-bold">{p.sku}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenManageImages(p);
+                                        }}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-orange-50 hover:bg-orange-100 text-[#FF6000] border border-orange-200 cursor-pointer transition-colors"
+                                        title="Click to view or add multiple picture links"
+                                      >
+                                        <Camera className="w-2.5 h-2.5 text-[#FF6000]" />
+                                        <span>{p.images && p.images.length > 0 ? p.images.length : (p.imageUrl ? 1 : 0)} photo{((p.images && p.images.length > 0 ? p.images.length : (p.imageUrl ? 1 : 0)) === 1 ? '' : 's')}</span>
+                                        <span className="text-orange-400">· Add Links</span>
+                                      </button>
+                                      {p.isFeatured && <span className="px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 text-[9px] font-black">Featured</span>}
+                                      {p.isNewArrival && <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[9px] font-black">New</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-slate-600 font-medium capitalize">
+                                {p.category}
+                              </td>
+                              <td className="py-3 px-3 font-semibold text-slate-700">
+                                <div>{p.shopName || 'ContactReach Market'}</div>
+                                {p.source === 'cjdropshipping' && (
+                                  <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 text-[9px] font-black uppercase tracking-wider">
+                                    CJ Dropshipping
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                                {p.costPrice !== undefined ? (
+                                  <div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-mono font-bold text-slate-900">{p.costPrice.toLocaleString()} FRW</span>
+                                      {p.costOverriddenByAdmin && (
+                                        <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 text-[8px] font-black" title="Admin custom cost - protected from CJ auto-sync overwrite">
+                                          Admin
+                                        </span>
+                                      )}
+                                    </div>
+                                    {p.source === 'cjdropshipping' && p.cjOriginalCostUsd && (
+                                      <div className="text-[10px] text-purple-600 font-mono">CJ: ${p.cjOriginalCostUsd}</div>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const val = window.prompt(`Update product cost for "${p.name}" (FRW):`, String(p.costPrice ?? ''));
+                                        if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
+                                          handleQuickUpdateProductCost(p.id, Number(val));
+                                        }
+                                      }}
+                                      className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                    >
+                                      Edit Cost
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <span className="text-slate-400 italic text-[11px]">—</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const val = window.prompt(`Set cost price for "${p.name}" (FRW):`, '');
+                                        if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
+                                          handleQuickUpdateProductCost(p.id, Number(val));
+                                        }
+                                      }}
+                                      className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                    >
+                                      + Set Cost
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-3">
+                                <span className="font-mono font-bold text-slate-900">{p.price.toLocaleString()} FRW</span>
+                                {p.costPrice && p.price > p.costPrice && (
+                                  <div className="text-[10px] font-bold text-emerald-600 font-mono">
+                                    +{Math.round(((p.price - p.costPrice) / p.price) * 100)}% margin
+                                  </div>
+                                )}
+                                {((p.discountPercent && p.discountPercent > 0) || (p.discountPrice && p.discountPrice < p.price)) && (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 text-[10px] font-black">
+                                      -{p.discountPercent || Math.round(((p.price - (p.discountPrice || 0)) / p.price) * 100)}%
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 font-semibold font-mono">
+                                      {(p.discountPrice || Math.round(p.price * (1 - (p.discountPercent || 0) / 100))).toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => {
+                                    setStockModalProduct(p);
+                                    setStockAdjustAmount(10);
+                                  }}
+                                  className={`px-2 py-0.5 rounded-full font-mono font-bold text-xs cursor-pointer ${
+                                    p.stock <= 5 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {p.stock} {p.unit || 'units'}
+                                </button>
+                              </td>
+                              <td className="py-3 px-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                  p.status === 'Available' ? 'bg-emerald-100 text-emerald-800' : p.status === 'Out of Stock' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-600'
+                                }`}>
+                                  {p.status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenManageImages(p)}
-                                  className="absolute inset-0 bg-black/60 text-white rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
                                   title="Manage picture links"
+                                  className="p-1.5 rounded-lg text-orange-600 hover:text-orange-800 hover:bg-orange-50 cursor-pointer"
                                 >
-                                  <Camera className="w-4 h-4 text-orange-400" />
+                                  <Camera className="w-4 h-4" />
                                 </button>
-                              </div>
-                              <div className="max-w-xs">
-                                <span className="font-bold text-slate-900 block line-clamp-1">{p.name}</span>
-                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                  <span className="text-[10px] font-mono text-slate-400 font-bold">{p.sku}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenManageImages(p)}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-orange-50 hover:bg-orange-100 text-[#FF6000] border border-orange-200 cursor-pointer transition-colors"
-                                    title="Click to view or add multiple picture links"
-                                  >
-                                    <Camera className="w-2.5 h-2.5 text-[#FF6000]" />
-                                    <span>{p.images && p.images.length > 0 ? p.images.length : (p.imageUrl ? 1 : 0)} photo{((p.images && p.images.length > 0 ? p.images.length : (p.imageUrl ? 1 : 0)) === 1 ? '' : 's')}</span>
-                                    <span className="text-orange-400">· Add Links</span>
-                                  </button>
-                                  {p.isFeatured && <span className="px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 text-[9px] font-black">Featured</span>}
-                                  {p.isNewArrival && <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[9px] font-black">New</span>}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-slate-600 font-medium capitalize">
-                            {p.category}
-                          </td>
-                          <td className="py-3 px-3 font-semibold text-slate-700">
-                            <div>{p.shopName || 'ContactReach Market'}</div>
-                            {p.source === 'cjdropshipping' && (
-                              <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 text-[9px] font-black uppercase tracking-wider">
-                                CJ Dropshipping
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3">
-                            {p.costPrice !== undefined ? (
-                              <div>
-                                <div className="flex items-center gap-1">
-                                  <span className="font-mono font-bold text-slate-900">{p.costPrice.toLocaleString()} FRW</span>
-                                  {p.costOverriddenByAdmin && (
-                                    <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 text-[8px] font-black" title="Admin custom cost - protected from CJ auto-sync overwrite">
-                                      Admin
-                                    </span>
-                                  )}
-                                </div>
-                                {p.source === 'cjdropshipping' && p.cjOriginalCostUsd && (
-                                  <div className="text-[10px] text-purple-600 font-mono">CJ: ${p.cjOriginalCostUsd}</div>
-                                )}
                                 <button
-                                  type="button"
-                                  onClick={() => {
-                                    const val = window.prompt(`Update product cost for "${p.name}" (FRW):`, String(p.costPrice ?? ''));
-                                    if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
-                                      handleQuickUpdateProductCost(p.id, Number(val));
-                                    }
-                                  }}
-                                  className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                  onClick={() => handleOpenEditProduct(p)}
+                                  title="Edit product"
+                                  className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
                                 >
-                                  Edit Cost
+                                  <Edit className="w-4 h-4" />
                                 </button>
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="text-slate-400 italic text-[11px]">—</span>
                                 <button
-                                  type="button"
-                                  onClick={() => {
-                                    const val = window.prompt(`Set cost price for "${p.name}" (FRW):`, '');
-                                    if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
-                                      handleQuickUpdateProductCost(p.id, Number(val));
-                                    }
-                                  }}
-                                  className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                  onClick={() => handleDuplicateProduct(p.id)}
+                                  title="Duplicate product"
+                                  className="p-1.5 rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 cursor-pointer"
                                 >
-                                  + Set Cost
+                                  <Copy className="w-4 h-4" />
                                 </button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="font-mono font-bold text-slate-900">{p.price.toLocaleString()} FRW</span>
-                            {p.costPrice && p.price > p.costPrice && (
-                              <div className="text-[10px] font-bold text-emerald-600 font-mono">
-                                +{Math.round(((p.price - p.costPrice) / p.price) * 100)}% margin
-                              </div>
-                            )}
-                            {((p.discountPercent && p.discountPercent > 0) || (p.discountPrice && p.discountPrice < p.price)) && (
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 text-[10px] font-black">
-                                  -{p.discountPercent || Math.round(((p.price - (p.discountPrice || 0)) / p.price) * 100)}%
-                                </span>
-                                <span className="text-[10px] text-emerald-600 font-semibold font-mono">
-                                  {(p.discountPrice || Math.round(p.price * (1 - (p.discountPercent || 0) / 100))).toLocaleString()}
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 px-3">
-                            <button
-                              onClick={() => {
-                                setStockModalProduct(p);
-                                setStockAdjustAmount(10);
-                              }}
-                              className={`px-2 py-0.5 rounded-full font-mono font-bold text-xs cursor-pointer ${
-                                p.stock <= 5 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
-                              }`}
-                            >
-                              {p.stock} {p.unit || 'units'}
-                            </button>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                              p.status === 'Available' ? 'bg-emerald-100 text-emerald-800' : p.status === 'Out of Stock' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-600'
-                            }`}>
-                              {p.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenManageImages(p)}
-                              title="Manage picture links"
-                              className="p-1.5 rounded-lg text-orange-600 hover:text-orange-800 hover:bg-orange-50 cursor-pointer"
-                            >
-                              <Camera className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleOpenEditProduct(p)}
-                              title="Edit product"
-                              className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDuplicateProduct(p.id)}
-                              title="Duplicate product"
-                              className="p-1.5 rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 cursor-pointer"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProduct(p.id)}
-                              title="Delete product"
-                              className="p-1.5 rounded-lg text-rose-600 hover:text-rose-800 hover:bg-rose-50 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                                <button
+                                  onClick={() => handleDeleteProduct(p.id)}
+                                  title="Delete product"
+                                  className="p-1.5 rounded-lg text-rose-600 hover:text-rose-800 hover:bg-rose-50 cursor-pointer"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -8842,6 +9029,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Products Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 tracking-tight">
+              Delete {selectedProductIds.length} Selected Product{selectedProductIds.length > 1 ? 's' : ''} at the Same Time?
+            </h3>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              This will permanently delete the <strong className="text-slate-800 font-bold">{selectedProductIds.length} selected product{selectedProductIds.length > 1 ? 's' : ''}</strong> from your ContactReach Market store catalog, inventory records, and Cloud Firestore simultaneously.
+            </p>
+
+            {/* Preview of items to be deleted */}
+            <div className="my-4 max-h-52 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl p-2 bg-slate-50">
+              {products
+                .filter(p => selectedProductIds.includes(p.id))
+                .slice(0, 15)
+                .map(p => (
+                  <div key={p.id} className="py-1.5 px-2 flex items-center gap-2.5 text-xs">
+                    <img src={p.imageUrl} alt={p.name} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-200" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-slate-800 truncate">{p.name}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{p.sku || p.id} · {p.price.toLocaleString()} FRW · {p.status}</p>
+                    </div>
+                  </div>
+                ))}
+              {selectedProductIds.length > 15 && (
+                <p className="text-[11px] text-center text-slate-500 py-1.5 font-semibold">
+                  + {selectedProductIds.length - 15} more selected products...
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setShowBulkDeleteModal(false)}
+                disabled={bulkDeleting}
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDeleteProducts}
+                disabled={bulkDeleting}
+                className="px-5 py-2 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl cursor-pointer flex items-center gap-2 disabled:opacity-50 transition-all shadow-sm"
+              >
+                {bulkDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting {selectedProductIds.length} Products...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Yes, Permanently Delete All {selectedProductIds.length}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
