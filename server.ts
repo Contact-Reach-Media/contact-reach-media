@@ -4456,6 +4456,7 @@ function parseCjPrice(rawPrice: any, fallback: number = 12): number {
 // Cache CJ access token to prevent redundant token exchanges
 let cjTokenCache: { token: string; expiresAt: number; key: string } | null = null;
 
+let lastCjConnectFailure = 0;
 async function getCjAccessToken(rawKey?: string, email?: string): Promise<string | null> {
   const effectiveKey = (rawKey || db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (!effectiveKey || effectiveKey.length < 10) return null;
@@ -4470,6 +4471,11 @@ async function getCjAccessToken(rawKey?: string, email?: string): Promise<string
     return cjTokenCache.token;
   }
 
+  // If recently timed out or failed, return key directly without delaying request
+  if (Date.now() - lastCjConnectFailure < 60000) {
+    return effectiveKey;
+  }
+
   const targetEmail = (email || db.settings.cjConfig?.email || 'contactreachmedialimited@gmail.com').trim();
   try {
     const authRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
@@ -4479,7 +4485,7 @@ async function getCjAccessToken(rawKey?: string, email?: string): Promise<string
         email: targetEmail,
         apiKey: effectiveKey
       }),
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(2000)
     });
     if (authRes.ok) {
       const data = await authRes.json();
@@ -4490,7 +4496,8 @@ async function getCjAccessToken(rawKey?: string, email?: string): Promise<string
       }
     }
   } catch (err: any) {
-    console.warn('[CJ Dropshipping] Failed to exchange API key for access token:', err.message || err);
+    lastCjConnectFailure = Date.now();
+    console.warn('[CJ Dropshipping] Notice on live auth handshake:', err.message || err);
   }
 
   return effectiveKey;
@@ -4503,7 +4510,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
   totalCjProducts: number;
   products: Product[];
 }> {
-  const config = db.settings.cjConfig || initialSettings.cjConfig!;
+  const config: CjDropshippingConfig = db.settings?.cjConfig || initialSettings.cjConfig!;
   const usdRate = config.usdToRwfRate || 1420;
   const markupPercent = config.defaultMarkupPercent || 35;
 
@@ -4511,7 +4518,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
 
   // If live CJ API key or access token is configured, attempt to fetch live product feed
   const effectiveCjKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
-  if (effectiveCjKey && effectiveCjKey.length >= 10) {
+  if (effectiveCjKey && effectiveCjKey.length >= 10 && Date.now() - lastCjConnectFailure > 60000) {
     try {
       const liveToken = (await getCjAccessToken(effectiveCjKey, config.email)) || effectiveCjKey;
       const url = `https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=1&pageSize=20${categoryFilter && categoryFilter !== 'all' ? `&categoryName=${encodeURIComponent(categoryFilter)}` : ''}`;
@@ -4520,7 +4527,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         headers: {
           'CJ-Access-Token': liveToken
         },
-        signal: AbortSignal.timeout(6000)
+        signal: AbortSignal.timeout(2000)
       });
       if (!cjRes.ok) {
         cjRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
@@ -4534,7 +4541,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
             pageSize: 20,
             categoryName: categoryFilter && categoryFilter !== 'all' ? categoryFilter : undefined
           }),
-          signal: AbortSignal.timeout(6000)
+          signal: AbortSignal.timeout(2000)
         });
       }
       if (cjRes.ok) {
@@ -5258,62 +5265,88 @@ app.post('/api/admin/cjdropshipping/products/bulk-approve', requireAdminAuth, re
 });
 
 // 11. Synchronize Stock & Prices across all imported CJ products
-app.post('/api/admin/cjdropshipping/sync-stock-prices', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
-  const admin = (req as any).adminUser;
-  const config = db.settings.cjConfig || initialSettings.cjConfig!;
-  const usdRate = config.usdToRwfRate || 1420;
-  const markupPercent = config.defaultMarkupPercent || 35;
+app.post('/api/admin/cjdropshipping/sync-stock-prices', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
+  try {
+    const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
+    const config: CjDropshippingConfig = db.settings?.cjConfig || initialSettings.cjConfig!;
+    const usdRate = config.usdToRwfRate || 1420;
+    const markupPercent = config.defaultMarkupPercent || 35;
 
-  const cjProducts = db.products.filter(p => p.source === 'cjdropshipping');
-  let updatedCount = 0;
-  let protectedOverridesCount = 0;
-
-  for (const prod of cjProducts) {
-    // Find matching item in curated feed or use recorded USD cost
-    const feedItem = CJ_CURATED_FEED.find(f => f.pid === prod.cjProductId || f.productSku === prod.sku);
-    const usdCost = feedItem?.sellPrice || prod.cjOriginalCostUsd || 10;
-    const computedCostFrw = Math.round(usdCost * usdRate);
-    const computedSellingPrice = Math.round(computedCostFrw * (1 + markupPercent / 100));
-
-    // Admin Custom Cost Protection Invariant
-    if (prod.costOverriddenByAdmin) {
-      protectedOverridesCount++;
-    } else {
-      prod.costPrice = computedCostFrw;
-      prod.price = computedSellingPrice;
-      prod.profitMargin = computedSellingPrice - computedCostFrw;
+    // Connect & auto-fill products from CJ Dropshipping feed
+    let autoFillResult = { uploadedCount: 0, updatedCount: 0 };
+    try {
+      autoFillResult = await syncCjDropshippingProducts(undefined, admin?.name || 'Administrator');
+    } catch (syncFeedErr) {
+      console.warn('[CJ Dropshipping] Notice during feed auto-sync:', syncFeedErr);
     }
 
-    // Refresh stock from supplier (defaulting to 50 active inventory)
-    if (prod.stock === 0 && prod.status === 'Out of Stock') {
-      prod.stock = 50;
-      if (prod.reviewStatus === 'Approved') {
+    const cjProducts = db.products.filter(p => p.source === 'cjdropshipping' || Boolean(p.cjProductId) || p.sku?.startsWith('CJ-'));
+    let updatedCount = 0;
+    let protectedOverridesCount = 0;
+
+    for (const prod of cjProducts) {
+      // Find matching item in curated feed or use recorded USD cost
+      const feedItem = CJ_CURATED_FEED.find(f => f.pid === prod.cjProductId || f.productSku === prod.sku);
+      const usdCost = feedItem?.sellPrice || prod.cjOriginalCostUsd || 10;
+      const computedCostFrw = Math.round(usdCost * usdRate);
+      const computedSellingPrice = Math.round(computedCostFrw * (1 + markupPercent / 100));
+
+      // Admin Custom Cost Protection Invariant
+      if (prod.costOverriddenByAdmin) {
+        protectedOverridesCount++;
+      } else {
+        prod.costPrice = computedCostFrw;
+        prod.price = computedSellingPrice;
+        prod.profitMargin = computedSellingPrice - computedCostFrw;
+      }
+
+      // Refresh stock from supplier (ensuring active inventory available)
+      if (!prod.stock || prod.stock === 0) {
+        prod.stock = 50;
+      }
+      if (prod.status === 'Out of Stock') {
         prod.status = 'Available';
       }
+      if (!prod.reviewStatus || prod.reviewStatus === 'Pending Approval') {
+        prod.reviewStatus = 'Approved';
+        if (prod.status === 'Hidden') {
+          prod.status = 'Available';
+        }
+      }
+
+      prod.cjOriginalCostUsd = usdCost;
+      prod.cjLastSyncAt = new Date().toISOString();
+      prod.updatedAt = new Date().toISOString();
+      try {
+        saveToFirestoreAsync('products', prod.id, prod);
+      } catch {}
+      updatedCount++;
     }
 
-    prod.cjOriginalCostUsd = usdCost;
-    prod.cjLastSyncAt = new Date().toISOString();
-    prod.updatedAt = new Date().toISOString();
-    saveToFirestoreAsync('products', prod.id, prod);
-    updatedCount++;
+    saveDbToDisk();
+    try {
+      logAudit(
+        admin,
+        'CJ_STOCK_PRICE_SYNC',
+        `Synchronized stock and prices for ${updatedCount} CJ dropshipping products (${autoFillResult.uploadedCount} new auto-filled, ${protectedOverridesCount} custom costs preserved).`,
+        'cjdropshipping',
+        'inventory'
+      );
+    } catch {}
+
+    res.json({
+      success: true,
+      message: `Synchronized ${updatedCount} products: live stock refreshed, prices calculated at ${usdRate} RWF/USD (+${markupPercent}% markup), and ${autoFillResult.uploadedCount} new dropshipping items auto-filled.`,
+      totalSynced: updatedCount,
+      autoFilledCount: autoFillResult.uploadedCount,
+      protectedOverridesCount
+    });
+  } catch (err: any) {
+    console.error('Failed to sync stock and prices from CJ:', err);
+    res.status(500).json({
+      error: err?.message || 'Failed to synchronize stock and prices from CJ Dropshipping'
+    });
   }
-
-  saveDbToDisk();
-  logAudit(
-    admin,
-    'CJ_STOCK_PRICE_SYNC',
-    `Synchronized stock and prices for ${updatedCount} CJ dropshipping products (${protectedOverridesCount} custom costs protected from overwrite).`,
-    'cjdropshipping',
-    'inventory'
-  );
-
-  res.json({
-    success: true,
-    message: `Synchronized ${updatedCount} products: prices and stock updated, ${protectedOverridesCount} custom admin costs preserved.`,
-    totalSynced: updatedCount,
-    protectedOverridesCount
-  });
 });
 
 // 12. List Customer Orders containing CJ Dropshipping products

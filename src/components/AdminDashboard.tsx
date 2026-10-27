@@ -1097,7 +1097,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       const res = await api.adminSyncCjProductsNow(categoryFilter);
       showToast(res.message);
-      fetchAllData();
+      try {
+        await fetchAllData(true);
+      } catch (refreshErr) {
+        console.warn('Non-blocking background refresh notice after CJ feed sync:', refreshErr);
+      }
       onRefreshPublicData();
     } catch (err: any) {
       showToast(err.message || 'CJ automated upload failed', 'error');
@@ -1226,7 +1230,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       const res = await api.adminSyncCjStockAndPrices();
       showToast(res.message);
-      fetchAllData();
+      try {
+        await fetchAllData(true);
+      } catch (refreshErr) {
+        console.warn('Non-blocking background refresh notice after stock & price sync:', refreshErr);
+      }
       onRefreshPublicData();
     } catch (err: any) {
       showToast(err.message || 'Stock and price sync failed', 'error');
@@ -4586,6 +4594,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
+                    type="button"
                     onClick={handleTestCjConnection}
                     disabled={cjTesting}
                     className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
@@ -4594,12 +4603,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>{cjTesting ? 'Testing...' : 'Test Connection'}</span>
                   </button>
                   <button
+                    type="button"
+                    onClick={handleSyncCjStockAndPrices}
+                    disabled={cjSyncingStockPrices}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                    title="Sync live stock levels and prices from supplier without altering admin custom costs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${cjSyncingStockPrices ? 'animate-spin text-purple-600' : 'text-slate-600'}`} />
+                    <span>{cjSyncingStockPrices ? 'Syncing...' : '🔄 Sync Stock & Prices'}</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleSyncCjNow(cjProductCategoryFilter !== 'all' ? cjProductCategoryFilter : undefined)}
                     disabled={cjSyncing}
                     className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                   >
-                    <RefreshCw className={`w-4 h-4 ${cjSyncing ? 'animate-spin' : ''}`} />
-                    <span>{cjSyncing ? 'Syncing Products...' : '⚡ Sync Feed Now'}</span>
+                    <Zap className={`w-4 h-4 ${cjSyncing ? 'animate-spin' : ''}`} />
+                    <span>{cjSyncing ? 'Auto-Filling...' : '⚡ Connect & Auto-Fill Feed'}</span>
                   </button>
                 </div>
               </div>
