@@ -6561,8 +6561,11 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
         const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbName}/documents/${col}?key=${apiKey}&pageSize=300`;
         const restRes = await fetch(url, { signal: AbortSignal.timeout(6000) });
         if (restRes.status === 404) {
-          dbNotFound = true;
-          break; // Database does not exist yet on GCP
+          const errBody = await restRes.text().catch(() => '');
+          if (errBody.includes('database') && (errBody.includes('does not exist') || errBody.includes('NOT_FOUND') || errBody.includes('setup'))) {
+            dbNotFound = true;
+            break; // Database does not exist yet on GCP
+          }
         }
         if (restRes.ok) {
           const json = await restRes.json();
@@ -6578,7 +6581,7 @@ app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['ow
     }
 
     if (dbNotFound) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         code: 'DATABASE_NOT_CREATED',
         message: `Firestore database "${dbName}" is not yet created in your Firebase project "${projectId}".`,
@@ -6702,7 +6705,7 @@ app.post('/api/admin/firebase/push-products', requireAdminAuth, requireRole(['ow
     const probeRes = await fetch(probeUrl, { signal: AbortSignal.timeout(4000) });
 
     if (probeRes.status === 404) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         code: 'DATABASE_NOT_CREATED',
         message: `Firestore database "${dbName}" is not yet created in your Firebase project "${projectId}".`,
