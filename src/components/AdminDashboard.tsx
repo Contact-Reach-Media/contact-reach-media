@@ -1145,12 +1145,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Search products across CJ Supplier catalog
-  const handleSearchCjProducts = async () => {
+  const handleSearchCjProducts = async (catOverride?: string) => {
     setCjSearching(true);
+    const targetCategory = catOverride !== undefined ? catOverride : cjSearchCategory;
     try {
       const res = await api.adminSearchCjProducts({
         query: cjSearchQuery.trim() || undefined,
-        category: cjSearchCategory !== 'all' ? cjSearchCategory : undefined
+        category: targetCategory !== 'all' ? targetCategory : undefined
       });
       setCjSearchResults(res.products || []);
       setCjSelectedItemsForImport([]);
@@ -5274,10 +5275,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           type="button"
                           onClick={() => {
                             setCjSearchCategory(c.id);
-                            api.adminSearchCjProducts({ category: c.id, query: cjSearchQuery.trim() || undefined }).then(res => {
-                              setCjSearchResults(res.products || []);
-                              setCjSelectedItemsForImport([]);
-                            });
+                            handleSearchCjProducts(c.id);
                           }}
                           className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer border ${
                             cjSearchCategory === c.id
@@ -5470,7 +5468,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </p>
                       <button
                         type="button"
-                        onClick={handleSearchCjProducts}
+                        onClick={() => handleSearchCjProducts()}
                         className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
                       >
                         Explore Trending Dropshipping Products

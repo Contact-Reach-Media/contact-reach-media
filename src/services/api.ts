@@ -2343,14 +2343,30 @@ export const api = {
     if (params.page) q.set('page', String(params.page));
     if (params.pageSize) q.set('pageSize', String(params.pageSize));
 
-    const res = await fetch(`/api/admin/cjdropshipping/products/search?${q.toString()}`, {
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json) {
-      throw new Error(parsed.json?.error || 'Failed to search CJ Dropshipping catalog');
+    try {
+      const res = await fetch(`/api/admin/cjdropshipping/products/search?${q.toString()}`, {
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json && Array.isArray(parsed.json.products)) {
+        return parsed.json;
+      }
+      if (parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (netErr: any) {
+      if (netErr?.message && !netErr.message.includes('Failed to fetch')) {
+        console.warn('CJ dropshipping catalog search notice:', netErr.message);
+      }
+      throw netErr;
     }
-    return parsed.json;
+
+    return {
+      total: 0,
+      usdToRwfRate: 1420,
+      defaultMarkupPercent: 35,
+      products: []
+    };
   },
 
   async adminImportCjProducts(payload: {
