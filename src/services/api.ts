@@ -2839,7 +2839,80 @@ export const api = {
       throw new Error(parsed.json?.error || 'Failed to update order tracking');
     }
     return parsed.json as Order;
+  },
+
+  async getFirebaseStatus(): Promise<{
+    configured: boolean;
+    projectId: string;
+    apiKey: string;
+    authDomain: string;
+    storageBucket: string;
+    databaseExists: boolean;
+    firestoreAvailable: boolean;
+    productsCountInFirestore: number;
+    localProductsCount: number;
+    firebaseConsoleUrl: string;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/firebase/status', {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to fetch Firebase status');
+    }
+    return parsed.json;
+  },
+
+  async pullProductsFromFirebase(): Promise<{
+    success: boolean;
+    code?: string;
+    message: string;
+    importedCount?: number;
+    updatedCount?: number;
+    totalCount?: number;
+    totalWebsiteProducts?: number;
+    products?: Product[];
+    consoleUrl?: string;
+    instruction?: string;
+  }> {
+    const res = await fetch('/api/admin/firebase/pull-products', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!parsed.isJson || !parsed.json) {
+      throw new Error('Invalid server response from Firebase pull endpoint');
+    }
+    if (!res.ok && parsed.json.code !== 'DATABASE_NOT_CREATED') {
+      throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to pull products from Firebase');
+    }
+    return parsed.json;
+  },
+
+  async pushProductsToFirebase(): Promise<{
+    success: boolean;
+    code?: string;
+    message: string;
+    pushedCount?: number;
+    totalProducts?: number;
+    consoleUrl?: string;
+    instruction?: string;
+  }> {
+    const res = await fetch('/api/admin/firebase/push-products', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!parsed.isJson || !parsed.json) {
+      throw new Error('Invalid server response from Firebase push endpoint');
+    }
+    if (!res.ok && parsed.json.code !== 'DATABASE_NOT_CREATED') {
+      throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to push products to Firebase');
+    }
+    return parsed.json;
   }
 };
+
 
 
