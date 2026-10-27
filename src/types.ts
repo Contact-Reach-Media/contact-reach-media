@@ -376,6 +376,7 @@ export interface VendorShop {
   address?: string;
   phone?: string;
   email?: string;
+  tinNumber?: string;
   contactPerson?: string;
   commissionRate?: number; // Default agreed commission e.g. 10%
   payoutMethod?: PaymentMethod;

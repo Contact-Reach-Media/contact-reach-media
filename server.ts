@@ -7415,6 +7415,79 @@ app.get('/api/admin/database/diagnostics', requireAdminAuth, async (req: Request
   }
 });
 
+function normalizeCategorySlug(rawCat?: string, name?: string): string {
+  const n = (name || '').toLowerCase();
+  if (n.includes('air jordan') || n.includes('satin party dress') || n.includes('slipper') || n.includes('sneaker') || n.includes('sandal') || n.includes('shoe') || n.includes('dress') || n.includes('two piece set') || n.includes('fedora') || n.includes('apparel') || n.includes('clothing')) {
+    if (n.includes('kid') || n.includes('child') || n.includes('baby') || n.includes('girls princess')) return 'abana';
+    return 'fashion';
+  }
+  if (n.includes('watch') || n.includes('chronograph') || n.includes('wristband') || n.includes('bicep loop') || n.includes('earring') || n.includes('ring') || n.includes('jewelry')) {
+    return 'amasaha';
+  }
+  if (n.includes('bag') || n.includes('backpack') || n.includes('tote') || n.includes('chest bag') || n.includes('crossbody')) {
+    return 'ibikapu';
+  }
+  if (n.includes('lamp') || n.includes('bulb') || n.includes('lighting') || n.includes('light') || n.includes('sunset projection')) {
+    return 'amatara';
+  }
+  if (n.includes('bike') || n.includes('bicycle') || n.includes('massage gun') || n.includes('fitness') || n.includes('athletic')) {
+    return 'sports';
+  }
+  if (n.includes('hair') || n.includes('wig') || n.includes('facial') || n.includes('cosmetic') || n.includes('beauty') || n.includes('t-blade') || n.includes('suction') || n.includes('serum') || n.includes('cleansing') || n.includes('massager')) {
+    return 'hair-beauty';
+  }
+  if (n.includes('igiseke') || n.includes('inkoko') || n.includes('igisabo') || n.includes('art') || n.includes('cutting board') || n.includes('stove') || n.includes('photo frame') || n.includes('floor mat') || n.includes('moka pot') || n.includes('blender') || n.includes('insulated bot') || n.includes('drying') || n.includes('kitchen organizer')) {
+    return 'impano';
+  }
+  if (n.includes('toy') || n.includes('building block') || n.includes('robot') || n.includes('baby') || n.includes('plush doll') || n.includes('children')) {
+    return 'abana';
+  }
+  if (n.includes('chair') || n.includes('office') || n.includes('swivel') || n.includes('book') || n.includes('planner') || n.includes('stationery')) {
+    return 'books';
+  }
+  if (n.includes('earbud') || n.includes('headphone') || n.includes('earphone') || n.includes('keyboard') || n.includes('trackpad') || n.includes('camera') || n.includes('charger') || n.includes('charging') || n.includes('usb') || n.includes('motor') || n.includes('phone grip') || n.includes('car mount') || n.includes('vlogging') || n.includes('printer') || n.includes('cable') || n.includes('aux cord') || n.includes('plugs into your vehicle')) {
+    return 'electronics';
+  }
+  if (n.includes('honey')) {
+    return 'supermarket';
+  }
+  const clean = (rawCat || '').toLowerCase().trim();
+  const map: Record<string, string> = {
+    'electronics & tv': 'electronics',
+    'electronic': 'electronics',
+    'tech accessories & smart gadgets': 'electronics',
+    'electronics': 'electronics',
+    'safety': 'electronics',
+    'beauty & cosmetics': 'hair-beauty',
+    'beauty & personal care': 'hair-beauty',
+    'hair-beauty': 'hair-beauty',
+    'fashion & apparel': 'fashion',
+    'fashion-shoes': 'fashion',
+    'shoes': 'fashion',
+    'clothes': 'fashion',
+    'fashion': 'fashion',
+    'bags & luggage': 'ibikapu',
+    'bags and fashion accessories': 'ibikapu',
+    'ibikapu': 'ibikapu',
+    'watches & jewelry': 'amasaha',
+    'amasaha': 'amasaha',
+    'lighting & gadgets': 'amatara',
+    'amatara': 'amatara',
+    'sports & fitness': 'sports',
+    'sports': 'sports',
+    'school, office and business supplies': 'books',
+    'books': 'books',
+    'gifts & home decor': 'impano',
+    'home and kitchen products': 'impano',
+    'impano': 'impano',
+    'abana': 'abana',
+    'kids & toys': 'abana',
+    'baby and family essentials': 'abana',
+    'supermarket': 'supermarket'
+  };
+  return map[clean] || 'electronics';
+}
+
 app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
   try {
@@ -7438,9 +7511,14 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
         changed = true;
       }
 
-      // Fix Price
+      // Fix Price & Margins
       if (typeof p.price !== 'number' || isNaN(p.price) || p.price <= 0) {
         p.price = 10000;
+        changed = true;
+      }
+      if (p.costPrice && p.price < p.costPrice) {
+        p.price = Math.round(p.costPrice * 1.35);
+        p.profitMargin = p.price - p.costPrice;
         changed = true;
       }
 
@@ -7451,8 +7529,9 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
       }
 
       // Fix Category
-      if (!p.category) {
-        p.category = 'electronics';
+      const targetCat = normalizeCategorySlug(p.category, p.name);
+      if (p.category !== targetCat) {
+        p.category = targetCat;
         changed = true;
       }
 
@@ -7635,8 +7714,9 @@ app.post('/api/admin/products/make-all-ready', requireAdminAuth, requireRole(['o
       }
 
       // Category
-      if (!p.category) {
-        p.category = 'electronics';
+      const targetCat = normalizeCategorySlug(p.category, p.name);
+      if (p.category !== targetCat) {
+        p.category = targetCat;
         changed = true;
       }
 
