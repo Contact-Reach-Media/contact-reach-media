@@ -222,6 +222,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [dbDiagnostics, setDbDiagnostics] = useState<any>(null);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
   const [repairingDb, setRepairingDb] = useState(false);
+  const [makingAllReady, setMakingAllReady] = useState(false);
 
   // CJ Dropshipping state
   const [cjConfig, setCjConfig] = useState<CjDropshippingConfig | null>(null);
@@ -647,6 +648,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       showToast(err.message || 'Failed to repair database', 'error');
     } finally {
       setRepairingDb(false);
+    }
+  };
+
+  const handleMakeAllProductsReady = async () => {
+    setMakingAllReady(true);
+    try {
+      const res = await api.adminMakeAllProductsReady();
+      showToast(res.message);
+      await fetchAllData(true);
+      await fetchDbDiagnostics();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to make all products ready', 'error');
+    } finally {
+      setMakingAllReady(false);
     }
   };
 
@@ -2438,6 +2454,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <RefreshCw className="w-4 h-4 text-purple-600" />
                     <span>CJ Dropshipping</span>
+                  </button>
+
+                  <button
+                    onClick={handleMakeAllProductsReady}
+                    disabled={makingAllReady}
+                    className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                    title="Make all products in catalog Approved, Available in stock, and verify CJ Dropshipping readiness"
+                  >
+                    <Sparkles className={`w-4 h-4 ${makingAllReady ? 'animate-spin text-amber-300' : 'text-amber-300'}`} />
+                    <span>{makingAllReady ? 'Making Ready...' : '✨ Make All Products Ready'}</span>
                   </button>
 
                   <button
@@ -4743,6 +4769,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${cjSyncingStockPrices ? 'animate-spin text-purple-600' : 'text-slate-600'}`} />
                     <span>{cjSyncingStockPrices ? 'Syncing...' : '🔄 Sync Stock & Prices'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMakeAllProductsReady}
+                    disabled={makingAllReady}
+                    className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                    title="Make all CJ dropshipping and marketplace products 100% Ready, Approved, and Available"
+                  >
+                    <Sparkles className={`w-4 h-4 ${makingAllReady ? 'animate-spin text-amber-300' : 'text-amber-300'}`} />
+                    <span>{makingAllReady ? 'Making Ready...' : '✨ Make All Products Ready'}</span>
                   </button>
                   <button
                     type="button"

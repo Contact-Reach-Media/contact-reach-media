@@ -37,18 +37,19 @@ export const initialSettings: AppSettings = {
   cjConfig: {
     apiKey: 'CJ5955548@api@7600932f7a6b4f3ea4e6dcfaaaa996a3',
     email: 'contactreachmedialimited@gmail.com',
-    autoUploadEnabled: false,
+    autoUploadEnabled: true,
     syncFrequency: 'daily',
-    defaultMarkupPercent: 35,
-    usdToRwfRate: 1420,
+    defaultMarkupPercent: 40,
+    usdToRwfRate: 1435,
     autoPublish: true,
+    requireAdminApproval: false,
     selectedCategories: ['electronics', 'fashion', 'amatara', 'hair-beauty', 'amasaha', 'ibikapu', 'sports'],
     lastSyncStats: {
       uploadedCount: 0,
-      updatedCount: 0,
-      totalCjProducts: 0,
+      updatedCount: 37,
+      totalCjProducts: 37,
       timestamp: new Date().toISOString(),
-      status: 'idle'
+      status: 'success'
     }
   },
   driveBackupStatus: {

@@ -33,7 +33,7 @@
       "rating": 5,
       "reviewsCount": 0,
       "createdAt": "2026-10-27T09:36:31.240Z",
-      "updatedAt": "2026-10-27T09:36:32.907Z",
+      "updatedAt": "2026-10-27T09:51:49.314Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.412Z",
@@ -54,7 +54,8 @@
       "aliExpressUrl": "https://www.aliexpress.com/item/1005007129482103.html",
       "supplierVariant": "Color: Midnight Black, Size: Large",
       "supplierSku": "ALI-TEST-7129-L",
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793093790792-ea0316",
@@ -186,7 +187,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.415Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793093788525-9b829b",
@@ -390,7 +392,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.419Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793093784780-1ef58c",
@@ -618,7 +621,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.420Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793093783763-2fc316",
@@ -779,7 +783,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.419Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793093783599-519d51",
@@ -1007,7 +1012,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.420Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793092484606-808695",
@@ -1139,7 +1145,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:14:46.088Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-cj-cj-minimalist-quartz-chronograph-17",
@@ -1192,7 +1199,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.503Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-27T09:14:43.790Z",
       "history": [
         {
@@ -1206,7 +1213,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:30.503Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-magsafe-car-mount-charger-16",
@@ -1257,7 +1264,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.503Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-27T09:14:43.790Z",
       "history": [
         {
@@ -1266,7 +1273,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:30.503Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-solar-security-wall-light-15",
@@ -1308,7 +1315,7 @@
       "unit": "Pack",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.503Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-27T09:14:43.789Z",
       "history": [
         {
@@ -1317,7 +1324,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:30.503Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-1793092482943-77cc8b",
@@ -1521,7 +1528,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:14:46.096Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793092478763-0ea263",
@@ -1749,7 +1757,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:14:46.096Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793092477728-d1ad12",
@@ -1910,7 +1919,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:14:46.093Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793092477562-c7d453",
@@ -2138,7 +2148,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:14:46.096Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091918509-294345",
@@ -2270,7 +2281,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:05:20.025Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091914698-2ee567",
@@ -2474,7 +2486,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:05:20.031Z"
+      "updatedAt": "2026-10-27T09:51:49.314Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091910437-b66ace",
@@ -2702,7 +2715,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:05:20.032Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091909292-940420",
@@ -2863,7 +2877,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:05:20.030Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091909105-f36ac4",
@@ -3091,7 +3106,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:05:20.032Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091821343-6a2424",
@@ -3223,7 +3239,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:03:42.766Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091818145-a89506",
@@ -3427,7 +3444,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:03:42.771Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091814339-3712d0",
@@ -3655,7 +3673,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:03:42.772Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091813328-63dc74",
@@ -3816,7 +3835,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:03:42.770Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793091813179-9760e0",
@@ -4044,7 +4064,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:03:42.772Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793082445138-1ee0df",
@@ -4176,7 +4197,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:27:26.875Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793082432533-2a97e7",
@@ -4380,7 +4402,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:27:26.877Z"
+      "updatedAt": "2026-10-27T09:51:49.315Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793082429328-2bc6f4",
@@ -4608,7 +4631,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:27:26.877Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793082428454-ee21eb",
@@ -4769,7 +4793,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:27:26.877Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793082428316-307a5d",
@@ -4997,7 +5022,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:27:26.877Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793081958378-125b93",
@@ -5129,7 +5155,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:19.612Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793081955227-b1b160",
@@ -5333,7 +5360,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:19.613Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793081951938-5d0bff",
@@ -5561,7 +5589,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:19.613Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793081951095-efbe9b",
@@ -5722,7 +5751,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:19.613Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793081950955-ac9ee9",
@@ -5950,7 +5980,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:19.613Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025890245-472316",
@@ -6172,7 +6203,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:00.877Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025887111-1a23e7",
@@ -6536,7 +6568,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:00.878Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025883962-0ce818",
@@ -6944,7 +6977,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:00.878Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025883114-76839f",
@@ -7225,7 +7259,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:00.878Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025882963-8c40aa",
@@ -7633,7 +7668,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T06:19:00.878Z"
+      "updatedAt": "2026-10-27T09:51:49.316Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025355307-7aa9e5",
@@ -7765,7 +7801,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:56.486Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025352438-cfacf4",
@@ -7969,7 +8006,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:56.488Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025349306-686338",
@@ -8197,7 +8235,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:56.488Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025348482-3aea74",
@@ -8358,7 +8397,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:56.487Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025348357-283482",
@@ -8586,7 +8626,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:56.488Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025325113-10685b",
@@ -8718,7 +8759,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:26.254Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025322239-e040b8",
@@ -8922,7 +8964,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:26.256Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025319396-d74d30",
@@ -9150,7 +9193,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:26.256Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025318639-550d3d",
@@ -9311,7 +9355,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:26.256Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025318511-0d8f01",
@@ -9539,7 +9584,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:26.256Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025303845-38c41c",
@@ -9671,7 +9717,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:05.023Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025300903-e85032",
@@ -9875,7 +9922,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:05.024Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025297864-92ddd7",
@@ -10103,7 +10151,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:05.024Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025297017-8f17cc",
@@ -10264,7 +10313,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:05.024Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025296875-59dda5",
@@ -10492,7 +10542,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:35:05.024Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025235858-e80e8a",
@@ -10624,7 +10675,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:33:57.167Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025232941-fdf57d",
@@ -10828,7 +10880,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:33:57.168Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025230177-2c403a",
@@ -11056,7 +11109,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:33:57.168Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025229402-82537a",
@@ -11217,7 +11271,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:33:57.168Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793025229284-d88571",
@@ -11445,7 +11500,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:33:57.168Z"
+      "updatedAt": "2026-10-27T09:51:49.317Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793013376086-3488c8",
@@ -11667,12 +11723,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:26:00.253Z",
+      "updatedAt": "2026-10-27T09:51:49.317Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005006294819201.html",
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793013372639-dac1c9",
@@ -12036,12 +12093,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:26:00.255Z",
+      "updatedAt": "2026-10-27T09:51:49.318Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793013369079-59db27",
@@ -12449,7 +12507,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:26:00.255Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793013368102-bfeb22",
@@ -12730,7 +12789,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:26:00.254Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793013367960-7a8a3c",
@@ -13138,7 +13198,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T14:26:00.255Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793012344207-467ac5",
@@ -13184,7 +13245,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.318Z"
     },
     {
       "id": "prod-1793012340952-54e118",
@@ -13228,12 +13291,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:59:01.286Z",
+      "updatedAt": "2026-10-27T09:51:49.318Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793012337354-7f309a",
@@ -13281,7 +13345,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:58:57.526Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793012336409-5ec10f",
@@ -13321,7 +13386,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.318Z"
     },
     {
       "id": "prod-1793012336249-734b44",
@@ -13367,7 +13434,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:59:04.689Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793011403593-71222f",
@@ -13413,7 +13481,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.318Z"
     },
     {
       "id": "prod-1793011400219-b80a0f",
@@ -13457,12 +13527,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:43:20.475Z",
+      "updatedAt": "2026-10-27T09:51:49.318Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793011397088-68d4bb",
@@ -13510,7 +13581,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:43:17.221Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793011396245-00f997",
@@ -13550,7 +13622,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.318Z"
     },
     {
       "id": "prod-1793011396106-83ac9a",
@@ -13596,7 +13670,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:43:24.007Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793011269837-c078f3",
@@ -13642,7 +13717,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.318Z"
     },
     {
       "id": "prod-cj-cj-2610260852281601700",
@@ -13653,10 +13730,10 @@
       "cjProductId": "cj-2610260852281601700",
       "cjProductSku": "CJYD3517774",
       "cjOriginalCostUsd": 5.38,
-      "costPrice": 7747,
+      "costPrice": 7720,
       "costOverriddenByAdmin": false,
-      "price": 10691,
-      "profitMargin": 2944,
+      "price": 10808,
+      "profitMargin": 3088,
       "category": "ibikapu",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/9ccf1915-f9a9-4f8e-8219-ded80adeaccc.jpg",
@@ -13684,7 +13761,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.629Z",
       "history": [
         {
@@ -13693,7 +13770,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260853101634300",
@@ -13704,10 +13781,10 @@
       "cjProductId": "cj-2610260853101634300",
       "cjProductSku": "CJMR3516988",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "abana",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/9be87845-e760-4d87-8397-c5e611c35df0.jpg",
@@ -13735,7 +13812,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.629Z",
       "history": [
         {
@@ -13744,7 +13821,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260855331633100",
@@ -13755,10 +13832,10 @@
       "cjProductId": "cj-2610260855331633100",
       "cjProductSku": "CJQB3517799",
       "cjOriginalCostUsd": 6.08,
-      "costPrice": 8755,
+      "costPrice": 8725,
       "costOverriddenByAdmin": false,
-      "price": 12082,
-      "profitMargin": 3327,
+      "price": 12215,
+      "profitMargin": 3490,
       "category": "fashion",
       "stock": 50,
       "imageUrl": "https://oss-cf.cjdropshipping.com/product/2026/10/26/08/75c0fd6b-48cf-405e-bb1e-71adfa2ece72.jpg",
@@ -13786,7 +13863,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.629Z",
       "history": [
         {
@@ -13795,7 +13872,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260856201636100",
@@ -13806,10 +13883,10 @@
       "cjProductId": "cj-2610260856201636100",
       "cjProductSku": "CJYD3517797",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "amasaha",
       "stock": 50,
       "imageUrl": "https://oss-cf.cjdropshipping.com/product/2026/10/26/08/41ad44c9-5962-4c47-bc3b-031ce742387a_water.jpeg",
@@ -13837,7 +13914,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.629Z",
       "history": [
         {
@@ -13846,7 +13923,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260902221625800",
@@ -13857,10 +13934,10 @@
       "cjProductId": "cj-2610260902221625800",
       "cjProductSku": "CJYD3517852",
       "cjOriginalCostUsd": 0.28,
-      "costPrice": 403,
+      "costPrice": 402,
       "costOverriddenByAdmin": false,
-      "price": 556,
-      "profitMargin": 153,
+      "price": 563,
+      "profitMargin": 161,
       "category": "impano",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/37b0ea45-6e77-46a3-a6f6-2a8050e8dcd1.jpg",
@@ -13888,7 +13965,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.629Z",
       "history": [
         {
@@ -13897,7 +13974,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260902231634000",
@@ -13908,10 +13985,10 @@
       "cjProductId": "cj-2610260902231634000",
       "cjProductSku": "CJCS3517831",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "impano",
       "stock": 50,
       "imageUrl": "https://oss-cf.cjdropshipping.com/product/2026/10/26/08/aa421bb0-683a-4aa1-91a1-b40e6d24ffc8.jpg",
@@ -13939,7 +14016,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.629Z",
       "history": [
         {
@@ -13948,7 +14025,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260904251610200",
@@ -13959,10 +14036,10 @@
       "cjProductId": "cj-2610260904251610200",
       "cjProductSku": "CJYD3517834",
       "cjOriginalCostUsd": 5.33,
-      "costPrice": 7675,
+      "costPrice": 7649,
       "costOverriddenByAdmin": false,
-      "price": 10592,
-      "profitMargin": 2917,
+      "price": 10709,
+      "profitMargin": 3060,
       "category": "ibikapu",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/7d59fbe7-b05b-43f4-994c-9f1437f77dc1.jpg",
@@ -13990,7 +14067,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.629Z",
       "history": [
         {
@@ -13999,7 +14076,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260904531603100",
@@ -14010,10 +14087,10 @@
       "cjProductId": "cj-2610260904531603100",
       "cjProductSku": "CJJT3517808",
       "cjOriginalCostUsd": 1.83,
-      "costPrice": 2635,
+      "costPrice": 2626,
       "costOverriddenByAdmin": false,
-      "price": 3636,
-      "profitMargin": 1001,
+      "price": 3676,
+      "profitMargin": 1050,
       "category": "electronics",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/c2b5ded3-9288-43d5-a9e8-98391f42d3d1.jpg",
@@ -14041,7 +14118,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14050,7 +14127,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260905181602900",
@@ -14061,10 +14138,10 @@
       "cjProductId": "cj-2610260905181602900",
       "cjProductSku": "CJSN3517880",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "amatara",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/96a2c774-2072-4fbb-874a-97d728f0cae3.jpg",
@@ -14092,7 +14169,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14101,7 +14178,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260906231637000",
@@ -14112,10 +14189,10 @@
       "cjProductId": "cj-2610260906231637000",
       "cjProductSku": "CJBQ3517878",
       "cjOriginalCostUsd": 1.52,
-      "costPrice": 2189,
+      "costPrice": 2181,
       "costOverriddenByAdmin": false,
-      "price": 3021,
-      "profitMargin": 832,
+      "price": 3053,
+      "profitMargin": 872,
       "category": "fashion",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/9415fa8b-e947-4ba9-a7c6-6e59761bcdff.jpg",
@@ -14143,7 +14220,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14152,7 +14229,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260906381628300",
@@ -14163,10 +14240,10 @@
       "cjProductId": "cj-2610260906381628300",
       "cjProductSku": "CJKT3517887",
       "cjOriginalCostUsd": 6.94,
-      "costPrice": 9994,
+      "costPrice": 9959,
       "costOverriddenByAdmin": false,
-      "price": 13792,
-      "profitMargin": 3798,
+      "price": 13943,
+      "profitMargin": 3984,
       "category": "fashion",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/920dfdc1-90c1-4350-9521-d61c8b067eee.jpg",
@@ -14194,7 +14271,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14203,7 +14280,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260908021638100",
@@ -14214,10 +14291,10 @@
       "cjProductId": "cj-2610260908021638100",
       "cjProductSku": "CJBQ3517828",
       "cjOriginalCostUsd": 3.86,
-      "costPrice": 5558,
+      "costPrice": 5539,
       "costOverriddenByAdmin": false,
-      "price": 7670,
-      "profitMargin": 2112,
+      "price": 7755,
+      "profitMargin": 2216,
       "category": "fashion",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/a8bde359-ce4c-4774-b188-3785750b2bd6.jpg",
@@ -14245,7 +14322,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14254,7 +14331,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260908301634000",
@@ -14265,10 +14342,10 @@
       "cjProductId": "cj-2610260908301634000",
       "cjProductSku": "CJYD3517889",
       "cjOriginalCostUsd": 0.81,
-      "costPrice": 1166,
+      "costPrice": 1162,
       "costOverriddenByAdmin": false,
-      "price": 1609,
-      "profitMargin": 443,
+      "price": 1627,
+      "profitMargin": 465,
       "category": "abana",
       "stock": 50,
       "imageUrl": "https://oss-cf.cjdropshipping.com/product/2026/10/26/09/e2ae1afe-5490-4fb9-9b33-ff72a56d2804_water_trans.jpeg",
@@ -14296,7 +14373,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14305,7 +14382,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260908581609400",
@@ -14316,10 +14393,10 @@
       "cjProductId": "cj-2610260908581609400",
       "cjProductSku": "CJYD3517658",
       "cjOriginalCostUsd": 484.02,
-      "costPrice": 696989,
+      "costPrice": 694569,
       "costOverriddenByAdmin": false,
-      "price": 961845,
-      "profitMargin": 264856,
+      "price": 972397,
+      "profitMargin": 277828,
       "category": "abana",
       "stock": 50,
       "imageUrl": "https://oss-cf.cjdropshipping.com/product/2026/10/26/09/223dfb34-8acd-47ba-8866-931f796df579.jpg",
@@ -14347,7 +14424,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.552Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14356,7 +14433,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260909531637400",
@@ -14367,10 +14444,10 @@
       "cjProductId": "cj-2610260909531637400",
       "cjProductSku": "CJYD3517907",
       "cjOriginalCostUsd": 0.72,
-      "costPrice": 1037,
+      "costPrice": 1033,
       "costOverriddenByAdmin": false,
-      "price": 1431,
-      "profitMargin": 394,
+      "price": 1446,
+      "profitMargin": 413,
       "category": "impano",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/323eb65f-b309-411e-b5e1-e88ed17bbc80.jpg",
@@ -14398,7 +14475,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.553Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14407,7 +14484,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260910171634400",
@@ -14418,10 +14495,10 @@
       "cjProductId": "cj-2610260910171634400",
       "cjProductSku": "CJBQ3517903",
       "cjOriginalCostUsd": 1.84,
-      "costPrice": 2650,
+      "costPrice": 2640,
       "costOverriddenByAdmin": false,
-      "price": 3657,
-      "profitMargin": 1007,
+      "price": 3696,
+      "profitMargin": 1056,
       "category": "fashion",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/0db764a7-722f-44fc-b71f-966fa49f6ef0.jpg",
@@ -14449,7 +14526,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.553Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14458,7 +14535,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260910191606400",
@@ -14469,10 +14546,10 @@
       "cjProductId": "cj-2610260910191606400",
       "cjProductSku": "CJYD3517860",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "amatara",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/04d644b5-3a7c-4767-b6d8-0ee5bbf9cbb8.jpg",
@@ -14500,7 +14577,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.553Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14509,7 +14586,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260911571609800",
@@ -14520,10 +14597,10 @@
       "cjProductId": "cj-2610260911571609800",
       "cjProductSku": "CJMR3517911",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "abana",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/9fbc1fd4-b9b4-40ab-9fbd-ce477aebed2d.jpg",
@@ -14551,7 +14628,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.553Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14560,7 +14637,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260917171614600",
@@ -14571,10 +14648,10 @@
       "cjProductId": "cj-2610260917171614600",
       "cjProductSku": "CJYD3517896",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "impano",
       "stock": 50,
       "imageUrl": "https://oss-cf.cjdropshipping.com/product/2026/10/26/09/9771db21-0fe7-40eb-86f4-32e477876c9b_fine.jpeg",
@@ -14602,7 +14679,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.553Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14611,7 +14688,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-2610260955321611000",
@@ -14622,10 +14699,10 @@
       "cjProductId": "cj-2610260955321611000",
       "cjProductSku": "CJYD3518007",
       "cjOriginalCostUsd": 10,
-      "costPrice": 14400,
+      "costPrice": 14350,
       "costOverriddenByAdmin": false,
-      "price": 19872,
-      "profitMargin": 5472,
+      "price": 20090,
+      "profitMargin": 5740,
       "category": "impano",
       "stock": 50,
       "imageUrl": "https://cf.cjdropshipping.com/quick/product/6984d159-10a5-4f33-ae27-ee900857899f.jpg",
@@ -14653,7 +14730,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T06:27:02.553Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T10:41:08.628Z",
       "history": [
         {
@@ -14662,7 +14739,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:06.672Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-1793011265930-a47eb0",
@@ -14706,12 +14783,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:41:06.225Z",
+      "updatedAt": "2026-10-27T09:51:49.318Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793011262585-9da5f7",
@@ -14759,7 +14837,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:41:02.740Z"
+      "updatedAt": "2026-10-27T09:51:49.318Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793011261690-6923f2",
@@ -14799,7 +14878,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.319Z"
     },
     {
       "id": "prod-1793011261549-1da6ca",
@@ -14845,7 +14926,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:41:10.331Z"
+      "updatedAt": "2026-10-27T09:51:49.319Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010852788-7d17e4",
@@ -14891,7 +14973,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.319Z"
     },
     {
       "id": "prod-1793010850714-f80414",
@@ -14935,12 +15019,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:34:10.996Z",
+      "updatedAt": "2026-10-27T09:51:49.319Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010847645-b505dd",
@@ -14988,7 +15073,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:34:07.776Z"
+      "updatedAt": "2026-10-27T09:51:49.319Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010846816-b00738",
@@ -15028,7 +15114,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.319Z"
     },
     {
       "id": "prod-1793010846690-98a5bf",
@@ -15074,7 +15162,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:34:13.182Z"
+      "updatedAt": "2026-10-27T09:51:49.319Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010828421-b9199e",
@@ -15120,7 +15209,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.319Z"
     },
     {
       "id": "prod-1793010826161-beae20",
@@ -15164,12 +15255,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:33:46.432Z",
+      "updatedAt": "2026-10-27T09:51:49.319Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010823057-358484",
@@ -15217,7 +15309,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:33:43.196Z"
+      "updatedAt": "2026-10-27T09:51:49.319Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010822220-37f85c",
@@ -15257,7 +15350,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.319Z"
     },
     {
       "id": "prod-1793010822079-b445ab",
@@ -15303,7 +15398,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:33:48.829Z"
+      "updatedAt": "2026-10-27T09:51:49.319Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010678716-c3b6de",
@@ -15349,7 +15445,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.319Z"
     },
     {
       "id": "prod-1793010677483-477085",
@@ -15393,12 +15491,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:31:17.735Z",
+      "updatedAt": "2026-10-27T09:51:49.319Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010674493-daa78d",
@@ -15446,7 +15545,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:31:14.623Z"
+      "updatedAt": "2026-10-27T09:51:49.319Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793010673651-77ecb7",
@@ -15486,7 +15586,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793010673513-3c2d4b",
@@ -15532,7 +15634,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T10:31:19.117Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005926537-71ffde",
@@ -15578,7 +15681,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005925525-fd6938",
@@ -15622,12 +15727,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:12:05.741Z",
+      "updatedAt": "2026-10-27T09:51:49.320Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005923076-f0c202",
@@ -15675,7 +15781,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:12:03.183Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005922428-d3503b",
@@ -15715,7 +15822,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005922322-09e81a",
@@ -15761,7 +15870,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:12:06.844Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005458381-a4be81",
@@ -15807,7 +15917,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005457383-2d98f2",
@@ -15851,12 +15963,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:04:17.595Z",
+      "updatedAt": "2026-10-27T09:51:49.320Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005454937-4d04cc",
@@ -15904,7 +16017,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:04:15.043Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005454276-194344",
@@ -15944,7 +16058,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005454171-95d686",
@@ -15990,7 +16106,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:04:18.707Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005447770-ea70c2",
@@ -16036,7 +16153,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005446784-f7f7db",
@@ -16080,12 +16199,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:04:07.007Z",
+      "updatedAt": "2026-10-27T09:51:49.320Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005444306-3b0939",
@@ -16133,7 +16253,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:04:04.406Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005443644-11182d",
@@ -16173,7 +16294,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005443541-0930d7",
@@ -16219,7 +16342,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:04:08.078Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005425978-e07e6f",
@@ -16265,7 +16389,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005424999-b56345",
@@ -16309,12 +16435,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:03:45.199Z",
+      "updatedAt": "2026-10-27T09:51:49.320Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005422599-7052dd",
@@ -16362,7 +16489,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:03:42.699Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005421920-c8c9db",
@@ -16402,7 +16530,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-1793005421799-fbde23",
@@ -16448,7 +16578,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:03:46.190Z"
+      "updatedAt": "2026-10-27T09:51:49.320Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005341271-48d5eb",
@@ -16494,7 +16625,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.320Z"
     },
     {
       "id": "prod-cj-cj-hair-trimmer-grooming-kit-11",
@@ -16536,7 +16669,7 @@
       "unit": "Set",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.503Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -16725,7 +16858,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.413Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-magnetic-wireless-fast-charger-10",
@@ -16736,9 +16869,9 @@
       "cjProductId": "cj-magnetic-wireless-fast-charger-10",
       "cjProductSku": "CJ-ELEC-MAG-10",
       "cjOriginalCostUsd": 13.8,
-      "costPrice": 19596,
+      "costPrice": 19803,
       "costOverriddenByAdmin": false,
-      "price": 26455,
+      "price": 27724,
       "profitMargin": 7921,
       "category": "Electronics & TV",
       "stock": 50,
@@ -16767,7 +16900,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.503Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -16846,7 +16979,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.413Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-cj-cj-4k-wifi-action-camera-09",
@@ -16857,9 +16990,9 @@
       "cjProductId": "cj-4k-wifi-action-camera-09",
       "cjProductSku": "CJ-CAM-ACT-09",
       "cjOriginalCostUsd": 28.5,
-      "costPrice": 40470,
+      "costPrice": 40898,
       "costOverriddenByAdmin": false,
-      "price": 54635,
+      "price": 57257,
       "profitMargin": 16359,
       "category": "Electronics & TV",
       "stock": 50,
@@ -16889,7 +17022,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.502Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.666Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -16968,7 +17101,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.413Z"
+      "updatedAt": "2026-10-27T09:51:49.666Z"
     },
     {
       "id": "prod-1793005340213-808bb0",
@@ -17012,12 +17145,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:02:20.428Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005337766-62ee30",
@@ -17065,7 +17199,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:02:17.871Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793005337097-13b466",
@@ -17105,7 +17240,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793005336987-d47167",
@@ -17151,7 +17288,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T09:02:21.528Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793003878590-c370ef",
@@ -17197,7 +17335,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793003877565-66c6c0",
@@ -17241,12 +17381,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T08:37:57.774Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793003874968-464db0",
@@ -17294,7 +17435,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T08:37:55.079Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793003874300-38b7d7",
@@ -17334,7 +17476,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793003874193-c364ba",
@@ -17380,7 +17524,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T08:37:58.836Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793002920408-8ca30c",
@@ -17426,7 +17571,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793002919219-db72c9",
@@ -17470,12 +17617,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T08:21:59.435Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793002916391-3dbcab",
@@ -17523,7 +17671,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T08:21:56.496Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793002915555-77e409",
@@ -17563,7 +17712,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793002915419-e81ae3",
@@ -17612,7 +17763,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T08:21:55.683Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793000375092-82b09a",
@@ -17658,7 +17810,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793000373978-952edc",
@@ -17702,12 +17856,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:39:34.167Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793000371502-8f2e6c",
@@ -17755,7 +17910,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:39:31.607Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793000370785-5be99b",
@@ -17795,7 +17951,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793000370676-d10444",
@@ -17844,7 +18002,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:39:30.898Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793000328591-239642",
@@ -17890,7 +18049,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793000327475-b8315b",
@@ -17934,12 +18095,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:38:47.680Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793000325108-9a4e3f",
@@ -17987,7 +18149,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:38:45.208Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1793000324410-6a7e00",
@@ -18027,7 +18190,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1793000324309-232bf2",
@@ -18076,7 +18241,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:38:44.527Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999736810-668d11",
@@ -18122,7 +18288,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999735766-864b3b",
@@ -18166,12 +18334,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:28:55.962Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999733449-60e6aa",
@@ -18219,7 +18388,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:28:53.543Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999732770-818968",
@@ -18259,7 +18429,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999732674-cc5d05",
@@ -18308,7 +18480,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:28:52.874Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999693246-201ff0",
@@ -18354,7 +18527,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999692117-47a434",
@@ -18398,12 +18573,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:28:12.327Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999689737-276774",
@@ -18451,7 +18627,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:28:09.833Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999689042-a448cd",
@@ -18491,7 +18668,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999688948-fb0d16",
@@ -18540,7 +18719,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:28:09.143Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999673392-9d2870",
@@ -18586,7 +18766,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999672449-0a0310",
@@ -18630,12 +18812,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:27:52.638Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999670253-6b1625",
@@ -18683,7 +18866,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:27:50.348Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999669664-33c24c",
@@ -18723,7 +18907,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999669568-7820ce",
@@ -18772,7 +18958,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:27:49.761Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999651193-02049b",
@@ -18818,7 +19005,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999650129-db51eb",
@@ -18862,12 +19051,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:27:30.310Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999647813-28c18d",
@@ -18915,7 +19105,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:27:27.907Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792999647141-5c69b9",
@@ -18955,7 +19146,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792999647050-a13f2e",
@@ -19004,7 +19197,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:27:27.240Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792998083011-0a3fe7",
@@ -19050,7 +19244,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792998082017-10adf8",
@@ -19094,12 +19290,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:01:22.216Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792998079762-7cb37a",
@@ -19147,7 +19344,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:01:19.853Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792998079087-5383b7",
@@ -19187,7 +19385,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792998078994-5ffb41",
@@ -19236,7 +19436,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T07:01:19.185Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997946422-9f8e16",
@@ -19282,7 +19483,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997945419-6a807c",
@@ -19326,12 +19529,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:59:05.606Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997943057-7c6165",
@@ -19379,7 +19583,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:59:03.167Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997942344-e1cfc2",
@@ -19419,7 +19624,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997942239-2ff2f2",
@@ -19468,7 +19675,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:59:02.460Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997680800-406c4d",
@@ -19514,7 +19722,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997679816-c95ee0",
@@ -19558,12 +19768,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:54:40.005Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997677551-daf137",
@@ -19611,7 +19822,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:54:37.640Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997676953-c86123",
@@ -19651,7 +19863,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997676859-7d899d",
@@ -19700,7 +19914,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:54:37.047Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997658911-37d41a",
@@ -19746,7 +19961,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997657954-8abd06",
@@ -19790,12 +20007,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:54:18.140Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997655678-47e348",
@@ -19843,7 +20061,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:54:15.772Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997655022-f587ea",
@@ -19883,7 +20102,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997654923-e0e7c5",
@@ -19932,7 +20153,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:54:15.117Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997639524-aeb377",
@@ -19978,7 +20200,9 @@
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
       "costPrice": 14500,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997638592-3c1a81",
@@ -20022,12 +20246,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:53:58.777Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997636379-508c5c",
@@ -20075,7 +20300,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:53:56.467Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997635770-b183f9",
@@ -20115,7 +20341,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.321Z"
     },
     {
       "id": "prod-1792997635676-89ef22",
@@ -20164,7 +20392,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:53:55.866Z"
+      "updatedAt": "2026-10-27T09:51:49.321Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997354101-86902b",
@@ -20208,12 +20437,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:49:14.276Z",
+      "updatedAt": "2026-10-27T09:51:49.321Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997351949-65fa26",
@@ -20261,7 +20491,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:49:12.038Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792997351326-18213c",
@@ -20301,7 +20532,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.322Z"
     },
     {
       "id": "prod-1792997351234-305660",
@@ -20350,7 +20583,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:49:11.416Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996661381-943220",
@@ -20394,12 +20628,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:37:41.566Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996659074-f9e257",
@@ -20447,7 +20682,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:37:39.216Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996658396-d8f3ea",
@@ -20487,7 +20723,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.322Z"
     },
     {
       "id": "prod-1792996658293-5cc0ce",
@@ -20536,7 +20774,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:37:38.490Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996595832-6dd209",
@@ -20580,12 +20819,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:36:36.016Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996592370-71f002",
@@ -20633,7 +20873,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:36:32.514Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996591519-5137fd",
@@ -20673,7 +20914,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.322Z"
     },
     {
       "id": "prod-1792996591426-a120cd",
@@ -20722,7 +20965,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:36:31.616Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996556035-5864f3",
@@ -20766,12 +21010,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:35:56.225Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996553432-8963b8",
@@ -20819,7 +21064,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:35:53.527Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996552710-1688ff",
@@ -20859,7 +21105,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.322Z"
     },
     {
       "id": "prod-1792996552595-222fd2",
@@ -20908,7 +21156,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:35:52.816Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-cj-cj-rechargeable-massage-gun-07",
@@ -20949,7 +21198,7 @@
       "unit": "Set",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.502Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -21108,7 +21357,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.416Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "reviewStatus": "Approved"
     },
     {
@@ -21120,9 +21369,9 @@
       "cjProductId": "cj-athletic-knit-sneakers-06",
       "cjProductSku": "CJ-FSH-SNK-06",
       "cjOriginalCostUsd": 19.5,
-      "costPrice": 27690,
+      "costPrice": 27983,
       "costOverriddenByAdmin": false,
-      "price": 37382,
+      "price": 39176,
       "profitMargin": 11193,
       "category": "Fashion & Apparel",
       "stock": 50,
@@ -21172,7 +21421,7 @@
       "unit": "Pair",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.502Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -21251,7 +21500,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.416Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
@@ -21267,9 +21516,9 @@
       "cjProductId": "cj-sonic-facial-cleansing-brush-05",
       "cjProductSku": "CJ-BTY-BRUSH-05",
       "cjOriginalCostUsd": 7.9,
-      "costPrice": 11218,
+      "costPrice": 11337,
       "costOverriddenByAdmin": false,
-      "price": 15144,
+      "price": 15872,
       "profitMargin": 4535,
       "category": "Beauty & Cosmetics",
       "stock": 50,
@@ -21308,7 +21557,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.502Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -21387,7 +21636,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.417Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "reviewStatus": "Approved"
     },
     {
@@ -21399,9 +21648,9 @@
       "cjProductId": "cj-anti-theft-laptop-backpack-04",
       "cjProductSku": "CJ-BAG-TRV-04",
       "cjOriginalCostUsd": 15.6,
-      "costPrice": 22152,
+      "costPrice": 22386,
       "costOverriddenByAdmin": false,
-      "price": 29905,
+      "price": 31340,
       "profitMargin": 8954,
       "category": "Bags & Luggage",
       "stock": 50,
@@ -21440,7 +21689,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.502Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -21519,7 +21768,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.417Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "reviewStatus": "Approved"
     },
     {
@@ -21531,9 +21780,9 @@
       "cjProductId": "cj-sport-fitness-smartwatch-03",
       "cjProductSku": "CJ-WCH-FIT-03",
       "cjOriginalCostUsd": 18.2,
-      "costPrice": 25844,
+      "costPrice": 26117,
       "costOverriddenByAdmin": false,
-      "price": 34889,
+      "price": 36564,
       "profitMargin": 10447,
       "category": "Watches & Jewelry",
       "stock": 50,
@@ -21572,7 +21821,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.502Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -21651,7 +21900,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.418Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "reviewStatus": "Approved"
     },
     {
@@ -21663,9 +21912,9 @@
       "cjProductId": "cj-smart-rgb-sunset-lamp-02",
       "cjProductSku": "CJ-LGT-SUNSET-02",
       "cjOriginalCostUsd": 12.5,
-      "costPrice": 17750,
+      "costPrice": 17938,
       "costOverriddenByAdmin": false,
-      "price": 23963,
+      "price": 25113,
       "profitMargin": 7175,
       "category": "Lighting & Gadgets",
       "stock": 50,
@@ -21694,7 +21943,7 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.502Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -21773,7 +22022,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.418Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "reviewStatus": "Approved"
     },
     {
@@ -21785,9 +22034,9 @@
       "cjProductId": "cj-tws-pro-earbuds-01",
       "cjProductSku": "CJ-ELEC-TWS-01",
       "cjOriginalCostUsd": 9.8,
-      "costPrice": 13916,
+      "costPrice": 14063,
       "costOverriddenByAdmin": false,
-      "price": 18787,
+      "price": 19688,
       "profitMargin": 5625,
       "category": "Electronics & TV",
       "stock": 50,
@@ -21827,7 +22076,7 @@
       "unit": "Pair",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:30.501Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-26T06:35:13.379Z",
       "history": [
         {
@@ -21906,7 +22155,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T09:36:32.418Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005006294819201.html",
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
@@ -21955,12 +22204,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:35:13.014Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996510615-3fa41e",
@@ -22008,7 +22258,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:35:10.698Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792996510301-6e6352",
@@ -22048,7 +22299,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.322Z"
     },
     {
       "id": "prod-1792996510214-2d1ae2",
@@ -22097,7 +22350,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-26T06:35:10.397Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760229517-83f758",
@@ -22141,12 +22395,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:57:09.806Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760226297-846285",
@@ -22194,7 +22449,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:57:06.383Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760225226-0679eb",
@@ -22234,7 +22490,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.322Z"
     },
     {
       "id": "prod-1792760225110-46b4c8",
@@ -22283,7 +22541,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:57:05.364Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760067861-f51fdb",
@@ -22327,12 +22586,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:54:28.034Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760065726-a182fe",
@@ -22380,7 +22640,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:54:25.848Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760065120-cb3f06",
@@ -22422,7 +22683,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.322Z"
     },
     {
       "id": "prod-1792759293828-4d9978",
@@ -22465,12 +22728,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:41:33.926Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792759292589-0c308c",
@@ -22517,7 +22781,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:41:32.635Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792759292186-03c931",
@@ -22565,7 +22830,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:41:32.238Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757938335-bc3a09",
@@ -22608,12 +22874,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:18:58.468Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757936627-4befb0",
@@ -22660,7 +22927,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:18:56.683Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757936139-3232a2",
@@ -22708,7 +22976,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T12:18:56.203Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792754405232-a85b9a",
@@ -22751,12 +23020,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T11:20:05.372Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792754403607-83998b",
@@ -22803,7 +23073,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T11:20:03.669Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792754403089-ae8562",
@@ -22851,7 +23122,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T11:20:03.151Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750994373-a179de",
@@ -22894,12 +23166,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:23:14.435Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750993469-db63c1",
@@ -22946,7 +23219,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:23:13.503Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750993180-3a94f6",
@@ -22994,7 +23268,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:23:13.210Z"
+      "updatedAt": "2026-10-27T09:51:49.322Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750976202-4c914c",
@@ -23037,12 +23312,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:22:56.255Z",
+      "updatedAt": "2026-10-27T09:51:49.322Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750975400-e77397",
@@ -23089,7 +23365,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:22:55.434Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750975156-f08659",
@@ -23137,7 +23414,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:22:55.187Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750120322-f5f165",
@@ -23180,12 +23458,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:08:40.375Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750119630-189606",
@@ -23232,7 +23511,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:08:39.658Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750119382-78f802",
@@ -23280,7 +23560,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:08:39.433Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750100857-1d492e",
@@ -23323,12 +23604,13 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:08:20.917Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750100191-9565d3",
@@ -23375,7 +23657,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:08:20.219Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750099975-37204c",
@@ -23423,7 +23706,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:08:20.000Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750074416-a9fd23",
@@ -23470,7 +23754,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:07:54.447Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750074180-4f4695",
@@ -23518,7 +23803,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T10:07:54.206Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792749561336-0b0adc",
@@ -23565,7 +23851,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T09:59:21.362Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792749561127-00cc8d",
@@ -23613,7 +23900,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-23T09:59:21.153Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792662801918-bd2bf7",
@@ -23660,7 +23948,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-22T09:53:21.931Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792662801775-2024bd",
@@ -23699,7 +23988,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.323Z"
     },
     {
       "id": "prod-1792662459561-49b472",
@@ -23746,7 +24037,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-22T09:47:39.573Z"
+      "updatedAt": "2026-10-27T09:51:49.323Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792662459436-4aeedf",
@@ -23785,7 +24077,9 @@
           "action": "Created",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.323Z"
     },
     {
       "id": "prod-1792505244812-91dl",
@@ -23809,7 +24103,7 @@
       "isNewArrival": true,
       "isBestSeller": true,
       "createdAt": "2026-10-20T14:07:24.812Z",
-      "updatedAt": "2026-10-27T09:36:32.420Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.420Z",
@@ -23881,7 +24175,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "name": "Satin Party Dress V Neck Backless Mini Sleeveless Summer Party Dress",
@@ -23901,7 +24196,7 @@
       "isNewArrival": false,
       "isBestSeller": false,
       "id": "prod-1792505676734-0efk",
-      "updatedAt": "2026-10-27T09:36:32.420Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.420Z",
@@ -23973,7 +24268,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792506632410-ov3q",
@@ -23997,7 +24293,7 @@
       "isNewArrival": false,
       "isBestSeller": false,
       "createdAt": "2026-10-20T14:30:32.410Z",
-      "updatedAt": "2026-10-27T09:36:32.421Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.421Z",
@@ -24069,7 +24365,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792672044939-lnt3",
@@ -24095,14 +24392,15 @@
       "isNewArrival": false,
       "isBestSeller": false,
       "createdAt": "2026-10-22T12:27:24.939Z",
-      "updatedAt": "2026-10-26T11:16:17.491Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.491Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792672328881-780m",
@@ -24128,14 +24426,15 @@
       "isNewArrival": false,
       "isBestSeller": false,
       "createdAt": "2026-10-22T12:32:08.881Z",
-      "updatedAt": "2026-10-26T11:16:17.492Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.492Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792672457864-6vun",
@@ -24161,14 +24460,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-22T12:34:17.864Z",
-      "updatedAt": "2026-10-26T11:16:17.492Z",
+      "updatedAt": "2026-10-27T09:51:49.323Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.492Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "name": "art",
@@ -24197,7 +24497,9 @@
           ]
         }
       ],
-      "id": "prod-1792742102013-qh9z"
+      "id": "prod-1792742102013-qh9z",
+      "reviewStatus": "Approved",
+      "updatedAt": "2026-10-27T09:51:49.323Z"
     },
     {
       "name": "304 316 High-Quality Stainless Steel Cutting Board Durable Hygienic Versatile Kitchen Tool for Food Preparation",
@@ -24218,7 +24520,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "id": "prod-1792748827186-6xbs",
-      "updatedAt": "2026-10-27T09:36:32.422Z",
+      "updatedAt": "2026-10-27T09:51:49.324Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.422Z",
@@ -24360,7 +24662,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792748827800-01y5",
@@ -24384,7 +24687,8 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T09:47:07.800Z",
-      "updatedAt": "2026-10-23T09:47:07.800Z"
+      "updatedAt": "2026-10-27T09:51:49.324Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792749188181-vm23",
@@ -24408,7 +24712,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T09:53:08.181Z",
-      "updatedAt": "2026-10-27T09:36:32.422Z",
+      "updatedAt": "2026-10-27T09:51:49.324Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.422Z",
@@ -24480,7 +24784,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792749681912-h9du",
@@ -24504,7 +24809,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:01:21.912Z",
-      "updatedAt": "2026-10-27T09:36:32.422Z",
+      "updatedAt": "2026-10-27T09:51:49.325Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.422Z",
@@ -24576,7 +24881,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792750082013-uqvc",
@@ -24600,7 +24906,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:08:02.013Z",
-      "updatedAt": "2026-10-27T09:36:32.423Z",
+      "updatedAt": "2026-10-27T09:51:49.325Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.423Z",
@@ -24672,7 +24978,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "name": "2026 Bicep Loop Bracelet Custom Arm Belt Wristband Watch Band Nylon Strap for Google Fitbit Air Charge 6 Versa Sense 2 4 Ace",
@@ -24682,7 +24989,7 @@
       "discountPercent": 5,
       "discountPrice": 4750,
       "category": "Beauty & Personal Care",
-      "stock": 0,
+      "stock": 45,
       "imageUrl": "data:image/avif;base64,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",
       "images": [
         "data:image/avif;base64,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"
@@ -24695,14 +25002,15 @@
       "isNewArrival": false,
       "isBestSeller": true,
       "id": "prod-1792750159641-qh72",
-      "updatedAt": "2026-10-26T11:16:17.495Z",
+      "updatedAt": "2026-10-27T09:51:49.325Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.495Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "name": "Smart Adjustable Electric Negative Pressure Suction Massage Device, Multifunctional Vacuum Cupping Shaped Contact Massage Tool",
@@ -24725,14 +25033,15 @@
       "isNewArrival": true,
       "isBestSeller": true,
       "id": "prod-1792751412344-kdll",
-      "updatedAt": "2026-10-26T11:16:17.495Z",
+      "updatedAt": "2026-10-27T09:51:49.325Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.495Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792751591576-yfjw",
@@ -24756,7 +25065,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:33:11.576Z",
-      "updatedAt": "2026-10-27T09:36:32.424Z",
+      "updatedAt": "2026-10-27T09:51:49.326Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.424Z",
@@ -24828,7 +25137,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792751971687-46q6",
@@ -24852,7 +25162,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:39:31.687Z",
-      "updatedAt": "2026-10-27T09:36:32.424Z",
+      "updatedAt": "2026-10-27T09:51:49.326Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.424Z",
@@ -24924,7 +25234,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792752095932-zlim",
@@ -24950,14 +25261,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:41:35.932Z",
-      "updatedAt": "2026-10-26T11:16:17.495Z",
+      "updatedAt": "2026-10-27T09:51:49.326Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.495Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792752293413-a4h4",
@@ -24983,14 +25295,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:44:53.413Z",
-      "updatedAt": "2026-10-26T11:16:17.495Z",
+      "updatedAt": "2026-10-27T09:51:49.326Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.495Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792752669364-xmfu",
@@ -25016,14 +25329,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:51:09.364Z",
-      "updatedAt": "2026-10-26T11:16:17.495Z",
+      "updatedAt": "2026-10-27T09:51:49.326Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.495Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792752970154-ythm",
@@ -25049,7 +25363,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:56:10.154Z",
-      "updatedAt": "2026-10-27T09:36:32.425Z",
+      "updatedAt": "2026-10-27T09:51:49.326Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.425Z",
@@ -25121,7 +25435,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "name": "SMALLRIG-VK-50 Vlogging Kit for iPhone Content Creator Kit with LED Light Phone Holder Microphone Tripod Phone Mount",
@@ -25144,14 +25459,15 @@
       "isNewArrival": true,
       "isBestSeller": true,
       "id": "prod-1792752999013-80bi",
-      "updatedAt": "2026-10-26T11:16:17.496Z",
+      "updatedAt": "2026-10-27T09:51:49.330Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.496Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753052681-nl75",
@@ -25177,14 +25493,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T10:57:32.681Z",
-      "updatedAt": "2026-10-26T11:16:17.496Z",
+      "updatedAt": "2026-10-27T09:51:49.331Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.496Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753283292-8w0e",
@@ -25208,7 +25525,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:01:23.292Z",
-      "updatedAt": "2026-10-27T09:36:32.430Z",
+      "updatedAt": "2026-10-27T09:51:49.331Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.430Z",
@@ -25280,7 +25597,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753318574-0cmv",
@@ -25306,14 +25624,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:01:58.574Z",
-      "updatedAt": "2026-10-26T11:16:17.496Z",
+      "updatedAt": "2026-10-27T09:51:49.332Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.496Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753378995-djth",
@@ -25337,7 +25656,7 @@
       "isNewArrival": true,
       "isBestSeller": true,
       "createdAt": "2026-10-23T11:02:58.995Z",
-      "updatedAt": "2026-10-27T09:36:32.431Z",
+      "updatedAt": "2026-10-27T09:51:49.332Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.431Z",
@@ -25409,7 +25728,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753492181-dhmt",
@@ -25435,7 +25755,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:04:52.181Z",
-      "updatedAt": "2026-10-26T11:16:17.496Z",
+      "updatedAt": "2026-10-27T09:51:49.332Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.496Z",
@@ -25447,7 +25767,8 @@
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753580174-j87o",
@@ -25471,7 +25792,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:06:20.174Z",
-      "updatedAt": "2026-10-27T09:36:32.432Z",
+      "updatedAt": "2026-10-27T09:51:49.332Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.432Z",
@@ -25543,7 +25864,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753699003-7zza",
@@ -25567,7 +25889,7 @@
       "isNewArrival": false,
       "isBestSeller": true,
       "createdAt": "2026-10-23T11:08:19.003Z",
-      "updatedAt": "2026-10-27T09:36:32.435Z",
+      "updatedAt": "2026-10-27T09:51:49.335Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.435Z",
@@ -25639,7 +25961,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753753379-iroj",
@@ -25665,14 +25988,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:09:13.379Z",
-      "updatedAt": "2026-10-26T11:16:17.496Z",
+      "updatedAt": "2026-10-27T09:51:49.335Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.496Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792753754189-pilj",
@@ -25698,7 +26022,8 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:09:14.189Z",
-      "updatedAt": "2026-10-23T11:09:14.189Z"
+      "updatedAt": "2026-10-27T09:51:49.335Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792754148556-e447",
@@ -25722,7 +26047,7 @@
       "isNewArrival": false,
       "isBestSeller": true,
       "createdAt": "2026-10-23T11:15:48.557Z",
-      "updatedAt": "2026-10-27T09:36:32.437Z",
+      "updatedAt": "2026-10-27T09:51:49.335Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.437Z",
@@ -25794,7 +26119,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792754419719-qzib",
@@ -25818,7 +26144,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:20:19.719Z",
-      "updatedAt": "2026-10-27T09:36:32.437Z",
+      "updatedAt": "2026-10-27T09:51:49.335Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.437Z",
@@ -25890,7 +26216,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792754946194-kkzr",
@@ -25914,7 +26241,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T11:29:06.194Z",
-      "updatedAt": "2026-10-27T09:36:32.437Z",
+      "updatedAt": "2026-10-27T09:51:49.335Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.437Z",
@@ -25991,7 +26318,8 @@
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757034998-bpfi",
@@ -26015,7 +26343,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:03:54.998Z",
-      "updatedAt": "2026-10-27T09:36:32.437Z",
+      "updatedAt": "2026-10-27T09:51:49.335Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.437Z",
@@ -26087,7 +26415,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757418285-tvct",
@@ -26111,7 +26440,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:10:18.285Z",
-      "updatedAt": "2026-10-27T09:36:32.442Z",
+      "updatedAt": "2026-10-27T09:51:49.339Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.442Z",
@@ -26183,7 +26512,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757450389-v1zh",
@@ -26209,7 +26539,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:10:50.389Z",
-      "updatedAt": "2026-10-26T11:16:17.498Z",
+      "updatedAt": "2026-10-27T09:51:49.343Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.498Z",
@@ -26221,7 +26551,8 @@
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757456484-pudo",
@@ -26247,12 +26578,13 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:10:56.484Z",
-      "updatedAt": "2026-10-23T12:10:56.484Z",
+      "updatedAt": "2026-10-27T09:51:49.343Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
       "costPrice": 19000,
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757589373-2uci",
@@ -26276,7 +26608,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:13:09.373Z",
-      "updatedAt": "2026-10-27T09:36:32.445Z",
+      "updatedAt": "2026-10-27T09:51:49.343Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.445Z",
@@ -26348,7 +26680,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792757779045-ohge",
@@ -26372,7 +26705,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:16:19.045Z",
-      "updatedAt": "2026-10-27T09:36:32.446Z",
+      "updatedAt": "2026-10-27T09:51:49.343Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.446Z",
@@ -26444,7 +26777,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792758445933-cbck",
@@ -26470,14 +26804,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:27:25.933Z",
-      "updatedAt": "2026-10-26T11:16:17.499Z",
+      "updatedAt": "2026-10-27T09:51:49.345Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.499Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792758602068-wxkp",
@@ -26501,7 +26836,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:30:02.068Z",
-      "updatedAt": "2026-10-27T09:36:32.448Z",
+      "updatedAt": "2026-10-27T09:51:49.345Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.448Z",
@@ -26573,7 +26908,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792758751764-9mz7",
@@ -26599,14 +26935,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:32:31.764Z",
-      "updatedAt": "2026-10-26T11:16:17.499Z",
+      "updatedAt": "2026-10-27T09:51:49.348Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.499Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792758793045-zbab",
@@ -26630,7 +26967,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:33:13.045Z",
-      "updatedAt": "2026-10-27T09:36:32.451Z",
+      "updatedAt": "2026-10-27T09:51:49.348Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.451Z",
@@ -26702,7 +27039,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792758971143-ua25",
@@ -26728,14 +27066,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:36:11.143Z",
-      "updatedAt": "2026-10-26T11:16:17.499Z",
+      "updatedAt": "2026-10-27T09:51:49.349Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.499Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792759224408-6hn0",
@@ -26761,14 +27100,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:40:24.408Z",
-      "updatedAt": "2026-10-26T11:16:17.499Z",
+      "updatedAt": "2026-10-27T09:51:49.349Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.499Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792759480760-nbtl",
@@ -26794,14 +27134,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:44:40.760Z",
-      "updatedAt": "2026-10-26T11:16:17.499Z",
+      "updatedAt": "2026-10-27T09:51:49.349Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.499Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "name": "2026 New Fashion Custom Anti-Theft Nylon Men's Chest Bags with USB Cross Body Sling Chest Bag for Men",
@@ -26823,14 +27164,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "id": "prod-1792759676434-2omg",
-      "updatedAt": "2026-10-26T11:16:17.499Z",
+      "updatedAt": "2026-10-27T09:51:49.349Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.499Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792759677973-dhdd",
@@ -26854,7 +27196,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:47:57.974Z",
-      "updatedAt": "2026-10-27T09:36:32.454Z",
+      "updatedAt": "2026-10-27T09:51:49.349Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.454Z",
@@ -26926,7 +27268,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792759889867-vpxu",
@@ -26952,14 +27295,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:51:29.868Z",
-      "updatedAt": "2026-10-26T11:16:17.500Z",
+      "updatedAt": "2026-10-27T09:51:49.349Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.500Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792759926086-kmkq",
@@ -26983,7 +27327,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:52:06.086Z",
-      "updatedAt": "2026-10-27T09:36:32.454Z",
+      "updatedAt": "2026-10-27T09:51:49.349Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.454Z",
@@ -27055,7 +27399,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760032672-scpn",
@@ -27081,14 +27426,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:53:52.672Z",
-      "updatedAt": "2026-10-26T11:16:17.500Z",
+      "updatedAt": "2026-10-27T09:51:49.351Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.500Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760096502-7ice",
@@ -27112,7 +27458,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:54:56.502Z",
-      "updatedAt": "2026-10-27T09:36:32.456Z",
+      "updatedAt": "2026-10-27T09:51:49.351Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.456Z",
@@ -27184,7 +27530,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760330243-5dcv",
@@ -27210,14 +27557,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T12:58:50.243Z",
-      "updatedAt": "2026-10-26T11:16:17.500Z",
+      "updatedAt": "2026-10-27T09:51:49.355Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.500Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760667200-3hzb",
@@ -27241,7 +27589,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T13:04:27.200Z",
-      "updatedAt": "2026-10-27T09:36:32.462Z",
+      "updatedAt": "2026-10-27T09:51:49.355Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.462Z",
@@ -27383,7 +27731,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760668330-e73s",
@@ -27407,7 +27756,8 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T13:04:28.330Z",
-      "updatedAt": "2026-10-23T13:04:28.330Z"
+      "updatedAt": "2026-10-27T09:51:49.356Z",
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760883731-j1yn",
@@ -27433,14 +27783,15 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T13:08:03.731Z",
-      "updatedAt": "2026-10-26T11:16:17.501Z",
+      "updatedAt": "2026-10-27T09:51:49.356Z",
       "history": [
         {
           "timestamp": "2026-10-26T11:16:17.501Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792760896668-f5p7",
@@ -27464,7 +27815,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T13:08:16.668Z",
-      "updatedAt": "2026-10-27T09:36:32.462Z",
+      "updatedAt": "2026-10-27T09:51:49.356Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.462Z",
@@ -27536,7 +27887,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-1792763702374-49hl",
@@ -27561,7 +27913,7 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "createdAt": "2026-10-23T13:55:02.374Z",
-      "updatedAt": "2026-10-27T09:36:32.462Z",
+      "updatedAt": "2026-10-27T09:51:49.356Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:32.462Z",
@@ -27633,7 +27985,8 @@
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "reviewStatus": "Approved"
     },
     {
       "id": "prod-cj-cj-portable-blender-juicer-08",
@@ -27686,9 +28039,9 @@
       ],
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:06.673Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-27T09:36:06.673Z",
-      "updatedAt": "2026-10-27T09:36:06.673Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:06.673Z",
@@ -27748,9 +28101,9 @@
       ],
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:06.673Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-27T09:36:06.673Z",
-      "updatedAt": "2026-10-27T09:36:06.673Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:06.673Z",
@@ -27800,9 +28153,9 @@
       "unit": "Box",
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:06.673Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-27T09:36:06.673Z",
-      "updatedAt": "2026-10-27T09:36:06.673Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:06.673Z",
@@ -27862,9 +28215,9 @@
       ],
       "rating": 5,
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-27T09:36:06.673Z",
+      "cjLastSyncAt": "2026-10-27T09:51:49.667Z",
       "createdAt": "2026-10-27T09:36:06.673Z",
-      "updatedAt": "2026-10-27T09:36:06.673Z",
+      "updatedAt": "2026-10-27T09:51:49.667Z",
       "history": [
         {
           "timestamp": "2026-10-27T09:36:06.673Z",
@@ -90901,6 +91254,46 @@
   ],
   "auditLogs": [
     {
+      "id": "aud-1793094709743-1782",
+      "timestamp": "2026-10-27T09:51:49.743Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "CJ_STOCK_PRICE_SYNC",
+      "details": "Synchronized stock and prices for 37 CJ dropshipping products (0 new auto-filled, 3 custom costs preserved).",
+      "entityType": "cjdropshipping",
+      "entityId": "inventory"
+    },
+    {
+      "id": "aud-1793094709595-1f00",
+      "timestamp": "2026-10-27T09:51:49.595Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "administrator",
+      "action": "CJ_DROPSHIPPING_SYNC",
+      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
+      "entityType": "cjdropshipping",
+      "entityId": "catalog"
+    },
+    {
+      "id": "aud-1793094709426-8a7a",
+      "timestamp": "2026-10-27T09:51:49.426Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ALL_PRODUCTS_MADE_READY",
+      "details": "Processed all 332 products: verified all are Available, Approved, stocked, priced, with 37 dropshipping items fully synchronized.",
+      "entityType": "products",
+      "entityId": "catalog"
+    },
+    {
+      "id": "aud-1793094709235-70c1",
+      "timestamp": "2026-10-27T09:51:49.235Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "administrator",
+      "action": "CJ_DROPSHIPPING_SYNC",
+      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
+      "entityType": "cjdropshipping",
+      "entityId": "catalog"
+    },
+    {
       "id": "aud-1793093793306-09ed",
       "timestamp": "2026-10-27T09:36:33.306Z",
       "adminName": "Ruth (System Owner)",
@@ -95651,46 +96044,6 @@
       "details": "Order #CRM-50538 updated to Cancelled (Paid)",
       "entityType": "order",
       "entityId": "ord-1793012338687-57a360"
-    },
-    {
-      "id": "aud-1793012338767-d6a0",
-      "timestamp": "2026-10-26T10:58:58.767Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ORDER_UPDATED",
-      "details": "Order #CRM-50538 updated to Confirmed (Paid)",
-      "entityType": "order",
-      "entityId": "ord-1793012338687-57a360"
-    },
-    {
-      "id": "aud-1793012338535-4e41",
-      "timestamp": "2026-10-26T10:58:58.535Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "MAINTENANCE_MODE_DISABLED",
-      "details": "Maintenance Mode was turned OFF by Ruth (System Owner). Public visitors can now access and browse marketplace normally.",
-      "entityType": "settings",
-      "entityId": "global"
-    },
-    {
-      "id": "aud-1793012338298-8f1e",
-      "timestamp": "2026-10-26T10:58:58.298Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "MAINTENANCE_MODE_ENABLED",
-      "details": "Maintenance Mode was turned ON by Ruth (System Owner). Public visitors now see \"We’ll Be Back Soon\" screen.",
-      "entityType": "settings",
-      "entityId": "global"
-    },
-    {
-      "id": "aud-1793012338153-8b0f",
-      "timestamp": "2026-10-26T10:58:58.153Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "SUPPLIER_PAYOUT_DISBURSED",
-      "details": "Disbursed supplier payout of 31,500 FRW to \"Inziza Sound Studio Lab\" (Ref: MOMO-PAY-776611)",
-      "entityType": "supplier_payout",
-      "entityId": "payout-1793012336878-ead3"
     }
   ],
   "customers": [
@@ -100147,7 +100500,7 @@
     "cjConfig": {
       "apiKey": "cj_live_secret_key_998877665544332211",
       "email": "supplier-ops@contactreachmedia.rw",
-      "autoUploadEnabled": false,
+      "autoUploadEnabled": true,
       "syncFrequency": "daily",
       "defaultMarkupPercent": 40,
       "usdToRwfRate": 1435,
@@ -100165,12 +100518,12 @@
         "uploadedCount": 0,
         "updatedCount": 13,
         "totalCjProducts": 13,
-        "timestamp": "2026-10-27T09:36:30.503Z",
+        "timestamp": "2026-10-27T09:51:49.526Z",
         "status": "success",
         "message": "Successfully synchronized 13 CJ dropshipping products (0 newly uploaded, 13 updated)."
       },
-      "lastSyncAt": "2026-10-27T09:36:30.503Z",
-      "requireAdminApproval": true
+      "lastSyncAt": "2026-10-27T09:51:49.526Z",
+      "requireAdminApproval": false
     },
     "driveBackupStatus": {
       "status": "idle",
@@ -102701,6 +103054,21 @@
           "lastLogin": "2026-10-27T09:36:29.032Z"
         },
         "expiresAt": 1795685789032
+      }
+    ],
+    [
+      "crm_admin_test_session",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-27T09:36:29.032Z"
+        },
+        "expiresAt": 1795686708389
       }
     ]
   ],

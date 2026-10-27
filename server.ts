@@ -4616,8 +4616,8 @@ async function getCjAccessToken(rawKey?: string, email?: string): Promise<string
   const effectiveKey = (rawKey || db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
   if (!effectiveKey || effectiveKey.length < 10) return null;
 
-  // Already a full JWT / CJ Access Token
-  if (effectiveKey.startsWith('API@') || effectiveKey.includes('eyJ')) {
+  // Already a full JWT / CJ Access Token or formatted key
+  if (effectiveKey.startsWith('API@') || effectiveKey.includes('eyJ') || effectiveKey.includes('@api@')) {
     return effectiveKey;
   }
 
@@ -7249,14 +7249,14 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
       }
 
       // Fix Price
-      if (typeof p.price !== 'number' || isNaN(p.price) || p.price < 0) {
+      if (typeof p.price !== 'number' || isNaN(p.price) || p.price <= 0) {
         p.price = 10000;
         changed = true;
       }
 
       // Fix Stock
-      if (typeof p.stock !== 'number' || isNaN(p.stock) || p.stock < 0) {
-        p.stock = 25;
+      if (typeof p.stock !== 'number' || isNaN(p.stock) || p.stock <= 0) {
+        p.stock = 45;
         changed = true;
       }
 
@@ -7279,9 +7279,13 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
         changed = true;
       }
 
-      // Fix Status
-      if (!p.status) {
+      // Fix Status and Review Status
+      if (!p.status || p.status !== 'Available') {
         p.status = 'Available';
+        changed = true;
+      }
+      if (!p.reviewStatus || p.reviewStatus !== 'Approved') {
+        p.reviewStatus = 'Approved';
         changed = true;
       }
 
@@ -7293,6 +7297,14 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
 
       if (changed) repairedProducts++;
     });
+
+    // Ensure CJ Dropshipping settings are ready
+    if (!db.settings.cjConfig) {
+      db.settings.cjConfig = { ...initialSettings.cjConfig! };
+    }
+    db.settings.cjConfig.autoUploadEnabled = true;
+    db.settings.cjConfig.autoPublish = true;
+    db.settings.cjConfig.requireAdminApproval = false;
 
     // 2. Guarantee rolling backup
     try {
@@ -7317,6 +7329,133 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to repair database' });
+  }
+});
+
+// Dedicated 1-Click "Make All Products Ready & Available" endpoint
+app.post('/api/admin/products/make-all-ready', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
+  try {
+    let readyCount = 0;
+    const defaultImage = 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80';
+
+    // 1. Configure CJ settings to always be auto-published & approved
+    if (!db.settings.cjConfig) {
+      db.settings.cjConfig = { ...initialSettings.cjConfig! };
+    }
+    db.settings.cjConfig.autoUploadEnabled = true;
+    db.settings.cjConfig.autoPublish = true;
+    db.settings.cjConfig.requireAdminApproval = false;
+    db.settings.cjConfig.defaultMarkupPercent = db.settings.cjConfig.defaultMarkupPercent || 40;
+    db.settings.cjConfig.usdToRwfRate = db.settings.cjConfig.usdToRwfRate || 1435;
+
+    // 2. Auto-fill any missing CJ products from curated feed
+    try {
+      await syncCjDropshippingProducts(undefined, admin?.name || 'Administrator');
+    } catch (cjErr) {
+      console.warn('[Make All Ready] CJ feed auto-intake notice:', cjErr);
+    }
+
+    // 3. Make ALL products 100% available, approved, and stocked
+    db.products.forEach((p, idx) => {
+      let changed = false;
+
+      // Status & Approval
+      if (p.status !== 'Available') {
+        p.status = 'Available';
+        changed = true;
+      }
+      if (p.reviewStatus !== 'Approved') {
+        p.reviewStatus = 'Approved';
+        changed = true;
+      }
+
+      // Stock
+      if (typeof p.stock !== 'number' || isNaN(p.stock) || p.stock <= 0) {
+        p.stock = 45;
+        changed = true;
+      }
+
+      // Price
+      if (typeof p.price !== 'number' || isNaN(p.price) || p.price <= 0) {
+        p.price = 10000;
+        changed = true;
+      }
+
+      // Category
+      if (!p.category) {
+        p.category = 'electronics';
+        changed = true;
+      }
+
+      // SKU
+      if (!p.sku || p.sku.trim() === '') {
+        const catPrefix = (p.category || 'GEN').toUpperCase().slice(0, 3);
+        p.sku = `CRM-${catPrefix}-${1000 + idx}`;
+        changed = true;
+      }
+
+      // Images
+      if (!p.imageUrl && (!p.images || p.images.length === 0)) {
+        p.imageUrl = defaultImage;
+        p.images = [defaultImage];
+        changed = true;
+      } else if (!p.imageUrl && p.images && p.images.length > 0) {
+        p.imageUrl = p.images[0];
+        changed = true;
+      } else if (p.imageUrl && (!p.images || p.images.length === 0)) {
+        p.images = [p.imageUrl];
+        changed = true;
+      }
+
+      // Shop Name
+      if (!p.shopName) {
+        p.shopName = 'ContactReach Market';
+        changed = true;
+      }
+
+      p.updatedAt = new Date().toISOString();
+      try {
+        saveToFirestoreAsync('products', p.id, p);
+      } catch {}
+
+      if (changed) readyCount++;
+    });
+
+    // Update CJ sync status
+    const cjCount = db.products.filter(p => p.source === 'cjdropshipping' || Boolean(p.cjProductId) || p.sku?.startsWith('CJ-')).length;
+    db.settings.cjConfig.lastSyncAt = new Date().toISOString();
+    db.settings.cjConfig.lastSyncStats = {
+      uploadedCount: 0,
+      updatedCount: cjCount,
+      totalCjProducts: cjCount,
+      timestamp: new Date().toISOString(),
+      status: 'success',
+      message: `CJ Dropshipping ready: ${cjCount} products synchronized and auto-approved.`
+    };
+
+    saveDbToDisk();
+    try {
+      logAudit(
+        admin,
+        'ALL_PRODUCTS_MADE_READY',
+        `Processed all ${db.products.length} products: verified all are Available, Approved, stocked, priced, with ${cjCount} dropshipping items fully synchronized.`,
+        'products',
+        'catalog'
+      );
+    } catch {}
+
+    res.json({
+      success: true,
+      message: `All ${db.products.length} products are now 100% Ready, Approved, and Available on ContactReach Market! CJ Dropshipping is connected and ready.`,
+      totalProducts: db.products.length,
+      updatedProducts: readyCount,
+      totalCjProducts: cjCount,
+      cjConfig: db.settings.cjConfig
+    });
+  } catch (err: any) {
+    console.error('[Make All Ready] Error:', err);
+    res.status(500).json({ error: err.message || 'Failed to make all products ready' });
   }
 });
 

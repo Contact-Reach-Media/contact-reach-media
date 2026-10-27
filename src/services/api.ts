@@ -3054,6 +3054,25 @@ export const api = {
       throw new Error('Failed to repair database');
     }
     return parsed.json;
+  },
+
+  async adminMakeAllProductsReady(): Promise<{
+    success: boolean;
+    message: string;
+    totalProducts: number;
+    updatedProducts: number;
+    totalCjProducts: number;
+    cjConfig?: any;
+  }> {
+    const res = await fetch('/api/admin/products/make-all-ready', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!parsed.isJson || !parsed.json || !res.ok) {
+      throw new Error(parsed.json?.error || 'Failed to make all products ready');
+    }
+    return parsed.json;
   }
 };
 
