@@ -1383,7 +1383,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSyncingFromSheet(true);
     try {
       const token = getGoogleAccessToken();
-      const res = await api.syncPullFromGoogleSheet(undefined, undefined, token || undefined);
+      let res;
+      try {
+        res = await api.syncPullFromGoogleSheet(undefined, undefined, token || undefined);
+      } catch (firstErr: any) {
+        if (token) {
+          console.warn('[Google Sheet Sync] Retrying pull with public link access...');
+          res = await api.syncPullFromGoogleSheet(undefined, undefined, undefined);
+        } else {
+          throw firstErr;
+        }
+      }
       showToast(res.message, 'success');
       fetchAllData();
       onRefreshPublicData();
