@@ -2853,6 +2853,22 @@ export const api = {
     localProductsCount: number;
     firebaseConsoleUrl: string;
     message: string;
+    anyConnected?: boolean;
+    bothConnected?: boolean;
+    databases?: Array<{
+      id: string;
+      name: string;
+      projectId: string;
+      apiKeyMasked: string;
+      authDomain: string;
+      storageBucket: string;
+      measurementId?: string;
+      databaseExists: boolean;
+      firestoreAvailable: boolean;
+      productsCountInFirestore: number;
+      consoleUrl: string;
+      message: string;
+    }>;
   }> {
     const res = await fetch('/api/admin/firebase/status', {
       headers: getAuthHeaders()
@@ -2864,10 +2880,20 @@ export const api = {
     return parsed.json;
   },
 
-  async pullProductsFromFirebase(): Promise<{
+  async pullProductsFromFirebase(targetDb: 'both' | 'db1' | 'db2' = 'both'): Promise<{
     success: boolean;
     code?: string;
     message: string;
+    targetDb?: string;
+    resultsByDb?: Array<{
+      id: string;
+      projectId: string;
+      success: boolean;
+      code?: string;
+      count: number;
+      message: string;
+      consoleUrl?: string;
+    }>;
     importedCount?: number;
     updatedCount?: number;
     totalCount?: number;
@@ -2879,7 +2905,8 @@ export const api = {
     try {
       const res = await fetch('/api/admin/firebase/pull-products', {
         method: 'POST',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ targetDb })
       });
       const parsed = await safeParseResponse<any>(res);
       if (parsed.json && typeof parsed.json === 'object') {
@@ -2907,10 +2934,20 @@ export const api = {
     }
   },
 
-  async pushProductsToFirebase(): Promise<{
+  async pushProductsToFirebase(targetDb: 'both' | 'db1' | 'db2' = 'both'): Promise<{
     success: boolean;
     code?: string;
     message: string;
+    targetDb?: string;
+    resultsByDb?: Array<{
+      id: string;
+      projectId: string;
+      success: boolean;
+      code?: string;
+      pushedCount?: number;
+      message: string;
+      consoleUrl?: string;
+    }>;
     pushedCount?: number;
     totalProducts?: number;
     consoleUrl?: string;
@@ -2919,7 +2956,8 @@ export const api = {
     try {
       const res = await fetch('/api/admin/firebase/push-products', {
         method: 'POST',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ targetDb })
       });
       const parsed = await safeParseResponse<any>(res);
       if (parsed.json && typeof parsed.json === 'object') {
@@ -2945,6 +2983,61 @@ export const api = {
         consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
       };
     }
+  },
+
+  async getDatabaseDiagnostics(): Promise<{
+    status: 'ready' | 'needs_attention';
+    healthy: boolean;
+    healthScore: number;
+    summary: string;
+    errors: string[];
+    warnings: string[];
+    counts: {
+      products: number;
+      categories: number;
+      shops: number;
+      orders: number;
+      coupons: number;
+      messages: number;
+    };
+    localStorage: {
+      status: string;
+      fileSizeKb: number;
+      backupFileExists: boolean;
+    };
+    firestore: {
+      projectId: string;
+      status: string;
+      databaseCreated: boolean;
+      consoleUrl: string;
+    };
+  }> {
+    const res = await fetch('/api/admin/database/diagnostics', {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!parsed.isJson || !parsed.json) {
+      throw new Error('Failed to run database diagnostics');
+    }
+    return parsed.json;
+  },
+
+  async repairDatabase(): Promise<{
+    success: boolean;
+    message: string;
+    repairedProducts: number;
+    totalProducts: number;
+    status: string;
+  }> {
+    const res = await fetch('/api/admin/database/repair', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!parsed.isJson || !parsed.json) {
+      throw new Error('Failed to repair database');
+    }
+    return parsed.json;
   }
 };
 

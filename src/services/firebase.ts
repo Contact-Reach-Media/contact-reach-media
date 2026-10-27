@@ -40,15 +40,46 @@ import {
   CustomerUser
 } from '../types.ts';
 
-// Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+// Primary Firebase App (ceremonial-arbor-62w8r)
+export const primaryConfig = {
+  apiKey: firebaseConfig.apiKey || "AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M",
+  authDomain: firebaseConfig.authDomain || "ceremonial-arbor-62w8r.firebaseapp.com",
+  projectId: firebaseConfig.projectId || "ceremonial-arbor-62w8r",
+  storageBucket: firebaseConfig.storageBucket || "ceremonial-arbor-62w8r.firebasestorage.app",
+  messagingSenderId: firebaseConfig.messagingSenderId || "214287806863",
+  appId: firebaseConfig.appId || "1:214287806863:web:264915cb1a1106e86b9bfa"
+};
 
-// Initialize Firebase Analytics if supported in the current environment
+// Secondary Firebase App (contactreachmarket)
+export const secondaryConfig = (firebaseConfig as any).secondaryConfig || {
+  apiKey: "AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU",
+  authDomain: "contactreachmarket.firebaseapp.com",
+  projectId: "contactreachmarket",
+  storageBucket: "contactreachmarket.firebasestorage.app",
+  messagingSenderId: "462974891704",
+  appId: "1:462974891704:web:525256b60c2e4262b7264d",
+  measurementId: "G-B4XV4ZWX1D"
+};
+
+// Initialize both Firebase Apps simultaneously
+export const app1 = initializeApp(primaryConfig, 'app-ceremonial-arbor');
+export const app2 = initializeApp(secondaryConfig, 'app-contactreachmarket');
+export const app = app1; // Primary default alias
+
+// Initialize both Firestore Databases simultaneously
+export const db1 = getFirestore(app1);
+export const db2 = getFirestore(app2);
+export const db = db1; // Primary default alias
+
+export const auth = getAuth(app1);
+export const auth2 = getAuth(app2);
+
+// Initialize Firebase Analytics on contactreachmarket (measurementId: G-B4XV4ZWX1D)
 export let analytics: any = null;
 if (typeof window !== 'undefined') {
   isSupported().then((supported) => {
     if (supported) {
-      analytics = getAnalytics(app);
+      analytics = getAnalytics(app2);
     }
   }).catch(() => null);
 }
@@ -56,10 +87,6 @@ if (typeof window !== 'undefined') {
 // Suppress internal gRPC stream lifecycle noise
 setLogLevel('silent');
 
-export const db = (firebaseConfig as any).firestoreDatabaseId
-  ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
-  : getFirestore(app);
-export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 // Google Drive and Google Sheets scopes for reading, syncing, and backing up product catalog
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
@@ -132,23 +159,37 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-let firestoreConnected = false;
+let firestore1Connected = false;
+let firestore2Connected = false;
+export let firestoreConnected = false;
 
-// Validate Connection to Firestore safely via lightweight probe
-export async function testConnection(): Promise<boolean> {
+// Validate Connection to BOTH Firestores safely via lightweight probes
+export async function testConnection(): Promise<{ db1: boolean; db2: boolean; anyConnected: boolean }> {
   try {
-    const dbName = (firebaseConfig as any).firestoreDatabaseId || '(default)';
-    const probeUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${dbName}/documents?key=${firebaseConfig.apiKey}&pageSize=1`;
-    const res = await fetch(probeUrl, { signal: AbortSignal.timeout(3000) });
-    firestoreConnected = res.status !== 404 && (res.ok || res.status < 500);
-    return firestoreConnected;
+    const probe1 = fetch(`https://firestore.googleapis.com/v1/projects/${primaryConfig.projectId}/databases/(default)/documents?key=${primaryConfig.apiKey}&pageSize=1`, { signal: AbortSignal.timeout(3000) })
+      .then(res => res.status !== 404 && (res.ok || res.status < 500))
+      .catch(() => false);
+
+    const probe2 = fetch(`https://firestore.googleapis.com/v1/projects/${secondaryConfig.projectId}/databases/(default)/documents?key=${secondaryConfig.apiKey}&pageSize=1`, { signal: AbortSignal.timeout(3000) })
+      .then(res => res.status !== 404 && (res.ok || res.status < 500))
+      .catch(() => false);
+
+    const [c1, c2] = await Promise.all([probe1, probe2]);
+    firestore1Connected = c1;
+    firestore2Connected = c2;
+    firestoreConnected = c1 || c2;
+    return { db1: c1, db2: c2, anyConnected: c1 || c2 };
   } catch {
+    firestore1Connected = false;
+    firestore2Connected = false;
     firestoreConnected = false;
-    return false;
+    return { db1: false, db2: false, anyConnected: false };
   }
 }
 
-export const isFirestoreConnected = (): boolean => firestoreConnected;
+export const isFirestoreConnected = (): boolean => firestore1Connected || firestore2Connected;
+export const isFirestore1Connected = (): boolean => firestore1Connected;
+export const isFirestore2Connected = (): boolean => firestore2Connected;
 
 // Non-blocking initial probe
 testConnection().catch(() => {});
@@ -485,39 +526,57 @@ export function cleanForFirestore<T>(data: T): any {
   return JSON.parse(JSON.stringify(data));
 }
 
-// Products
+// Products: queries both databases and merges
 export async function getProductsFromFirestore(): Promise<Product[]> {
-  if (!firestoreConnected) return [];
-  const colPath = 'products';
-  try {
-    const snap = await getDocs(collection(db, colPath));
-    const items: Product[] = [];
-    snap.forEach(d => {
-      items.push({ ...(d.data() as Product), id: d.id });
-    });
-    return items;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, colPath);
+  const itemsMap = new Map<string, Product>();
+
+  if (firestore1Connected) {
+    try {
+      const snap1 = await getDocs(collection(db1, 'products'));
+      snap1.forEach(d => {
+        itemsMap.set(d.id, { ...(d.data() as Product), id: d.id });
+      });
+    } catch {}
   }
+
+  if (firestore2Connected) {
+    try {
+      const snap2 = await getDocs(collection(db2, 'products'));
+      snap2.forEach(d => {
+        if (!itemsMap.has(d.id)) {
+          itemsMap.set(d.id, { ...(d.data() as Product), id: d.id });
+        }
+      });
+    } catch {}
+  }
+
+  return Array.from(itemsMap.values());
 }
 
 export async function saveProductToFirestore(product: Product): Promise<void> {
-  if (!firestoreConnected) return;
-  const docPath = `products/${product.id}`;
-  try {
-    await setDoc(doc(db, 'products', product.id), cleanForFirestore(product));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, docPath);
+  const clean = cleanForFirestore(product);
+  const tasks: Promise<any>[] = [];
+  if (firestore1Connected) {
+    tasks.push(setDoc(doc(db1, 'products', product.id), clean).catch(() => {}));
+  }
+  if (firestore2Connected) {
+    tasks.push(setDoc(doc(db2, 'products', product.id), clean).catch(() => {}));
+  }
+  if (tasks.length > 0) {
+    await Promise.allSettled(tasks);
   }
 }
 
 export async function deleteProductFromFirestore(productId: string): Promise<void> {
-  if (!firestoreConnected) return;
-  const docPath = `products/${productId}`;
-  try {
-    await deleteDoc(doc(db, 'products', productId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, docPath);
+  const tasks: Promise<any>[] = [];
+  if (firestore1Connected) {
+    tasks.push(deleteDoc(doc(db1, 'products', productId)).catch(() => {}));
+  }
+  if (firestore2Connected) {
+    tasks.push(deleteDoc(doc(db2, 'products', productId)).catch(() => {}));
+  }
+  if (tasks.length > 0) {
+    await Promise.allSettled(tasks);
   }
 }
 

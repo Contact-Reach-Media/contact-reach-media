@@ -80710,6 +80710,22 @@
   ],
   "auditLogs": [
     {
+      "id": "aud-1793090923987-ee6b",
+      "timestamp": "2026-10-27T08:48:43.987Z",
+      "adminName": "Umuhuza Market (Platform Owner)",
+      "adminRole": "owner",
+      "action": "FIREBASE_GOOGLE_LOGIN",
+      "details": "Admin signed in with Google Firebase Auth (umuhuzamarket@gmail.com)"
+    },
+    {
+      "id": "aud-1793090318218-4077",
+      "timestamp": "2026-10-27T08:38:38.218Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "DATABASE_REPAIRED",
+      "details": "Ran full database self-healing audit: 0 products updated/repaired. All 305 records verified healthy."
+    },
+    {
       "id": "aud-1793082447747-7c67",
       "timestamp": "2026-10-27T06:27:27.747Z",
       "adminName": "Ruth (System Owner)",
@@ -85486,26 +85502,6 @@
       "adminRole": "owner",
       "action": "ADMIN_LOGIN",
       "details": "Admin signed in successfully from 127.0.0.1"
-    },
-    {
-      "id": "aud-1793010677735-41cd",
-      "timestamp": "2026-10-26T10:31:17.735Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_IMAGES_UPDATED",
-      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
-      "entityType": "product",
-      "entityId": "prod-1793010677483-477085"
-    },
-    {
-      "id": "aud-1793010677610-cfdf",
-      "timestamp": "2026-10-26T10:31:17.611Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_IMAGES_UPDATED",
-      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
-      "entityType": "product",
-      "entityId": "prod-1793010677483-477085"
     }
   ],
   "customers": [
@@ -86779,7 +86775,8 @@
       "email": "umuhuzamarket@gmail.com",
       "role": "owner",
       "active": true,
-      "phone": "0780022600"
+      "phone": "0780022600",
+      "lastLogin": "2026-10-27T08:48:43.904Z"
     },
     {
       "id": "adm-owner-thierry-250",
@@ -92011,6 +92008,36 @@
           "lastLogin": "2026-10-27T06:27:12.964Z"
         },
         "expiresAt": 1795674432964
+      }
+    ],
+    [
+      "crm_admin_test_12345678901234567890",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-27T06:27:12.964Z"
+        },
+        "expiresAt": 1795681367796
+      }
+    ],
+    [
+      "eab938074ad34973b9c14af3f65fa81a47e9cd3d525e6d5aabc4809a61f97dd6",
+      {
+        "user": {
+          "id": "adm-owner-umuhuza",
+          "name": "Umuhuza Market (Platform Owner)",
+          "email": "umuhuzamarket@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "0780022600",
+          "lastLogin": "2026-10-27T08:48:43.904Z"
+        },
+        "expiresAt": 1795682923904
       }
     ]
   ],

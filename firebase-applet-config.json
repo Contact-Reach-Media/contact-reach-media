@@ -4,5 +4,39 @@
   "apiKey": "AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M",
   "authDomain": "ceremonial-arbor-62w8r.firebaseapp.com",
   "storageBucket": "ceremonial-arbor-62w8r.firebasestorage.app",
-  "messagingSenderId": "214287806863"
+  "messagingSenderId": "214287806863",
+  "secondaryConfig": {
+    "projectId": "contactreachmarket",
+    "appId": "1:462974891704:web:525256b60c2e4262b7264d",
+    "apiKey": "AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU",
+    "authDomain": "contactreachmarket.firebaseapp.com",
+    "storageBucket": "contactreachmarket.firebasestorage.app",
+    "messagingSenderId": "462974891704",
+    "measurementId": "G-B4XV4ZWX1D"
+  },
+  "databases": [
+    {
+      "id": "db1",
+      "name": "Database 1 (Ceremonial Arbor)",
+      "projectId": "ceremonial-arbor-62w8r",
+      "appId": "1:214287806863:web:264915cb1a1106e86b9bfa",
+      "apiKey": "AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M",
+      "authDomain": "ceremonial-arbor-62w8r.firebaseapp.com",
+      "storageBucket": "ceremonial-arbor-62w8r.firebasestorage.app",
+      "messagingSenderId": "214287806863",
+      "consoleUrl": "https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore"
+    },
+    {
+      "id": "db2",
+      "name": "Database 2 (ContactReach Market)",
+      "projectId": "contactreachmarket",
+      "appId": "1:462974891704:web:525256b60c2e4262b7264d",
+      "apiKey": "AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU",
+      "authDomain": "contactreachmarket.firebaseapp.com",
+      "storageBucket": "contactreachmarket.firebasestorage.app",
+      "messagingSenderId": "462974891704",
+      "measurementId": "G-B4XV4ZWX1D",
+      "consoleUrl": "https://console.firebase.google.com/project/contactreachmarket/firestore"
+    }
+  ]
 }

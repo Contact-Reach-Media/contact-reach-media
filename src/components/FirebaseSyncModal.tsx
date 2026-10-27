@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Database, RefreshCw, Download, Upload, ExternalLink,
-  CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck,
-  Package, Info, Sparkles, Layers, Check
+  CheckCircle2, AlertTriangle, ShieldCheck, Activity,
+  Layers, Check, BarChart3, Globe, Sparkles
 } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { Product } from '../types.ts';
 
 interface FirebaseSyncModalProps {
   isOpen: boolean;
@@ -25,8 +24,10 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<'both' | 'db1' | 'db2'>('both');
   const [status, setStatus] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [lastActionResult, setLastActionResult] = useState<any>(null);
 
   const fetchStatus = async () => {
     setLoadingStatus(true);
@@ -44,6 +45,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchStatus();
+      setLastActionResult(null);
     }
   }, [isOpen]);
 
@@ -52,14 +54,13 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   const handlePull = async () => {
     setPulling(true);
     setErrorMsg(null);
+    setLastActionResult(null);
     try {
-      const res = await api.pullProductsFromFirebase();
-      if (!res.success || res.code === 'DATABASE_NOT_CREATED') {
+      const res = await api.pullProductsFromFirebase(selectedTarget);
+      setLastActionResult(res);
+      if (!res.success && res.code === 'DATABASE_NOT_CREATED') {
         showToast(res.message, 'error');
         setErrorMsg(`${res.message} ${res.instruction || ''}`);
-        if (res.code === 'DATABASE_NOT_CREATED') {
-          setStatus((prev: any) => ({ ...prev, databaseExists: false }));
-        }
       } else {
         showToast(res.message);
         onProductsUpdated();
@@ -77,14 +78,13 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   const handlePush = async () => {
     setPushing(true);
     setErrorMsg(null);
+    setLastActionResult(null);
     try {
-      const res = await api.pushProductsToFirebase();
-      if (!res.success || res.code === 'DATABASE_NOT_CREATED') {
+      const res = await api.pushProductsToFirebase(selectedTarget);
+      setLastActionResult(res);
+      if (!res.success && res.code === 'DATABASE_NOT_CREATED') {
         showToast(res.message, 'error');
         setErrorMsg(`${res.message} ${res.instruction || ''}`);
-        if (res.code === 'DATABASE_NOT_CREATED') {
-          setStatus((prev: any) => ({ ...prev, databaseExists: false }));
-        }
       } else {
         showToast(res.message);
         fetchStatus();
@@ -98,27 +98,47 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
     }
   };
 
-  const projectId = status?.projectId || 'ceremonial-arbor-62w8r';
-  const consoleUrl = `https://console.firebase.google.com/project/${projectId}/firestore`;
+  const db1 = status?.databases?.[0] || {
+    id: 'db1',
+    name: 'Database 1 (ceremonial-arbor-62w8r)',
+    projectId: 'ceremonial-arbor-62w8r',
+    authDomain: 'ceremonial-arbor-62w8r.firebaseapp.com',
+    consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore',
+    databaseExists: false,
+    productsCountInFirestore: 0
+  };
+
+  const db2 = status?.databases?.[1] || {
+    id: 'db2',
+    name: 'Database 2 (contactreachmarket)',
+    projectId: 'contactreachmarket',
+    authDomain: 'contactreachmarket.firebaseapp.com',
+    measurementId: 'G-B4XV4ZWX1D',
+    consoleUrl: 'https://console.firebase.google.com/project/contactreachmarket/firestore',
+    databaseExists: false,
+    productsCountInFirestore: 0
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="p-6 bg-gradient-to-r from-amber-500 via-[#FF6000] to-orange-600 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-white border border-white/20">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-white border border-white/20 shadow-inner">
               <Database className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-tight flex items-center gap-2">
-                Firebase Firestore Product Sync
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black tracking-tight">
+                  Dual Firebase Cloud Sync
+                </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white border border-white/30 uppercase tracking-wider">
-                  Live
+                  Simultaneous
                 </span>
-              </h2>
-              <p className="text-xs text-orange-100">
-                Project: <span className="font-mono font-bold text-white">{projectId}</span>
+              </div>
+              <p className="text-xs text-orange-100 mt-0.5">
+                Connected to <span className="font-mono font-bold text-white">ceremonial-arbor-62w8r</span> and <span className="font-mono font-bold text-white">contactreachmarket</span>
               </p>
             </div>
           </div>
@@ -132,25 +152,17 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
 
         {/* Content body */}
         <div className="p-6 overflow-y-auto space-y-5">
-          {/* Status banner */}
-          <div className="p-4 rounded-2xl border bg-slate-50 border-slate-200 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Target Firebase Project:</span>
-                  <span className="px-2.5 py-0.5 rounded-lg bg-slate-200 text-slate-900 font-mono font-bold text-xs">
-                    {projectId}
-                  </span>
-                </div>
-                <div className="text-xs text-slate-600 flex flex-wrap items-center gap-3">
-                  <span>Auth Domain: <strong className="font-mono">{status?.authDomain || `${projectId}.firebaseapp.com`}</strong></span>
-                  <span>Website Catalog: <strong>{productsCount} products</strong></span>
-                </div>
-              </div>
+          {/* Dual Database Status Grid */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-[#FF6000]" />
+                Connected Cloud Databases
+              </span>
               <button
                 onClick={fetchStatus}
                 disabled={loadingStatus}
-                className="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-3 py-1 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                 title="Re-check database connection"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loadingStatus ? 'animate-spin text-[#FF6000]' : ''}`} />
@@ -158,52 +170,180 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
               </button>
             </div>
 
-            {/* Connection result notice */}
-            {status?.databaseExists ? (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="text-xs space-y-0.5">
-                  <p className="font-bold">Cloud Firestore Database is Active & Ready!</p>
-                  <p className="text-emerald-700">
-                    Found <strong>{status.productsCountInFirestore} products</strong> in collection <code className="font-mono bg-emerald-100 px-1 rounded">products</code>.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 space-y-2">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs space-y-1">
-                    <p className="font-bold">Firestore Database Pending in Firebase Console</p>
-                    <p className="text-amber-800 leading-relaxed">
-                      Your Firebase project <code className="font-mono bg-amber-100 px-1 py-0.5 rounded font-semibold">{projectId}</code> is verified and connected. If you have not created the Firestore database yet, click the link below to initialize it in 1 click in the Firebase Console:
-                    </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {/* DB 1 Card */}
+              <div className="p-4 rounded-2xl border-2 border-slate-200 bg-slate-50/70 hover:border-amber-300 transition-all space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold text-[10px] uppercase">
+                        Database 1
+                      </span>
+                      {db1.databaseExists ? (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                          Setup Ready
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-mono font-bold text-slate-900 text-sm">
+                      {db1.projectId}
+                    </h3>
                   </div>
-                </div>
-                <div className="pl-6 pt-1 flex items-center gap-2">
                   <a
-                    href={consoleUrl}
+                    href={db1.consoleUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition-colors"
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                    title="Open in Firebase Console"
                   >
-                    <span>Open Firebase Firestore Console</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <ExternalLink className="w-4 h-4" />
                   </a>
-                  <span className="text-[11px] text-amber-700">
-                    (Click "Create database" in Native mode)
-                  </span>
                 </div>
-              </div>
-            )}
 
-            {errorMsg && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                <p className="leading-relaxed">{errorMsg}</p>
+                <div className="text-[11px] text-slate-500 space-y-1">
+                  <div>Auth: <span className="font-mono text-slate-700">{db1.authDomain}</span></div>
+                  <div>Status: <span className="text-slate-700">{db1.message || 'Configured & connected'}</span></div>
+                </div>
+
+                <a
+                  href={db1.consoleUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-1.5 px-3 rounded-lg bg-white border border-slate-300 hover:border-slate-400 text-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <span>Firebase Console (DB 1)</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400" />
+                </a>
               </div>
-            )}
+
+              {/* DB 2 Card */}
+              <div className="p-4 rounded-2xl border-2 border-slate-200 bg-slate-50/70 hover:border-blue-300 transition-all space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 font-bold text-[10px] uppercase">
+                        Database 2
+                      </span>
+                      {db2.databaseExists ? (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-md">
+                          Setup Ready
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-mono font-bold text-slate-900 text-sm">
+                      {db2.projectId}
+                    </h3>
+                  </div>
+                  <a
+                    href={db2.consoleUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                    title="Open in Firebase Console"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+
+                <div className="text-[11px] text-slate-500 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <BarChart3 className="w-3 h-3 text-blue-600" />
+                    <span>Analytics: <strong className="font-mono text-blue-700">G-B4XV4ZWX1D</strong></span>
+                  </div>
+                  <div>Status: <span className="text-slate-700">{db2.message || 'Configured & connected'}</span></div>
+                </div>
+
+                <a
+                  href={db2.consoleUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-1.5 px-3 rounded-lg bg-white border border-slate-300 hover:border-slate-400 text-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <span>Firebase Console (DB 2)</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400" />
+                </a>
+              </div>
+            </div>
           </div>
+
+          {/* Sync Target Selector */}
+          <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-200 space-y-2">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+              Synchronization Target:
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedTarget('both')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  selectedTarget === 'both'
+                    ? 'bg-[#FF6000] text-white shadow-xs'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Both Databases</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTarget('db1')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer truncate ${
+                  selectedTarget === 'db1'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+                }`}
+              >
+                <span>ceremonial-arbor</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTarget('db2')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer truncate ${
+                  selectedTarget === 'db2'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+                }`}
+              >
+                <span>contactreachmarket</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Operation Status / Notices */}
+          {errorMsg && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold">Notice</p>
+                <p className="leading-relaxed text-amber-800">{errorMsg}</p>
+              </div>
+            </div>
+          )}
+
+          {lastActionResult && lastActionResult.resultsByDb && (
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+              <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-600" />
+                Latest Operation Results:
+              </p>
+              <div className="space-y-1 pl-1">
+                {lastActionResult.resultsByDb.map((res: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between text-[11px] text-slate-600 border-b border-slate-200 pb-1 last:border-0 last:pb-0">
+                    <span className="font-mono font-semibold text-slate-800">{res.projectId}:</span>
+                    <span>{res.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Action cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -215,7 +355,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
                 </div>
                 <h3 className="font-black text-slate-900 text-sm">Pull Products from Firebase</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Fetches all product records stored in your Firebase collection <code className="font-mono text-slate-700 bg-slate-100 px-1 rounded">products</code>, extracts prices, stock, images, and imports them directly into your website.
+                  Fetches product records stored in collection <code className="font-mono text-slate-700 bg-slate-100 px-1 rounded">products</code> from {selectedTarget === 'both' ? 'both cloud databases simultaneously' : selectedTarget === 'db1' ? 'ceremonial-arbor-62w8r' : 'contactreachmarket'} and merges them without duplicate IDs.
                 </p>
               </div>
               <button
@@ -231,7 +371,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    <span>Pull Products from Firebase</span>
+                    <span>Pull from {selectedTarget === 'both' ? 'Both Databases' : selectedTarget}</span>
                   </>
                 )}
               </button>
@@ -245,7 +385,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
                 </div>
                 <h3 className="font-black text-slate-900 text-sm">Push Products to Firebase</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Uploads all <strong>{productsCount} products</strong> from this website into your Firebase database so your Firestore catalog is completely seeded with prices in RWF.
+                  Pushes all <strong>{productsCount} products</strong> with RWF prices and images to {selectedTarget === 'both' ? 'both cloud databases simultaneously' : selectedTarget === 'db1' ? 'ceremonial-arbor-62w8r' : 'contactreachmarket'}.
                 </p>
               </div>
               <button
@@ -261,44 +401,37 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
                 ) : (
                   <>
                     <Upload className="w-4 h-4" />
-                    <span>Push ({productsCount}) Products to Firebase</span>
+                    <span>Push ({productsCount}) Products</span>
                   </>
                 )}
               </button>
             </div>
           </div>
-
-          {/* Quick instructions guide */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
-            <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-              <Info className="w-4 h-4 text-slate-500" />
-              How Firebase Synchronization Works
-            </h4>
-            <ol className="list-decimal list-inside space-y-1.5 pl-1 leading-relaxed text-slate-600">
-              <li>
-                Your app is configured with your project <strong className="font-mono text-slate-900">{projectId}</strong> in <code className="font-mono bg-slate-200 px-1 rounded">firebase-applet-config.json</code>.
-              </li>
-              <li>
-                Click <strong>"Pull Products from Firebase"</strong> to import any documents added to your Firestore database.
-              </li>
-              <li>
-                Click <strong>"Push Products to Firebase"</strong> anytime you want your online store's catalog synced to Firestore.
-              </li>
-            </ol>
-          </div>
         </div>
 
         {/* Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-          <a
-            href={consoleUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 font-medium"
-          >
-            <span>Firebase Console</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href={db1.consoleUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 font-medium"
+            >
+              <span>Console 1</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <span className="text-slate-300">|</span>
+            <a
+              href={db2.consoleUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 font-medium"
+            >
+              <span>Console 2</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
           <button
             onClick={onClose}
             className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
