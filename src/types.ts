@@ -343,6 +343,14 @@ export interface CjDropshippingConfig {
   requireAdminApproval?: boolean; // Review queue before publishing to live store
   selectedCategories: string[];
   lastSyncAt?: string;
+  // Official CJdropshipping Real Connection State
+  isConnected?: boolean;
+  connectionStatus?: 'connected' | 'disconnected' | 'error' | 'untested';
+  connectedAt?: string;
+  lastConnectedEmail?: string;
+  lastError?: string;
+  accessTokenExpiry?: string;
+  openId?: number | string;
   lastSyncStats?: {
     uploadedCount: number;
     updatedCount: number;

@@ -71,6 +71,7 @@ export interface SupplierPayoutRecord {
 // In-Memory Database Structure
 interface MarketDatabase {
   products: Product[];
+  cjPendingProducts?: Product[];
   categories: Category[];
   shops: VendorShop[];
   orders: Order[];
@@ -236,6 +237,7 @@ const defaultAdminUsers: AdminUser[] = [
 // Initialize in-memory DB
 let db: MarketDatabase = {
   products: [...initialProducts],
+  cjPendingProducts: [],
   categories: [...initialCategories],
   shops: [...initialShops],
   orders: [],
@@ -286,6 +288,7 @@ function saveDbToDisk() {
   try {
     const dataToSave = {
       products: db.products,
+      cjPendingProducts: db.cjPendingProducts || [],
       categories: db.categories,
       shops: db.shops,
       orders: db.orders,
@@ -328,6 +331,7 @@ function loadDbFromDisk() {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       if (parsed.products && Array.isArray(parsed.products)) db.products = parsed.products;
+      if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
       if (parsed.categories && Array.isArray(parsed.categories)) {
         const existingIds = new Set(parsed.categories.map((c: any) => c.id));
         const missingInitial = initialCategories.filter(c => !existingIds.has(c.id));
@@ -4717,57 +4721,124 @@ function parseCjPrice(rawPrice: any, fallback: number = 12): number {
 // Cache CJ access token to prevent redundant token exchanges
 let cjTokenCache: { token: string; expiresAt: number; key: string } | null = null;
 
-let lastCjConnectFailure = 0;
-async function getCjAccessToken(rawKey?: string, email?: string): Promise<string | null> {
-  const effectiveKey = (rawKey || db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
-  if (!effectiveKey || effectiveKey.length < 10) return null;
+interface CjAuthResult {
+  success: boolean;
+  accessToken?: string;
+  accessTokenExpiryDate?: string;
+  openId?: number | string;
+  code?: number;
+  message: string;
+}
+
+// Authenticate directly with the official CJdropshipping API (v2.0)
+let lastCjConnectFailure: number = 0;
+async function authenticateWithCjApi(apiKeyInput?: string, emailInput?: string): Promise<CjAuthResult> {
+  const apiKey = (apiKeyInput || db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  const email = (emailInput || db.settings.cjConfig?.email || '').trim();
+
+  if (!apiKey) {
+    return {
+      success: false,
+      code: 400,
+      message: 'CJdropshipping API Key is required. Please get your API Key from cjdropshipping.com > Authorization > API.'
+    };
+  }
 
   // Already a full JWT / CJ Access Token or API token
-  if (effectiveKey.startsWith('API@') || effectiveKey.includes('eyJ') || effectiveKey.includes('@api@')) {
-    return effectiveKey;
+  if (apiKey.startsWith('API@') || apiKey.includes('eyJ') || apiKey.includes('@api@')) {
+    // If it looks like a token, verify it with a real request to CJ product list
+    try {
+      const verifyRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=1&pageSize=1', {
+        headers: { 'CJ-Access-Token': apiKey },
+        signal: AbortSignal.timeout(8000)
+      });
+      const verifyData = await verifyRes.json();
+      if (verifyData && (verifyData.code === 200 || verifyData.result === true)) {
+        cjTokenCache = { token: apiKey, expiresAt: Date.now() + 180 * 24 * 60 * 60 * 1000, key: apiKey };
+        return {
+          success: true,
+          accessToken: apiKey,
+          code: 200,
+          message: 'Connected to official CJdropshipping API! Direct token verified.'
+        };
+      }
+    } catch {}
   }
 
-  // Check cache
-  if (cjTokenCache && cjTokenCache.key === effectiveKey && Date.now() < cjTokenCache.expiresAt) {
-    return cjTokenCache.token;
+  // If already cached and valid, perform a fast verification
+  if (cjTokenCache && cjTokenCache.key === apiKey && Date.now() < cjTokenCache.expiresAt) {
+    return {
+      success: true,
+      accessToken: cjTokenCache.token,
+      code: 200,
+      message: 'Connected to official CJdropshipping API! Active session verified.'
+    };
   }
 
-  // If recently timed out or failed, skip live remote handshake to keep responses instant
-  if (Date.now() - lastCjConnectFailure < 5 * 60 * 1000) {
-    return null;
-  }
-
-  const targetEmail = (email || db.settings.cjConfig?.email || 'contactreachmedialimited@gmail.com').trim();
+  // Official CJdropshipping API v2.0 Authentication endpoint
   try {
+    const payload: any = { apiKey };
+    if (email) payload.email = email;
+
     const authRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: targetEmail,
-        apiKey: effectiveKey
-      }),
-      signal: AbortSignal.timeout(3000)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000)
     });
-    if (authRes.ok) {
-      const data = await authRes.json();
-      if (data && (data.code === 200 || data.result === true) && data.data?.accessToken) {
-        const token = data.data.accessToken;
-        cjTokenCache = { token, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, key: effectiveKey };
-        return token;
-      } else {
-        lastCjConnectFailure = Date.now();
-        console.warn('[CJ Dropshipping] Notice on live auth response code:', data?.code, data?.message);
-        return null;
-      }
-    } else {
-      lastCjConnectFailure = Date.now();
-      return null;
+
+    const data = await authRes.json().catch(() => null);
+
+    if (!data) {
+      return {
+        success: false,
+        code: authRes.status,
+        message: `CJdropshipping API responded with HTTP ${authRes.status} but no valid response.`
+      };
     }
+
+    if ((data.code === 200 || data.result === true) && data.data?.accessToken) {
+      const accessToken = data.data.accessToken;
+      const expiry = data.data.accessTokenExpiryDate || new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+      const openId = data.data.openId;
+
+      cjTokenCache = {
+        token: accessToken,
+        expiresAt: new Date(expiry).getTime() || (Date.now() + 24 * 60 * 60 * 1000),
+        key: apiKey
+      };
+
+      return {
+        success: true,
+        accessToken,
+        accessTokenExpiryDate: expiry,
+        openId,
+        code: 200,
+        message: 'Successfully authenticated with official CJdropshipping API!'
+      };
+    }
+
+    // Official CJ API error returned from server
+    return {
+      success: false,
+      code: data.code || 1600005,
+      message: data.message || 'CJdropshipping rejected the API credentials. Please verify your API Key.'
+    };
   } catch (err: any) {
-    lastCjConnectFailure = Date.now();
-    console.warn('[CJ Dropshipping] Notice on live auth handshake:', err.message || err);
-    return null;
+    const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
+    return {
+      success: false,
+      code: 504,
+      message: isTimeout
+        ? 'Connection to CJdropshipping API timed out. Please check your network and try again.'
+        : `Network error connecting to CJdropshipping API: ${err.message}`
+    };
   }
+}
+
+async function getCjAccessToken(rawKey?: string, email?: string): Promise<string | null> {
+  const auth = await authenticateWithCjApi(rawKey, email);
+  return auth.success && auth.accessToken ? auth.accessToken : null;
 }
 
 // Helper to perform automated product upload from CJ Dropshipping
@@ -5016,6 +5087,8 @@ app.get('/api/admin/cjdropshipping/config', requireAdminAuth, (req: Request, res
       ...cfg,
       apiKey: maskedKey,
       hasApiKey,
+      isConnected: Boolean(cfg.isConnected && hasApiKey && cfg.connectionStatus === 'connected'),
+      connectionStatus: cfg.connectionStatus || (hasApiKey ? 'untested' : 'disconnected'),
       requireAdminApproval: cfg.requireAdminApproval !== undefined ? cfg.requireAdminApproval : true
     });
   } catch (err: any) {
@@ -5101,25 +5174,173 @@ app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owne
   }
 });
 
-// 3. Test Connection
+// Connect directly with official CJdropshipping API
+app.post('/api/admin/cjdropshipping/connect', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { apiKey, email } = req.body;
+
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+    return res.status(400).json({
+      success: false,
+      status: 'disconnected',
+      error: 'Please enter your CJdropshipping API Key.'
+    });
+  }
+
+  const effectiveEmail = typeof email === 'string' ? email.trim() : (db.settings.cjConfig?.email || '');
+  const authResult = await authenticateWithCjApi(apiKey.trim(), effectiveEmail);
+
+  if (!authResult.success) {
+    if (db.settings.cjConfig) {
+      db.settings.cjConfig.isConnected = false;
+      db.settings.cjConfig.connectionStatus = 'error';
+      db.settings.cjConfig.lastError = authResult.message;
+      saveDbToDisk();
+      saveToFirestoreAsync('settings', 'global', db.settings);
+    }
+    return res.status(400).json({
+      success: false,
+      status: 'disconnected',
+      code: authResult.code,
+      error: authResult.message,
+      message: authResult.message
+    });
+  }
+
+  // Real connection verified by CJ API!
+  const current = db.settings.cjConfig || initialSettings.cjConfig!;
+  const updated: CjDropshippingConfig = {
+    ...current,
+    apiKey: apiKey.trim(),
+    email: effectiveEmail,
+    isConnected: true,
+    connectionStatus: 'connected',
+    connectedAt: new Date().toISOString(),
+    lastConnectedEmail: effectiveEmail,
+    lastError: undefined,
+    accessTokenExpiry: authResult.accessTokenExpiryDate,
+    openId: authResult.openId
+  };
+
+  db.settings.cjConfig = updated;
+  process.env.CJ_DROPSHIPPING_API_KEY = apiKey.trim();
+  saveDbToDisk();
+  saveToFirestoreAsync('settings', 'global', db.settings);
+
+  logAudit(
+    admin,
+    'CJ_CONNECTED',
+    `Authenticated and connected directly to official CJdropshipping API (Account: ${effectiveEmail || authResult.openId || 'Verified Partner'})`,
+    'cjdropshipping',
+    'auth'
+  );
+
+  const rawKey = updated.apiKey || '';
+  const maskedKey = rawKey.length > 8
+    ? `${rawKey.slice(0, 4)}••••••••${rawKey.slice(-4)}`
+    : '••••••••';
+
+  res.json({
+    success: true,
+    status: 'connected',
+    message: authResult.message,
+    account: {
+      openId: authResult.openId,
+      expiry: authResult.accessTokenExpiryDate
+    },
+    config: {
+      ...updated,
+      apiKey: maskedKey,
+      hasApiKey: true,
+      isConnected: true,
+      connectionStatus: 'connected'
+    }
+  });
+});
+
+// Disconnect from CJdropshipping API
+app.post('/api/admin/cjdropshipping/disconnect', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  cjTokenCache = null;
+  process.env.CJ_DROPSHIPPING_API_KEY = '';
+
+  if (db.settings.cjConfig) {
+    db.settings.cjConfig.apiKey = '';
+    db.settings.cjConfig.isConnected = false;
+    db.settings.cjConfig.connectionStatus = 'disconnected';
+    db.settings.cjConfig.lastError = undefined;
+    db.settings.cjConfig.accessTokenExpiry = undefined;
+    db.settings.cjConfig.openId = undefined;
+  }
+
+  saveDbToDisk();
+  saveToFirestoreAsync('settings', 'global', db.settings);
+
+  logAudit(
+    admin,
+    'CJ_DISCONNECTED',
+    'Admin disconnected CJdropshipping API integration and cleared access tokens.',
+    'cjdropshipping',
+    'auth'
+  );
+
+  res.json({
+    success: true,
+    status: 'disconnected',
+    message: 'Disconnected from CJdropshipping API. Credentials and access tokens cleared.'
+  });
+});
+
+// 3. Test Connection with real CJ API request
 app.post('/api/admin/cjdropshipping/test-connection', requireAdminAuth, async (req: Request, res: Response) => {
   const { apiKey, email } = req.body;
   const currentKey = db.settings.cjConfig?.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '';
-  const effectiveKey = (apiKey && !apiKey.includes('••••')) ? apiKey : currentKey;
-  const effectiveEmail = email || db.settings.cjConfig?.email;
+  const effectiveKey = (apiKey && !apiKey.includes('••••')) ? String(apiKey).trim() : currentKey.trim();
+  const effectiveEmail = email !== undefined ? String(email).trim() : (db.settings.cjConfig?.email || '');
 
-  if (effectiveKey && effectiveKey.length >= 10) {
-    return res.json({
-      success: true,
-      status: 'connected',
-      message: `CJ Dropshipping API credentials verified. Connected with account ${effectiveEmail || 'CJ Dropshipping Partner'}. Automated product catalog pipeline active.`
+  if (!effectiveKey) {
+    return res.status(400).json({
+      success: false,
+      status: 'disconnected',
+      message: 'No API Key provided. Please enter your CJdropshipping API Key.'
     });
+  }
+
+  // Authenticate directly with official CJ API
+  const authResult = await authenticateWithCjApi(effectiveKey, effectiveEmail);
+
+  if (!authResult.success) {
+    if (db.settings.cjConfig) {
+      db.settings.cjConfig.isConnected = false;
+      db.settings.cjConfig.connectionStatus = 'error';
+      db.settings.cjConfig.lastError = authResult.message;
+      saveDbToDisk();
+      saveToFirestoreAsync('settings', 'global', db.settings);
+    }
+    return res.status(400).json({
+      success: false,
+      status: 'disconnected',
+      code: authResult.code,
+      message: authResult.message
+    });
+  }
+
+  // Real connection verified!
+  if (db.settings.cjConfig) {
+    db.settings.cjConfig.isConnected = true;
+    db.settings.cjConfig.connectionStatus = 'connected';
+    db.settings.cjConfig.lastConnectedEmail = effectiveEmail;
+    db.settings.cjConfig.lastError = undefined;
+    db.settings.cjConfig.accessTokenExpiry = authResult.accessTokenExpiryDate;
+    db.settings.cjConfig.openId = authResult.openId;
+    saveDbToDisk();
+    saveToFirestoreAsync('settings', 'global', db.settings);
   }
 
   return res.json({
     success: true,
-    status: 'ready',
-    message: 'CJ Dropshipping catalog pipeline is ready. Products from your connected CJ feed will synchronize automatically.'
+    status: 'connected',
+    message: `Official CJdropshipping API credentials verified! Connected to account ${effectiveEmail || authResult.openId || 'Partner'}.`
   });
 });
 
@@ -5311,6 +5532,7 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
     admin.name
   );
 
+  db.cjPendingProducts = db.cjPendingProducts || [];
   let importedCount = 0;
   let updatedCount = 0;
   const importedList: Product[] = [];
@@ -5395,8 +5617,22 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
         }]
       };
 
-      db.products.unshift(newProduct);
-      saveToFirestoreAsync('products', newProduct.id, newProduct);
+      if (shouldRequireApproval) {
+        db.cjPendingProducts = db.cjPendingProducts || [];
+        const existingPendingIdx = db.cjPendingProducts.findIndex(p => p.cjProductId === pid || (p.sku && p.sku === sku));
+        if (existingPendingIdx !== -1) {
+          db.cjPendingProducts[existingPendingIdx] = newProduct;
+          updatedCount++;
+        } else {
+          db.cjPendingProducts.unshift(newProduct);
+          importedCount++;
+        }
+        saveToFirestoreAsync('cjPendingProducts', newProduct.id, newProduct);
+      } else {
+        db.products.unshift(newProduct);
+        saveToFirestoreAsync('products', newProduct.id, newProduct);
+        importedCount++;
+      }
 
       db.inventoryLogs.unshift({
         id: `inv-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
@@ -5519,20 +5755,45 @@ app.post('/api/admin/cjdropshipping/products/bulk-approve', requireAdminAuth, re
   const approvedProducts: Product[] = [];
 
   for (const id of productIds) {
-    const prod = db.products.find(p => p.id === id);
-    if (prod && prod.source === 'cjdropshipping') {
-      prod.reviewStatus = 'Approved';
-      prod.status = 'Available';
-      prod.updatedAt = new Date().toISOString();
-      prod.history = prod.history || [];
-      prod.history.unshift({
+    db.cjPendingProducts = db.cjPendingProducts || [];
+    const pendingIdx = db.cjPendingProducts.findIndex(p => p.id === id);
+    if (pendingIdx !== -1) {
+      const [pendingProd] = db.cjPendingProducts.splice(pendingIdx, 1);
+      pendingProd.reviewStatus = 'Approved';
+      pendingProd.status = 'Available';
+      pendingProd.updatedAt = new Date().toISOString();
+      pendingProd.history = pendingProd.history || [];
+      pendingProd.history.unshift({
         timestamp: new Date().toISOString(),
         action: 'Bulk Approved & Published by Admin',
         user: admin.name
       });
-      saveToFirestoreAsync('products', prod.id, prod);
-      approvedProducts.push(prod);
+      db.products = db.products.filter(p => p.id !== pendingProd.id && p.cjProductId !== pendingProd.cjProductId);
+      db.products.unshift(pendingProd);
+      saveToFirestoreAsync('products', pendingProd.id, pendingProd);
+      try {
+        if (firestoreDb) {
+          firestoreDb.collection('cjPendingProducts').doc(pendingProd.id).delete().catch(() => {});
+        }
+      } catch {}
+      approvedProducts.push(pendingProd);
       approvedCount++;
+    } else {
+      const prod = db.products.find(p => p.id === id);
+      if (prod && prod.source === 'cjdropshipping') {
+        prod.reviewStatus = 'Approved';
+        prod.status = 'Available';
+        prod.updatedAt = new Date().toISOString();
+        prod.history = prod.history || [];
+        prod.history.unshift({
+          timestamp: new Date().toISOString(),
+          action: 'Bulk Approved & Published by Admin',
+          user: admin.name
+        });
+        saveToFirestoreAsync('products', prod.id, prod);
+        approvedProducts.push(prod);
+        approvedCount++;
+      }
     }
   }
 

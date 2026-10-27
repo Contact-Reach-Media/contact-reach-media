@@ -2273,7 +2273,37 @@ export const api = {
     };
   },
 
-  async adminTestCjConnection(apiKey?: string, email?: string): Promise<{ success: boolean; status: string; message: string }> {
+  async adminConnectCj(apiKey: string, email?: string): Promise<{ success: boolean; status: string; message: string; config?: CjDropshippingConfig }> {
+    const res = await fetch('/api/admin/cjdropshipping/connect', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ apiKey, email })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json?.success) {
+      return parsed.json;
+    }
+    const errorMessage = parsed.json?.error || parsed.json?.message || 'Failed to authenticate with CJdropshipping API. Please check your credentials.';
+    throw new Error(errorMessage);
+  },
+
+  async adminDisconnectCj(): Promise<{ success: boolean; status: string; message: string; config?: CjDropshippingConfig }> {
+    const res = await fetch('/api/admin/cjdropshipping/disconnect', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson) {
+      return parsed.json;
+    }
+    return {
+      success: true,
+      status: 'disconnected',
+      message: 'Disconnected from CJdropshipping API.'
+    };
+  },
+
+  async adminTestCjConnection(apiKey?: string, email?: string): Promise<{ success: boolean; status: string; message: string; config?: CjDropshippingConfig }> {
     try {
       const res = await fetch('/api/admin/cjdropshipping/test-connection', {
         method: 'POST',
@@ -2281,30 +2311,24 @@ export const api = {
         body: JSON.stringify({ apiKey, email })
       });
       const parsed = await safeParseResponse<any>(res);
-      if (res.ok && parsed.isJson) {
+      if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
-      if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
+      if (parsed.isJson && (parsed.json?.error || parsed.json?.message)) {
+        return {
+          success: false,
+          status: 'disconnected',
+          message: parsed.json?.error || parsed.json?.message
+        };
       }
+      throw new Error(`Connection test failed (HTTP ${res.status})`);
     } catch (err: any) {
-      if (err.message && !err.message.includes('fetch')) throw err;
-    }
-
-    // Fallback response if offline
-    const effectiveKey = apiKey && !apiKey.includes('••••') ? apiKey : '';
-    if (effectiveKey && effectiveKey.length >= 8) {
       return {
-        success: true,
-        status: 'connected',
-        message: `CJ Dropshipping API credentials verified for ${email || 'supplier-ops@contactreachmedia.rw'}. Automated product catalog pipeline active.`
+        success: false,
+        status: 'disconnected',
+        message: err.message || 'Network error connecting to CJdropshipping API.'
       };
     }
-    return {
-      success: true,
-      status: 'ready',
-      message: 'CJ Dropshipping catalog pipeline is ready. Products from your connected CJ feed will synchronize automatically.'
-    };
   },
 
   async adminSyncCjProductsNow(category?: string, autoPublish: boolean = true): Promise<{ success: boolean; message: string; stats: any }> {

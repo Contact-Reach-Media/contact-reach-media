@@ -234,6 +234,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [cjConfig, setCjConfig] = useState<CjDropshippingConfig | null>(null);
   const [cjSyncing, setCjSyncing] = useState(false);
   const [cjTesting, setCjTesting] = useState(false);
+  const [cjConnecting, setCjConnecting] = useState(false);
+  const [cjDisconnecting, setCjDisconnecting] = useState(false);
+  const [cjConnectionError, setCjConnectionError] = useState<string | null>(null);
   const [cjApiKeyInput, setCjApiKeyInput] = useState('');
   const [showCjApiKey, setShowCjApiKey] = useState(false);
   const [cjEmailInput, setCjEmailInput] = useState('contactreachmedialimited@gmail.com');
@@ -245,6 +248,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [cjSelectedCategories, setCjSelectedCategories] = useState<string[]>([
     'electronics', 'fashion', 'amatara', 'hair-beauty', 'amasaha', 'ibikapu', 'sports'
   ]);
+  const isCjConnected = Boolean(cjConfig?.isConnected && cjConfig?.connectionStatus === 'connected');
   const [savingCjConfig, setSavingCjConfig] = useState(false);
   const [cjProductCategoryFilter, setCjProductCategoryFilter] = useState('all');
   const [cjProductSearch, setCjProductSearch] = useState('');
@@ -1208,13 +1212,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleConnectCj = async () => {
+    if (!cjApiKeyInput.trim()) {
+      showToast('Please enter your CJ Dropshipping API Key', 'error');
+      return;
+    }
+    setCjConnecting(true);
+    setCjConnectionError(null);
+    try {
+      const res = await api.adminConnectCj(cjApiKeyInput.trim(), cjEmailInput.trim());
+      if (res.success) {
+        showToast(res.message, 'success');
+        setCjConfig(res.config || null);
+        setCjConnectionError(null);
+        if (res.config?.apiKey) {
+          setCjApiKeyInput(res.config.apiKey);
+        }
+      } else {
+        const errMsg = res.message || 'Authentication with CJ API failed';
+        setCjConnectionError(errMsg);
+        showToast(errMsg, 'error');
+        if (res.config) setCjConfig(res.config);
+      }
+    } catch (err: any) {
+      const errMsg = err.message || 'Failed to connect to CJ Dropshipping API';
+      setCjConnectionError(errMsg);
+      showToast(errMsg, 'error');
+    } finally {
+      setCjConnecting(false);
+    }
+  };
+
+  const handleDisconnectCj = async () => {
+    if (!window.confirm('Are you sure you want to disconnect from CJ Dropshipping? Your credentials and access token will be cleared.')) {
+      return;
+    }
+    setCjDisconnecting(true);
+    try {
+      const res = await api.adminDisconnectCj();
+      showToast(res.message, 'success');
+      if (res.config) {
+        setCjConfig(res.config);
+      } else {
+        setCjConfig(prev => prev ? { ...prev, isConnected: false, connectionStatus: 'disconnected' } : null);
+      }
+      setCjApiKeyInput('');
+      setCjConnectionError(null);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to disconnect CJ Dropshipping', 'error');
+    } finally {
+      setCjDisconnecting(false);
+    }
+  };
+
   const handleTestCjConnection = async () => {
     setCjTesting(true);
+    setCjConnectionError(null);
     try {
       const res = await api.adminTestCjConnection(cjApiKeyInput.trim(), cjEmailInput.trim());
-      showToast(res.message, res.success ? 'success' : 'error');
+      if (res.success) {
+        showToast(res.message, 'success');
+        setCjConnectionError(null);
+        if (res.config) setCjConfig(res.config);
+      } else {
+        const errMsg = res.message || 'Connection test failed';
+        setCjConnectionError(errMsg);
+        showToast(errMsg, 'error');
+      }
     } catch (err: any) {
-      showToast(err.message || 'Connection test failed', 'error');
+      const errMsg = err.message || 'Connection test failed';
+      setCjConnectionError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setCjTesting(false);
     }
@@ -6040,18 +6108,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* SUBTAB 5: FEED SETTINGS */}
               {cjSubTab === 'settings' && (
                 <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-6 text-xs">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
                     <div>
                       <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
                         <Sliders className="w-4 h-4 text-purple-600" />
                         <span>CJ Dropshipping Account & API Configuration</span>
+                        {isCjConnected ? (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            API CONNECTED
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-300">
+                            DISCONNECTED
+                          </span>
+                        )}
                       </h3>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        API credentials are secure on the backend. Credentials are never exposed in public client bundles.
+                        API credentials are secure on the backend. Only validated against official CJ API v2.0 developers endpoint.
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isCjConnected ? (
+                        <button
+                          type="button"
+                          onClick={handleDisconnectCj}
+                          disabled={cjDisconnecting}
+                          className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl border border-red-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>{cjDisconnecting ? 'Disconnecting...' : 'Disconnect'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleConnectCj}
+                          disabled={cjConnecting || !cjApiKeyInput.trim()}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                        >
+                          <Zap className={`w-3.5 h-3.5 ${cjConnecting ? 'animate-spin' : ''}`} />
+                          <span>{cjConnecting ? 'Connecting...' : 'Connect to CJ API'}</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleTestCjConnection}
@@ -6066,13 +6166,82 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         type="button"
                         onClick={handleSaveCjConfig}
                         disabled={savingCjConfig}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
                       >
                         <Check className="w-3.5 h-3.5" />
                         <span>{savingCjConfig ? 'Saving...' : 'Save Settings'}</span>
                       </button>
                     </div>
                   </div>
+
+                  {/* Real Live Connection Status Banner */}
+                  {isCjConnected ? (
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0 text-emerald-700 font-black">
+                          ✓
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-emerald-900 flex items-center gap-2">
+                            <span>CJdropshipping API v2.0 Authenticated</span>
+                            <span className="text-[10px] font-mono bg-emerald-200/80 text-emerald-900 font-bold px-2 py-0.5 rounded-full">REAL API ACTIVE</span>
+                          </div>
+                          <p className="text-xs text-emerald-800 mt-0.5">
+                            Real API access token acquired directly from developers.cjdropshipping.com{cjConfig?.connectedAt ? ` on ${new Date(cjConfig.connectedAt).toLocaleString()}` : ''}. Auto-import and live stock synchronization are enabled.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleDisconnectCj}
+                        disabled={cjDisconnecting}
+                        className="px-3.5 py-1.5 bg-white hover:bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-200 shadow-2xs cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        Disconnect API
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs ${
+                      cjConnectionError || cjConfig?.connectionStatus === 'error'
+                        ? 'bg-red-50 border-red-200 text-red-950'
+                        : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-black ${
+                          cjConnectionError || cjConfig?.connectionStatus === 'error'
+                            ? 'bg-red-100 text-red-600'
+                            : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          !
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm flex items-center gap-2">
+                            <span>{cjConnectionError || cjConfig?.connectionStatus === 'error' ? 'Authentication Failed' : 'CJdropshipping API Disconnected'}</span>
+                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                              cjConnectionError || cjConfig?.connectionStatus === 'error'
+                                ? 'bg-red-200 text-red-900'
+                                : 'bg-slate-200 text-slate-700'
+                            }`}>
+                              {cjConnectionError || cjConfig?.connectionStatus === 'error' ? 'INVALID CREDENTIALS' : 'NOT CONNECTED'}
+                            </span>
+                          </div>
+                          <p className="text-xs mt-0.5 opacity-90">
+                            {cjConnectionError || cjConfig?.lastError || 'Provide your official CJ Dropshipping API Key below and click "Connect to CJ API" to authenticate directly with CJ API 2.0.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleConnectCj}
+                          disabled={cjConnecting || !cjApiKeyInput.trim()}
+                          className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer disabled:opacity-50"
+                        >
+                          {cjConnecting ? 'Connecting...' : 'Connect to CJ API'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Automation Toggles */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -6181,9 +6350,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block font-bold text-slate-700">CJ Account Email</label>
-                        {cjConfig?.email && (
-                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                        {isCjConnected ? (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                             Connected
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                            Disconnected
                           </span>
                         )}
                       </div>
