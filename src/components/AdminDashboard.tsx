@@ -1044,16 +1044,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSaveCjConfig = async () => {
     setSavingCjConfig(true);
     try {
+      const sanitizedRate = Math.max(1, Number(cjUsdRateInput) || 1420);
+      const sanitizedMarkup = Math.max(0, Number(cjMarkupInput) || 35);
+
       const updated = await api.adminUpdateCjConfig({
         apiKey: cjApiKeyInput.trim(),
         email: cjEmailInput.trim(),
-        autoUploadEnabled: cjAutoUploadToggle,
-        autoPublish: cjAutoPublishToggle,
-        requireAdminApproval: cjRequireApprovalToggle,
-        usdToRwfRate: Number(cjUsdRateInput) || 1420,
-        defaultMarkupPercent: Number(cjMarkupInput) || 35,
+        autoUploadEnabled: Boolean(cjAutoUploadToggle),
+        autoPublish: Boolean(cjAutoPublishToggle),
+        requireAdminApproval: Boolean(cjRequireApprovalToggle),
+        usdToRwfRate: sanitizedRate,
+        defaultMarkupPercent: sanitizedMarkup,
         selectedCategories: cjSelectedCategories
       });
+
       setCjConfig(updated);
       if (updated.apiKey) {
         setCjApiKeyInput(updated.apiKey);
@@ -1062,7 +1066,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setCjEmailInput(updated.email);
       }
       showToast('CJ Dropshipping credentials and settings saved successfully!');
-      fetchAllData(true);
+
+      try {
+        await fetchAllData(true);
+      } catch (refreshErr) {
+        console.warn('Non-blocking background refresh notice after CJ save:', refreshErr);
+      }
     } catch (err: any) {
       console.error('CJ config save error:', err);
       showToast(err.message || 'Failed to save CJ configuration. Please check your credentials.', 'error');

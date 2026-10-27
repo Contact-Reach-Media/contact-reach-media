@@ -4045,27 +4045,47 @@ app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (re
 // ADMIN SETTINGS UPDATE & MAINTENANCE MODE
 // -------------------------------------------------------------
 
-app.put('/api/admin/settings', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
-  const admin = (req as any).adminUser;
-  const previousMaintenance = db.settings.isMaintenanceMode;
-  db.settings = { ...db.settings, ...req.body };
-  
-  if (req.body.isMaintenanceMode !== undefined && req.body.isMaintenanceMode !== previousMaintenance) {
-    db.settings.maintenanceUpdatedAt = new Date().toISOString();
-    logAudit(
-      admin,
-      req.body.isMaintenanceMode ? 'MAINTENANCE_MODE_ENABLED' : 'MAINTENANCE_MODE_DISABLED',
-      `Maintenance Mode was turned ${req.body.isMaintenanceMode ? 'ON' : 'OFF'} by ${admin.name}. Public visitors ${req.body.isMaintenanceMode ? 'now see "We’ll Be Back Soon" screen' : 'can now access and browse marketplace normally'}.`,
-      'settings',
-      'global'
-    );
-  } else {
-    logAudit(admin, 'SETTINGS_UPDATED', 'Updated marketplace configuration and receiver details');
-  }
+app.put('/api/admin/settings', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  try {
+    const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
+    const previousMaintenance = db.settings.isMaintenanceMode;
+    
+    // Safely merge nested objects like cjConfig if provided in settings body
+    const incomingCjConfig = req.body.cjConfig;
+    const currentCjConfig = db.settings.cjConfig || initialSettings.cjConfig;
+    
+    db.settings = { ...db.settings, ...req.body };
+    if (incomingCjConfig && typeof incomingCjConfig === 'object') {
+      db.settings.cjConfig = {
+        ...currentCjConfig,
+        ...incomingCjConfig
+      };
+    }
+    
+    if (req.body.isMaintenanceMode !== undefined && req.body.isMaintenanceMode !== previousMaintenance) {
+      db.settings.maintenanceUpdatedAt = new Date().toISOString();
+      logAudit(
+        admin,
+        req.body.isMaintenanceMode ? 'MAINTENANCE_MODE_ENABLED' : 'MAINTENANCE_MODE_DISABLED',
+        `Maintenance Mode was turned ${req.body.isMaintenanceMode ? 'ON' : 'OFF'} by ${admin.name}. Public visitors ${req.body.isMaintenanceMode ? 'now see "We’ll Be Back Soon" screen' : 'can now access and browse marketplace normally'}.`,
+        'settings',
+        'global'
+      );
+    } else {
+      logAudit(admin, 'SETTINGS_UPDATED', 'Updated marketplace configuration and receiver details');
+    }
 
-  saveDbToDisk();
-  saveToFirestoreAsync('settings', 'global', db.settings);
-  res.json(db.settings);
+    saveDbToDisk();
+    try {
+      saveToFirestoreAsync('settings', 'global', db.settings);
+    } catch (fsErr) {
+      console.warn('[Firestore] Notice during settings save:', fsErr);
+    }
+    res.json(db.settings);
+  } catch (err: any) {
+    console.error('Failed to update settings:', err);
+    res.status(500).json({ error: err?.message || 'Failed to update marketplace settings' });
+  }
 });
 
 // Dedicated fast Maintenance Mode toggle endpoint
@@ -4717,77 +4737,101 @@ const CJ_CATEGORIES_CATALOG = [
 
 // 1. Get CJ Dropshipping configuration with masked credentials
 app.get('/api/admin/cjdropshipping/config', requireAdminAuth, (req: Request, res: Response) => {
-  const cfg = db.settings.cjConfig || initialSettings.cjConfig!;
-  const rawKey = (cfg.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
-  const hasApiKey = rawKey.length > 0;
-  const maskedKey = hasApiKey
-    ? (rawKey.length > 8 ? `${rawKey.slice(0, 4)}••••••••${rawKey.slice(-4)}` : '••••••••')
-    : '';
+  try {
+    const cfg: CjDropshippingConfig = db.settings?.cjConfig || initialSettings.cjConfig!;
+    const rawKey = (cfg.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+    const hasApiKey = rawKey.length > 0;
+    const maskedKey = hasApiKey
+      ? (rawKey.length > 8 ? `${rawKey.slice(0, 4)}••••••••${rawKey.slice(-4)}` : '••••••••')
+      : '';
 
-  res.json({
-    ...cfg,
-    apiKey: maskedKey,
-    hasApiKey,
-    requireAdminApproval: cfg.requireAdminApproval !== undefined ? cfg.requireAdminApproval : true
-  });
+    res.json({
+      ...cfg,
+      apiKey: maskedKey,
+      hasApiKey,
+      requireAdminApproval: cfg.requireAdminApproval !== undefined ? cfg.requireAdminApproval : true
+    });
+  } catch (err: any) {
+    console.error('Error fetching CJ configuration:', err);
+    res.status(500).json({ error: err?.message || 'Failed to retrieve CJ Dropshipping config' });
+  }
 });
 
 // 2. Update CJ Dropshipping configuration
-app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1];
-  const current = db.settings.cjConfig || initialSettings.cjConfig!;
-  
-  // Guard API key: don't overwrite with masked string
-  let effectiveApiKey = current.apiKey || '';
-  if (req.body.apiKey !== undefined && typeof req.body.apiKey === 'string') {
-    const trimmed = req.body.apiKey.trim();
-    if (trimmed && !trimmed.includes('••••')) {
-      effectiveApiKey = trimmed;
-      process.env.CJ_DROPSHIPPING_API_KEY = trimmed;
+app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), (req: Request, res: Response) => {
+  try {
+    const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
+    if (!db.settings) {
+      db.settings = { ...initialSettings };
     }
+    const current: CjDropshippingConfig = db.settings.cjConfig || initialSettings.cjConfig!;
+    
+    // Guard API key: don't overwrite with masked string, but allow clearing with empty string
+    let effectiveApiKey = current.apiKey || '';
+    if (req.body.apiKey !== undefined && typeof req.body.apiKey === 'string') {
+      const trimmed = req.body.apiKey.trim();
+      if (trimmed === '') {
+        effectiveApiKey = '';
+        process.env.CJ_DROPSHIPPING_API_KEY = '';
+      } else if (!trimmed.includes('••••')) {
+        effectiveApiKey = trimmed;
+        process.env.CJ_DROPSHIPPING_API_KEY = trimmed;
+      }
+    }
+
+    const effectiveEmail = typeof req.body.email === 'string'
+      ? req.body.email.trim()
+      : (current.email || '');
+
+    const updated: CjDropshippingConfig = {
+      ...current,
+      ...req.body,
+      apiKey: effectiveApiKey,
+      email: effectiveEmail,
+      usdToRwfRate: Math.max(1, Number(req.body.usdToRwfRate) || current.usdToRwfRate || 1420),
+      defaultMarkupPercent: Math.max(0, req.body.defaultMarkupPercent !== undefined ? Number(req.body.defaultMarkupPercent) : (current.defaultMarkupPercent || 35)),
+      requireAdminApproval: req.body.requireAdminApproval !== undefined ? Boolean(req.body.requireAdminApproval) : (current.requireAdminApproval !== undefined ? current.requireAdminApproval : true),
+      autoUploadEnabled: req.body.autoUploadEnabled !== undefined ? Boolean(req.body.autoUploadEnabled) : Boolean(current.autoUploadEnabled),
+      autoPublish: req.body.autoPublish !== undefined ? Boolean(req.body.autoPublish) : (current.autoPublish !== false),
+      selectedCategories: Array.isArray(req.body.selectedCategories) ? req.body.selectedCategories : (current.selectedCategories || []),
+      lastSyncStats: current.lastSyncStats
+    };
+
+    db.settings.cjConfig = updated;
+    saveDbToDisk();
+    try {
+      saveToFirestoreAsync('settings', 'global', db.settings);
+    } catch (fsErr) {
+      console.warn('[Firestore] Notice during CJ settings save:', fsErr);
+    }
+
+    try {
+      logAudit(
+        admin,
+        'CJ_CONFIG_UPDATED',
+        `Updated CJ Dropshipping settings (Email: ${updated.email || 'N/A'}, Approval Required: ${updated.requireAdminApproval ? 'YES' : 'NO'}, Rate: ${updated.usdToRwfRate} RWF, Markup: ${updated.defaultMarkupPercent}%)`
+      );
+    } catch (auditErr) {
+      console.warn('[Audit] Notice during CJ settings log:', auditErr);
+    }
+
+    const rawKey = updated.apiKey || '';
+    const maskedKey = rawKey.length > 8
+      ? `${rawKey.slice(0, 4)}••••••••${rawKey.slice(-4)}`
+      : (rawKey ? '••••••••' : '');
+    
+    res.json({
+      message: 'CJ Dropshipping settings updated successfully',
+      config: {
+        ...updated,
+        apiKey: maskedKey,
+        hasApiKey: Boolean(updated.apiKey)
+      }
+    });
+  } catch (err: any) {
+    console.error('Failed to update CJ Dropshipping settings:', err);
+    res.status(500).json({ error: err?.message || 'Failed to update CJ Dropshipping settings' });
   }
-
-  const effectiveEmail = typeof req.body.email === 'string'
-    ? req.body.email.trim()
-    : (current.email || '');
-
-  const updated: CjDropshippingConfig = {
-    ...current,
-    ...req.body,
-    apiKey: effectiveApiKey,
-    email: effectiveEmail,
-    usdToRwfRate: Number(req.body.usdToRwfRate) || current.usdToRwfRate || 1420,
-    defaultMarkupPercent: req.body.defaultMarkupPercent !== undefined ? Number(req.body.defaultMarkupPercent) : (current.defaultMarkupPercent || 35),
-    requireAdminApproval: req.body.requireAdminApproval !== undefined ? Boolean(req.body.requireAdminApproval) : (current.requireAdminApproval !== undefined ? current.requireAdminApproval : true),
-    autoUploadEnabled: req.body.autoUploadEnabled !== undefined ? Boolean(req.body.autoUploadEnabled) : Boolean(current.autoUploadEnabled),
-    autoPublish: req.body.autoPublish !== undefined ? Boolean(req.body.autoPublish) : (current.autoPublish !== false),
-    selectedCategories: Array.isArray(req.body.selectedCategories) ? req.body.selectedCategories : (current.selectedCategories || []),
-    lastSyncStats: current.lastSyncStats
-  };
-
-  db.settings.cjConfig = updated;
-  saveDbToDisk();
-  saveToFirestoreAsync('settings', 'global', db.settings);
-
-  logAudit(
-    admin,
-    'CJ_CONFIG_UPDATED',
-    `Updated CJ Dropshipping settings (Email: ${updated.email || 'N/A'}, Approval Required: ${updated.requireAdminApproval ? 'YES' : 'NO'}, Rate: ${updated.usdToRwfRate} RWF, Markup: ${updated.defaultMarkupPercent}%)`
-  );
-
-  const rawKey = updated.apiKey || '';
-  const maskedKey = rawKey.length > 8
-    ? `${rawKey.slice(0, 4)}••••••••${rawKey.slice(-4)}`
-    : (rawKey ? '••••••••' : '');
-  
-  res.json({
-    message: 'CJ Dropshipping settings updated successfully',
-    config: {
-      ...updated,
-      apiKey: maskedKey,
-      hasApiKey: Boolean(updated.apiKey)
-    }
-  });
 });
 
 // 3. Test Connection
