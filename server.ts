@@ -6451,6 +6451,306 @@ app.post('/api/admin/google-sheet/sync-push', requireAdminAuth, async (req: Requ
   }
 });
 
+// -------------------------------------------------------------
+// FIREBASE FIRESTORE SYNC & PULL PRODUCTS (ceremonial-arbor-62w8r)
+// -------------------------------------------------------------
+
+function parseFirestoreRestFields(fields: Record<string, any>): any {
+  if (!fields) return {};
+  const res: any = {};
+  for (const [key, val] of Object.entries(fields)) {
+    if (!val || typeof val !== 'object') continue;
+    if ('stringValue' in val) res[key] = val.stringValue;
+    else if ('integerValue' in val) res[key] = parseInt(val.integerValue, 10);
+    else if ('doubleValue' in val) res[key] = parseFloat(val.doubleValue);
+    else if ('booleanValue' in val) res[key] = Boolean(val.booleanValue);
+    else if ('nullValue' in val) res[key] = null;
+    else if ('timestampValue' in val) res[key] = val.timestampValue;
+    else if ('arrayValue' in val) {
+      res[key] = (val.arrayValue?.values || []).map((v: any) => {
+        if ('stringValue' in v) return v.stringValue;
+        if ('integerValue' in v) return parseInt(v.integerValue, 10);
+        if ('doubleValue' in v) return parseFloat(v.doubleValue);
+        if ('booleanValue' in v) return Boolean(v.booleanValue);
+        if ('mapValue' in v) return parseFirestoreRestFields(v.mapValue?.fields || {});
+        return v;
+      });
+    } else if ('mapValue' in val) {
+      res[key] = parseFirestoreRestFields(val.mapValue?.fields || {});
+    }
+  }
+  return res;
+}
+
+// 1. Get Firebase configuration and live connection status
+app.get('/api/admin/firebase/status', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const fbConfigPath = path.resolve('firebase-applet-config.json');
+    const config = fs.existsSync(fbConfigPath) ? JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8')) : {};
+    const projectId = config.projectId || 'ceremonial-arbor-62w8r';
+    const apiKey = config.apiKey || '';
+    const dbName = config.firestoreDatabaseId || '(default)';
+
+    let databaseExists = false;
+    let productsCountInFirestore = 0;
+    let message = '';
+
+    if (projectId && apiKey) {
+      try {
+        const probeUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbName}/documents/products?key=${apiKey}&pageSize=100`;
+        const restRes = await fetch(probeUrl, { signal: AbortSignal.timeout(4000) });
+        if (restRes.ok) {
+          databaseExists = true;
+          const data = await restRes.json();
+          productsCountInFirestore = Array.isArray(data.documents) ? data.documents.length : 0;
+          message = `Connected to Cloud Firestore on project ${projectId}. Found ${productsCountInFirestore} products in collection "products".`;
+        } else if (restRes.status === 404) {
+          databaseExists = false;
+          message = `Firebase project "${projectId}" is configured, but Cloud Firestore database "${dbName}" is not yet created in Firebase Console.`;
+        } else {
+          message = `Firebase response status: ${restRes.status}`;
+        }
+      } catch (err: any) {
+        message = `Firebase probe notice: ${err.message}`;
+      }
+    }
+
+    res.json({
+      configured: Boolean(projectId),
+      projectId,
+      apiKey: apiKey ? `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}` : '',
+      authDomain: config.authDomain || `${projectId}.firebaseapp.com`,
+      storageBucket: config.storageBucket || `${projectId}.firebasestorage.app`,
+      databaseExists,
+      firestoreAvailable,
+      productsCountInFirestore,
+      localProductsCount: db.products.filter(p => !db.deletedRecordIds?.includes(p.id)).length,
+      firebaseConsoleUrl: `https://console.firebase.google.com/project/${projectId}/firestore`,
+      message
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to check Firebase status' });
+  }
+});
+
+// 2. Pull products from Firebase Firestore into ContactReach Market website
+app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
+  try {
+    const fbConfigPath = path.resolve('firebase-applet-config.json');
+    if (!fs.existsSync(fbConfigPath)) {
+      return res.status(400).json({ error: 'firebase-applet-config.json not found' });
+    }
+    const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
+    const projectId = config.projectId || 'ceremonial-arbor-62w8r';
+    const apiKey = config.apiKey;
+    const dbName = config.firestoreDatabaseId || '(default)';
+
+    if (!projectId || !apiKey) {
+      return res.status(400).json({ error: 'Firebase project ID and API key must be configured in firebase-applet-config.json' });
+    }
+
+    // Collections to check in priority order
+    const candidateCollections = ['products', 'items', 'catalog', 'inventory', 'cjProducts'];
+    let fetchedDocs: any[] = [];
+    let matchedCollection = 'products';
+    let dbNotFound = false;
+
+    for (const col of candidateCollections) {
+      try {
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbName}/documents/${col}?key=${apiKey}&pageSize=300`;
+        const restRes = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (restRes.status === 404) {
+          dbNotFound = true;
+          break; // Database does not exist yet on GCP
+        }
+        if (restRes.ok) {
+          const json = await restRes.json();
+          if (Array.isArray(json.documents) && json.documents.length > 0) {
+            fetchedDocs = json.documents;
+            matchedCollection = col;
+            break;
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[Firebase Pull] Error checking collection ${col}:`, e.message);
+      }
+    }
+
+    if (dbNotFound) {
+      return res.status(404).json({
+        success: false,
+        code: 'DATABASE_NOT_CREATED',
+        message: `Firestore database "${dbName}" is not yet created in your Firebase project "${projectId}".`,
+        instruction: 'Please open the Firebase Console and click "Create database" in Native mode (choose your region). After creating, click "Pull Products from Firebase" again.',
+        consoleUrl: `https://console.firebase.google.com/project/${projectId}/firestore`
+      });
+    }
+
+    if (fetchedDocs.length === 0) {
+      return res.json({
+        success: true,
+        count: 0,
+        message: `Connected to Firebase project "${projectId}", but no documents were found in collections (checked: ${candidateCollections.join(', ')}). You can use "Push Products to Firebase" to populate your Firebase database with all current products!`,
+        totalProducts: db.products.length
+      });
+    }
+
+    // Normalize imported Firestore documents into ContactReach Market Product schema
+    let importedCount = 0;
+    let updatedCount = 0;
+    const importedProducts: Product[] = [];
+
+    for (const doc of fetchedDocs) {
+      const docId = doc.name ? doc.name.split('/').pop() : `prod-fb-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const raw = parseFirestoreRestFields(doc.fields || {});
+
+      const images: string[] = Array.isArray(raw.images) && raw.images.length > 0
+        ? raw.images
+        : (raw.imageUrl ? [raw.imageUrl] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
+
+      const normalized: Product = {
+        id: raw.id || docId,
+        name: raw.name || raw.title || `Imported Firebase Product ${docId}`,
+        sku: raw.sku || `CRM-FB-${docId.slice(-6).toUpperCase()}`,
+        description: raw.description || 'Imported from Firebase Firestore.',
+        price: Math.max(0, parseInt(String(raw.price || raw.sellingPrice || 10000), 10) || 10000),
+        discountPrice: raw.discountPrice ? Math.max(0, parseInt(String(raw.discountPrice), 10)) : undefined,
+        costPrice: raw.costPrice ? Math.max(0, parseInt(String(raw.costPrice), 10)) : undefined,
+        costOverriddenByAdmin: Boolean(raw.costOverriddenByAdmin),
+        profitMargin: raw.profitMargin,
+        category: raw.category || 'electronics',
+        subcategory: raw.subcategory,
+        stock: raw.stock !== undefined ? Math.max(0, parseInt(String(raw.stock), 10)) : 30,
+        imageUrl: raw.imageUrl || images[0],
+        images,
+        shopName: raw.shopName || 'ContactReach Market',
+        shopId: raw.shopId,
+        receiverName: raw.receiverName || 'Ruth',
+        receiverPhone: raw.receiverPhone || '078002260',
+        merchantCode: raw.merchantCode || '078002',
+        location: raw.location || 'Kigali, Rwanda',
+        deliveryInfo: raw.deliveryInfo || 'Same-day Kigali delivery',
+        status: (raw.status as ProductStatus) || 'Available',
+        isFeatured: Boolean(raw.isFeatured),
+        isNewArrival: raw.isNewArrival !== undefined ? Boolean(raw.isNewArrival) : true,
+        isBestSeller: Boolean(raw.isBestSeller),
+        brand: raw.brand,
+        unit: raw.unit || 'Piece',
+        videoUrl: raw.videoUrl,
+        variations: Array.isArray(raw.variations) ? raw.variations : undefined,
+        rating: raw.rating || 5.0,
+        reviewsCount: raw.reviewsCount || 0,
+        source: raw.source || 'cjdropshipping',
+        cjProductId: raw.cjProductId,
+        cjProductSku: raw.cjProductSku,
+        cjOriginalCostUsd: raw.cjOriginalCostUsd,
+        createdAt: raw.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const existingIndex = db.products.findIndex(p => p.id === normalized.id || (p.sku && normalized.sku && p.sku === normalized.sku));
+      if (existingIndex >= 0) {
+        db.products[existingIndex] = { ...db.products[existingIndex], ...normalized };
+        updatedCount++;
+      } else {
+        db.products.unshift(normalized);
+        importedCount++;
+      }
+      importedProducts.push(normalized);
+    }
+
+    saveDbToDisk();
+    logAudit(
+      admin,
+      'FIREBASE_PRODUCTS_PULLED',
+      `Pulled ${importedProducts.length} products from Firebase project ${projectId} (${importedCount} new added, ${updatedCount} existing updated).`,
+      'firebase',
+      projectId
+    );
+
+    res.json({
+      success: true,
+      message: `Successfully imported ${importedCount} new products (${updatedCount} updated) from Firebase collection "${matchedCollection}".`,
+      importedCount,
+      updatedCount,
+      totalCount: importedProducts.length,
+      totalWebsiteProducts: db.products.length,
+      products: importedProducts
+    });
+  } catch (err: any) {
+    console.error('[Firebase Pull Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to pull products from Firebase' });
+  }
+});
+
+// 3. Push / Seed website products to user's Firebase Firestore database
+app.post('/api/admin/firebase/push-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
+  try {
+    const fbConfigPath = path.resolve('firebase-applet-config.json');
+    if (!fs.existsSync(fbConfigPath)) {
+      return res.status(400).json({ error: 'firebase-applet-config.json not found' });
+    }
+    const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
+    const projectId = config.projectId || 'ceremonial-arbor-62w8r';
+    const apiKey = config.apiKey;
+    const dbName = config.firestoreDatabaseId || '(default)';
+
+    // Probe if Firestore database is ready
+    const probeUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbName}/documents?key=${apiKey}&pageSize=1`;
+    const probeRes = await fetch(probeUrl, { signal: AbortSignal.timeout(4000) });
+
+    if (probeRes.status === 404) {
+      return res.status(404).json({
+        success: false,
+        code: 'DATABASE_NOT_CREATED',
+        message: `Firestore database "${dbName}" is not yet created in your Firebase project "${projectId}".`,
+        instruction: 'Please open Firebase Console and click "Create database" in Native mode. Once created, you can push all products with 1 click!',
+        consoleUrl: `https://console.firebase.google.com/project/${projectId}/firestore`
+      });
+    }
+
+    // Push products to Firestore
+    const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
+    let pushedCount = 0;
+
+    if (!firestoreDb) {
+      await initFirestoreIfProvisioned();
+    }
+
+    if (firestoreDb && firestoreAvailable) {
+      for (const prod of activeProducts) {
+        try {
+          await firestoreSetDoc(firestoreDoc(firestoreDb, 'products', prod.id), sanitizeForFirestore(prod), { merge: true });
+          pushedCount++;
+        } catch (e: any) {
+          console.warn(`[Firebase Push] Error pushing product ${prod.id}:`, e.message);
+        }
+      }
+    }
+
+    logAudit(
+      admin,
+      'FIREBASE_PRODUCTS_PUSHED',
+      `Pushed ${pushedCount} products to Firebase project ${projectId}.`,
+      'firebase',
+      projectId
+    );
+
+    res.json({
+      success: true,
+      message: `Successfully pushed ${pushedCount} products to Firebase Firestore!`,
+      pushedCount,
+      totalProducts: activeProducts.length
+    });
+  } catch (err: any) {
+    console.error('[Firebase Push Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to push products to Firebase' });
+  }
+});
+
+
 
 // -------------------------------------------------------------
 // API 404 & ERROR HANDLER (ENSURES JSON, NEVER HTML)
