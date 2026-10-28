@@ -751,12 +751,32 @@ export async function fetchGoogleSheetValuesFromCsv(
   spreadsheetId: string,
   sheetTitle = 'Sheet1'
 ): Promise<{ headers: string[]; rows: any[][] }> {
-  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch spreadsheet CSV (${res.status}). Ensure the sheet link is shared.`);
+  const candidateUrls = [
+    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`,
+    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`,
+    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetTitle)}`
+  ];
+
+  let arrayBuf: ArrayBuffer | null = null;
+  for (const url of candidateUrls) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength > 0) {
+          arrayBuf = buf;
+          break;
+        }
+      }
+    } catch {}
   }
-  const arrayBuf = await res.arrayBuffer();
+
+  if (!arrayBuf || arrayBuf.byteLength === 0) {
+    throw new Error(
+      `Failed to fetch spreadsheet CSV. Ensure the sheet link is shared with "Anyone with the link can view".`
+    );
+  }
+
   const workbook = XLSX.read(new Uint8Array(arrayBuf), { type: 'array' });
   const sheetName = workbook.SheetNames[0] || sheetTitle;
   const worksheet = workbook.Sheets[sheetName];
@@ -778,6 +798,14 @@ export async function writeProductsToGoogleSheet(
   accessToken: string
 ): Promise<{ updatedRows: number; spreadsheetUrl: string }> {
   const categoryMap = new Map((categories || []).map(c => [c.id, c.nameEn || c.id]));
+
+  let targetTab = sheetTitle || 'Sheet1';
+  try {
+    const meta = await fetchGoogleSheetMetadata(spreadsheetId, accessToken);
+    if (meta.sheets.length > 0 && !meta.sheets.some(s => s.title === sheetTitle)) {
+      targetTab = meta.sheets[0].title;
+    }
+  } catch {}
 
   const headers = [
     'ID',
@@ -816,8 +844,8 @@ export async function writeProductsToGoogleSheet(
   ]);
 
   const allValues = [headers, ...rows];
-  const encodedTitle = encodeURIComponent(sheetTitle);
-  const range = `${encodedTitle}!A1`;
+  const encodedTitle = encodeURIComponent(targetTab);
+  const range = `${encodedTitle}!A1:O${allValues.length + 5}`;
 
   const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',

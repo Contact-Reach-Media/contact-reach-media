@@ -215,9 +215,22 @@ export async function loginWithGoogle(requestWorkspaceAccess = false): Promise<U
     return userWithToken;
   } catch (error: any) {
     if (requestWorkspaceAccess) {
-      console.warn('[Firebase Auth] Workspace scope sign-in failed, falling back to standard login:', error?.message);
-      const fallbackResult = await signInWithPopup(auth, googleProvider);
-      return Object.assign(fallbackResult.user, { accessToken: undefined });
+      console.warn('[Firebase Auth] Full workspace sign-in notice, retrying with core drive.file and spreadsheets scopes:', error?.message);
+      try {
+        const coreProvider = new GoogleAuthProvider();
+        coreProvider.addScope('https://www.googleapis.com/auth/drive.file');
+        coreProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+        coreProvider.setCustomParameters({ prompt: 'consent' });
+        const coreResult = await signInWithPopup(auth, coreProvider);
+        const cred = GoogleAuthProvider.credentialFromResult(coreResult);
+        if (cred?.accessToken) {
+          cachedAccessToken = cred.accessToken;
+        }
+        return Object.assign(coreResult.user, { accessToken: cachedAccessToken || undefined });
+      } catch (coreErr: any) {
+        console.error('[Firebase Auth] Core workspace authorization failed:', coreErr);
+        throw coreErr;
+      }
     }
     console.error('Google Sign-in failed:', error);
     throw error;
@@ -225,18 +238,8 @@ export async function loginWithGoogle(requestWorkspaceAccess = false): Promise<U
 }
 
 export async function authorizeGoogleWorkspace(): Promise<string | null> {
-  try {
-    const result = await signInWithPopup(auth, workspaceProvider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (credential?.accessToken) {
-      cachedAccessToken = credential.accessToken;
-      return credential.accessToken;
-    }
-    return null;
-  } catch (error: any) {
-    console.warn('[Workspace Auth] Notice during Workspace authorization:', error?.message);
-    throw error;
-  }
+  const user = await loginWithGoogle(true);
+  return user.accessToken || cachedAccessToken || null;
 }
 
 // Sign-Out
@@ -338,7 +341,8 @@ export async function syncProductsToGoogleDrive(
     } else {
       // 2b. Create new file with metadata using multipart upload
       const boundary = '-------314159265358979323846';
-      const delimiter = `\r\n--${boundary}\r\n`;
+      const initialDelimiter = `--${boundary}\r\n`;
+      const intermediateDelimiter = `\r\n--${boundary}\r\n`;
       const closeDelim = `\r\n--${boundary}--`;
 
       const metadata = {
@@ -348,10 +352,10 @@ export async function syncProductsToGoogleDrive(
       };
 
       const multipartRequestBody =
-        delimiter +
+        initialDelimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
         JSON.stringify(metadata) +
-        delimiter +
+        intermediateDelimiter +
         'Content-Type: application/json\r\n\r\n' +
         fileContent +
         closeDelim;

@@ -6286,7 +6286,8 @@ app.post('/api/admin/drive/sync-products', requireAdminAuth, async (req: Request
     } else {
       // Create new file via multipart upload
       const boundary = '-------314159265358979323846';
-      const delimiter = `\r\n--${boundary}\r\n`;
+      const initialDelimiter = `--${boundary}\r\n`;
+      const intermediateDelimiter = `\r\n--${boundary}\r\n`;
       const closeDelim = `\r\n--${boundary}--`;
 
       const metadata = {
@@ -6296,10 +6297,10 @@ app.post('/api/admin/drive/sync-products', requireAdminAuth, async (req: Request
       };
 
       const multipartRequestBody =
-        delimiter +
+        initialDelimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
         JSON.stringify(metadata) +
-        delimiter +
+        intermediateDelimiter +
         'Content-Type: application/json\r\n\r\n' +
         fileContent +
         closeDelim;
@@ -6694,53 +6695,94 @@ function parseGoogleSheetId(input: string): string {
 }
 
 // Pull and parse rows from Google Sheet
-async function pullRowsFromGoogleSheet(sheetId: string, tabName = 'Sheet1', accessToken?: string): Promise<{ headers: string[]; rows: any[]; rawData: any[] }> {
+async function pullRowsFromGoogleSheet(
+  sheetId: string,
+  tabName = 'Sheet1',
+  accessToken?: string
+): Promise<{ headers: string[]; rows: any[]; rawData: any[] }> {
   let csvBuffer: Buffer | null = null;
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 
-  try {
-    const fetchHeaders: Record<string, string> = {};
-    if (accessToken) {
-      fetchHeaders['Authorization'] = `Bearer ${accessToken}`;
-    }
-    const res = await fetch(csvUrl, { headers: fetchHeaders });
-    if (res.ok) {
-      const arrayBuf = await res.arrayBuffer();
-      csvBuffer = Buffer.from(arrayBuf);
-    }
-  } catch (err) {
-    console.warn('[Google Sheets] CSV export notice:', err);
-  }
-
-  // If CSV export failed or returned empty and we have an accessToken, try Google Sheets API v4
-  if (!csvBuffer && accessToken) {
-    const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A1:Z2000`;
-    const apiRes = await fetch(apiUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    if (apiRes.ok) {
-      const apiData = await apiRes.json();
-      const values: any[][] = apiData.values || [];
-      if (values.length > 0) {
-        const headers = values[0].map((h: any) => String(h || '').trim());
-        const dataRows = values.slice(1).map((r: any[]) => {
-          const obj: Record<string, any> = {};
-          headers.forEach((h, idx) => {
-            obj[h] = r[idx] !== undefined ? r[idx] : '';
-          });
-          return obj;
+  // 1. If accessToken is provided, try Google Sheets API v4 first (most authoritative for live edits)
+  if (accessToken) {
+    try {
+      let targetSheetTitle = tabName;
+      try {
+        const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
         });
-        return { headers, rows: values.slice(1), rawData: dataRows };
+        if (metaRes.ok) {
+          const metaData = await metaRes.json();
+          const titles = (metaData.sheets || []).map((s: any) => s.properties?.title).filter(Boolean);
+          if (titles.length > 0 && !titles.includes(tabName)) {
+            targetSheetTitle = titles[0];
+          }
+        }
+      } catch (metaErr) {
+        console.warn('[Google Sheets API v4] Tab title probe note:', metaErr);
       }
+
+      const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(targetSheetTitle)}!A1:ZZ5000`;
+      const apiRes = await fetch(apiUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (apiRes.ok) {
+        const apiData = await apiRes.json();
+        const values: any[][] = apiData.values || [];
+        if (values.length > 0) {
+          const headers = values[0].map((h: any) => String(h || '').trim());
+          const dataRows = values.slice(1).map((r: any[]) => {
+            const obj: Record<string, any> = {};
+            headers.forEach((h, idx) => {
+              obj[h] = r[idx] !== undefined ? r[idx] : '';
+            });
+            return obj;
+          });
+          return { headers, rows: values.slice(1), rawData: dataRows };
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[Google Sheets API v4] Values fetch notice:', apiErr);
     }
   }
 
-  if (!csvBuffer) {
-    throw new Error('Unable to read Google Sheet data. Ensure the spreadsheet is shared with link access or Google account is authorized.');
+  // 2. Multi-tiered CSV Export fallbacks (works reliably with public link access and Bearer tokens)
+  const candidateUrls = [
+    `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`,
+    `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`,
+    `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`
+  ];
+
+  for (const url of candidateUrls) {
+    try {
+      const fetchHeaders: Record<string, string> = {};
+      if (accessToken) {
+        fetchHeaders['Authorization'] = `Bearer ${accessToken}`;
+      }
+      const res = await fetch(url, { headers: fetchHeaders });
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        if (arrayBuf.byteLength > 0) {
+          csvBuffer = Buffer.from(arrayBuf);
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn(`[Google Sheets CSV] Fetch notice for ${url}:`, err);
+    }
+  }
+
+  if (!csvBuffer || csvBuffer.length === 0) {
+    throw new Error(
+      'Unable to read Google Sheet data. Ensure the spreadsheet is shared with link access ("Anyone with the link can view/edit") or authorize your Google account.'
+    );
   }
 
   const workbook = XLSX.read(csvBuffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
+  if (!sheetName || !workbook.Sheets[sheetName]) {
+    throw new Error('Google Sheet appears to have no readable tabs or rows.');
+  }
+
   const worksheet = workbook.Sheets[sheetName];
   const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
   const headerMatrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
@@ -6766,32 +6808,51 @@ async function applyGoogleSheetEdits(
   const processedProducts: Product[] = [];
   const adminName = adminUser?.name || 'Google Sheet Live Sync';
 
-  for (const row of rawData) {
-    const rawId = String(row['ID'] || row['id'] || row['Id'] || '').trim();
-    const rawName = String(row['Product Name'] || row['Name'] || row['name'] || row['Title'] || '').trim();
-    const rawSku = String(row['SKU'] || row['Sku'] || row['sku'] || row['Code'] || '').trim();
+  for (let rowIndex = 0; rowIndex < rawData.length; rowIndex++) {
+    const row = rawData[rowIndex];
+    const rawId = String(row['ID'] || row['id'] || row['Id'] || row['Product ID'] || '').trim();
+    const rawName = String(row['Product Name'] || row['Name'] || row['name'] || row['Title'] || row['Product'] || '').trim();
+    const rawSku = String(row['SKU'] || row['Sku'] || row['sku'] || row['Code'] || row['SKU / Code'] || row['Sku / Code'] || '').trim();
 
-    if (!rawName && !rawId) continue; // Skip blank rows
+    if (!rawName && !rawId) continue; // Skip completely blank rows
 
-    const rawCategory = String(row['Category'] || row['category'] || 'supermarket').trim();
-    const rawPrice = parseFloat(String(row['Price (RWF)'] || row['Price'] || row['price'] || 0));
-    const rawDiscountPercent = parseFloat(String(row['Discount %'] || row['Discount Percent'] || row['discountPercent'] || 0));
-    const rawDiscountPrice = parseFloat(String(row['Discount Price (RWF)'] || row['Promo Price (RWF)'] || row['discountPrice'] || 0));
-    const rawCostPrice = row['Cost Price (RWF)'] || row['Cost Price'] || row['costPrice'];
-    const rawStock = parseInt(String(row['Stock'] || row['stock'] || row['Quantity'] || 0), 10);
-    const rawStatus = String(row['Status'] || row['status'] || 'Available').trim();
-    const rawShop = String(row['Shop'] || row['Shop Name'] || row['Supplier'] || 'ContactReach Market').trim();
-    const rawImageUrl = String(row['Image URL'] || row['Image'] || row['ImageUrl'] || '').trim();
-    const rawDescription = String(row['Description'] || row['description'] || '').trim();
+    const rawCategory = String(row['Category'] || row['category'] || row['Category Slug'] || 'supermarket').trim();
+    const rawPrice = parseFloat(String(row['Price (RWF)'] || row['Price'] || row['price'] || row['Selling Price'] || row['Price (FRW)'] || 0));
+    const rawDiscountPercent = parseFloat(String(row['Discount %'] || row['Discount Percent'] || row['discountPercent'] || row['Discount'] || 0));
+    const rawDiscountPrice = parseFloat(String(row['Discount Price (RWF)'] || row['Promotional Price (RWF)'] || row['Promo Price (RWF)'] || row['discountPrice'] || 0));
+    const rawCostPrice = row['Cost Price (RWF)'] || row['Cost Price'] || row['costPrice'] || row['Cost'];
+    const rawStock = parseInt(String(row['Stock'] || row['stock'] || row['Stock Quantity'] || row['Quantity'] || row['Qty'] || 0), 10);
+    const rawStatus = String(row['Status'] || row['status'] || row['Product Status'] || 'Available').trim();
+    const rawShop = String(row['Shop'] || row['Shop Name'] || row['Supplier / Shop'] || row['Supplier'] || 'ContactReach Market').trim();
+    const rawImageUrl = String(row['Image URL'] || row['Primary Image URL'] || row['Image'] || row['ImageUrl'] || row['image'] || '').trim();
+    const rawDescription = String(row['Description'] || row['description'] || row['Details'] || '').trim();
     const rawVideoUrl = String(row['Video URL'] || row['Video'] || row['videoUrl'] || '').trim();
 
-    // Match existing product
-    const existing = db.products.find(p => {
-      if (rawId && p.id.toLowerCase() === rawId.toLowerCase()) return true;
-      if (rawSku && p.sku && p.sku.toLowerCase() === rawSku.toLowerCase()) return true;
-      if (rawName && p.name.trim().toLowerCase() === rawName.toLowerCase()) return true;
-      return false;
-    });
+    // Normalize Status
+    let effectiveStatus: ProductStatus = 'Available';
+    const sLower = rawStatus.toLowerCase();
+    if (sLower === 'out of stock' || sLower === 'out_of_stock' || sLower === 'outofstock' || sLower === 'sold out') {
+      effectiveStatus = 'Out of Stock';
+    } else if (sLower === 'hidden' || sLower === 'inactive' || sLower === 'draft' || sLower === 'discontinued' || sLower === 'archived') {
+      effectiveStatus = 'Hidden';
+    } else {
+      effectiveStatus = 'Available';
+    }
+
+    // Match existing product: ID takes priority, then SKU. Only match by Name if no ID was provided in the row.
+    let existing: Product | undefined = undefined;
+    if (rawId) {
+      existing = db.products.find(p => p.id.toLowerCase() === rawId.toLowerCase());
+    }
+    if (!existing && rawSku) {
+      existing = db.products.find(p => p.sku && p.sku.toLowerCase() === rawSku.toLowerCase());
+    }
+    if (!existing && !rawId && rawName) {
+      existing = db.products.find(p =>
+        p.name.trim().toLowerCase() === rawName.toLowerCase() &&
+        (!rawShop || (p.shopName || '').toLowerCase() === rawShop.toLowerCase())
+      );
+    }
 
     if (existing) {
       let changed = false;
@@ -6805,8 +6866,20 @@ async function applyGoogleSheetEdits(
         changed = true;
       }
       if (!isNaN(rawStock) && rawStock >= 0 && existing.stock !== rawStock) {
+        const previousStock = existing.stock;
         existing.stock = rawStock;
         changed = true;
+        db.inventoryLogs.unshift({
+          id: `inv-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+          productId: existing.id,
+          productName: existing.name,
+          previousStock,
+          newStock: rawStock,
+          changeAmount: rawStock - previousStock,
+          reason: `Stock adjustment from Google Sheet sync`,
+          adminName,
+          timestamp: new Date().toISOString()
+        });
       }
       if (rawSku && existing.sku !== rawSku) {
         existing.sku = rawSku;
@@ -6820,8 +6893,8 @@ async function applyGoogleSheetEdits(
         existing.category = rawCategory;
         changed = true;
       }
-      if (rawStatus && existing.status !== rawStatus) {
-        existing.status = rawStatus as ProductStatus;
+      if (existing.status !== effectiveStatus) {
+        existing.status = effectiveStatus;
         changed = true;
       }
       if (rawShop && existing.shopName !== rawShop) {
@@ -6841,10 +6914,14 @@ async function applyGoogleSheetEdits(
         existing.videoUrl = rawVideoUrl;
         changed = true;
       }
+
+      // Handle Discount Price & Percentage
       if (!isNaN(rawDiscountPercent) && rawDiscountPercent >= 0) {
-        if (existing.discountPercent !== rawDiscountPercent) {
-          existing.discountPercent = rawDiscountPercent > 0 ? rawDiscountPercent : undefined;
-          existing.discountPrice = rawDiscountPercent > 0 ? Math.round(existing.price * (1 - rawDiscountPercent / 100)) : undefined;
+        const newDiscPct = rawDiscountPercent > 0 ? rawDiscountPercent : undefined;
+        const newDiscPrice = rawDiscountPercent > 0 ? Math.round(existing.price * (1 - rawDiscountPercent / 100)) : undefined;
+        if (existing.discountPercent !== newDiscPct || existing.discountPrice !== newDiscPrice) {
+          existing.discountPercent = newDiscPct;
+          existing.discountPrice = newDiscPrice;
           changed = true;
         }
       } else if (!isNaN(rawDiscountPrice) && rawDiscountPrice > 0) {
@@ -6854,10 +6931,12 @@ async function applyGoogleSheetEdits(
           changed = true;
         }
       }
+
       if (rawCostPrice !== undefined && rawCostPrice !== '' && !isNaN(Number(rawCostPrice))) {
         const parsedCost = Number(rawCostPrice);
         if (existing.costPrice !== parsedCost) {
           existing.costPrice = parsedCost;
+          existing.costOverriddenByAdmin = true;
           changed = true;
         }
       }
@@ -6885,6 +6964,15 @@ async function applyGoogleSheetEdits(
       const discPct = !isNaN(rawDiscountPercent) && rawDiscountPercent > 0 ? rawDiscountPercent : undefined;
       const discPrice = discPct ? Math.round(effectivePrice * (1 - discPct / 100)) : (!isNaN(rawDiscountPrice) && rawDiscountPrice > 0 ? rawDiscountPrice : undefined);
 
+      const { shopId, shopName } = resolveOrCreateShop(
+        rawShop,
+        undefined,
+        { category: rawCategory },
+        adminName
+      );
+
+      const defaultImg = rawImageUrl || '/src/assets/images/product_street_sneakers_1791966366958.jpg';
+
       const newProduct: Product = {
         id: targetId,
         name: rawName,
@@ -6894,19 +6982,21 @@ async function applyGoogleSheetEdits(
         discountPercent: discPct,
         discountPrice: discPrice,
         costPrice: rawCostPrice && !isNaN(Number(rawCostPrice)) ? Number(rawCostPrice) : undefined,
+        costOverriddenByAdmin: Boolean(rawCostPrice && !isNaN(Number(rawCostPrice))),
         category: rawCategory,
         stock: effectiveStock,
-        imageUrl: rawImageUrl || '/src/assets/images/product_street_sneakers_1791966366958.jpg',
-        images: rawImageUrl ? [rawImageUrl] : ['/src/assets/images/product_street_sneakers_1791966366958.jpg'],
-        shopName: rawShop || 'ContactReach Market',
-        shopId: 'crm-main',
-        receiverName: 'Ruth',
+        imageUrl: defaultImg,
+        images: [defaultImg],
+        shopName,
+        shopId,
+        receiverName: db.settings.receiverName || 'Ruth',
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: '078002',
-        receiverPhone: '078002260',
+        merchantCode: db.settings.merchantCode || '078002',
+        receiverPhone: db.settings.paymentNumber || '078002260',
         location: 'Kigali, Rwanda',
         deliveryInfo: 'Same-day Kigali delivery',
-        status: (rawStatus as any) || 'Available',
+        status: effectiveStatus,
+        reviewStatus: 'Approved',
         isFeatured: false,
         isNewArrival: true,
         isBestSeller: false,
@@ -6924,6 +7014,21 @@ async function applyGoogleSheetEdits(
 
       db.products.unshift(newProduct);
       saveToFirestoreAsync('products', newProduct.id, newProduct);
+
+      if (effectiveStock > 0) {
+        db.inventoryLogs.unshift({
+          id: `inv-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+          productId: newProduct.id,
+          productName: newProduct.name,
+          previousStock: 0,
+          newStock: effectiveStock,
+          changeAmount: effectiveStock,
+          reason: `Initial stock intake from Google Sheet live sync`,
+          adminName,
+          timestamp: new Date().toISOString()
+        });
+      }
+
       processedProducts.push(newProduct);
       createdCount++;
     }
@@ -6944,6 +7049,23 @@ async function pushCatalogToGoogleSheet(
 ): Promise<{ updatedRows: number; spreadsheetUrl: string }> {
   const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
   const categoryMap = new Map((db.categories || []).map(c => [c.id, c.nameEn || c.id]));
+
+  let targetTab = tabName;
+  // Inspect spreadsheet metadata to ensure the target tab exists and avoid 400 Invalid Range errors
+  try {
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (metaRes.ok) {
+      const metaData = await metaRes.json();
+      const sheetTitles = (metaData.sheets || []).map((s: any) => s.properties?.title).filter(Boolean);
+      if (sheetTitles.length > 0 && !sheetTitles.includes(tabName)) {
+        targetTab = sheetTitles[0];
+      }
+    }
+  } catch (err) {
+    console.warn('[Google Sheets] Metadata probe notice:', err);
+  }
 
   const headers = [
     'ID',
@@ -6982,7 +7104,7 @@ async function pushCatalogToGoogleSheet(
   ]);
 
   const allValues = [headers, ...rows];
-  const encodedTitle = encodeURIComponent(tabName);
+  const encodedTitle = encodeURIComponent(targetTab);
   const range = `${encodedTitle}!A1:O${allValues.length + 5}`;
 
   const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
