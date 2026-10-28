@@ -530,21 +530,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                       <div className="bg-white/80 p-2 rounded-xl border border-orange-100">
                         <span className="text-[10px] text-slate-400 block font-semibold uppercase">Shipping to Rwanda</span>
                         <span className="font-extrabold font-mono text-orange-700">
-                          {product.alibabaShippingCostRwf ? `${product.alibabaShippingCostRwf.toLocaleString()} RWF` : 'Included'}
+                          {product.shippingCostRwf || product.alibabaShippingCostRwf
+                            ? `${(product.shippingCostRwf || product.alibabaShippingCostRwf)!.toLocaleString()} RWF`
+                            : 'Included in price'}
                         </span>
-                        {product.alibabaShippingCostUsd !== undefined && (
+                        {product.alibabaShippingCostUsd !== undefined ? (
                           <span className="text-[10px] text-slate-400 font-mono block">(${product.alibabaShippingCostUsd.toFixed(2)})</span>
-                        )}
+                        ) : product.shippingCostRwf ? (
+                          <span className="text-[10px] text-slate-400 font-mono block">(${Math.round(product.shippingCostRwf / 1435 * 100) / 100})</span>
+                        ) : null}
                       </div>
 
                       <div className="bg-white/80 p-2 rounded-xl border border-orange-100">
-                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Gross Weight / Dims</span>
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Weight / Dimensions</span>
                         <span className="font-bold text-slate-800">
-                          {product.alibabaWeightKg ? `${product.alibabaWeightKg} kg` : 'Standard'}
+                          {product.grossWeightKg || product.alibabaWeightKg ? `${product.grossWeightKg || product.alibabaWeightKg} kg` : 'Standard'}
                         </span>
-                        {product.alibabaDimensionsCm && (
-                          <span className="text-[10px] text-slate-400 block">
-                            {product.alibabaDimensionsCm.length}x{product.alibabaDimensionsCm.width}x{product.alibabaDimensionsCm.height}cm
+                        {(product.packageDimensionsCm || product.alibabaDimensionsCm) && (
+                          <span className="text-[10px] text-slate-400 block font-mono">
+                            {product.packageDimensionsCm || `${product.alibabaDimensionsCm?.length}x${product.alibabaDimensionsCm?.width}x${product.alibabaDimensionsCm?.height}cm`}
                           </span>
                         )}
                       </div>
@@ -554,16 +558,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         <span className="font-mono text-[10px] font-bold text-emerald-700">
                           (Cost + Freight) × 1.10
                         </span>
-                        <span className="text-[9px] text-slate-400 block">Official markup</span>
+                        <span className="text-[9px] text-slate-400 block">Strict 10% gross markup</span>
                       </div>
                     </div>
 
                     <p className="text-[11px] text-slate-600 leading-snug">
-                      Dispatched via official Alibaba Air Express directly to Kigali International Airport with customs clearance at MAGERWA Gikondo. Delivery timeframe: 7 - 12 business days.
+                      Dispatched via official Alibaba Air Express / Cargo Freight directly to Kigali International Airport (KGL Hub) with customs clearance at MAGERWA Gikondo. Delivery timeframe: 7 - 12 business days.
                     </p>
-                    {product.alibabaShippingMethod && (
+                    {(product.alibabaShippingMethod || product.deliveryInfo) && (
                       <p className="text-[10px] font-mono text-slate-500">
-                        Carrier Method: {product.alibabaShippingMethod}
+                        Carrier Method: {product.alibabaShippingMethod || product.deliveryInfo}
                       </p>
                     )}
                   </div>

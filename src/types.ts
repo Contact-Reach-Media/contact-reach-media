@@ -132,6 +132,12 @@ export interface Product {
   alibabaTradeAssurance?: boolean;
   alibabaVerifiedSupplier?: boolean;
   alibabaLastSyncAt?: string;
+  shippingCostRwf?: number;
+  grossWeightKg?: number;
+  packageDimensionsCm?: string;
+  chargeableWeightKg?: number;
+  isTradeAssurance?: boolean;
+  alibabaSpecifications?: Record<string, string>;
   // DSers & AliExpress Supplier Mapping
   aliExpressUrl?: string; // Exact AliExpress Product URL for DSers mapping
   supplierVariant?: string; // Exact supplier variant string (e.g. "Color: Black, Size: XL")

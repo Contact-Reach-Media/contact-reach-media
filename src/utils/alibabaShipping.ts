@@ -140,3 +140,6 @@ export function calculateAlibabaLandedPricing(
     formulaDisplay
   };
 }
+
+export const calculateAlibabaRwandaShipping = calculateAlibabaShipping;
+
