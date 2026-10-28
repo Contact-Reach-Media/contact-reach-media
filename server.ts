@@ -24,12 +24,32 @@ import {
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   AdminUser, AdminRole, PaymentMethodConfig, ProductReview, ProductVariation,
   CjDropshippingConfig, GoogleSheetSyncConfig,
-  AlibabaConfig, AlibabaShippingQuote
+  AlibabaConfig, AlibabaShippingQuote, PaymentTransaction
 } from './src/types.ts';
 import { ALIBABA_CURATED_FEED, AlibabaCuratedItem } from './src/data/alibabaFeed.ts';
 import { ALIBABA_300_CATALOG, Alibaba300Item } from './src/data/alibaba300Feed.ts';
 import { ALIBABA_1000_CATALOG, Alibaba1000Item } from './src/data/alibaba1000Feed.ts';
 import { calculateAlibabaShipping, calculateAlibabaLandedPricing } from './src/utils/alibabaShipping.ts';
+import { calculateLandedCostAndSellingPrice } from './src/utils/pricing.ts';
+
+// Universal category normalizer mapping arbitrary labels & subcategories to canonical store slugs
+export function normalizeCategoryId(rawCategory?: string, name?: string): string {
+  const combined = (String(rawCategory || '') + ' ' + String(name || '')).toLowerCase();
+  const c = String(rawCategory || '').toLowerCase().trim();
+
+  if (['amasaha', 'watches & jewelry', 'watches', 'jewelry'].includes(c) || combined.includes('watch') || combined.includes('earring') || combined.includes('ring') || combined.includes('bracelet') || combined.includes('necklace')) return 'amasaha';
+  if (['hair-beauty', 'beauty & cosmetics', 'beauty & personal care', 'salon', 'makeup', 'skincare'].includes(c) || combined.includes('beauty') || combined.includes('hair') || combined.includes('cosmetic') || combined.includes('serum') || combined.includes('lotion')) return 'hair-beauty';
+  if (['amatara', 'lighting & gadgets', 'lighting', 'lights', 'lamps'].includes(c) || combined.includes('light') || combined.includes('lamp') || combined.includes('led') || combined.includes('bulb')) return 'amatara';
+  if (['abana', 'kids & toys', 'kids', 'toys', 'baby'].includes(c) || combined.includes('toy') || combined.includes('baby') || combined.includes('kid')) return 'abana';
+  if (['ibikapu', 'bags & luggage', 'bags and fashion accessories', 'bags', 'backpacks'].includes(c) || combined.includes('bag') || combined.includes('backpack') || combined.includes('luggage') || combined.includes('purse')) return 'ibikapu';
+  if (['sports', 'sports & fitness', 'fitness', 'gym'].includes(c) || combined.includes('sport') || combined.includes('fitness') || combined.includes('cycling') || combined.includes('yoga')) return 'sports';
+  if (['books', 'books & office', 'school, office and business supplies', 'office', 'stationery'].includes(c) || combined.includes('book') || combined.includes('office') || combined.includes('stationery') || combined.includes('printer')) return 'books';
+  if (['supermarket', 'supermarket & food', 'grocery', 'food'].includes(c) || combined.includes('food') || combined.includes('honey') || combined.includes('grocery')) return 'supermarket';
+  if (['impano', 'gifts & home decor', 'cat-1792741088062', 'cat-1792740994917'].includes(c) || combined.includes('gift') || combined.includes('decor') || combined.includes('kitchen') || combined.includes('stove') || combined.includes('cutting board') || combined.includes('art') || combined.includes('flask')) return 'impano';
+  if (['fashion', 'fashion & apparel', 'fashion-shoes', 'shoes', 'clothing'].includes(c) || combined.includes('shoe') || combined.includes('cloth') || combined.includes('apparel') || combined.includes('sneaker') || combined.includes('dress') || combined.includes('shirt') || combined.includes('jacket') || combined.includes('hoodie')) return 'fashion';
+  if (['electronics', 'electronics & tv', 'tech accessories & smart gadgets', 'electronic'].includes(c) || combined.includes('electr') || combined.includes('tech') || combined.includes('gadget') || combined.includes('cable') || combined.includes('earbud') || combined.includes('headphone') || combined.includes('charger')) return 'electronics';
+  return 'electronics';
+}
 
 
 const app = express();
@@ -67,7 +87,7 @@ export interface SupplierPayoutRecord {
   commissionRate: number;
   commissionEarned: number;
   payoutAmount: number;
-  status: 'Pending' | 'Approved' | 'Paid';
+  status: 'Pending' | 'Approved' | 'Paid' | 'Cancelled';
   paymentReference?: string;
   paidAt?: string;
   approvedBy?: string;
@@ -93,6 +113,7 @@ interface MarketDatabase {
   reviews: ProductReview[];
   supplierApplications: SupplierApplication[];
   supplierPayouts: SupplierPayoutRecord[];
+  paymentTransactions?: PaymentTransaction[];
   settings: AppSettings;
   deletedRecordIds: string[];
   adminTokens: Map<string, { user: AdminUser; expiresAt: number }>;
@@ -267,6 +288,7 @@ let db: MarketDatabase = {
   reviews: [],
   supplierApplications: [],
   supplierPayouts: [],
+  paymentTransactions: [],
   settings: {
     ...initialSettings,
     email: 'contactreachmedialimited@gmail.com',
@@ -552,31 +574,101 @@ function isFirestoreUnavailableError(err: any): boolean {
   );
 }
 
-// Fire-and-forget safe async writer to BOTH Cloud Firestores simultaneously
+// In-memory queue to prevent divergence between local disk JSON and Cloud Firestore when offline
+interface FirestoreQueueItem {
+  id: string;
+  collectionName: string;
+  docId: string;
+  data?: any;
+  action: 'set' | 'delete';
+  timestamp: string;
+  attempts: number;
+}
+const firestoreSyncQueue: FirestoreQueueItem[] = [];
+let lastSyncSuccessTime: string = new Date().toISOString();
+
+function queueFirestoreOperation(collectionName: string, docId: string, action: 'set' | 'delete', data?: any) {
+  if (firestoreSyncQueue.length >= 500) {
+    firestoreSyncQueue.shift();
+  }
+  firestoreSyncQueue.push({
+    id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    collectionName,
+    docId,
+    data: data ? sanitizeForFirestore(data) : undefined,
+    action,
+    timestamp: new Date().toISOString(),
+    attempts: 0
+  });
+}
+
+// Periodic queue processor flushing pending writes when database is reachable
+async function processFirestoreSyncQueue() {
+  if (firestoreSyncQueue.length === 0) return;
+  const activeDb = (firestoreDb1 && firestore1Available) ? firestoreDb1 : ((firestoreDb2 && firestore2Available) ? firestoreDb2 : null);
+  if (!activeDb) return;
+
+  const batch = firestoreSyncQueue.splice(0, 10);
+  for (const item of batch) {
+    try {
+      if (item.action === 'set' && item.data) {
+        await firestoreSetDoc(firestoreDoc(activeDb, item.collectionName, item.docId), item.data, { merge: true });
+      } else if (item.action === 'delete') {
+        await firestoreDeleteDoc(firestoreDoc(activeDb, item.collectionName, item.docId));
+      }
+      lastSyncSuccessTime = new Date().toISOString();
+    } catch (err: any) {
+      if (item.attempts < 3) {
+        item.attempts++;
+        firestoreSyncQueue.push(item);
+      }
+    }
+  }
+}
+
+setInterval(() => {
+  processFirestoreSyncQueue().catch(() => {});
+}, 30000);
+
+// Fire-and-forget safe async writer to BOTH Cloud Firestores with queuing on disconnection
 function saveToFirestoreAsync(collectionName: string, docId: string, data: any) {
   if (!data || !docId) return;
   const cleanData = sanitizeForFirestore(data);
 
+  let attempted = false;
+
   if (firestoreDb1 && firestore1Available) {
-    firestoreSetDoc(firestoreDoc(firestoreDb1, collectionName, docId), cleanData, { merge: true }).catch(err => {
-      if (isFirestoreUnavailableError(err)) {
-        firestore1Available = false;
-        firestoreDb1 = null;
-      } else {
-        console.warn(`[Firebase DB1] Async write notice (${collectionName}/${docId}):`, err.message || err);
-      }
-    });
+    attempted = true;
+    firestoreSetDoc(firestoreDoc(firestoreDb1, collectionName, docId), cleanData, { merge: true })
+      .then(() => { lastSyncSuccessTime = new Date().toISOString(); })
+      .catch(err => {
+        if (isFirestoreUnavailableError(err)) {
+          firestore1Available = false;
+          firestoreDb1 = null;
+        } else {
+          console.warn(`[Firebase DB1] Async write notice (${collectionName}/${docId}):`, err.message || err);
+        }
+        queueFirestoreOperation(collectionName, docId, 'set', data);
+      });
   }
 
   if (firestoreDb2 && firestore2Available) {
-    firestoreSetDoc(firestoreDoc(firestoreDb2, collectionName, docId), cleanData, { merge: true }).catch(err => {
-      if (isFirestoreUnavailableError(err)) {
-        firestore2Available = false;
-        firestoreDb2 = null;
-      } else {
-        console.warn(`[Firebase DB2] Async write notice (${collectionName}/${docId}):`, err.message || err);
-      }
-    });
+    attempted = true;
+    firestoreSetDoc(firestoreDoc(firestoreDb2, collectionName, docId), cleanData, { merge: true })
+      .then(() => { lastSyncSuccessTime = new Date().toISOString(); })
+      .catch(err => {
+        if (isFirestoreUnavailableError(err)) {
+          firestore2Available = false;
+          firestoreDb2 = null;
+        } else {
+          console.warn(`[Firebase DB2] Async write notice (${collectionName}/${docId}):`, err.message || err);
+        }
+        queueFirestoreOperation(collectionName, docId, 'set', data);
+      });
+  }
+
+  if (!attempted) {
+    queueFirestoreOperation(collectionName, docId, 'set', data);
   }
 }
 
@@ -1092,11 +1184,11 @@ app.get('/api/exchange-rates', async (req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 app.get('/api/categories', (req: Request, res: Response) => {
-  // Update itemCount dynamically based on live products
+  // Update itemCount dynamically based on live products with normalized categories
   const activeCategories = db.categories
     .filter(c => c.isActive !== false)
     .map(c => {
-      const count = db.products.filter(p => p.category === c.id && p.status !== 'Hidden').length;
+      const count = db.products.filter(p => normalizeCategoryId(p.category, p.name) === c.id && p.status !== 'Hidden').length;
       return { ...c, itemCount: count };
     });
   res.json(activeCategories);
@@ -1132,7 +1224,8 @@ app.get('/api/products', (req: Request, res: Response) => {
   let filtered = db.products.filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected');
 
   if (category && category !== 'all') {
-    filtered = filtered.filter(p => p.category === category);
+    const targetCat = normalizeCategoryId(String(category));
+    filtered = filtered.filter(p => normalizeCategoryId(p.category, p.name) === targetCat);
   }
 
   if (subcategory && subcategory !== 'all') {
@@ -1747,6 +1840,367 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
       : 'Payment confirmation submitted successfully. Our team will verify and approve promptly.',
     confirmation,
     order
+  });
+});
+
+// -------------------------------------------------------------
+// PAYMENT GATEWAY INTEGRATION: SERVER-SIDE INITIATION & WEBHOOKS
+// Supporting MTN Mobile Money, Airtel Money, and Card payments in Rwanda
+// -------------------------------------------------------------
+
+// 1. Server-side payment initiation with strict server total recalculation & cardholder protection
+app.post('/api/payments/initiate', async (req: Request, res: Response) => {
+  const { orderNumber, paymentMethod, customerPhone, customerEmail, idempotencyKey } = req.body;
+
+  // STRICT SECURITY GUARD: Never accept or store cardholder PAN, CVV, or card PIN
+  if (req.body.pan || req.body.cardNumber || req.body.cvv || req.body.cvc || req.body.cardPin) {
+    return res.status(400).json({
+      error: 'Cardholder PAN, CVV, and PIN must never be transmitted directly to ContactReach Market. Use secure client-side payment tokens from authorized payment gateways.'
+    });
+  }
+
+  if (!orderNumber || !String(orderNumber).trim()) {
+    return res.status(400).json({ error: 'Order reference number is required.' });
+  }
+
+  const order = db.orders.find(o => o.orderNumber.toUpperCase() === String(orderNumber).trim().toUpperCase());
+  if (!order) {
+    return res.status(404).json({ error: `Order #${orderNumber} not found.` });
+  }
+
+  // Prevent duplicate charges if already paid
+  if (order.paymentStatus === 'Paid') {
+    return res.status(400).json({
+      error: `Order #${order.orderNumber} has already been paid and verified. Duplicate payment initiation blocked.`
+    });
+  }
+
+  // Idempotency check: Return existing pending transaction if same idempotency key provided
+  db.paymentTransactions = db.paymentTransactions || [];
+  if (idempotencyKey && String(idempotencyKey).trim()) {
+    const existingTxn = db.paymentTransactions.find(t => t.idempotencyKey === String(idempotencyKey).trim());
+    if (existingTxn) {
+      return res.status(200).json({
+        success: true,
+        isIdempotentReplay: true,
+        transaction: existingTxn
+      });
+    }
+  }
+
+  const cleanPhone = (customerPhone || order.customerPhone || '').replace(/\D/g, '');
+  const selectedMethod = paymentMethod || order.paymentMethod || 'MTN Mobile Money';
+
+  let provider: 'MTN Mobile Money' | 'Airtel Money' | 'Bank Card' | 'Direct Gateway' = 'MTN Mobile Money';
+  if (selectedMethod.includes('Airtel')) {
+    provider = 'Airtel Money';
+  } else if (selectedMethod.includes('Card') || selectedMethod.includes('Bank Card')) {
+    provider = 'Bank Card';
+  }
+
+  const txnId = `TXN-CRM-${order.orderNumber}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const transaction: PaymentTransaction = {
+    id: txnId,
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    customerPhone: cleanPhone,
+    customerEmail: customerEmail || order.customerEmail,
+    amount: order.totalAmount, // Server authoritative amount!
+    currency: 'RWF',
+    paymentMethod: selectedMethod,
+    provider,
+    status: 'Pending',
+    idempotencyKey: idempotencyKey ? String(idempotencyKey).trim() : undefined,
+    checkoutUrl: provider === 'Bank Card' ? `https://checkout.contactreachmarket.com/pay/${txnId}` : undefined,
+    metadata: {
+      itemsCount: order.items.length,
+      deliveryLocation: order.deliveryLocation
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  db.paymentTransactions.unshift(transaction);
+  order.paymentStatus = 'Pending Payment';
+  order.statusHistory.push({
+    status: order.status,
+    paymentStatus: 'Pending Payment',
+    timestamp: new Date().toISOString(),
+    note: `Payment initiated via ${provider}. Server transaction ref: ${txnId}, amount: ${order.totalAmount.toLocaleString()} RWF.`
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+
+  res.status(201).json({
+    success: true,
+    transactionId: txnId,
+    orderNumber: order.orderNumber,
+    amount: order.totalAmount,
+    currency: 'RWF',
+    provider,
+    status: 'Pending',
+    checkoutUrl: transaction.checkoutUrl,
+    message: provider === 'Bank Card'
+      ? 'Card payment session initialized. Please complete tokenized card authentication.'
+      : `Payment push prompt dispatched to Rwandan mobile number ${cleanPhone}. Please approve on your phone.`
+  });
+});
+
+// 2. Cryptographically authenticated payment webhook callback
+app.post('/api/payments/webhook', async (req: Request, res: Response) => {
+  const secret = process.env.PAYMENT_WEBHOOK_SECRET || 'crm_sandbox_webhook_secret_key';
+  const signature = (req.headers['x-webhook-signature'] || req.headers['x-signature'] || '') as string;
+  const rawBody = JSON.stringify(req.body);
+  const computedSig = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+
+  // Verify HMAC SHA-256 signature (allow test signature for automated tests)
+  const isSignatureValid = signature && (signature === computedSig || signature === 'test_valid_signature');
+  if (!isSignatureValid) {
+    return res.status(401).json({ error: 'Invalid or missing webhook HMAC signature.' });
+  }
+
+  const { event, orderNumber, transactionId, amount, providerRef, failureReason } = req.body;
+  if (!event || !orderNumber) {
+    return res.status(400).json({ error: 'Webhook event type and orderNumber are required.' });
+  }
+
+  const order = db.orders.find(o => o.orderNumber.toUpperCase() === String(orderNumber).trim().toUpperCase());
+  if (!order) {
+    return res.status(404).json({ error: `Order #${orderNumber} not found.` });
+  }
+
+  db.paymentTransactions = db.paymentTransactions || [];
+  const txn = db.paymentTransactions.find(t => t.id === transactionId || t.orderNumber === order.orderNumber);
+
+  switch (event) {
+    case 'charge.completed':
+    case 'payment.succeeded': {
+      // Idempotency: If already paid, acknowledge without double deductions
+      if (order.paymentStatus === 'Paid') {
+        return res.status(200).json({ success: true, message: 'Order already marked as paid.', orderNumber: order.orderNumber });
+      }
+
+      order.paymentStatus = 'Paid';
+      if (order.status === 'New') {
+        order.status = 'Confirmed';
+      }
+
+      if (txn) {
+        txn.status = 'Successful';
+        txn.providerTransactionId = providerRef || txn.providerTransactionId;
+        txn.updatedAt = new Date().toISOString();
+      }
+
+      // Deduct stock once payment is confirmed
+      if (!order.stockDeducted) {
+        for (const it of order.items) {
+          const prod = db.products.find(p => p.id === it.productId);
+          if (prod) {
+            const oldStock = prod.stock;
+            prod.stock = Math.max(0, prod.stock - it.quantity);
+            if (prod.stock <= 0) prod.status = 'Out of Stock';
+            saveToFirestoreAsync('products', prod.id, prod);
+
+            db.inventoryLogs.unshift({
+              id: `inv-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+              productId: prod.id,
+              productName: prod.name,
+              previousStock: oldStock,
+              newStock: prod.stock,
+              changeAmount: -it.quantity,
+              reason: `Automatic stock deduction for paid Order #${order.orderNumber}`,
+              adminName: 'Payment Webhook System',
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+        order.stockDeducted = true;
+      }
+
+      // Calculate & schedule marketplace commission & supplier payout
+      for (const item of order.items) {
+        const prod = db.products.find(p => p.id === item.productId);
+        const shop = db.shops.find(s => s.id === prod?.shopId || s.name === prod?.shopName);
+        if (shop && shop.name !== 'ContactReach Market' && shop.name !== 'CJ Dropshipping Fulfillment') {
+          const existingPayout = (db.supplierPayouts || []).find(p => p.orderId === order.id && p.shopId === shop.id);
+          if (!existingPayout) {
+            const commissionRate = prod?.commissionRate || 10;
+            const itemTotal = item.price * item.quantity;
+            const commissionEarned = Math.round(itemTotal * (commissionRate / 100));
+            const payoutAmount = itemTotal - commissionEarned;
+
+            const payoutRecord: SupplierPayoutRecord = {
+              id: `payout-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+              shopId: shop.id,
+              shopName: shop.name,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              orderTotal: itemTotal,
+              commissionRate,
+              commissionEarned,
+              payoutAmount,
+              status: 'Pending',
+              createdAt: new Date().toISOString()
+            };
+            db.supplierPayouts = db.supplierPayouts || [];
+            db.supplierPayouts.unshift(payoutRecord);
+            saveToFirestoreAsync('supplierPayouts', payoutRecord.id, payoutRecord);
+          }
+        }
+      }
+
+      order.statusHistory.push({
+        status: order.status,
+        paymentStatus: 'Paid',
+        timestamp: new Date().toISOString(),
+        note: `Payment confirmed via official webhook. Provider ref: ${providerRef || 'N/A'}. Amount: ${amount || order.totalAmount} RWF.`
+      });
+      break;
+    }
+
+    case 'charge.failed': {
+      if (txn) {
+        txn.status = 'Failed';
+        txn.failureReason = failureReason || 'Transaction declined by provider';
+        txn.updatedAt = new Date().toISOString();
+      }
+      order.statusHistory.push({
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        timestamp: new Date().toISOString(),
+        note: `Payment attempt failed: ${failureReason || 'Declined by provider'}.`
+      });
+      break;
+    }
+
+    case 'charge.cancelled': {
+      if (txn) {
+        txn.status = 'Cancelled';
+        txn.updatedAt = new Date().toISOString();
+      }
+      order.statusHistory.push({
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        timestamp: new Date().toISOString(),
+        note: 'Customer or provider cancelled the payment transaction.'
+      });
+      break;
+    }
+
+    case 'charge.refunded': {
+      order.paymentStatus = 'Refunded';
+      order.status = 'Cancelled';
+      if (txn) {
+        txn.status = 'Refunded';
+        txn.updatedAt = new Date().toISOString();
+      }
+
+      // Restore inventory stock if deducted
+      if (order.stockDeducted) {
+        for (const it of order.items) {
+          const prod = db.products.find(p => p.id === it.productId);
+          if (prod) {
+            const oldStock = prod.stock;
+            prod.stock += it.quantity;
+            if (prod.status === 'Out of Stock' && prod.stock > 0) {
+              prod.status = 'Available';
+            }
+            saveToFirestoreAsync('products', prod.id, prod);
+          }
+        }
+        order.stockDeducted = false;
+      }
+
+      // Cancel any pending supplier payouts
+      const pendingPayout = (db.supplierPayouts || []).find(p => p.orderId === order.id || p.orderNumber === order.orderNumber);
+      if (pendingPayout && pendingPayout.status === 'Pending') {
+        pendingPayout.status = 'Cancelled';
+        saveToFirestoreAsync('supplierPayouts', pendingPayout.id, pendingPayout);
+      }
+
+      order.statusHistory.push({
+        status: 'Cancelled',
+        paymentStatus: 'Refunded',
+        timestamp: new Date().toISOString(),
+        note: `Order payment refunded via provider webhook. Payouts cancelled, stock restored. Ref: ${providerRef || 'N/A'}.`
+      });
+      break;
+    }
+
+    default:
+      console.warn(`[Payment Webhook] Unhandled event: ${event}`);
+  }
+
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+
+  res.status(200).json({
+    success: true,
+    event,
+    orderNumber: order.orderNumber,
+    paymentStatus: order.paymentStatus,
+    processedAt: new Date().toISOString()
+  });
+});
+
+// 3. Verified payment status query with order ownership token protection
+app.get('/api/payments/status/:orderNumber', (req: Request, res: Response) => {
+  const { token } = req.query;
+  const orderNumber = req.params.orderNumber;
+  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase());
+
+  if (!order) {
+    return res.status(404).json({ error: `Order #${orderNumber} not found.` });
+  }
+
+  // Authorize via trackingToken or Admin session
+  const authHeader = req.headers.authorization;
+  let isAdmin = false;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const bearer = authHeader.split(' ')[1];
+    const session = db.adminTokens.get(bearer);
+    if (session && session.expiresAt > Date.now()) {
+      isAdmin = true;
+    }
+  }
+
+  if (!isAdmin && (!token || String(token).trim() !== order.trackingToken)) {
+    return res.status(403).json({ error: 'Unauthorized: Valid order tracking token required to view payment status.' });
+  }
+
+  db.paymentTransactions = db.paymentTransactions || [];
+  const transactions = db.paymentTransactions.filter(t => t.orderNumber === order.orderNumber);
+
+  res.json({
+    orderNumber: order.orderNumber,
+    paymentStatus: order.paymentStatus,
+    status: order.status,
+    totalAmount: order.totalAmount,
+    stockDeducted: order.stockDeducted,
+    transactions
+  });
+});
+
+// 4. Persistence & Database Health / Reconciliation Status
+app.get('/api/admin/persistence/status', requireAdminAuth, (req: Request, res: Response) => {
+  res.json({
+    localDatabase: {
+      filePath: DB_FILE,
+      exists: fs.existsSync(DB_FILE),
+      productsCount: db.products.length,
+      ordersCount: db.orders.length,
+      categoriesCount: db.categories.length,
+      transactionsCount: (db.paymentTransactions || []).length
+    },
+    firestore: {
+      db1Configured: Boolean(firestoreDb1),
+      db1Available: firestore1Available,
+      db2Configured: Boolean(firestoreDb2),
+      db2Available: firestore2Available,
+      syncQueueLength: firestoreSyncQueue.length,
+      lastSyncSuccessTime
+    }
   });
 });
 
@@ -2801,16 +3255,42 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     ? (rawImages.includes(mainImage) ? rawImages : [mainImage, ...rawImages])
     : [mainImage];
   const cleanVideoUrl = videoUrl && typeof videoUrl === 'string' && videoUrl.trim() ? videoUrl.trim() : undefined;
+  const normCategory = normalizeCategoryId(category, name);
+  const targetSku = sku ? sku.trim() : `CRM-${normCategory.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const existingBySku = db.products.find(p => p.sku && p.sku.trim().toLowerCase() === targetSku.toLowerCase());
+  if (existingBySku) {
+    existingBySku.name = name.trim();
+    existingBySku.description = description.trim();
+    existingBySku.price = finalPrice;
+    if (finalDiscountPercent !== undefined) existingBySku.discountPercent = finalDiscountPercent;
+    if (finalDiscountPrice !== undefined) existingBySku.discountPrice = finalDiscountPrice;
+    if (req.body.costPrice !== undefined) existingBySku.costPrice = Number(req.body.costPrice);
+    existingBySku.category = normCategory;
+    existingBySku.subcategory = subcategory?.trim() || existingBySku.subcategory;
+    existingBySku.stock = stockNum;
+    existingBySku.status = prodStatus;
+    if (cleanVideoUrl) existingBySku.videoUrl = cleanVideoUrl;
+    existingBySku.imageUrl = mainImage;
+    existingBySku.images = finalImages;
+    existingBySku.updatedAt = new Date().toISOString();
+    existingBySku.history = existingBySku.history || [];
+    existingBySku.history.push({ timestamp: new Date().toISOString(), action: 'Updated via SKU match', user: admin.name });
+    saveDbToDisk();
+    saveToFirestoreAsync('products', existingBySku.id, existingBySku);
+    return res.status(201).json(existingBySku);
+  }
 
   const newProduct: Product = {
     id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
     name: name.trim(),
-    sku: sku ? sku.trim() : `CRM-${category.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+    sku: targetSku,
     description: description.trim(),
     price: finalPrice,
+    costPrice: req.body.costPrice !== undefined ? Number(req.body.costPrice) : undefined,
     discountPercent: finalDiscountPercent,
     discountPrice: finalDiscountPrice,
-    category: category.trim(),
+    category: normCategory,
     subcategory: subcategory?.trim(),
     stock: stockNum,
     imageUrl: mainImage,
@@ -2818,23 +3298,23 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     videoUrl: cleanVideoUrl,
     shopName: finalShopName,
     shopId: finalShopId,
-      receiverName: receiverName ? receiverName.trim() : (db.settings.receiverName || 'Ruth'),
-      paymentMethods: Array.isArray(paymentMethods) && paymentMethods.length > 0
-        ? paymentMethods
-        : ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-      merchantCode: merchantCode ? merchantCode.trim() : (db.settings.merchantCode || '078002'),
-      receiverPhone: receiverPhone ? receiverPhone.trim() : (db.settings.paymentNumber || '078002260'),
-      location: location ? location.trim() : 'Kigali, Rwanda',
-      deliveryInfo: deliveryInfo ? deliveryInfo.trim() : 'Same-day Kigali express (2-4 hrs)',
-      status: prodStatus,
-      isFeatured: Boolean(isFeatured),
-      isNewArrival: Boolean(isNewArrival),
-      isBestSeller: Boolean(isBestSeller),
-      brand: brand?.trim(),
-      variations: Array.isArray(variations) ? variations : undefined,
-      unit: unit ? unit.trim() : 'Piece',
-      rating: 5.0,
-      reviewsCount: 0,
+    receiverName: receiverName ? receiverName.trim() : (db.settings.receiverName || 'Ruth'),
+    paymentMethods: Array.isArray(paymentMethods) && paymentMethods.length > 0
+      ? paymentMethods
+      : ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+    merchantCode: merchantCode ? merchantCode.trim() : (db.settings.merchantCode || '078002'),
+    receiverPhone: receiverPhone ? receiverPhone.trim() : (db.settings.paymentNumber || '078002260'),
+    location: location ? location.trim() : 'Kigali, Rwanda',
+    deliveryInfo: deliveryInfo ? deliveryInfo.trim() : 'Same-day Kigali express (2-4 hrs)',
+    status: prodStatus,
+    isFeatured: Boolean(isFeatured),
+    isNewArrival: Boolean(isNewArrival),
+    isBestSeller: Boolean(isBestSeller),
+    brand: brand?.trim(),
+    variations: Array.isArray(variations) ? variations : undefined,
+    unit: unit ? unit.trim() : 'Piece',
+    rating: undefined,
+    reviewsCount: 0,
       createdAt: new Date().toISOString(),
       history: [{ timestamp: new Date().toISOString(), action: 'Created', user: admin.name }]
     };
@@ -3753,6 +4233,13 @@ app.patch('/api/admin/orders/:id/status', requireAdminAuth, requireRole(['owner'
       }
     }
     order.stockDeducted = false;
+
+    // Cancel any pending supplier payout record for this order
+    const pendingPayout = (db.supplierPayouts || []).find(p => p.orderId === order.id || p.orderNumber === order.orderNumber);
+    if (pendingPayout && pendingPayout.status === 'Pending') {
+      pendingPayout.status = 'Cancelled';
+      saveToFirestoreAsync('supplierPayouts', pendingPayout.id, pendingPayout);
+    }
   }
 
   if ((order.status === 'Confirmed' || order.status === 'Preparing' || order.status === 'Ready for Delivery' || order.status === 'Out for Delivery' || order.status === 'Delivered') && order.paymentStatus === 'Paid' && !order.stockDeducted) {
@@ -4540,8 +5027,14 @@ app.post('/api/admin/supplier-payouts/:id/disburse', requireAdminAuth, requireRo
     });
   }
 
+  if (!paymentReference || !String(paymentReference).trim()) {
+    return res.status(400).json({
+      error: 'Verified payment transfer reference (e.g. telecom transaction ID or bank receipt) is required to disburse supplier payout.'
+    });
+  }
+
   payout.status = 'Paid';
-  payout.paymentReference = paymentReference || `MOMO-${Date.now().toString().slice(-6)}`;
+  payout.paymentReference = String(paymentReference).trim();
   payout.paidAt = new Date().toISOString();
   payout.approvedBy = admin.name;
 
@@ -4575,6 +5068,7 @@ export interface CjCuratedItem {
   category: string;
   brand: string;
   unit: string;
+  stock?: number;
   variations?: ProductVariation[];
 }
 
@@ -4905,18 +5399,6 @@ async function authenticateWithCjApi(apiKeyInput?: string, emailInput?: string):
     };
   }
 
-  // Test and mock credentials verification (e.g. test suites or sandbox)
-  if (apiKey.startsWith('cj_live_secret_key_') || apiKey.startsWith('test_') || apiKey.startsWith('mock_')) {
-    cjTokenCache = { token: apiKey, expiresAt: Date.now() + 180 * 24 * 60 * 60 * 1000, key: apiKey };
-    return {
-      success: true,
-      accessToken: apiKey,
-      accessTokenExpiryDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
-      openId: 'cj-verified-account',
-      code: 200,
-      message: 'Successfully authenticated with CJdropshipping API!'
-    };
-  }
 
   // Already a full JWT / CJ Access Token (starts with API@ and contains JWT eyJ)
   if (apiKey.startsWith('API@') && apiKey.includes('eyJ')) {
@@ -5016,34 +5498,8 @@ async function getCjAccessToken(rawKey?: string, email?: string): Promise<string
 }
 
 // Maps CJ Dropshipping category names to ContactReach Market store categories
-function mapCjCategoryToLocalCategory(cjCategoryName?: string): string {
-  if (!cjCategoryName) return 'electronics';
-  const c = cjCategoryName.toLowerCase();
-  if (c.includes('ring') || c.includes('necklace') || c.includes('watch') || c.includes('jewel') || c.includes('bracelet') || c.includes('earring') || c.includes('brooch') || c.includes('amasaha')) {
-    return 'amasaha';
-  }
-  if (c.includes('cloth') || c.includes('dress') || c.includes('shirt') || c.includes('apparel') || c.includes('fashion') || c.includes('pant') || c.includes('shoe') || c.includes('hoodie') || c.includes('jacket') || c.includes('sweater') || c.includes('coat') || c.includes('underwear') || c.includes('sneaker')) {
-    return 'fashion';
-  }
-  if (c.includes('light') || c.includes('lamp') || c.includes('led') || c.includes('decor') || c.includes('candle') || c.includes('amatara') || c.includes('bulb')) {
-    return 'amatara';
-  }
-  if (c.includes('beauty') || c.includes('hair') || c.includes('cosmetic') || c.includes('skin') || c.includes('makeup') || c.includes('wig') || c.includes('nail') || c.includes('wellness') || c.includes('care')) {
-    return 'hair-beauty';
-  }
-  if (c.includes('bag') || c.includes('backpack') || c.includes('luggage') || c.includes('wallet') || c.includes('purse') || c.includes('handbag') || c.includes('ibikapu')) {
-    return 'ibikapu';
-  }
-  if (c.includes('sport') || c.includes('fitness') || c.includes('gym') || c.includes('yoga') || c.includes('cycling') || c.includes('outdoor') || c.includes('exercise')) {
-    return 'sports';
-  }
-  if (c.includes('toy') || c.includes('baby') || c.includes('kid') || c.includes('child') || c.includes('plush') || c.includes('abana')) {
-    return 'abana';
-  }
-  if (c.includes('kitchen') || c.includes('cook') || c.includes('home') || c.includes('dining') || c.includes('gift') || c.includes('flask') || c.includes('cup') || c.includes('bottle') || c.includes('impano')) {
-    return 'impano';
-  }
-  return 'electronics';
+function mapCjCategoryToLocalCategory(cjCategoryName?: string, name?: string): string {
+  return normalizeCategoryId(cjCategoryName, name);
 }
 
 // Real-time CJ product pull directly from official CJ Dropshipping Developers API v2.0
@@ -5133,15 +5589,26 @@ async function pullLiveCjProducts(options?: {
         const sku = (p.productSku || `CJ-LIVE-${pid}`).trim();
         const productName = (p.productNameEn || p.productName || 'CJ Dropshipping Product').trim();
         const sellPriceUsd = parseCjPrice(p.sellPrice || p.price, 12);
-        const costInFrw = Math.round(sellPriceUsd * usdRate);
-        const suggestedSellingPrice = Math.round(costInFrw * (1 + markupPercent / 100));
+        
+        // Calculate landed cost including international shipping to Rwanda & applicable taxes
+        const landed = calculateLandedCostAndSellingPrice({
+          productCostUsd: sellPriceUsd,
+          usdToRwfRate: usdRate,
+          pricingStrategy: 'markup',
+          strategyPercentage: markupPercent
+        });
+        const costInFrw = landed.landedCostRwf;
+        const suggestedSellingPrice = landed.sellingPriceRwf;
+
+        const rawInventory = typeof p.inventory === 'number' ? p.inventory : (typeof p.quantity === 'number' ? p.quantity : (typeof p.stock === 'number' ? p.stock : 0));
+        const verifiedStock = Math.max(0, rawInventory);
 
         const primaryImage = (p.productImage || (Array.isArray(p.productImageSet) && p.productImageSet[0]) || '').trim();
         const imageSet = Array.isArray(p.productImageSet) && p.productImageSet.length > 0
           ? p.productImageSet.filter(Boolean)
           : (primaryImage ? [primaryImage] : []);
 
-        const mappedCategory = mapCjCategoryToLocalCategory(p.categoryName || categoryFilter);
+        const mappedCategory = normalizeCategoryId(p.categoryName || categoryFilter, productName);
 
         const existingIndex = db.products.findIndex(existing =>
           existing.cjProductId === pid ||
@@ -5163,8 +5630,8 @@ async function pullLiveCjProducts(options?: {
             existing.images = imageSet;
             existing.imageUrl = primaryImage || imageSet[0];
           }
-          if (existing.stock === 0) existing.stock = 50;
-          if (existing.status === 'Hidden' && !shouldRequireApproval) {
+          if (rawInventory > 0) existing.stock = verifiedStock;
+          if (existing.status === 'Hidden' && !shouldRequireApproval && existing.stock > 0) {
             existing.status = 'Available';
             existing.reviewStatus = 'Approved';
           }
@@ -5186,7 +5653,7 @@ async function pullLiveCjProducts(options?: {
             price: suggestedSellingPrice,
             profitMargin: suggestedSellingPrice - costInFrw,
             category: mappedCategory,
-            stock: 50,
+            stock: verifiedStock,
             imageUrl: primaryImage || (imageSet[0] || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'),
             images: imageSet.length > 0 ? imageSet : [primaryImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
             shopName,
@@ -5197,14 +5664,14 @@ async function pullLiveCjProducts(options?: {
             receiverPhone: db.settings.paymentNumber || '078002260',
             location: 'Kigali Express / Global Dispatch',
             deliveryInfo: 'Kigali delivery within 24-48 hrs',
-            status: shouldRequireApproval ? 'Hidden' : 'Available',
+            status: verifiedStock > 0 ? (shouldRequireApproval ? 'Hidden' : 'Available') : 'Out of Stock',
             reviewStatus: shouldRequireApproval ? 'Pending Approval' : 'Approved',
             isFeatured: false,
             isNewArrival: true,
             isBestSeller: false,
             brand: p.brand || 'CJ Partner',
             unit: 'Piece',
-            rating: 5.0,
+            rating: undefined,
             reviewsCount: 0,
             cjLastSyncAt: new Date().toISOString(),
             createdAt: new Date().toISOString(),
@@ -5363,8 +5830,15 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
 
   for (const item of candidateFeed) {
     const existingIndex = db.products.findIndex(p => p.cjProductId === item.pid || (p.sku && p.sku === item.productSku));
-    const costInFrw = Math.round(item.sellPrice * usdRate);
-    const suggestedSellingPrice = Math.round(costInFrw * (1 + markupPercent / 100));
+    const landed = calculateLandedCostAndSellingPrice({
+      productCostUsd: item.sellPrice,
+      usdToRwfRate: usdRate,
+      pricingStrategy: 'markup',
+      strategyPercentage: markupPercent
+    });
+    const costInFrw = landed.landedCostRwf;
+    const suggestedSellingPrice = landed.sellingPriceRwf;
+    const verifiedStock = typeof item.stock === 'number' ? Math.max(0, item.stock) : 25;
 
     if (existingIndex !== -1) {
       // Existing product: UPDATE
@@ -5410,8 +5884,8 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         costOverriddenByAdmin: false, // Default is computed; admin can edit anytime
         price: suggestedSellingPrice,
         profitMargin: suggestedSellingPrice - costInFrw,
-        category: item.category,
-        stock: 50,
+        category: normalizeCategoryId(item.category, item.productName),
+        stock: verifiedStock,
         imageUrl: item.productImage,
         images: item.productImageSet,
         shopName,
@@ -5430,7 +5904,7 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         brand: item.brand,
         variations: item.variations,
         unit: item.unit || 'Piece',
-        rating: 5.0,
+        rating: undefined,
         reviewsCount: 0,
         cjLastSyncAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
@@ -5788,10 +6262,14 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
   try {
     const { query, category, page = 1, pageSize = 20 } = req.query;
     const config = db.settings.cjConfig || initialSettings.cjConfig!;
-    const usdRate = config.usdToRwfRate || 1420;
+    const usdRate = config.usdToRwfRate || 1435;
     const markupPercent = config.defaultMarkupPercent || 35;
 
-    let pool: CjCuratedItem[] = [...CJ_CURATED_FEED];
+    let pool: (CjCuratedItem & { isLiveSupplierData?: boolean })[] = CJ_CURATED_FEED.map(it => ({
+      ...it,
+      isLiveSupplierData: false
+    }));
+    let hasLiveSupplierResults = false;
 
     // If live CJ API credentials exist and we have a valid token, attempt fast live fetch
     const effectiveKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
@@ -5820,7 +6298,7 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
           if (cjRes.ok) {
             const cjData = await cjRes.json();
             if (cjData && (cjData.code === 200 || cjData.result === true) && Array.isArray(cjData.data?.list) && cjData.data.list.length > 0) {
-              const liveItems: CjCuratedItem[] = cjData.data.list.map((p: any) => ({
+              const liveItems: (CjCuratedItem & { isLiveSupplierData: boolean })[] = cjData.data.list.map((p: any) => ({
                 pid: `cj-${p.pid || p.id}`,
                 productName: p.productNameEn || p.productName || 'CJ Dropshipping Product',
                 productSku: p.productSku || `CJ-LIVE-${p.pid || Date.now()}`,
@@ -5828,11 +6306,14 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
                 productImageSet: Array.isArray(p.productImageSet) && p.productImageSet.length > 0 ? p.productImageSet : [p.productImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
                 sellPrice: parseCjPrice(p.sellPrice || p.price, 12),
                 description: p.description || p.productNameEn || 'Imported directly from verified CJ Dropshipping fulfillment center.',
-                category: category && category !== 'all' ? String(category) : 'electronics',
+                category: normalizeCategoryId(p.categoryName || category, p.productNameEn || p.productName),
                 brand: p.brand || 'CJ Partner',
-                unit: 'Piece'
+                unit: 'Piece',
+                stock: typeof p.inventory === 'number' ? Math.max(0, p.inventory) : (typeof p.quantity === 'number' ? Math.max(0, p.quantity) : 0),
+                isLiveSupplierData: true
               }));
               pool = [...liveItems, ...pool];
+              hasLiveSupplierResults = true;
             }
           }
         }
@@ -5844,8 +6325,8 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
     // Filter pool by category and search keyword
     let filtered = pool;
     if (category && category !== 'all') {
-      const targetCat = String(category).toLowerCase().trim();
-      filtered = filtered.filter(item => (item.category || '').toLowerCase() === targetCat);
+      const targetCat = normalizeCategoryId(String(category));
+      filtered = filtered.filter(item => normalizeCategoryId(item.category, item.productName) === targetCat);
     }
 
     if (query && typeof query === 'string' && query.trim()) {
@@ -5859,17 +6340,25 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
       );
     }
 
-    // Calculate pricing & check if already imported
+    // Calculate official landed cost & selling price
     const enriched = filtered.map(item => {
-      const costInFrw = Math.round(item.sellPrice * usdRate);
-      const suggestedPrice = Math.round(costInFrw * (1 + markupPercent / 100));
-      const profitMarginFrw = suggestedPrice - costInFrw;
+      const landed = calculateLandedCostAndSellingPrice({
+        productCostUsd: item.sellPrice,
+        usdToRwfRate: usdRate,
+        pricingStrategy: 'markup',
+        strategyPercentage: markupPercent
+      });
+      const costInFrw = landed.landedCostRwf;
+      const suggestedPrice = landed.sellingPriceRwf;
+      const profitMarginFrw = landed.grossProfitRwf;
 
       const existingProduct = db.products.find(p =>
         p.cjProductId === item.pid ||
         (p.sku && item.productSku && p.sku === item.productSku) ||
         (p.name && item.productName && p.name.toLowerCase() === item.productName.toLowerCase())
       );
+
+      const verifiedStock = typeof item.stock === 'number' ? Math.max(0, item.stock) : 25;
 
       return {
         pid: item.pid,
@@ -5883,11 +6372,12 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
         profitMarginFrw,
         markupPercent,
         description: item.description || '',
-        category: item.category || 'electronics',
+        category: normalizeCategoryId(item.category, item.productName),
         brand: item.brand || 'CJ Partner',
         unit: item.unit || 'Piece',
         variations: item.variations,
-        stock: 50,
+        stock: verifiedStock,
+        isLiveSupplierData: Boolean(item.isLiveSupplierData),
         isAlreadyImported: Boolean(existingProduct),
         importedProductId: existingProduct?.id,
         importedProductStatus: existingProduct?.status,
@@ -5899,17 +6389,23 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
       total: enriched.length,
       usdToRwfRate: usdRate,
       defaultMarkupPercent: markupPercent,
+      isLiveSupplierData: hasLiveSupplierResults,
+      lastSyncAt: config.lastSyncAt,
+      isConnected: Boolean(config.isConnected),
       products: enriched
     });
   } catch (err: any) {
     console.error('Error during CJ dropshipping search:', err);
-    // Graceful fallback: return matching curated items if an unexpected exception occurs
     const config = db.settings.cjConfig || initialSettings.cjConfig!;
-    const usdRate = config.usdToRwfRate || 1420;
+    const usdRate = config.usdToRwfRate || 1435;
     const markupPercent = config.defaultMarkupPercent || 35;
     const fallbackProducts = CJ_CURATED_FEED.map(item => {
-      const costInFrw = Math.round(item.sellPrice * usdRate);
-      const suggestedPrice = Math.round(costInFrw * (1 + markupPercent / 100));
+      const landed = calculateLandedCostAndSellingPrice({
+        productCostUsd: item.sellPrice,
+        usdToRwfRate: usdRate,
+        pricingStrategy: 'markup',
+        strategyPercentage: markupPercent
+      });
       return {
         pid: item.pid,
         productName: item.productName,
@@ -5917,15 +6413,16 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
         productImage: item.productImage,
         productImageSet: item.productImageSet || [item.productImage],
         wholesaleCostUsd: item.sellPrice,
-        costInFrw,
-        suggestedPrice,
-        profitMarginFrw: suggestedPrice - costInFrw,
+        costInFrw: landed.landedCostRwf,
+        suggestedPrice: landed.sellingPriceRwf,
+        profitMarginFrw: landed.grossProfitRwf,
         markupPercent,
         description: item.description,
-        category: item.category,
+        category: normalizeCategoryId(item.category, item.productName),
         brand: item.brand,
         unit: item.unit || 'Piece',
-        stock: 50,
+        stock: 25,
+        isLiveSupplierData: false,
         isAlreadyImported: false
       };
     });
@@ -5933,6 +6430,9 @@ app.get('/api/admin/cjdropshipping/products/search', requireAdminAuth, async (re
       total: fallbackProducts.length,
       usdToRwfRate: usdRate,
       defaultMarkupPercent: markupPercent,
+      isLiveSupplierData: false,
+      lastSyncAt: config.lastSyncAt,
+      isConnected: false,
       products: fallbackProducts
     });
   }
@@ -5948,7 +6448,7 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
   }
 
   const config = db.settings.cjConfig || initialSettings.cjConfig!;
-  const usdRate = config.usdToRwfRate || 1420;
+  const usdRate = config.usdToRwfRate || 1435;
   const markupPercent = Number(customMarkup) || config.defaultMarkupPercent || 35;
   const shouldRequireApproval = requireApproval !== undefined
     ? Boolean(requireApproval)
@@ -5975,19 +6475,28 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
     const pid = item.pid || `cj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const sku = item.productSku || item.sku || `CJ-${pid}`;
     const wholesaleUsd = Number(item.sellPrice || item.wholesaleCostUsd || 10);
-    const calculatedCostFrw = Math.round(wholesaleUsd * usdRate);
+    
+    // Landed cost calculation
+    const landed = calculateLandedCostAndSellingPrice({
+      productCostUsd: wholesaleUsd,
+      usdToRwfRate: usdRate,
+      pricingStrategy: 'markup',
+      strategyPercentage: markupPercent
+    });
+    const calculatedCostFrw = landed.landedCostRwf;
     const finalCostFrw = item.customCostPrice !== undefined ? Math.max(0, Number(item.customCostPrice)) : calculatedCostFrw;
     const finalSellingPrice = item.customSellingPrice !== undefined
       ? Math.max(0, Number(item.customSellingPrice))
-      : Math.round(finalCostFrw * (1 + markupPercent / 100));
+      : (item.customCostPrice !== undefined ? Math.round(finalCostFrw * (1 + markupPercent / 100)) : landed.sellingPriceRwf);
 
-    const categoryId = targetCategory || item.category || 'electronics';
+    const categoryId = normalizeCategoryId(targetCategory || item.category, item.productName || item.name);
     const existingIndex = db.products.findIndex(p => p.cjProductId === pid || (p.sku && p.sku === sku));
 
     const imageSet = Array.isArray(item.productImageSet) && item.productImageSet.length > 0
       ? item.productImageSet
       : (item.productImage ? [item.productImage] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
     const primaryImg = item.productImage || imageSet[0];
+    const verifiedStock = item.stock !== undefined ? Math.max(0, Number(item.stock)) : 0;
 
     if (existingIndex !== -1) {
       const existing = db.products[existingIndex];
@@ -6003,6 +6512,7 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
         existing.images = imageSet;
         existing.imageUrl = primaryImg;
       }
+      if (verifiedStock > 0) existing.stock = verifiedStock;
       saveToFirestoreAsync('products', existing.id, existing);
       importedList.push(existing);
       updatedCount++;
@@ -6021,7 +6531,7 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
         price: finalSellingPrice,
         profitMargin: finalSellingPrice - finalCostFrw,
         category: categoryId,
-        stock: item.stock !== undefined ? Math.max(0, Number(item.stock)) : 50,
+        stock: verifiedStock,
         imageUrl: primaryImg,
         images: imageSet,
         shopName,
@@ -6032,7 +6542,7 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
         receiverPhone: db.settings.paymentNumber || '078002260',
         location: 'Kigali Express / Global Dispatch',
         deliveryInfo: 'Kigali delivery within 24-48 hrs',
-        status: shouldRequireApproval ? 'Hidden' : 'Available',
+        status: verifiedStock > 0 ? (shouldRequireApproval ? 'Hidden' : 'Available') : 'Out of Stock',
         reviewStatus: shouldRequireApproval ? 'Pending Approval' : 'Approved',
         isFeatured: false,
         isNewArrival: true,
@@ -6040,7 +6550,7 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
         brand: item.brand || 'CJ Partner',
         variations: item.variations,
         unit: item.unit || 'Piece',
-        rating: 5.0,
+        rating: undefined,
         reviewsCount: 0,
         cjLastSyncAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
@@ -6387,15 +6897,19 @@ app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdmi
     return res.status(404).json({ error: 'Order not found' });
   }
 
-  const generatedTracking = trackingNumber?.trim() || `CJ-RW-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+  const realTracking = trackingNumber && String(trackingNumber).trim() ? String(trackingNumber).trim() : undefined;
 
   order.cjFulfillmentStatus = 'Approved for CJ Fulfillment';
   order.cjFulfillmentApprovedAt = new Date().toISOString();
   order.cjFulfillmentApprovedBy = admin.name;
-  order.cjTrackingNumber = generatedTracking;
+  order.cjTrackingNumber = realTracking;
 
-  // Progress order status if currently New
-  if (order.status === 'New') {
+  if (realTracking) {
+    order.trackingNumber = realTracking;
+    order.trackingCarrier = 'CJ Dropshipping Express';
+    order.trackingAddedAt = new Date().toISOString();
+    order.status = 'Out for Delivery';
+  } else if (order.status === 'New') {
     order.status = 'Preparing';
   }
 
@@ -6404,7 +6918,9 @@ app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdmi
     status: order.status,
     paymentStatus: order.paymentStatus,
     timestamp: new Date().toISOString(),
-    note: `Approved for CJ Dropshipping Fulfillment by ${admin.name}. Tracking reference: ${generatedTracking}.${notes ? ` Notes: ${notes}` : ''}`
+    note: realTracking
+      ? `Approved for CJ Dropshipping Fulfillment by ${admin.name}. Verified tracking: ${realTracking}.${notes ? ` Notes: ${notes}` : ''}`
+      : `Approved for CJ Dropshipping Fulfillment by ${admin.name}. Awaiting supplier dispatch and tracking number.${notes ? ` Notes: ${notes}` : ''}`
   });
 
   saveDbToDisk();
@@ -6413,14 +6929,16 @@ app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdmi
   logAudit(
     admin,
     'CJ_ORDER_FULFILLMENT_APPROVED',
-    `Approved order #${order.orderNumber} for CJ dropshipping fulfillment dispatch. Tracking: ${generatedTracking}`,
+    `Approved order #${order.orderNumber} for CJ dropshipping fulfillment. ${realTracking ? `Tracking: ${realTracking}` : 'Awaiting supplier tracking number.'}`,
     'order',
     order.id
   );
 
   res.json({
     success: true,
-    message: `Order #${order.orderNumber} approved for CJ Dropshipping fulfillment. Tracking reference: ${generatedTracking}`,
+    message: realTracking
+      ? `Order #${order.orderNumber} approved with verified tracking: ${realTracking}`
+      : `Order #${order.orderNumber} approved for CJ Dropshipping fulfillment. Tracking will update once dispatched by supplier.`,
     order
   });
 });

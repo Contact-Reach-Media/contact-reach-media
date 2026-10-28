@@ -42,7 +42,28 @@ export type PaymentMethod =
   | 'MTN Merchant Code'
   | 'Airtel Money'
   | 'Bank Transfer'
+  | 'Bank Card'
   | 'Cash on Delivery';
+
+export interface PaymentTransaction {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  customerPhone: string;
+  customerEmail?: string;
+  amount: number;
+  currency: string;
+  paymentMethod: PaymentMethod;
+  provider: 'MTN Mobile Money' | 'Airtel Money' | 'Bank Card' | 'Direct Gateway';
+  status: 'Pending' | 'Successful' | 'Failed' | 'Cancelled' | 'Expired' | 'Refunded';
+  providerTransactionId?: string;
+  idempotencyKey?: string;
+  checkoutUrl?: string;
+  failureReason?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type ProductStatus = 'Available' | 'Out of Stock' | 'Hidden' | 'Archived';
 

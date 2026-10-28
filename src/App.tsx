@@ -116,9 +116,38 @@ export default function App() {
   const [shops, setShops] = useState<VendorShop[]>(initialShops);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
 
-  // Cart & Wishlist
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [wishlist, setWishlist] = useState<string[]>([]);
+  // Cart & Wishlist with localStorage Persistence
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('crm_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('crm_wishlist');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('crm_cart', JSON.stringify(cart));
+    } catch {}
+  }, [cart]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('crm_wishlist', JSON.stringify(wishlist));
+    } catch {}
+  }, [wishlist]);
 
   // Filtering & Catalog
   const [selectedCategory, setSelectedCategory] = useState<string>(initialRoute.category);
@@ -237,6 +266,22 @@ export default function App() {
         const currentBuyer = await api.buyerGetMe();
         if (currentBuyer) setBuyerUser(currentBuyer);
       } catch {}
+
+      // Reconcile and clamp existing cart items against fresh inventory
+      setCart(currentCart => {
+        if (!currentCart || currentCart.length === 0) return currentCart;
+        return currentCart.map(item => {
+          const fresh = fetchedProducts.find(p => p.id === item.product.id);
+          if (!fresh) return item;
+          const freshStock = Math.max(0, fresh.stock || 0);
+          const clampedQty = Math.min(item.quantity, freshStock);
+          return {
+            ...item,
+            product: fresh,
+            quantity: clampedQty
+          };
+        }).filter(item => item.quantity > 0 && item.product.status !== 'Out of Stock');
+      });
     } catch (err) {
       console.warn('Backend sync in fallback mode:', err);
     }
@@ -306,20 +351,34 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isAdminLoggedIn, products]);
 
-  // Cart Actions
+  // Cart Actions with Verified Stock Clamping
   const handleAddToCart = (product: Product, quantity = 1, variation?: { [key: string]: string }) => {
+    const availableStock = Math.max(0, product.stock || 0);
+    if (availableStock <= 0 || product.status === 'Out of Stock') {
+      showToast(currentLang === 'en' ? `"${product.name.slice(0, 24)}" is currently out of stock.` : `"${product.name.slice(0, 24)}" ntiri mu bubiko.`);
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
+        const potentialQty = existing.quantity + quantity;
+        const clampedQty = Math.min(potentialQty, availableStock);
+        if (potentialQty > availableStock) {
+          showToast(`Only ${availableStock} units available in stock.`);
+        } else {
+          showToast(`Added "${product.name.slice(0, 24)}..." to cart`);
+        }
         return prev.map(item =>
           item.product.id === product.id
-            ? { ...item, quantity: item.quantity + quantity, selectedVariation: variation || item.selectedVariation }
+            ? { ...item, quantity: clampedQty, selectedVariation: variation || item.selectedVariation }
             : item
         );
       }
-      return [...prev, { product, quantity, selectedVariation: variation }];
+      const initialQty = Math.min(quantity, availableStock);
+      showToast(`Added "${product.name.slice(0, 24)}..." to cart`);
+      return [...prev, { product, quantity: initialQty, selectedVariation: variation }];
     });
-    showToast(`Added "${product.name.slice(0, 24)}..." to cart`);
   };
 
   const handleUpdateCartQuantity = (productId: string, delta: number) => {
@@ -327,8 +386,14 @@ export default function App() {
       prev
         .map(item => {
           if (item.product.id === productId) {
+            const maxStock = Math.max(0, item.product.stock || 0);
             const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
+            if (newQty <= 0) return null;
+            if (newQty > maxStock) {
+              showToast(`Maximum available stock reached (${maxStock} units).`);
+              return { ...item, quantity: maxStock };
+            }
+            return { ...item, quantity: newQty };
           }
           return item;
         })
@@ -342,7 +407,13 @@ export default function App() {
   };
 
   const handleQuickBuy = (product: Product, quantity = 1, variation?: { [key: string]: string }) => {
-    setCart([{ product, quantity, selectedVariation: variation }]);
+    const availableStock = Math.max(0, product.stock || 0);
+    if (availableStock <= 0 || product.status === 'Out of Stock') {
+      showToast(currentLang === 'en' ? `"${product.name.slice(0, 24)}" is currently out of stock.` : `"${product.name.slice(0, 24)}" ntiri mu bubiko.`);
+      return;
+    }
+    const safeQty = Math.min(quantity, availableStock);
+    setCart([{ product, quantity: safeQty, selectedVariation: variation }]);
     setSelectedProduct(null);
     setIsCheckoutOpen(true);
   };

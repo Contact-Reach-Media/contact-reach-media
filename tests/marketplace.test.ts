@@ -1857,6 +1857,228 @@ async function runTests() {
     assert.strictEqual(revokedRes.status, 403, 'Deactivated admin token must be rejected with 403');
   });
 
+  await test('Landed cost engine adheres strictly to Rwanda pricing formulas', async () => {
+    const { calculateLandedCostAndSellingPrice } = await import('../src/utils/pricing.ts');
+    
+    // 15% Markup test
+    // Product cost: $10, Shipping: $7.30, CIF: $17.30, Taxes (18%): $3.11 -> Landed: $20.41 in USD equivalent
+    const markupResult = calculateLandedCostAndSellingPrice({
+      productCostUsd: 10,
+      shippingToRwandaUsd: 7.30,
+      usdToRwfRate: 1435,
+      applicableTaxesPercent: 18,
+      pricingStrategy: 'markup',
+      strategyPercentage: 15
+    });
+
+    assert(markupResult.landedCostRwf > 0, 'Landed cost must be calculated');
+    assert(markupResult.sellingPriceRwf > markupResult.landedCostRwf, 'Selling price must exceed landed cost');
+    assert(markupResult.sellingPriceRwf % 100 === 0, 'Selling price should round cleanly to 100 RWF');
+
+    // 15% Gross margin test
+    const marginResult = calculateLandedCostAndSellingPrice({
+      productCostUsd: 10,
+      shippingToRwandaUsd: 7.30,
+      usdToRwfRate: 1435,
+      applicableTaxesPercent: 18,
+      pricingStrategy: 'gross_margin',
+      strategyPercentage: 15
+    });
+    assert(marginResult.sellingPriceRwf > markupResult.sellingPriceRwf, 'Gross margin 15% price must be higher than 15% markup');
+    assert.strictEqual(marginResult.pricingStrategy, 'gross_margin');
+  });
+
+  await test('Product category normalization returns clean catalog for all canonical categories', async () => {
+    const prodRes = await fetch(`${BASE_URL}/api/products`);
+    assert.strictEqual(prodRes.status, 200);
+    const prods = await prodRes.json();
+    assert(prods.length > 50, 'Catalog should contain products');
+
+    // Verify all returned products have canonical categories
+    const validSlugs = new Set(['electronics', 'fashion', 'hair-beauty', 'amatara', 'impano', 'abana', 'amasaha', 'ibikapu', 'sports', 'books', 'supermarket']);
+    for (const p of prods) {
+      assert(validSlugs.has(p.category), `Product ${p.id} category "${p.category}" must be a canonical slug`);
+    }
+
+    // Verify category filtering matches normalized categories
+    const elecRes = await fetch(`${BASE_URL}/api/products?category=electronics`);
+    assert.strictEqual(elecRes.status, 200);
+    const elecProds = await elecRes.json();
+    assert(elecProds.length > 0, 'Electronics category must return items');
+    for (const p of elecProds) {
+      assert.strictEqual(p.category, 'electronics');
+    }
+  });
+
+  await test('Payment Gateway: Cardholder data protection, server-side initiation, and idempotency', async () => {
+    // 1. Create a test order
+    const prodsRes = await fetch(`${BASE_URL}/api/products`);
+    const prods = await prodsRes.json();
+    const testProd = prods.find((p: any) => p.stock > 5);
+
+    const orderRes = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Jean Paul Test',
+        customerPhone: '0788998877',
+        deliveryLocation: 'Gasabo',
+        deliveryAddress: 'Remera, Kigali',
+        items: [{ productId: testProd.id, quantity: 1 }],
+        paymentMethod: 'MTN Mobile Money'
+      })
+    });
+    assert.strictEqual(orderRes.status, 200);
+    const order = await orderRes.json();
+
+    // 2. Security test: Reject direct cardholder PAN / CVV transmission
+    const panLeakRes = await fetch(`${BASE_URL}/api/payments/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderNumber: order.orderNumber,
+        paymentMethod: 'Bank Card',
+        cardNumber: '4111111111111111',
+        cvv: '123'
+      })
+    });
+    assert.strictEqual(panLeakRes.status, 400, 'Direct cardholder PAN/CVV transmission must be rejected');
+    const panErr = await panLeakRes.json();
+    assert(panErr.error.includes('Cardholder PAN'), 'Must return card protection warning');
+
+    // 3. Proper initiation via MTN Mobile Money
+    const idempotencyKey = `idemp-${Date.now()}`;
+    const initRes = await fetch(`${BASE_URL}/api/payments/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderNumber: order.orderNumber,
+        paymentMethod: 'MTN Mobile Money',
+        customerPhone: '0788998877',
+        idempotencyKey
+      })
+    });
+    assert.strictEqual(initRes.status, 201, 'Payment initiation should succeed with 201 Created');
+    const initData = await initRes.json();
+    assert(initData.success, 'Initiation response must be success');
+    assert(initData.transactionId, 'Must issue server transaction ID');
+    assert.strictEqual(initData.amount, order.totalAmount, 'Initiated amount must match authoritative server total');
+
+    // 4. Safe retry / idempotency check
+    const retryRes = await fetch(`${BASE_URL}/api/payments/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderNumber: order.orderNumber,
+        paymentMethod: 'MTN Mobile Money',
+        customerPhone: '0788998877',
+        idempotencyKey
+      })
+    });
+    assert.strictEqual(retryRes.status, 200, 'Idempotent replay must return 200');
+    const retryData = await retryRes.json();
+    assert(retryData.isIdempotentReplay, 'Response should confirm idempotent replay');
+    assert.strictEqual(retryData.transaction.id, initData.transactionId);
+  });
+
+  await test('Payment Webhook: Processes charge.completed, deducts stock, and charge.refunded restores stock', async () => {
+    // 1. Create a fresh order
+    const prodsRes = await fetch(`${BASE_URL}/api/products`);
+    const prods = await prodsRes.json();
+    const testProd = prods.find((p: any) => p.stock > 5);
+    const initialStock = testProd.stock;
+
+    const orderRes = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Aline Testing',
+        customerPhone: '0788223344',
+        deliveryLocation: 'Gasabo',
+        deliveryAddress: 'Kacyiru, Kigali',
+        items: [{ productId: testProd.id, quantity: 2 }],
+        paymentMethod: 'MTN Mobile Money'
+      })
+    });
+    const order = await orderRes.json();
+
+    // 2. Reject unauthenticated webhook
+    const badWebhookRes = await fetch(`${BASE_URL}/api/payments/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-signature': 'invalid_signature_xyz'
+      },
+      body: JSON.stringify({
+        event: 'charge.completed',
+        orderNumber: order.orderNumber
+      })
+    });
+    assert.strictEqual(badWebhookRes.status, 401, 'Invalid webhook signature must return 401 Unauthorized');
+
+    // 3. Process charge.completed with valid signature
+    const goodWebhookRes = await fetch(`${BASE_URL}/api/payments/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-signature': 'test_valid_signature'
+      },
+      body: JSON.stringify({
+        event: 'charge.completed',
+        orderNumber: order.orderNumber,
+        amount: order.totalAmount,
+        providerRef: 'MOMO-PAY-RW-9988'
+      })
+    });
+    assert.strictEqual(goodWebhookRes.status, 200, 'Valid charge.completed webhook must return 200 OK');
+
+    // Verify order is now Paid and stock is deducted
+    const checkOrderRes = await fetch(`${BASE_URL}/api/orders/${order.orderNumber}?token=${order.trackingToken}`);
+    const updatedOrder = await checkOrderRes.json();
+    assert.strictEqual(updatedOrder.paymentStatus, 'Paid');
+    assert.strictEqual(updatedOrder.stockDeducted, true);
+
+    const freshProdRes = await fetch(`${BASE_URL}/api/products/${testProd.id}`);
+    const freshProd = await freshProdRes.json();
+    assert.strictEqual(freshProd.stock, initialStock - 2, 'Stock must be deducted by 2 units');
+
+    // 4. Process charge.refunded: stock must be restored
+    const refundWebhookRes = await fetch(`${BASE_URL}/api/payments/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-signature': 'test_valid_signature'
+      },
+      body: JSON.stringify({
+        event: 'charge.refunded',
+        orderNumber: order.orderNumber,
+        providerRef: 'REFUND-RW-1122'
+      })
+    });
+    assert.strictEqual(refundWebhookRes.status, 200);
+
+    const refundedProdRes = await fetch(`${BASE_URL}/api/products/${testProd.id}`);
+    const refundedProd = await refundedProdRes.json();
+    assert.strictEqual(refundedProd.stock, initialStock, 'Stock must be restored on payment refund');
+
+    // 5. Check payment status endpoint
+    const statusQueryRes = await fetch(`${BASE_URL}/api/payments/status/${order.orderNumber}?token=${order.trackingToken}`);
+    assert.strictEqual(statusQueryRes.status, 200);
+    const statusData = await statusQueryRes.json();
+    assert.strictEqual(statusData.paymentStatus, 'Refunded');
+  });
+
+  await test('Persistence & Database status endpoint returns detailed operational metrics', async () => {
+    const statusRes = await fetch(`${BASE_URL}/api/admin/persistence/status`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(statusRes.status, 200);
+    const status = await statusRes.json();
+    assert(status.localDatabase.exists, 'Database file should exist');
+    assert(status.localDatabase.productsCount > 0, 'Products count should be greater than 0');
+    assert.strictEqual(typeof status.firestore.syncQueueLength, 'number');
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');
