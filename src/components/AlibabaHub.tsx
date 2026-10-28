@@ -24,9 +24,22 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
   onRefreshData,
   showToast
 }) => {
-  const [subTab, setSubTab] = useState<'catalog' | 'search' | 'logistics' | 'orders' | 'settings'>('catalog');
+  const [subTab, setSubTab] = useState<'catalog' | 'staging' | 'search' | 'logistics' | 'orders' | 'settings'>('staging');
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<AlibabaConfig | null>(null);
+
+  // Staging & Review Queue state
+  const [stagingProducts, setStagingProducts] = useState<Product[]>([]);
+  const [stagingSummary, setStagingSummary] = useState({ totalCount: 0, pendingCount: 0, approvedCount: 0, rejectedCount: 0 });
+  const [stagingLoading, setStagingLoading] = useState(false);
+  const [stagingFilterStatus, setStagingFilterStatus] = useState<string>('Pending Approval');
+  const [stagingFilterCategory, setStagingFilterCategory] = useState<string>('all');
+  const [stagingSearch, setStagingSearch] = useState<string>('');
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [importing300, setImporting300] = useState(false);
+  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
 
   // Search & Import state
   const [searchQuery, setSearchQuery] = useState('');
@@ -253,6 +266,84 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
     }
   };
 
+  const fetchStaging = async () => {
+    setStagingLoading(true);
+    try {
+      const res = await api.adminGetAlibabaStaging({
+        status: stagingFilterStatus,
+        category: stagingFilterCategory,
+        search: stagingSearch
+      });
+      setStagingProducts(res.products || []);
+      if (res.summary) setStagingSummary(res.summary);
+    } catch {
+      // Fallback
+    } finally {
+      setStagingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStaging();
+  }, [stagingFilterStatus, stagingFilterCategory]);
+
+  const handleImport300 = async (autoPublish: boolean = false) => {
+    setImporting300(true);
+    try {
+      const res = await api.adminImport300AlibabaProducts({ autoPublish });
+      showToast(res.message, 'success');
+      onRefreshData();
+      await fetchStaging();
+      setSubTab('staging');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to import 300 Alibaba products', 'error');
+    } finally {
+      setImporting300(false);
+    }
+  };
+
+  const handleApproveProduct = async (id: string) => {
+    setApprovingId(id);
+    try {
+      const res = await api.adminApproveAlibabaProduct(id);
+      showToast(res.message, 'success');
+      onRefreshData();
+      await fetchStaging();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to approve product', 'error');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handleRejectProduct = async (id: string) => {
+    setRejectingId(id);
+    try {
+      const res = await api.adminRejectAlibabaProduct(id);
+      showToast(res.message, 'success');
+      onRefreshData();
+      await fetchStaging();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to reject product', 'error');
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
+  const handleBulkApprove = async (allPending: boolean = true) => {
+    setBulkApproving(true);
+    try {
+      const res = await api.adminBulkApproveAlibabaProducts({ allPending });
+      showToast(res.message, 'success');
+      onRefreshData();
+      await fetchStaging();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to bulk approve products', 'error');
+    } finally {
+      setBulkApproving(false);
+    }
+  };
+
   // Re-calculate logistics quote when inputs change
   useEffect(() => {
     const rate = Number(usdRateInput) || 1435;
@@ -288,6 +379,15 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => handleImport300(false)}
+              disabled={importing300}
+              className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+            >
+              <Package className={`w-4 h-4 ${importing300 ? 'animate-spin' : ''}`} />
+              <span>{importing300 ? 'Importing 300...' : '📦 Import 300 Products (Review Queue)'}</span>
+            </button>
             <button
               type="button"
               onClick={handleTestConnection}
@@ -336,15 +436,26 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => handleCloneStoreOrProduct()}
-            disabled={cloningStore}
-            className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white text-xs font-black rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
-          >
-            <Zap className={`w-4 h-4 ${cloningStore ? 'animate-spin' : ''}`} />
-            <span>{cloningStore ? 'Cloning to Website...' : '⚡ Clone Entire Alibaba Store Now'}</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleImport300(false)}
+              disabled={importing300}
+              className="px-3.5 py-2.5 bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-950 text-xs font-black rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
+            >
+              <Layers className="w-4 h-4 text-amber-700" />
+              <span>{importing300 ? 'Importing...' : '📦 Import 300 to Staging'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCloneStoreOrProduct()}
+              disabled={cloningStore}
+              className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white text-xs font-black rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
+            >
+              <Zap className={`w-4 h-4 ${cloningStore ? 'animate-spin' : ''}`} />
+              <span>{cloningStore ? 'Cloning to Website...' : '⚡ Clone Entire Alibaba Store Now'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Input Form */}
@@ -453,6 +564,33 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
       <div className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-1.5 flex-wrap text-xs font-bold">
         <button
           type="button"
+          onClick={() => {
+            setSubTab('staging');
+            fetchStaging();
+          }}
+          className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+            subTab === 'staging'
+              ? 'bg-orange-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4" />
+          <span>Review & Staging Queue</span>
+          {stagingSummary.pendingCount > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-400 text-slate-950 font-black animate-pulse">
+              {stagingSummary.pendingCount} Pending
+            </span>
+          ) : (
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+              subTab === 'staging' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {stagingSummary.totalCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setSubTab('catalog')}
           className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
             subTab === 'catalog'
@@ -461,7 +599,7 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
           }`}
         >
           <Package className="w-4 h-4" />
-          <span>Imported Catalog</span>
+          <span>Live Catalog</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
             subTab === 'catalog' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-800'
           }`}>
@@ -535,7 +673,351 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
         </button>
       </div>
 
-      {/* SUB-TAB 1: IMPORTED CATALOG */}
+      {/* SUB-TAB 0: REVIEW & STAGING QUEUE (300 VERIFIED PRODUCTS) */}
+      {subTab === 'staging' && (
+        <div className="space-y-4">
+          {/* Staging Control Header */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold mb-1">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Quality Control & Admin Approval Queue</span>
+                </div>
+                <h2 className="text-lg font-black text-slate-900">
+                  Alibaba Staging Queue ({stagingSummary.totalCount} Products Total)
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Review original descriptions, images, supplier Trade Assurance, authentic air cargo to Kigali, and strict 10% markup before publishing live to the customer storefront.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleBulkApprove(true)}
+                  disabled={bulkApproving || stagingSummary.pendingCount === 0}
+                  className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+                >
+                  <CheckCircle2 className={`w-4 h-4 ${bulkApproving ? 'animate-spin' : ''}`} />
+                  <span>
+                    {bulkApproving ? 'Approving All...' : `✨ Approve All (${stagingSummary.pendingCount}) to Live Store`}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleImport300(false)}
+                  disabled={importing300}
+                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+                >
+                  <RefreshCw className={`w-4 h-4 ${importing300 ? 'animate-spin' : ''}`} />
+                  <span>{importing300 ? 'Importing 300...' : '📦 Re-Import 300 Products'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Status Tabs & Filter Controls */}
+            <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setStagingFilterStatus('Pending Approval')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                    stagingFilterStatus === 'Pending Approval'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Pending Review ({stagingSummary.pendingCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStagingFilterStatus('Approved')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                    stagingFilterStatus === 'Approved'
+                      ? 'bg-emerald-600 text-white font-black shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Approved & Live ({stagingSummary.approvedCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStagingFilterStatus('Rejected')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                    stagingFilterStatus === 'Rejected'
+                      ? 'bg-rose-600 text-white font-black shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Rejected ({stagingSummary.rejectedCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStagingFilterStatus('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                    stagingFilterStatus === 'all'
+                      ? 'bg-slate-900 text-white font-black shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All ({stagingSummary.totalCount})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 md:w-56">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search staged items..."
+                    value={stagingSearch}
+                    onChange={e => setStagingSearch(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') fetchStaging(); }}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:border-orange-500"
+                  />
+                </div>
+
+                <select
+                  value={stagingFilterCategory}
+                  onChange={e => setStagingFilterCategory(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-orange-500"
+                >
+                  <option value="all">All 10 Categories</option>
+                  <option value="amatara">Solar & Lighting (30)</option>
+                  <option value="electronics">Electronics (30)</option>
+                  <option value="hair-beauty">Hair & Beauty (30)</option>
+                  <option value="amasaha">Watches & Amasaha (30)</option>
+                  <option value="ibikapu">Bags & Ibikapu (30)</option>
+                  <option value="home-kitchen">Home & Kitchen (30)</option>
+                  <option value="services">Services & Tools (30)</option>
+                  <option value="fashion">Fashion & Apparel (30)</option>
+                  <option value="sports">Sports & Fitness (30)</option>
+                  <option value="supermarket">Supermarket (30)</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={fetchStaging}
+                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg cursor-pointer"
+                  title="Refresh Queue"
+                >
+                  <RefreshCw className={`w-4 h-4 ${stagingLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Staging Products Table */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            {stagingLoading ? (
+              <div className="p-12 text-center space-y-3">
+                <RefreshCw className="w-8 h-8 text-orange-500 animate-spin mx-auto" />
+                <p className="text-xs font-bold text-slate-600">Loading staged Alibaba products...</p>
+              </div>
+            ) : stagingProducts.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <Package className="w-12 h-12 text-slate-300 mx-auto" />
+                <p className="text-sm font-bold text-slate-700">No products match current staging filters</p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Click below to import all 300 authentic Alibaba products covering all 10 store categories into this queue.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleImport300(false)}
+                  disabled={importing300}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  {importing300 ? 'Importing 300 Products...' : '📦 Import 300 Alibaba Products to Staging Queue'}
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200/60 uppercase font-bold text-[10px] tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">Product Specs & Images</th>
+                      <th className="py-3 px-4">Supplier & Trade Assurance</th>
+                      <th className="py-3 px-4">Kigali Freight (KGL Hub)</th>
+                      <th className="py-3 px-4">Total Landed Cost</th>
+                      <th className="py-3 px-4">Selling Price (+10%)</th>
+                      <th className="py-3 px-4">Review Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {stagingProducts.map(prod => (
+                      <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={prod.imageUrl || (prod.images && prod.images[0]) || '/logo.png'}
+                              alt={prod.name}
+                              onClick={() => setPreviewProduct(prod)}
+                              className="w-14 h-14 rounded-xl object-cover border border-slate-200 flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                            />
+                            <div className="space-y-0.5 max-w-xs">
+                              <p
+                                onClick={() => setPreviewProduct(prod)}
+                                className="font-bold text-slate-900 line-clamp-2 hover:text-orange-600 cursor-pointer"
+                              >
+                                {prod.name}
+                              </p>
+                              <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                                <span className="font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">
+                                  {prod.sku}
+                                </span>
+                                <span className="bg-orange-50 text-orange-800 font-bold px-1.5 py-0.2 rounded border border-orange-200/60">
+                                  {prod.category}
+                                </span>
+                                {prod.images && prod.images.length > 1 && (
+                                  <span className="text-slate-400">
+                                    📷 {prod.images.length} photos
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-slate-800 line-clamp-1">
+                              {prod.alibabaSupplierName || 'Alibaba Verified Manufacturer'}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              {prod.alibabaSupplierLocation || 'China'}
+                            </p>
+                            <div className="flex items-center gap-1 pt-0.5">
+                              {prod.alibabaTradeAssurance && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold">
+                                  <ShieldCheck className="w-2.5 h-2.5" /> Trade Assurance
+                                </span>
+                              )}
+                              <span className="text-[9px] text-slate-400 font-mono">
+                                MOQ: {prod.alibabaMoq || 1} {prod.unit || 'pc'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
+                            <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 text-xs inline-block">
+                              +{(prod.alibabaShippingCostRwf || 0).toLocaleString()} RWF
+                            </span>
+                            <p className="text-[10px] text-slate-500">
+                              Air Freight: {prod.alibabaWeightKg || 1} kg ({prod.alibabaShippingMethod || 'Alibaba Express Cargo'})
+                            </p>
+                            <p className="text-[9px] text-slate-400">
+                              Direct to Kigali Airport (KGL) Hub
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
+                            <span className="font-mono font-bold text-slate-900 text-xs">
+                              {(prod.costPrice || 0).toLocaleString()} RWF
+                            </span>
+                            <p className="text-[10px] text-slate-500">
+                              Item: {((prod.alibabaOriginalCostUsd || 10) * (usdRateInput || 1435)).toLocaleString()} RWF (${prod.alibabaOriginalCostUsd})
+                            </p>
+                            <p className="text-[9px] text-slate-400">
+                              + Freight: {(prod.alibabaShippingCostRwf || 0).toLocaleString()} RWF
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
+                            <span className="font-mono font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 text-xs inline-block">
+                              {(prod.price || 0).toLocaleString()} RWF
+                            </span>
+                            <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                              <span>Profit (+10%): +{(prod.profitMargin || 0).toLocaleString()} RWF</span>
+                            </div>
+                            <span className="text-[9px] text-slate-400 font-mono block">
+                              (Cost + Shipping) × 1.10
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          {prod.reviewStatus === 'Approved' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black border border-emerald-300">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Approved & Live</span>
+                            </span>
+                          ) : prod.reviewStatus === 'Rejected' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black border border-rose-300">
+                              <ShieldAlert className="w-3 h-3 text-rose-600" />
+                              <span>Rejected</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 text-[10px] font-black border border-amber-300 animate-pulse">
+                              <Clock className="w-3 h-3 text-amber-700" />
+                              <span>Pending Review</span>
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewProduct(prod)}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                              title="Inspect unmodified specs and original photos"
+                            >
+                              Inspect
+                            </button>
+
+                            {prod.reviewStatus !== 'Approved' && (
+                              <button
+                                type="button"
+                                onClick={() => handleApproveProduct(prod.id)}
+                                disabled={approvingId === prod.id}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-black shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              >
+                                {approvingId === prod.id ? (
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Check className="w-3 h-3" />
+                                )}
+                                <span>Approve</span>
+                              </button>
+                            )}
+
+                            {prod.reviewStatus !== 'Rejected' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRejectProduct(prod.id)}
+                                disabled={rejectingId === prod.id}
+                                className="px-2 py-1 bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 rounded-lg text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                                title="Reject and hide from store"
+                              >
+                                {rejectingId === prod.id ? (
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  'Reject'
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 1: LIVE IMPORTED CATALOG */}
       {subTab === 'catalog' && (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1193,6 +1675,214 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
             </button>
           </div>
         </form>
+      )}
+
+      {/* FULL PRODUCT SPECS & INSPECTION MODAL */}
+      {previewProduct && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-4 sticky top-0 bg-white z-10">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-800 text-[11px] font-bold mb-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Original Verified Alibaba Specifications</span>
+                </div>
+                <h3 className="text-base font-black text-slate-900 line-clamp-2">
+                  {previewProduct.name}
+                </h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  SKU: {previewProduct.sku} · Category: {previewProduct.category}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPreviewProduct(null)}
+                className="p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6">
+              {/* Image Gallery */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Original Alibaba High-Resolution Image Gallery ({previewProduct.images?.length || 1})
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {(previewProduct.images && previewProduct.images.length > 0 ? previewProduct.images : [previewProduct.imageUrl || '/logo.png']).map((img, idx) => (
+                    <a
+                      key={idx}
+                      href={img}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 block"
+                    >
+                      <img
+                        src={img}
+                        alt={`${previewProduct.name} ${idx + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
+                        #{idx + 1}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+              {/* Formula & Cost Breakdown */}
+              <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-emerald-900 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Landed Price Formula: Selling Price = (Product Cost + Shipping Cost) × 1.10
+                  </span>
+                  <span className="font-mono text-xs font-black text-emerald-800 bg-white px-2.5 py-1 rounded-md border border-emerald-200">
+                    Strict +10% Markup
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-emerald-100">
+                    <span className="text-[10px] text-slate-500 block">Wholesale Price (USD)</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">
+                      ${previewProduct.alibabaOriginalCostUsd || 10} USD
+                    </span>
+                    <span className="text-[10px] text-slate-400 block font-mono">
+                      ≈ {((previewProduct.alibabaOriginalCostUsd || 10) * (usdRateInput || 1435)).toLocaleString()} RWF
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-emerald-100">
+                    <span className="text-[10px] text-slate-500 block">Kigali Freight (KGL)</span>
+                    <span className="font-mono font-bold text-purple-700 text-sm">
+                      +{(previewProduct.alibabaShippingCostRwf || 0).toLocaleString()} RWF
+                    </span>
+                    <span className="text-[10px] text-slate-400 block font-mono">
+                      {previewProduct.alibabaWeightKg || 1} kg ({previewProduct.alibabaShippingMethod || 'Air Express'})
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-emerald-100">
+                    <span className="text-[10px] text-slate-500 block">Total Landed Cost</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">
+                      {(previewProduct.costPrice || 0).toLocaleString()} RWF
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">Product + Kigali Cargo</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-emerald-200 bg-emerald-100/30">
+                    <span className="text-[10px] text-emerald-800 font-bold block">Selling Price (+10%)</span>
+                    <span className="font-mono font-black text-emerald-700 text-base">
+                      {(previewProduct.price || 0).toLocaleString()} RWF
+                    </span>
+                    <span className="text-[10px] text-emerald-600 block font-bold">
+                      Profit: +{(previewProduct.profitMargin || 0).toLocaleString()} RWF
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supplier & Logistics Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Building className="w-4 h-4 text-orange-500" />
+                    Supplier & Trade Assurance
+                  </h5>
+                  <p className="font-semibold text-slate-800">{previewProduct.alibabaSupplierName || 'Alibaba Verified Manufacturer'}</p>
+                  <p className="text-slate-500">{previewProduct.alibabaSupplierLocation || 'China'}</p>
+                  <div className="pt-2 flex flex-wrap gap-2 text-[11px]">
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded">
+                      ✓ Trade Assurance 100% Protected
+                    </span>
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded">
+                      MOQ: {previewProduct.alibabaMoq || 1} {previewProduct.unit || 'piece'}
+                    </span>
+                    <span className="px-2 py-0.5 bg-slate-200 text-slate-800 font-bold rounded">
+                      Lead Time: {previewProduct.alibabaLeadTimeDays || 7} days
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-purple-600" />
+                    Packaging & Kigali Customs Routing
+                  </h5>
+                  <p className="text-slate-600">
+                    Package Weight: <span className="font-bold text-slate-900">{previewProduct.alibabaWeightKg || 1} kg</span>
+                  </p>
+                  {previewProduct.alibabaDimensionsCm && (
+                    <p className="text-slate-600">
+                      Dimensions: <span className="font-bold text-slate-900">{previewProduct.alibabaDimensionsCm.length} × {previewProduct.alibabaDimensionsCm.width} × {previewProduct.alibabaDimensionsCm.height} cm</span>
+                    </p>
+                  )}
+                  <p className="text-slate-600">
+                    Destination: <span className="font-bold text-slate-900">Kigali International Airport (KGL) Hub & Gikondo MAGERWA Customs</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Estimated Transit: 7-12 business days via official air freight route.
+                  </p>
+                </div>
+              </div>
+
+              {/* Original Unmodified Description */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Original Unmodified Alibaba Product Description & Specifications
+                </h4>
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 font-mono whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                  {previewProduct.description}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 border-t border-slate-100 flex items-center justify-between bg-slate-50/60 sticky bottom-0 rounded-b-3xl">
+              <button
+                type="button"
+                onClick={() => setPreviewProduct(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                {previewProduct.reviewStatus !== 'Approved' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleApproveProduct(previewProduct.id);
+                      setPreviewProduct(null);
+                    }}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Approve & Publish to Store</span>
+                  </button>
+                )}
+
+                {previewProduct.reviewStatus !== 'Rejected' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleRejectProduct(previewProduct.id);
+                      setPreviewProduct(null);
+                    }}
+                    className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    Reject & Hide
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

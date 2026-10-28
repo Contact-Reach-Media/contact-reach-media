@@ -3524,6 +3524,93 @@ export const api = {
       throw new Error(parsed.json?.error || 'Failed to clone Alibaba shop products');
     }
     return parsed.json;
+  },
+
+  async adminImport300AlibabaProducts(payload?: { autoPublish?: boolean; category?: string }): Promise<{
+    success: boolean;
+    message: string;
+    uploadedCount: number;
+    updatedCount: number;
+    totalAlibaba: number;
+    pendingReview: number;
+    approvedLive: number;
+    stagedForReview: boolean;
+  }> {
+    const res = await fetch('/api/admin/alibaba/import-300', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload || {})
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to import 300 Alibaba products');
+    }
+    return parsed.json;
+  },
+
+  async adminGetAlibabaStaging(params?: { status?: string; category?: string; search?: string; page?: number; pageSize?: number }): Promise<{
+    total: number;
+    page: number;
+    pageSize: number;
+    summary: { totalCount: number; pendingCount: number; approvedCount: number; rejectedCount: number };
+    products: Product[];
+  }> {
+    const q = new URLSearchParams();
+    if (params?.status && params.status !== 'all') q.set('status', params.status);
+    if (params?.category && params.category !== 'all') q.set('category', params.category);
+    if (params?.search) q.set('search', params.search);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.pageSize) q.set('pageSize', String(params.pageSize));
+
+    const res = await fetch(`/api/admin/alibaba/staging?${q.toString()}`, {
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      return { total: 0, page: 1, pageSize: 50, summary: { totalCount: 0, pendingCount: 0, approvedCount: 0, rejectedCount: 0 }, products: [] };
+    }
+    return parsed.json;
+  },
+
+  async adminApproveAlibabaProduct(id: string): Promise<{ success: boolean; message: string; product: Product }> {
+    const res = await fetch(`/api/admin/alibaba/products/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to approve product');
+    }
+    return parsed.json;
+  },
+
+  async adminRejectAlibabaProduct(id: string): Promise<{ success: boolean; message: string; product: Product }> {
+    const res = await fetch(`/api/admin/alibaba/products/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to reject product');
+    }
+    return parsed.json;
+  },
+
+  async adminBulkApproveAlibabaProducts(payload: { productIds?: string[]; allPending?: boolean }): Promise<{
+    success: boolean;
+    message: string;
+    approvedCount: number;
+  }> {
+    const res = await fetch('/api/admin/alibaba/bulk-approve', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to bulk approve products');
+    }
+    return parsed.json;
   }
 };
 
