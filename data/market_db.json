@@ -1,7 +1,7 @@
 {
   "products": [
     {
-      "id": "prod-1793196215195-9d3522",
+      "id": "prod-1793196747444-befb11",
       "name": "Pure Organic Honey from Nyungwe Forest 500ml",
       "sku": "CRM-NYUNGWE-HONEY",
       "description": "Raw mountain honey harvested sustainably in Rwanda.",
@@ -32,16 +32,16 @@
       "unit": "Piece",
       "rating": 5,
       "reviewsCount": 0,
-      "createdAt": "2026-10-28T14:03:35.195Z",
-      "updatedAt": "2026-10-28T14:03:37.116Z",
+      "createdAt": "2026-10-28T14:12:27.444Z",
+      "updatedAt": "2026-10-28T14:12:30.965Z",
       "history": [
         {
-          "timestamp": "2026-10-28T14:03:35.195Z",
+          "timestamp": "2026-10-28T14:12:27.444Z",
           "action": "Imported from Spreadsheet",
           "user": "Ruth (System Owner)"
         },
         {
-          "timestamp": "2026-10-28T14:03:37.116Z",
+          "timestamp": "2026-10-28T14:12:30.965Z",
           "action": "Updated DSers/AliExpress supplier mapping: Mapped (https://www.aliexpress.com/item/1005007129482103.html)",
           "user": "Ruth (System Owner)"
         }
@@ -50,6 +50,180 @@
       "supplierVariant": "Color: Midnight Black, Size: Large",
       "supplierSku": "ALI-TEST-7129-L",
       "isSupplierMapped": true
+    },
+    {
+      "id": "prod-1793196743603-dcaf98",
+      "name": "Multi-Angle Gallery Test Sneakers",
+      "sku": "CRM-FAS-1551",
+      "description": "Premium shoes with full 360-degree multiple angle gallery.",
+      "price": 45000,
+      "category": "fashion",
+      "stock": 12,
+      "imageUrl": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&w=600&q=80",
+        "https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=600&q=80"
+      ],
+      "shopName": "ContactReach Media Ltd",
+      "shopId": "shop-contactreach-media-ltd-5653",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "reviewsCount": 0,
+      "createdAt": "2026-10-28T14:12:23.603Z",
+      "history": [
+        {
+          "timestamp": "2026-10-28T14:12:23.603Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-28T14:12:23.984Z"
+    },
+    {
+      "id": "prod-1793196739178-c807d3",
+      "name": "Glow Facial Vitamin C Serum (20% OFF Special)",
+      "sku": "CRM-HAI-7971",
+      "description": "Brightening facial serum with 20% promotional discount.",
+      "price": 25000,
+      "discountPercent": 30,
+      "discountPrice": 17500,
+      "category": "hair-beauty",
+      "stock": 40,
+      "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+      "images": [
+        "/src/assets/images/product_street_sneakers_1791966366958.jpg"
+      ],
+      "shopName": "ContactReach Media Ltd",
+      "shopId": "shop-contactreach-media-ltd-5653",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "reviewsCount": 0,
+      "createdAt": "2026-10-28T14:12:19.178Z",
+      "history": [
+        {
+          "timestamp": "2026-10-28T14:12:19.178Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-28T14:12:19.363Z",
+          "action": "Updated details",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-28T14:12:19.363Z"
+    },
+    {
+      "id": "prod-1793196737905-7fb459",
+      "name": "Studio Audio Cable Aux Cord",
+      "sku": "CRM-ELE-9461",
+      "description": "Gold-plated 3.5mm stereo cable.",
+      "price": 5000,
+      "category": "electronics",
+      "stock": 30,
+      "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+      "images": [
+        "/src/assets/images/product_street_sneakers_1791966366958.jpg"
+      ],
+      "shopName": "Inziza Sound Studio Lab",
+      "shopId": "shop-inziza-sound-studio-lab-5019",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "reviewsCount": 0,
+      "createdAt": "2026-10-28T14:12:17.905Z",
+      "history": [
+        {
+          "timestamp": "2026-10-28T14:12:17.905Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        }
+      ]
+    },
+    {
+      "id": "prod-1793196737676-c25f8d",
+      "name": "Wireless Studio Bluetooth Headphones",
+      "sku": "CRM-74440",
+      "description": "Updated studio headphones description via spreadsheet import.",
+      "price": 38000,
+      "category": "electronics",
+      "stock": 28,
+      "imageUrl": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80"
+      ],
+      "shopName": "Inziza Sound Studio Lab",
+      "shopId": "shop-inziza-sound-studio-lab-5019",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "078002",
+      "receiverPhone": "078002260",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "reviewsCount": 0,
+      "createdAt": "2026-10-28T14:12:17.676Z",
+      "history": [
+        {
+          "timestamp": "2026-10-28T14:12:17.676Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-28T14:12:18.082Z",
+          "action": "Updated details",
+          "user": "Ruth (System Owner)"
+        }
+      ],
+      "updatedAt": "2026-10-28T14:12:27.444Z"
     },
     {
       "id": "prod-1793196211299-c62982",
@@ -955,6 +1129,11 @@
       "createdAt": "2026-10-28T13:02:27.307Z",
       "history": [
         {
+          "timestamp": "2026-10-28T14:12:30.396Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Ruth (System Owner)"
+        },
+        {
           "timestamp": "2026-10-28T14:03:36.632Z",
           "action": "Updated from Google Sheet Live Sync",
           "user": "Ruth (System Owner)"
@@ -1013,9 +1192,14 @@
           "timestamp": "2026-10-28T14:03:34.818Z",
           "action": "Updated via SKU match",
           "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-28T14:12:27.042Z",
+          "action": "Updated via SKU match",
+          "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:36.632Z",
+      "updatedAt": "2026-10-28T14:12:30.396Z",
       "costPrice": 20000
     },
     {
@@ -4214,8 +4398,18 @@
       "isBestSeller": false,
       "reviewsCount": 0,
       "createdAt": "2026-10-28T12:45:15.414Z",
-      "updatedAt": "2026-10-28T14:03:36.643Z",
+      "updatedAt": "2026-10-28T14:12:30.406Z",
       "history": [
+        {
+          "timestamp": "2026-10-28T14:12:30.406Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-28T14:12:30.402Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Ruth (System Owner)"
+        },
         {
           "timestamp": "2026-10-28T14:03:36.643Z",
           "action": "Updated from Google Sheet Live Sync",
@@ -8700,7 +8894,7 @@
       ],
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.505Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-27T09:14:43.790Z",
       "history": [
         {
@@ -8767,9 +8961,14 @@
           "timestamp": "2026-10-28T14:03:33.831Z",
           "action": "Cost/Pricing updated by Ruth (System Owner) (Cost: 9,999 FRW, Price: 18,999 FRW)",
           "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-28T14:12:26.127Z",
+          "action": "Cost/Pricing updated by Ruth (System Owner) (Cost: 9,999 FRW, Price: 18,999 FRW)",
+          "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.505Z"
+      "updatedAt": "2026-10-28T14:12:26.756Z"
     },
     {
       "id": "prod-cj-cj-magsafe-car-mount-charger-16",
@@ -8819,7 +9018,7 @@
       ],
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-27T09:14:43.790Z",
       "history": [
         {
@@ -8828,7 +9027,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z"
+      "updatedAt": "2026-10-28T14:12:26.756Z"
     },
     {
       "id": "prod-cj-cj-solar-security-wall-light-15",
@@ -8869,7 +9068,7 @@
       "brand": "SunGuard",
       "unit": "Pack",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-27T09:14:43.789Z",
       "history": [
         {
@@ -8878,7 +9077,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z"
+      "updatedAt": "2026-10-28T14:12:26.756Z"
     },
     {
       "id": "prod-cj-cj-2610260852281601700",
@@ -9919,7 +10118,7 @@
       "brand": "BarberCraft",
       "unit": "Set",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -10133,7 +10332,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z"
+      "updatedAt": "2026-10-28T14:12:26.756Z"
     },
     {
       "id": "prod-cj-cj-magnetic-wireless-fast-charger-10",
@@ -10174,7 +10373,7 @@
       "brand": "MagCharge",
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -10278,7 +10477,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z"
+      "updatedAt": "2026-10-28T14:12:26.756Z"
     },
     {
       "id": "prod-cj-cj-4k-wifi-action-camera-09",
@@ -10320,7 +10519,7 @@
       "brand": "ApexAction",
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-26T09:02:20.720Z",
       "history": [
         {
@@ -10424,7 +10623,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z"
+      "updatedAt": "2026-10-28T14:12:26.756Z"
     },
     {
       "id": "prod-cj-cj-rechargeable-massage-gun-07",
@@ -10464,7 +10663,7 @@
       "brand": "FitFlex",
       "unit": "Set",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -10648,7 +10847,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z",
+      "updatedAt": "2026-10-28T14:12:26.756Z",
       "reviewStatus": "Approved"
     },
     {
@@ -10711,7 +10910,7 @@
       ],
       "unit": "Pair",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -10815,7 +11014,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z",
+      "updatedAt": "2026-10-28T14:12:26.756Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005005839201842.html",
       "supplierVariant": "Color: White Orange, Size: EU 42",
       "supplierSku": "ALI-SNK-42",
@@ -10871,7 +11070,7 @@
       ],
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-26T06:35:13.381Z",
       "history": [
         {
@@ -10975,7 +11174,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z",
+      "updatedAt": "2026-10-28T14:12:26.756Z",
       "reviewStatus": "Approved"
     },
     {
@@ -11027,7 +11226,7 @@
       ],
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.756Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -11131,7 +11330,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z",
+      "updatedAt": "2026-10-28T14:12:26.756Z",
       "reviewStatus": "Approved"
     },
     {
@@ -11183,7 +11382,7 @@
       ],
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.504Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.755Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -11287,7 +11486,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.504Z",
+      "updatedAt": "2026-10-28T14:12:26.755Z",
       "reviewStatus": "Approved"
     },
     {
@@ -11329,7 +11528,7 @@
       "brand": "LumiAura",
       "unit": "Piece",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.503Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.755Z",
       "createdAt": "2026-10-26T06:35:13.380Z",
       "history": [
         {
@@ -11433,7 +11632,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.503Z",
+      "updatedAt": "2026-10-28T14:12:26.755Z",
       "reviewStatus": "Approved"
     },
     {
@@ -11486,7 +11685,7 @@
       ],
       "unit": "Pair",
       "reviewsCount": 0,
-      "cjLastSyncAt": "2026-10-28T14:03:34.503Z",
+      "cjLastSyncAt": "2026-10-28T14:12:26.754Z",
       "createdAt": "2026-10-26T06:35:13.379Z",
       "history": [
         {
@@ -11590,7 +11789,7 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-28T14:03:34.503Z",
+      "updatedAt": "2026-10-28T14:12:26.754Z",
       "aliExpressUrl": "https://www.aliexpress.com/item/1005006294819201.html",
       "supplierVariant": "Color: Matte Black / ANC Pro",
       "supplierSku": "ALI-ANC-BLK",
@@ -12171,8 +12370,18 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "id": "prod-1792748827186-6xbs",
-      "updatedAt": "2026-10-28T14:03:36.643Z",
+      "updatedAt": "2026-10-28T14:12:30.407Z",
       "history": [
+        {
+          "timestamp": "2026-10-28T14:12:30.407Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Ruth (System Owner)"
+        },
+        {
+          "timestamp": "2026-10-28T14:12:30.406Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Ruth (System Owner)"
+        },
         {
           "timestamp": "2026-10-28T14:03:36.643Z",
           "action": "Updated from Google Sheet Live Sync",
@@ -17088,6 +17297,1000 @@
     }
   ],
   "orders": [
+    {
+      "id": "ord-1793196756062-4034f7",
+      "orderNumber": "CRM-32853",
+      "trackingToken": "4c4f31c335b8da665f582e16df44c89e",
+      "createdAt": "2026-10-28T14:12:36.062Z",
+      "customerName": "Aline Testing",
+      "customerPhone": "0788223344",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo",
+      "deliveryAddress": "Kacyiru, Kigali",
+      "items": [
+        {
+          "productId": "prod-1793196747444-befb11",
+          "productName": "Pure Organic Honey from Nyungwe Forest 500ml",
+          "price": 7000,
+          "quantity": 2,
+          "imageUrl": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80",
+          "sku": "CRM-NYUNGWE-HONEY",
+          "aliExpressUrl": "https://www.aliexpress.com/item/1005007129482103.html",
+          "supplierVariant": "Color: Midnight Black, Size: Large",
+          "supplierSku": "ALI-TEST-7129-L"
+        }
+      ],
+      "subtotal": 14000,
+      "deliveryFee": 1500,
+      "totalAmount": 15500,
+      "commissionRate": 10,
+      "commissionEarned": 1400,
+      "supplierPayoutAmount": 12600,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Crafts & Provisions",
+      "paymentStatus": "Refunded",
+      "status": "Cancelled",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:36.062Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-28T14:12:36.214Z",
+          "note": "Payment confirmed via official webhook. Provider ref: MOMO-PAY-RW-9988. Amount: 15500 RWF."
+        },
+        {
+          "status": "Cancelled",
+          "paymentStatus": "Refunded",
+          "timestamp": "2026-10-28T14:12:36.398Z",
+          "note": "Order payment refunded via provider webhook. Payouts cancelled, stock restored. Ref: REFUND-RW-1122."
+        }
+      ]
+    },
+    {
+      "id": "ord-1793196755572-97ec95",
+      "orderNumber": "CRM-97402",
+      "trackingToken": "395f1f81d62eae5095bf5260028b0dc7",
+      "createdAt": "2026-10-28T14:12:35.573Z",
+      "customerName": "Jean Paul Test",
+      "customerPhone": "0788998877",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo",
+      "deliveryAddress": "Remera, Kigali",
+      "items": [
+        {
+          "productId": "prod-1793196747444-befb11",
+          "productName": "Pure Organic Honey from Nyungwe Forest 500ml",
+          "price": 7000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80",
+          "sku": "CRM-NYUNGWE-HONEY",
+          "aliExpressUrl": "https://www.aliexpress.com/item/1005007129482103.html",
+          "supplierVariant": "Color: Midnight Black, Size: Large",
+          "supplierSku": "ALI-TEST-7129-L"
+        }
+      ],
+      "subtotal": 7000,
+      "deliveryFee": 1500,
+      "totalAmount": 8500,
+      "commissionRate": 10,
+      "commissionEarned": 700,
+      "supplierPayoutAmount": 6300,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Crafts & Provisions",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:35.573Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:35.717Z",
+          "note": "Payment initiated via MTN Mobile Money. Server transaction ref: TXN-CRM-CRM-97402-DFC710, amount: 8,500 RWF."
+        }
+      ]
+    },
+    {
+      "id": "ord-1793196751284-c85a3c",
+      "orderNumber": "CRM-33183",
+      "trackingToken": "d83fdad0eb32c838d75ebf73d6bddf86",
+      "createdAt": "2026-10-28T14:12:31.284Z",
+      "customerName": "DSers Workflow Tester",
+      "customerPhone": "0789123456",
+      "customerEmail": "dsers-test@example.com",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Kigali Gasabo Area",
+      "deliveryAddress": "KG 622 St, Fair View Plaza",
+      "items": [
+        {
+          "productId": "prod-1793196747444-befb11",
+          "productName": "Pure Organic Honey from Nyungwe Forest 500ml",
+          "price": 7000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80",
+          "sku": "CRM-NYUNGWE-HONEY",
+          "aliExpressUrl": "https://www.aliexpress.com/item/1005007129482103.html",
+          "supplierVariant": "Color: Midnight Black, Size: Large",
+          "supplierSku": "ALI-TEST-7129-L"
+        }
+      ],
+      "subtotal": 7000,
+      "deliveryFee": 1500,
+      "totalAmount": 8500,
+      "commissionRate": 10,
+      "commissionEarned": 700,
+      "supplierPayoutAmount": 6300,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Approved",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Crafts & Provisions",
+      "paymentStatus": "Pending Payment",
+      "status": "Out for Delivery",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:31.284Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:31.404Z",
+          "note": "Supplier/DSers review: Approved. Note: Admin verified payment and product SKU mapping",
+          "updatedBy": "Ruth (System Owner)"
+        },
+        {
+          "status": "Out for Delivery",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:31.627Z",
+          "note": "Tracking added: LP0069284019284 via AliExpress Standard Shipping. Note: Dispatched via Shenzhen Logistics Hub",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ],
+      "supplierApprovedAt": "2026-10-28T14:12:31.404Z",
+      "supplierApprovedBy": "Ruth (System Owner)",
+      "trackingNumber": "LP0069284019284",
+      "trackingCarrier": "AliExpress Standard Shipping",
+      "trackingUrl": "https://t.17track.net/en#nums=LP0069284019284",
+      "trackingAddedAt": "2026-10-28T14:12:31.627Z"
+    },
+    {
+      "id": "ord-1793196743227-2b79d2",
+      "orderNumber": "CRM-62876",
+      "trackingToken": "b0ed42f0641ea63cc343c96ae205aa6e",
+      "createdAt": "2026-10-28T14:12:23.227Z",
+      "customerName": "Customer A",
+      "customerPhone": "0789111222",
+      "deliveryType": "pickup",
+      "deliveryLocation": "Store Pickup (Fair View Plaza)",
+      "deliveryAddress": "Fair View Plaza, KG 622 St, Kigali, Rwanda",
+      "items": [
+        {
+          "productId": "prod-1793196743040-894c99",
+          "productName": "Limited Stock Sneaker",
+          "price": 15000,
+          "quantity": 2,
+          "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+          "sku": "CRM-FAS-5711"
+        }
+      ],
+      "subtotal": 30000,
+      "deliveryFee": 0,
+      "totalAmount": 30000,
+      "commissionRate": 10,
+      "commissionEarned": 3000,
+      "supplierPayoutAmount": 27000,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "ContactReach Media Ltd",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:23.227Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1793196741356-84e5a4",
+      "orderNumber": "CRM-72152",
+      "trackingToken": "b58899701b965fd54c004c41585b7dd7",
+      "createdAt": "2026-10-28T14:12:21.356Z",
+      "customerName": "Sam Habimana",
+      "customerPhone": "0780445566",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Kicukiro (Gikondo)",
+      "deliveryAddress": "Kigali",
+      "items": [
+        {
+          "productId": "prod-1793196737676-c25f8d",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-9230"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Sound Studio Lab",
+      "paymentStatus": "Pending Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:21.356Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-28T14:12:21.464Z",
+          "note": "Payment confirmation submitted. Txn ID: CLAIM-1793196741461, Phone: 0780445566. Pending verification."
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1793196741463-3fe9e5",
+        "orderId": "ord-1793196741356-84e5a4",
+        "orderNumber": "CRM-72152",
+        "customerName": "Sam Habimana",
+        "paymentPhone": "0780445566",
+        "paymentMethod": "MTN Mobile Money",
+        "amountPaid": 36500,
+        "transactionId": "CLAIM-1793196741461",
+        "submittedAt": "2026-10-28T14:12:21.463Z",
+        "verificationStatus": "Pending Verification",
+        "isDuplicateTxn": false,
+        "flaggedSuspicious": false
+      }
+    },
+    {
+      "id": "ord-1793196740876-a59d70",
+      "orderNumber": "CRM-34130",
+      "trackingToken": "e05e675e2049641d46128b223bdc6937",
+      "createdAt": "2026-10-28T14:12:20.876Z",
+      "customerName": "Keza Diane",
+      "customerPhone": "0788998822",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Nyarugenge",
+      "deliveryAddress": "KN 20 St",
+      "items": [
+        {
+          "productId": "prod-1793196737676-c25f8d",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 2,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-9230"
+        }
+      ],
+      "subtotal": 70000,
+      "deliveryFee": 0,
+      "totalAmount": 70000,
+      "commissionRate": 10,
+      "commissionEarned": 7000,
+      "supplierPayoutAmount": 63000,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Sound Studio Lab",
+      "paymentStatus": "Paid",
+      "status": "Cancelled",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:20.876Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-28T14:12:20.962Z",
+          "note": "Order status updated to \"Confirmed\" (Payment: \"Paid\") by Ruth (System Owner).",
+          "updatedBy": "Ruth (System Owner)"
+        },
+        {
+          "status": "Cancelled",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-28T14:12:21.161Z",
+          "note": "Customer requested cancellation.",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ]
+    },
+    {
+      "id": "ord-1793196740545-5f01ac",
+      "orderNumber": "CRM-31452",
+      "trackingToken": "cfc7038c90cb363bec15da364757f41d",
+      "createdAt": "2026-10-28T14:12:20.545Z",
+      "customerName": "Admin Test Shopper",
+      "customerPhone": "0780991122",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo",
+      "deliveryAddress": "KG 12 St",
+      "items": [
+        {
+          "productId": "prod-1793196737676-c25f8d",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-9230"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Sound Studio Lab",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:20.545Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1793196740076-ba8f28",
+      "orderNumber": "CRM-17707",
+      "trackingToken": "05646d720acf4e7d1a7f6371de598814",
+      "createdAt": "2026-10-28T14:12:20.076Z",
+      "customerName": "Eric Safari",
+      "customerPhone": "0780998877",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo (Kacyiru)",
+      "deliveryAddress": "KG 544 St, Kacyiru",
+      "items": [
+        {
+          "productId": "prod-1793196737676-c25f8d",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-9230"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Sound Studio Lab",
+      "paymentStatus": "Pending Payment",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:20.076Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        }
+      ]
+    },
+    {
+      "id": "ord-1793196739558-fc639b",
+      "orderNumber": "CRM-41912",
+      "trackingToken": "35c4de82dbb8ea44b02b64f4a45794d8",
+      "createdAt": "2026-10-28T14:12:19.558Z",
+      "customerName": "Gisele Umuhoza",
+      "customerPhone": "0788776655",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Nyarugenge (City Center)",
+      "deliveryAddress": "KN 4 Ave, Kigali",
+      "items": [
+        {
+          "productId": "prod-1793196737676-c25f8d",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-9230"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "Airtel Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Sound Studio Lab",
+      "paymentStatus": "Under Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:19.558Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:19.662Z",
+          "note": "Customer updated payment channel from \"MTN Merchant Code\" to \"Airtel Money\"."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-28T14:12:19.792Z",
+          "note": "Payment confirmation submitted. Txn ID: 991827461, Phone: 0788776655 [WARNING: Duplicate Txn ID detected]. Pending verification."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Under Verification",
+          "timestamp": "2026-10-28T14:12:19.889Z",
+          "note": "Payment moved to Under Verification by Ruth (System Owner): Suspicious duplicate transaction reference detected. Requesting telecom statement export..",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1793196739792-720e6d",
+        "orderId": "ord-1793196739558-fc639b",
+        "orderNumber": "CRM-41912",
+        "customerName": "Gisele Umuhoza",
+        "paymentPhone": "0788776655",
+        "paymentMethod": "Airtel Money",
+        "amountPaid": 36500,
+        "transactionId": "991827461",
+        "submittedAt": "2026-10-28T14:12:19.792Z",
+        "verificationStatus": "Under Verification",
+        "isDuplicateTxn": true,
+        "duplicateOrderNumbers": [
+          "CRM-22298",
+          "CRM-30333",
+          "CRM-42990",
+          "CRM-46544",
+          "CRM-17088",
+          "CRM-87020",
+          "CRM-38283",
+          "CRM-75858",
+          "CRM-52796",
+          "CRM-16475",
+          "CRM-97078",
+          "CRM-33949",
+          "CRM-79172",
+          "CRM-19898",
+          "CRM-74541",
+          "CRM-66056",
+          "CRM-12009",
+          "CRM-60008",
+          "CRM-89066",
+          "CRM-24225",
+          "CRM-96695",
+          "CRM-95764",
+          "CRM-39788",
+          "CRM-77020",
+          "CRM-23892",
+          "CRM-73539",
+          "CRM-38912",
+          "CRM-26747",
+          "CRM-88092",
+          "CRM-45765",
+          "CRM-44866",
+          "CRM-23192",
+          "CRM-30410",
+          "CRM-18363",
+          "CRM-48890",
+          "CRM-99502",
+          "CRM-49998",
+          "CRM-76537",
+          "CRM-19463",
+          "CRM-62613",
+          "CRM-97068",
+          "CRM-93214",
+          "CRM-73554",
+          "CRM-38659",
+          "CRM-40955",
+          "CRM-91866",
+          "CRM-79810",
+          "CRM-77237",
+          "CRM-82210",
+          "CRM-87670",
+          "CRM-95378",
+          "CRM-32668",
+          "CRM-89768",
+          "CRM-45957",
+          "CRM-23838",
+          "CRM-70487",
+          "CRM-97144",
+          "CRM-39374",
+          "CRM-14356",
+          "CRM-87145",
+          "CRM-45197",
+          "CRM-60680",
+          "CRM-86085",
+          "CRM-49246",
+          "CRM-44611",
+          "CRM-35334",
+          "CRM-21267",
+          "CRM-96507",
+          "CRM-44483",
+          "CRM-25207",
+          "CRM-53329",
+          "CRM-51235",
+          "CRM-82596",
+          "CRM-53319",
+          "CRM-76918",
+          "CRM-20112",
+          "CRM-13779",
+          "CRM-95107",
+          "CRM-77217",
+          "CRM-35939",
+          "CRM-29784",
+          "CRM-19157",
+          "CRM-20448",
+          "CRM-14777",
+          "CRM-80718",
+          "CRM-38903",
+          "CRM-86857",
+          "CRM-82624",
+          "CRM-43995",
+          "CRM-91152",
+          "CRM-78629",
+          "CRM-94643",
+          "CRM-66222",
+          "CRM-34568",
+          "CRM-90686",
+          "CRM-54419",
+          "CRM-62758",
+          "CRM-85816",
+          "CRM-95836",
+          "CRM-33924",
+          "CRM-91104",
+          "CRM-38308",
+          "CRM-18867",
+          "CRM-60675",
+          "CRM-57691",
+          "CRM-61713",
+          "CRM-79565",
+          "CRM-48669",
+          "CRM-87442",
+          "CRM-36869",
+          "CRM-98346",
+          "CRM-67332",
+          "CRM-21454",
+          "CRM-67889",
+          "CRM-97014",
+          "CRM-93140",
+          "CRM-35913",
+          "CRM-80132",
+          "CRM-25099",
+          "CRM-80420",
+          "CRM-97025",
+          "CRM-59836",
+          "CRM-72274",
+          "CRM-61019",
+          "CRM-22410",
+          "CRM-27403",
+          "CRM-79683",
+          "CRM-95910",
+          "CRM-12402",
+          "CRM-77513",
+          "CRM-18765",
+          "CRM-72126",
+          "CRM-69625",
+          "CRM-30061",
+          "CRM-88178",
+          "CRM-14918",
+          "CRM-34118",
+          "CRM-56470",
+          "CRM-39288",
+          "CRM-26669",
+          "CRM-13158",
+          "CRM-27214",
+          "CRM-67718",
+          "CRM-31287",
+          "CRM-13927",
+          "CRM-41950",
+          "CRM-80704",
+          "CRM-78885",
+          "CRM-73401",
+          "CRM-25621",
+          "CRM-74566",
+          "CRM-39000",
+          "CRM-19233",
+          "CRM-46821",
+          "CRM-10642"
+        ],
+        "flaggedSuspicious": true,
+        "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-22298, #CRM-30333, #CRM-42990, #CRM-46544, #CRM-17088, #CRM-87020, #CRM-38283, #CRM-75858, #CRM-52796, #CRM-16475, #CRM-97078, #CRM-33949, #CRM-79172, #CRM-19898, #CRM-74541, #CRM-66056, #CRM-12009, #CRM-60008, #CRM-89066, #CRM-24225, #CRM-96695, #CRM-95764, #CRM-39788, #CRM-77020, #CRM-23892, #CRM-73539, #CRM-38912, #CRM-26747, #CRM-88092, #CRM-45765, #CRM-44866, #CRM-23192, #CRM-30410, #CRM-18363, #CRM-48890, #CRM-99502, #CRM-49998, #CRM-76537, #CRM-19463, #CRM-62613, #CRM-97068, #CRM-93214, #CRM-73554, #CRM-38659, #CRM-40955, #CRM-91866, #CRM-79810, #CRM-77237, #CRM-82210, #CRM-87670, #CRM-95378, #CRM-32668, #CRM-89768, #CRM-45957, #CRM-23838, #CRM-70487, #CRM-97144, #CRM-39374, #CRM-14356, #CRM-87145, #CRM-45197, #CRM-60680, #CRM-86085, #CRM-49246, #CRM-44611, #CRM-35334, #CRM-21267, #CRM-96507, #CRM-44483, #CRM-25207, #CRM-53329, #CRM-51235, #CRM-82596, #CRM-53319, #CRM-76918, #CRM-20112, #CRM-13779, #CRM-95107, #CRM-77217, #CRM-35939, #CRM-29784, #CRM-19157, #CRM-20448, #CRM-14777, #CRM-80718, #CRM-38903, #CRM-86857, #CRM-82624, #CRM-43995, #CRM-91152, #CRM-78629, #CRM-94643, #CRM-66222, #CRM-34568, #CRM-90686, #CRM-54419, #CRM-62758, #CRM-85816, #CRM-95836, #CRM-33924, #CRM-91104, #CRM-38308, #CRM-18867, #CRM-60675, #CRM-57691, #CRM-61713, #CRM-79565, #CRM-48669, #CRM-87442, #CRM-36869, #CRM-98346, #CRM-67332, #CRM-21454, #CRM-67889, #CRM-97014, #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642",
+        "verifiedAt": "2026-10-28T14:12:19.889Z",
+        "verifiedBy": "Ruth (System Owner)",
+        "adminNotes": "Suspicious duplicate transaction reference detected. Requesting telecom statement export."
+      }
+    },
+    {
+      "id": "ord-1793196738697-009c14",
+      "orderNumber": "CRM-22298",
+      "trackingToken": "9c3fcec036b8246e95020a3856061a8b",
+      "createdAt": "2026-10-28T14:12:18.699Z",
+      "customerName": "Kwizera Bosco",
+      "customerPhone": "0780112233",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Kicukiro (Sonatubes)",
+      "deliveryAddress": "Sonatubes near Bank of Kigali",
+      "items": [
+        {
+          "productId": "prod-1793196737676-c25f8d",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-9230"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Pending",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Merchant Code",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002",
+      "shopName": "Inziza Sound Studio Lab",
+      "paymentStatus": "Pending Verification",
+      "status": "New",
+      "stockDeducted": false,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:18.699Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-28T14:12:18.835Z",
+          "note": "Payment confirmation submitted. Txn ID: 991827461, Phone: 0780112233 (SMS pasted) (Screenshot attached) [WARNING: Duplicate Txn ID detected]. Pending verification."
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1793196738835-3f8037",
+        "orderId": "ord-1793196738697-009c14",
+        "orderNumber": "CRM-22298",
+        "customerName": "Kwizera Bosco",
+        "paymentPhone": "0780112233",
+        "paymentMethod": "MTN Merchant Code",
+        "amountPaid": 36500,
+        "transactionId": "991827461",
+        "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "confirmationMessage": "Y'ello! You have transferred 36,500 RWF to ContactReach Market (078002) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.",
+        "submittedAt": "2026-10-28T14:12:18.835Z",
+        "verificationStatus": "Pending Verification",
+        "isDuplicateTxn": true,
+        "duplicateOrderNumbers": [
+          "CRM-30333",
+          "CRM-42990",
+          "CRM-46544",
+          "CRM-17088",
+          "CRM-87020",
+          "CRM-38283",
+          "CRM-75858",
+          "CRM-52796",
+          "CRM-16475",
+          "CRM-97078",
+          "CRM-33949",
+          "CRM-79172",
+          "CRM-19898",
+          "CRM-74541",
+          "CRM-66056",
+          "CRM-12009",
+          "CRM-60008",
+          "CRM-89066",
+          "CRM-24225",
+          "CRM-96695",
+          "CRM-95764",
+          "CRM-39788",
+          "CRM-77020",
+          "CRM-23892",
+          "CRM-73539",
+          "CRM-38912",
+          "CRM-26747",
+          "CRM-88092",
+          "CRM-45765",
+          "CRM-44866",
+          "CRM-23192",
+          "CRM-30410",
+          "CRM-18363",
+          "CRM-48890",
+          "CRM-99502",
+          "CRM-49998",
+          "CRM-76537",
+          "CRM-19463",
+          "CRM-62613",
+          "CRM-97068",
+          "CRM-93214",
+          "CRM-73554",
+          "CRM-38659",
+          "CRM-40955",
+          "CRM-91866",
+          "CRM-79810",
+          "CRM-77237",
+          "CRM-82210",
+          "CRM-87670",
+          "CRM-95378",
+          "CRM-32668",
+          "CRM-89768",
+          "CRM-45957",
+          "CRM-23838",
+          "CRM-70487",
+          "CRM-97144",
+          "CRM-39374",
+          "CRM-14356",
+          "CRM-87145",
+          "CRM-45197",
+          "CRM-60680",
+          "CRM-86085",
+          "CRM-49246",
+          "CRM-44611",
+          "CRM-35334",
+          "CRM-21267",
+          "CRM-96507",
+          "CRM-44483",
+          "CRM-25207",
+          "CRM-53329",
+          "CRM-51235",
+          "CRM-82596",
+          "CRM-53319",
+          "CRM-76918",
+          "CRM-20112",
+          "CRM-13779",
+          "CRM-95107",
+          "CRM-77217",
+          "CRM-35939",
+          "CRM-29784",
+          "CRM-19157",
+          "CRM-20448",
+          "CRM-14777",
+          "CRM-80718",
+          "CRM-38903",
+          "CRM-86857",
+          "CRM-82624",
+          "CRM-43995",
+          "CRM-91152",
+          "CRM-78629",
+          "CRM-94643",
+          "CRM-66222",
+          "CRM-34568",
+          "CRM-90686",
+          "CRM-54419",
+          "CRM-62758",
+          "CRM-85816",
+          "CRM-95836",
+          "CRM-33924",
+          "CRM-91104",
+          "CRM-38308",
+          "CRM-18867",
+          "CRM-60675",
+          "CRM-57691",
+          "CRM-61713",
+          "CRM-79565",
+          "CRM-48669",
+          "CRM-87442",
+          "CRM-36869",
+          "CRM-98346",
+          "CRM-67332",
+          "CRM-21454",
+          "CRM-67889",
+          "CRM-97014",
+          "CRM-93140",
+          "CRM-35913",
+          "CRM-80132",
+          "CRM-25099",
+          "CRM-80420",
+          "CRM-97025",
+          "CRM-59836",
+          "CRM-72274",
+          "CRM-61019",
+          "CRM-22410",
+          "CRM-27403",
+          "CRM-79683",
+          "CRM-95910",
+          "CRM-12402",
+          "CRM-77513",
+          "CRM-18765",
+          "CRM-72126",
+          "CRM-69625",
+          "CRM-30061",
+          "CRM-88178",
+          "CRM-14918",
+          "CRM-34118",
+          "CRM-56470",
+          "CRM-39288",
+          "CRM-26669",
+          "CRM-13158",
+          "CRM-27214",
+          "CRM-67718",
+          "CRM-31287",
+          "CRM-13927",
+          "CRM-41950",
+          "CRM-80704",
+          "CRM-78885",
+          "CRM-73401",
+          "CRM-25621",
+          "CRM-74566",
+          "CRM-39000",
+          "CRM-19233",
+          "CRM-46821",
+          "CRM-10642"
+        ],
+        "flaggedSuspicious": true,
+        "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-30333, #CRM-42990, #CRM-46544, #CRM-17088, #CRM-87020, #CRM-38283, #CRM-75858, #CRM-52796, #CRM-16475, #CRM-97078, #CRM-33949, #CRM-79172, #CRM-19898, #CRM-74541, #CRM-66056, #CRM-12009, #CRM-60008, #CRM-89066, #CRM-24225, #CRM-96695, #CRM-95764, #CRM-39788, #CRM-77020, #CRM-23892, #CRM-73539, #CRM-38912, #CRM-26747, #CRM-88092, #CRM-45765, #CRM-44866, #CRM-23192, #CRM-30410, #CRM-18363, #CRM-48890, #CRM-99502, #CRM-49998, #CRM-76537, #CRM-19463, #CRM-62613, #CRM-97068, #CRM-93214, #CRM-73554, #CRM-38659, #CRM-40955, #CRM-91866, #CRM-79810, #CRM-77237, #CRM-82210, #CRM-87670, #CRM-95378, #CRM-32668, #CRM-89768, #CRM-45957, #CRM-23838, #CRM-70487, #CRM-97144, #CRM-39374, #CRM-14356, #CRM-87145, #CRM-45197, #CRM-60680, #CRM-86085, #CRM-49246, #CRM-44611, #CRM-35334, #CRM-21267, #CRM-96507, #CRM-44483, #CRM-25207, #CRM-53329, #CRM-51235, #CRM-82596, #CRM-53319, #CRM-76918, #CRM-20112, #CRM-13779, #CRM-95107, #CRM-77217, #CRM-35939, #CRM-29784, #CRM-19157, #CRM-20448, #CRM-14777, #CRM-80718, #CRM-38903, #CRM-86857, #CRM-82624, #CRM-43995, #CRM-91152, #CRM-78629, #CRM-94643, #CRM-66222, #CRM-34568, #CRM-90686, #CRM-54419, #CRM-62758, #CRM-85816, #CRM-95836, #CRM-33924, #CRM-91104, #CRM-38308, #CRM-18867, #CRM-60675, #CRM-57691, #CRM-61713, #CRM-79565, #CRM-48669, #CRM-87442, #CRM-36869, #CRM-98346, #CRM-67332, #CRM-21454, #CRM-67889, #CRM-97014, #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642"
+      }
+    },
+    {
+      "id": "ord-1793196738266-0a6d68",
+      "orderNumber": "CRM-53876",
+      "trackingToken": "842d8839768dc62cfe3380fc1db4e6f3",
+      "createdAt": "2026-10-28T14:12:18.266Z",
+      "customerName": "Aline Mugabo",
+      "customerPhone": "0788123456",
+      "deliveryType": "delivery",
+      "deliveryLocation": "Gasabo (Kimironko)",
+      "deliveryAddress": "KG 15 Ave, Kimironko",
+      "items": [
+        {
+          "productId": "prod-1793196737676-c25f8d",
+          "productName": "Wireless Studio Bluetooth Headphones",
+          "price": 35000,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80",
+          "sku": "CRM-ELE-9230"
+        }
+      ],
+      "subtotal": 35000,
+      "deliveryFee": 1500,
+      "totalAmount": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "supplierPayoutAmount": 31500,
+      "supplierPayoutStatus": "Paid",
+      "supplierFulfillmentStatus": "Pending",
+      "supplierApprovalStatus": "Pending Review",
+      "cjFulfillmentStatus": "Not Applicable",
+      "paymentMethod": "MTN Mobile Money",
+      "receiverName": "Ruth",
+      "receiverDetails": "078002260",
+      "shopName": "Inziza Sound Studio Lab",
+      "paymentStatus": "Paid",
+      "status": "Confirmed",
+      "stockDeducted": true,
+      "statusHistory": [
+        {
+          "status": "New",
+          "paymentStatus": "Pending Payment",
+          "timestamp": "2026-10-28T14:12:18.266Z",
+          "note": "Order successfully created. Awaiting mobile money payment initiation."
+        },
+        {
+          "status": "New",
+          "paymentStatus": "Pending Verification",
+          "timestamp": "2026-10-28T14:12:18.364Z",
+          "note": "Payment confirmation submitted. Txn ID: TXN1793196738362, Phone: 0788123456. Pending verification."
+        },
+        {
+          "status": "Confirmed",
+          "paymentStatus": "Paid",
+          "timestamp": "2026-10-28T14:12:18.470Z",
+          "note": "Payment verified & approved by Ruth (System Owner): 36,500 FRW (TXN1793196738362).",
+          "updatedBy": "Ruth (System Owner)"
+        }
+      ],
+      "paymentConfirmation": {
+        "id": "conf-1793196738364-2e01ff",
+        "orderId": "ord-1793196738266-0a6d68",
+        "orderNumber": "CRM-53876",
+        "customerName": "Aline Mugabo",
+        "paymentPhone": "0788123456",
+        "paymentMethod": "MTN Mobile Money",
+        "amountPaid": 36500,
+        "transactionId": "TXN1793196738362",
+        "submittedAt": "2026-10-28T14:12:18.364Z",
+        "verificationStatus": "Verified/Paid",
+        "isDuplicateTxn": false,
+        "flaggedSuspicious": false,
+        "verifiedAt": "2026-10-28T14:12:18.470Z",
+        "verifiedBy": "Ruth (System Owner)",
+        "adminNotes": "Verified via MTN MoMo statement.",
+        "customerNotified": true,
+        "notificationMessage": "Payment of 36,500 FRW for Order #CRM-53876 has been verified and confirmed! ContactReach Market is preparing your delivery."
+      },
+      "supplierPayoutRef": "MOMO-PAY-776611"
+    },
     {
       "id": "ord-1793196220216-b73f5d",
       "orderNumber": "CRM-53657",
@@ -69237,6 +70440,387 @@
   ],
   "paymentConfirmations": [
     {
+      "id": "conf-1793196741463-3fe9e5",
+      "orderId": "ord-1793196741356-84e5a4",
+      "orderNumber": "CRM-72152",
+      "customerName": "Sam Habimana",
+      "paymentPhone": "0780445566",
+      "paymentMethod": "MTN Mobile Money",
+      "amountPaid": 36500,
+      "transactionId": "CLAIM-1793196741461",
+      "submittedAt": "2026-10-28T14:12:21.463Z",
+      "verificationStatus": "Pending Verification",
+      "isDuplicateTxn": false,
+      "flaggedSuspicious": false
+    },
+    {
+      "id": "conf-1793196739792-720e6d",
+      "orderId": "ord-1793196739558-fc639b",
+      "orderNumber": "CRM-41912",
+      "customerName": "Gisele Umuhoza",
+      "paymentPhone": "0788776655",
+      "paymentMethod": "Airtel Money",
+      "amountPaid": 36500,
+      "transactionId": "991827461",
+      "submittedAt": "2026-10-28T14:12:19.792Z",
+      "verificationStatus": "Under Verification",
+      "isDuplicateTxn": true,
+      "duplicateOrderNumbers": [
+        "CRM-22298",
+        "CRM-30333",
+        "CRM-42990",
+        "CRM-46544",
+        "CRM-17088",
+        "CRM-87020",
+        "CRM-38283",
+        "CRM-75858",
+        "CRM-52796",
+        "CRM-16475",
+        "CRM-97078",
+        "CRM-33949",
+        "CRM-79172",
+        "CRM-19898",
+        "CRM-74541",
+        "CRM-66056",
+        "CRM-12009",
+        "CRM-60008",
+        "CRM-89066",
+        "CRM-24225",
+        "CRM-96695",
+        "CRM-95764",
+        "CRM-39788",
+        "CRM-77020",
+        "CRM-23892",
+        "CRM-73539",
+        "CRM-38912",
+        "CRM-26747",
+        "CRM-88092",
+        "CRM-45765",
+        "CRM-44866",
+        "CRM-23192",
+        "CRM-30410",
+        "CRM-18363",
+        "CRM-48890",
+        "CRM-99502",
+        "CRM-49998",
+        "CRM-76537",
+        "CRM-19463",
+        "CRM-62613",
+        "CRM-97068",
+        "CRM-93214",
+        "CRM-73554",
+        "CRM-38659",
+        "CRM-40955",
+        "CRM-91866",
+        "CRM-79810",
+        "CRM-77237",
+        "CRM-82210",
+        "CRM-87670",
+        "CRM-95378",
+        "CRM-32668",
+        "CRM-89768",
+        "CRM-45957",
+        "CRM-23838",
+        "CRM-70487",
+        "CRM-97144",
+        "CRM-39374",
+        "CRM-14356",
+        "CRM-87145",
+        "CRM-45197",
+        "CRM-60680",
+        "CRM-86085",
+        "CRM-49246",
+        "CRM-44611",
+        "CRM-35334",
+        "CRM-21267",
+        "CRM-96507",
+        "CRM-44483",
+        "CRM-25207",
+        "CRM-53329",
+        "CRM-51235",
+        "CRM-82596",
+        "CRM-53319",
+        "CRM-76918",
+        "CRM-20112",
+        "CRM-13779",
+        "CRM-95107",
+        "CRM-77217",
+        "CRM-35939",
+        "CRM-29784",
+        "CRM-19157",
+        "CRM-20448",
+        "CRM-14777",
+        "CRM-80718",
+        "CRM-38903",
+        "CRM-86857",
+        "CRM-82624",
+        "CRM-43995",
+        "CRM-91152",
+        "CRM-78629",
+        "CRM-94643",
+        "CRM-66222",
+        "CRM-34568",
+        "CRM-90686",
+        "CRM-54419",
+        "CRM-62758",
+        "CRM-85816",
+        "CRM-95836",
+        "CRM-33924",
+        "CRM-91104",
+        "CRM-38308",
+        "CRM-18867",
+        "CRM-60675",
+        "CRM-57691",
+        "CRM-61713",
+        "CRM-79565",
+        "CRM-48669",
+        "CRM-87442",
+        "CRM-36869",
+        "CRM-98346",
+        "CRM-67332",
+        "CRM-21454",
+        "CRM-67889",
+        "CRM-97014",
+        "CRM-93140",
+        "CRM-35913",
+        "CRM-80132",
+        "CRM-25099",
+        "CRM-80420",
+        "CRM-97025",
+        "CRM-59836",
+        "CRM-72274",
+        "CRM-61019",
+        "CRM-22410",
+        "CRM-27403",
+        "CRM-79683",
+        "CRM-95910",
+        "CRM-12402",
+        "CRM-77513",
+        "CRM-18765",
+        "CRM-72126",
+        "CRM-69625",
+        "CRM-30061",
+        "CRM-88178",
+        "CRM-14918",
+        "CRM-34118",
+        "CRM-56470",
+        "CRM-39288",
+        "CRM-26669",
+        "CRM-13158",
+        "CRM-27214",
+        "CRM-67718",
+        "CRM-31287",
+        "CRM-13927",
+        "CRM-41950",
+        "CRM-80704",
+        "CRM-78885",
+        "CRM-73401",
+        "CRM-25621",
+        "CRM-74566",
+        "CRM-39000",
+        "CRM-19233",
+        "CRM-46821",
+        "CRM-10642"
+      ],
+      "flaggedSuspicious": true,
+      "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-22298, #CRM-30333, #CRM-42990, #CRM-46544, #CRM-17088, #CRM-87020, #CRM-38283, #CRM-75858, #CRM-52796, #CRM-16475, #CRM-97078, #CRM-33949, #CRM-79172, #CRM-19898, #CRM-74541, #CRM-66056, #CRM-12009, #CRM-60008, #CRM-89066, #CRM-24225, #CRM-96695, #CRM-95764, #CRM-39788, #CRM-77020, #CRM-23892, #CRM-73539, #CRM-38912, #CRM-26747, #CRM-88092, #CRM-45765, #CRM-44866, #CRM-23192, #CRM-30410, #CRM-18363, #CRM-48890, #CRM-99502, #CRM-49998, #CRM-76537, #CRM-19463, #CRM-62613, #CRM-97068, #CRM-93214, #CRM-73554, #CRM-38659, #CRM-40955, #CRM-91866, #CRM-79810, #CRM-77237, #CRM-82210, #CRM-87670, #CRM-95378, #CRM-32668, #CRM-89768, #CRM-45957, #CRM-23838, #CRM-70487, #CRM-97144, #CRM-39374, #CRM-14356, #CRM-87145, #CRM-45197, #CRM-60680, #CRM-86085, #CRM-49246, #CRM-44611, #CRM-35334, #CRM-21267, #CRM-96507, #CRM-44483, #CRM-25207, #CRM-53329, #CRM-51235, #CRM-82596, #CRM-53319, #CRM-76918, #CRM-20112, #CRM-13779, #CRM-95107, #CRM-77217, #CRM-35939, #CRM-29784, #CRM-19157, #CRM-20448, #CRM-14777, #CRM-80718, #CRM-38903, #CRM-86857, #CRM-82624, #CRM-43995, #CRM-91152, #CRM-78629, #CRM-94643, #CRM-66222, #CRM-34568, #CRM-90686, #CRM-54419, #CRM-62758, #CRM-85816, #CRM-95836, #CRM-33924, #CRM-91104, #CRM-38308, #CRM-18867, #CRM-60675, #CRM-57691, #CRM-61713, #CRM-79565, #CRM-48669, #CRM-87442, #CRM-36869, #CRM-98346, #CRM-67332, #CRM-21454, #CRM-67889, #CRM-97014, #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642",
+      "verifiedAt": "2026-10-28T14:12:19.889Z",
+      "verifiedBy": "Ruth (System Owner)",
+      "adminNotes": "Suspicious duplicate transaction reference detected. Requesting telecom statement export."
+    },
+    {
+      "id": "conf-1793196738835-3f8037",
+      "orderId": "ord-1793196738697-009c14",
+      "orderNumber": "CRM-22298",
+      "customerName": "Kwizera Bosco",
+      "paymentPhone": "0780112233",
+      "paymentMethod": "MTN Merchant Code",
+      "amountPaid": 36500,
+      "transactionId": "991827461",
+      "screenshotUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "confirmationMessage": "Y'ello! You have transferred 36,500 RWF to ContactReach Market (078002) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.",
+      "submittedAt": "2026-10-28T14:12:18.835Z",
+      "verificationStatus": "Pending Verification",
+      "isDuplicateTxn": true,
+      "duplicateOrderNumbers": [
+        "CRM-30333",
+        "CRM-42990",
+        "CRM-46544",
+        "CRM-17088",
+        "CRM-87020",
+        "CRM-38283",
+        "CRM-75858",
+        "CRM-52796",
+        "CRM-16475",
+        "CRM-97078",
+        "CRM-33949",
+        "CRM-79172",
+        "CRM-19898",
+        "CRM-74541",
+        "CRM-66056",
+        "CRM-12009",
+        "CRM-60008",
+        "CRM-89066",
+        "CRM-24225",
+        "CRM-96695",
+        "CRM-95764",
+        "CRM-39788",
+        "CRM-77020",
+        "CRM-23892",
+        "CRM-73539",
+        "CRM-38912",
+        "CRM-26747",
+        "CRM-88092",
+        "CRM-45765",
+        "CRM-44866",
+        "CRM-23192",
+        "CRM-30410",
+        "CRM-18363",
+        "CRM-48890",
+        "CRM-99502",
+        "CRM-49998",
+        "CRM-76537",
+        "CRM-19463",
+        "CRM-62613",
+        "CRM-97068",
+        "CRM-93214",
+        "CRM-73554",
+        "CRM-38659",
+        "CRM-40955",
+        "CRM-91866",
+        "CRM-79810",
+        "CRM-77237",
+        "CRM-82210",
+        "CRM-87670",
+        "CRM-95378",
+        "CRM-32668",
+        "CRM-89768",
+        "CRM-45957",
+        "CRM-23838",
+        "CRM-70487",
+        "CRM-97144",
+        "CRM-39374",
+        "CRM-14356",
+        "CRM-87145",
+        "CRM-45197",
+        "CRM-60680",
+        "CRM-86085",
+        "CRM-49246",
+        "CRM-44611",
+        "CRM-35334",
+        "CRM-21267",
+        "CRM-96507",
+        "CRM-44483",
+        "CRM-25207",
+        "CRM-53329",
+        "CRM-51235",
+        "CRM-82596",
+        "CRM-53319",
+        "CRM-76918",
+        "CRM-20112",
+        "CRM-13779",
+        "CRM-95107",
+        "CRM-77217",
+        "CRM-35939",
+        "CRM-29784",
+        "CRM-19157",
+        "CRM-20448",
+        "CRM-14777",
+        "CRM-80718",
+        "CRM-38903",
+        "CRM-86857",
+        "CRM-82624",
+        "CRM-43995",
+        "CRM-91152",
+        "CRM-78629",
+        "CRM-94643",
+        "CRM-66222",
+        "CRM-34568",
+        "CRM-90686",
+        "CRM-54419",
+        "CRM-62758",
+        "CRM-85816",
+        "CRM-95836",
+        "CRM-33924",
+        "CRM-91104",
+        "CRM-38308",
+        "CRM-18867",
+        "CRM-60675",
+        "CRM-57691",
+        "CRM-61713",
+        "CRM-79565",
+        "CRM-48669",
+        "CRM-87442",
+        "CRM-36869",
+        "CRM-98346",
+        "CRM-67332",
+        "CRM-21454",
+        "CRM-67889",
+        "CRM-97014",
+        "CRM-93140",
+        "CRM-35913",
+        "CRM-80132",
+        "CRM-25099",
+        "CRM-80420",
+        "CRM-97025",
+        "CRM-59836",
+        "CRM-72274",
+        "CRM-61019",
+        "CRM-22410",
+        "CRM-27403",
+        "CRM-79683",
+        "CRM-95910",
+        "CRM-12402",
+        "CRM-77513",
+        "CRM-18765",
+        "CRM-72126",
+        "CRM-69625",
+        "CRM-30061",
+        "CRM-88178",
+        "CRM-14918",
+        "CRM-34118",
+        "CRM-56470",
+        "CRM-39288",
+        "CRM-26669",
+        "CRM-13158",
+        "CRM-27214",
+        "CRM-67718",
+        "CRM-31287",
+        "CRM-13927",
+        "CRM-41950",
+        "CRM-80704",
+        "CRM-78885",
+        "CRM-73401",
+        "CRM-25621",
+        "CRM-74566",
+        "CRM-39000",
+        "CRM-19233",
+        "CRM-46821",
+        "CRM-10642"
+      ],
+      "flaggedSuspicious": true,
+      "suspiciousReason": "Duplicate Transaction ID: \"991827461\" was already submitted for Order #CRM-30333, #CRM-42990, #CRM-46544, #CRM-17088, #CRM-87020, #CRM-38283, #CRM-75858, #CRM-52796, #CRM-16475, #CRM-97078, #CRM-33949, #CRM-79172, #CRM-19898, #CRM-74541, #CRM-66056, #CRM-12009, #CRM-60008, #CRM-89066, #CRM-24225, #CRM-96695, #CRM-95764, #CRM-39788, #CRM-77020, #CRM-23892, #CRM-73539, #CRM-38912, #CRM-26747, #CRM-88092, #CRM-45765, #CRM-44866, #CRM-23192, #CRM-30410, #CRM-18363, #CRM-48890, #CRM-99502, #CRM-49998, #CRM-76537, #CRM-19463, #CRM-62613, #CRM-97068, #CRM-93214, #CRM-73554, #CRM-38659, #CRM-40955, #CRM-91866, #CRM-79810, #CRM-77237, #CRM-82210, #CRM-87670, #CRM-95378, #CRM-32668, #CRM-89768, #CRM-45957, #CRM-23838, #CRM-70487, #CRM-97144, #CRM-39374, #CRM-14356, #CRM-87145, #CRM-45197, #CRM-60680, #CRM-86085, #CRM-49246, #CRM-44611, #CRM-35334, #CRM-21267, #CRM-96507, #CRM-44483, #CRM-25207, #CRM-53329, #CRM-51235, #CRM-82596, #CRM-53319, #CRM-76918, #CRM-20112, #CRM-13779, #CRM-95107, #CRM-77217, #CRM-35939, #CRM-29784, #CRM-19157, #CRM-20448, #CRM-14777, #CRM-80718, #CRM-38903, #CRM-86857, #CRM-82624, #CRM-43995, #CRM-91152, #CRM-78629, #CRM-94643, #CRM-66222, #CRM-34568, #CRM-90686, #CRM-54419, #CRM-62758, #CRM-85816, #CRM-95836, #CRM-33924, #CRM-91104, #CRM-38308, #CRM-18867, #CRM-60675, #CRM-57691, #CRM-61713, #CRM-79565, #CRM-48669, #CRM-87442, #CRM-36869, #CRM-98346, #CRM-67332, #CRM-21454, #CRM-67889, #CRM-97014, #CRM-93140, #CRM-35913, #CRM-80132, #CRM-25099, #CRM-80420, #CRM-97025, #CRM-59836, #CRM-72274, #CRM-61019, #CRM-22410, #CRM-27403, #CRM-79683, #CRM-95910, #CRM-12402, #CRM-77513, #CRM-18765, #CRM-72126, #CRM-69625, #CRM-30061, #CRM-88178, #CRM-14918, #CRM-34118, #CRM-56470, #CRM-39288, #CRM-26669, #CRM-13158, #CRM-27214, #CRM-67718, #CRM-31287, #CRM-13927, #CRM-41950, #CRM-80704, #CRM-78885, #CRM-73401, #CRM-25621, #CRM-74566, #CRM-39000, #CRM-19233, #CRM-46821, #CRM-10642"
+    },
+    {
+      "id": "conf-1793196738364-2e01ff",
+      "orderId": "ord-1793196738266-0a6d68",
+      "orderNumber": "CRM-53876",
+      "customerName": "Aline Mugabo",
+      "paymentPhone": "0788123456",
+      "paymentMethod": "MTN Mobile Money",
+      "amountPaid": 36500,
+      "transactionId": "TXN1793196738362",
+      "submittedAt": "2026-10-28T14:12:18.364Z",
+      "verificationStatus": "Verified/Paid",
+      "isDuplicateTxn": false,
+      "flaggedSuspicious": false,
+      "verifiedAt": "2026-10-28T14:12:18.470Z",
+      "verifiedBy": "Ruth (System Owner)",
+      "adminNotes": "Verified via MTN MoMo statement.",
+      "customerNotified": true,
+      "notificationMessage": "Payment of 36,500 FRW for Order #CRM-53876 has been verified and confirmed! ContactReach Market is preparing your delivery."
+    },
+    {
       "id": "conf-1793196208944-2b81f0",
       "orderId": "ord-1793196208858-b06b41",
       "orderNumber": "CRM-71867",
@@ -86727,6 +88311,149 @@
   ],
   "inventoryLogs": [
     {
+      "id": "inv-1793196756213-43db",
+      "productId": "prod-1793196747444-befb11",
+      "productName": "Pure Organic Honey from Nyungwe Forest 500ml",
+      "previousStock": 60,
+      "newStock": 58,
+      "changeAmount": -2,
+      "reason": "Automatic stock deduction for paid Order #CRM-32853",
+      "adminName": "Payment Webhook System",
+      "timestamp": "2026-10-28T14:12:36.214Z"
+    },
+    {
+      "id": "inv-1793196753247",
+      "productId": "prod-1793196752879-f15d0c",
+      "productName": "Shop Manager Tested Handbag",
+      "previousStock": 12,
+      "newStock": 15,
+      "changeAmount": 3,
+      "reason": "Stock manual update via admin editor",
+      "adminName": "Gisozi Shop Manager",
+      "timestamp": "2026-10-28T14:12:33.247Z"
+    },
+    {
+      "id": "inv-1793196752879",
+      "productId": "prod-1793196752879-f15d0c",
+      "productName": "Shop Manager Tested Handbag",
+      "previousStock": 0,
+      "newStock": 12,
+      "changeAmount": 12,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Gisozi Shop Manager",
+      "timestamp": "2026-10-28T14:12:32.879Z"
+    },
+    {
+      "id": "inv-1793196747444-0",
+      "productId": "prod-1793196737676-c25f8d",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 14,
+      "newStock": 28,
+      "changeAmount": 14,
+      "reason": "Spreadsheet Batch Update (14 -> 28)",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:27.444Z"
+    },
+    {
+      "id": "inv-1793196743603",
+      "productId": "prod-1793196743603-dcaf98",
+      "productName": "Multi-Angle Gallery Test Sneakers",
+      "previousStock": 0,
+      "newStock": 12,
+      "changeAmount": 12,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:23.603Z"
+    },
+    {
+      "id": "inv-1793196743040",
+      "productId": "prod-1793196743040-894c99",
+      "productName": "Limited Stock Sneaker",
+      "previousStock": 0,
+      "newStock": 2,
+      "changeAmount": 2,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:23.040Z"
+    },
+    {
+      "id": "inv-1793196742665",
+      "productId": "prod-1793196742665-cba148",
+      "productName": "Tombstone Test Product",
+      "previousStock": 0,
+      "newStock": 5,
+      "changeAmount": 5,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:22.665Z"
+    },
+    {
+      "id": "inv-1793196741161",
+      "productId": "prod-1793196737676-c25f8d",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 12,
+      "newStock": 14,
+      "changeAmount": 2,
+      "reason": "Stock restored from cancelled/refunded order CRM-34130",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:21.161Z"
+    },
+    {
+      "id": "inv-1793196740962",
+      "productId": "prod-1793196737676-c25f8d",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 14,
+      "newStock": 12,
+      "changeAmount": -2,
+      "reason": "Stock deducted for confirmed order CRM-34130",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:20.962Z"
+    },
+    {
+      "id": "inv-1793196739178",
+      "productId": "prod-1793196739178-c807d3",
+      "productName": "Glow Facial Vitamin C Serum (20% OFF Special)",
+      "previousStock": 0,
+      "newStock": 40,
+      "changeAmount": 40,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:19.178Z"
+    },
+    {
+      "id": "inv-1793196738470",
+      "productId": "prod-1793196737676-c25f8d",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 15,
+      "newStock": 14,
+      "changeAmount": -1,
+      "reason": "Stock deducted for approved payment on order CRM-53876",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:18.470Z"
+    },
+    {
+      "id": "inv-1793196737905",
+      "productId": "prod-1793196737905-7fb459",
+      "productName": "Studio Audio Cable Aux Cord",
+      "previousStock": 0,
+      "newStock": 30,
+      "changeAmount": 30,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:17.905Z"
+    },
+    {
+      "id": "inv-1793196737676",
+      "productId": "prod-1793196737676-c25f8d",
+      "productName": "Wireless Studio Bluetooth Headphones",
+      "previousStock": 0,
+      "newStock": 15,
+      "changeAmount": 15,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-28T14:12:17.676Z"
+    },
+    {
       "id": "inv-1793196220320-9c75",
       "productId": "prod-1793196215195-9d3522",
       "productName": "Pure Organic Honey from Nyungwe Forest 500ml",
@@ -96650,6 +98377,484 @@
   ],
   "auditLogs": [
     {
+      "id": "aud-1793196754787-a02d",
+      "timestamp": "2026-10-28T14:12:34.787Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_UPDATED",
+      "details": "Updated administrator account Temporary Admin (deact-1793196754108@contactreachmedia.rw): role=administrator, active=false",
+      "entityType": "admin_user",
+      "entityId": "adm-1793196754110-5212"
+    },
+    {
+      "id": "aud-1793196754646-7ed5",
+      "timestamp": "2026-10-28T14:12:34.646Z",
+      "adminName": "Temporary Admin",
+      "adminRole": "administrator",
+      "action": "FIREBASE_GOOGLE_LOGIN",
+      "details": "Admin signed in with Google Firebase Auth (deact-1793196754108@contactreachmedia.rw)"
+    },
+    {
+      "id": "aud-1793196754110-ee7d",
+      "timestamp": "2026-10-28T14:12:34.110Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_CREATED",
+      "details": "Created administrator account for Temporary Admin (deact-1793196754108@contactreachmedia.rw) with role administrator",
+      "entityType": "admin_user",
+      "entityId": "adm-1793196754110-5212"
+    },
+    {
+      "id": "aud-1793196753747-2cd2",
+      "timestamp": "2026-10-28T14:12:33.747Z",
+      "adminName": "Gisozi Shop Manager",
+      "adminRole": "shop_manager",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Shop Manager Tested Handbag\"",
+      "entityType": "product",
+      "entityId": "prod-1793196752879-f15d0c"
+    },
+    {
+      "id": "aud-1793196753247-3e4f",
+      "timestamp": "2026-10-28T14:12:33.247Z",
+      "adminName": "Gisozi Shop Manager",
+      "adminRole": "shop_manager",
+      "action": "PRODUCT_UPDATED",
+      "details": "Updated product \"Shop Manager Tested Handbag\"",
+      "entityType": "product",
+      "entityId": "prod-1793196752879-f15d0c"
+    },
+    {
+      "id": "aud-1793196752879-0fb7",
+      "timestamp": "2026-10-28T14:12:32.879Z",
+      "adminName": "Gisozi Shop Manager",
+      "adminRole": "shop_manager",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Shop Manager Tested Handbag\" (SKU: CRM-IBI-7893) with stock 12",
+      "entityType": "product",
+      "entityId": "prod-1793196752879-f15d0c"
+    },
+    {
+      "id": "aud-1793196752729-46bf",
+      "timestamp": "2026-10-28T14:12:32.729Z",
+      "adminName": "Gisozi Shop Manager",
+      "adminRole": "shop_manager",
+      "action": "FIREBASE_GOOGLE_LOGIN",
+      "details": "Admin signed in with Google Firebase Auth (shopmgr-1793196752294@contactreachmedia.rw)"
+    },
+    {
+      "id": "aud-1793196752297-b40a",
+      "timestamp": "2026-10-28T14:12:32.297Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_CREATED",
+      "details": "Created administrator account for Gisozi Shop Manager (shopmgr-1793196752294@contactreachmedia.rw) with role shop_manager",
+      "entityType": "admin_user",
+      "entityId": "adm-1793196752297-d71b"
+    },
+    {
+      "id": "aud-1793196752098-fae2",
+      "timestamp": "2026-10-28T14:12:32.098Z",
+      "adminName": "Thierry Maniriho (Platform Owner)",
+      "adminRole": "owner",
+      "action": "FIREBASE_GOOGLE_LOGIN",
+      "details": "Admin signed in with Google Firebase Auth (manirihocoss@gmail.com)"
+    },
+    {
+      "id": "aud-1793196751627-261f",
+      "timestamp": "2026-10-28T14:12:31.627Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_TRACKING_UPDATED",
+      "details": "Order #CRM-33183 tracking set to LP0069284019284 (AliExpress Standard Shipping)",
+      "entityType": "order",
+      "entityId": "ord-1793196751284-c85a3c"
+    },
+    {
+      "id": "aud-1793196751404-1381",
+      "timestamp": "2026-10-28T14:12:31.404Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_SUPPLIER_APPROVAL",
+      "details": "Order #CRM-33183 supplier approval updated from \"Pending Review\" to \"Approved\"",
+      "entityType": "order",
+      "entityId": "ord-1793196751284-c85a3c"
+    },
+    {
+      "id": "aud-1793196750965-84dc",
+      "timestamp": "2026-10-28T14:12:30.965Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_SUPPLIER_MAPPED",
+      "details": "Product \"Pure Organic Honey from Nyungwe Forest 500ml\" (CRM-NYUNGWE-HONEY) supplier mapping updated",
+      "entityType": "product",
+      "entityId": "prod-1793196747444-befb11"
+    },
+    {
+      "id": "aud-1793196750597-a3d6",
+      "timestamp": "2026-10-28T14:12:30.597Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "GOOGLE_SHEET_SYNC_PULL",
+      "details": "Synchronized products from Google Sheet (1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk): 0 created, 5 updated, 210 unchanged out of 215 sheet rows."
+    },
+    {
+      "id": "aud-1793196748042-7ee3",
+      "timestamp": "2026-10-28T14:12:28.042Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "GOOGLE_SHEET_CONFIG_UPDATED",
+      "details": "Updated connected Google Sheet configuration: ID=1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk, AutoSync=true"
+    },
+    {
+      "id": "aud-1793196747766-b7f6",
+      "timestamp": "2026-10-28T14:12:27.766Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "CJ_CONFIG_UPDATED",
+      "details": "Updated CJ Dropshipping settings (Email: supplier-ops@contactreachmedia.rw, Approval Required: YES, Rate: 1435 RWF, Markup: 40%)"
+    },
+    {
+      "id": "aud-1793196747536-aacb",
+      "timestamp": "2026-10-28T14:12:27.537Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SPREADSHEET_IMPORT",
+      "details": "Bulk imported spreadsheet: 1 created, 1 updated, 0 skipped. (Strategy: upsert)"
+    },
+    {
+      "id": "aud-1793196747268-2b6b",
+      "timestamp": "2026-10-28T14:12:27.268Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Pure Organic Honey from Nyungwe Forest 500ml\"",
+      "entityType": "product",
+      "entityId": "prod-1793196215195-9d3522"
+    },
+    {
+      "id": "aud-1793196746838-8239",
+      "timestamp": "2026-10-28T14:12:26.838Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "administrator",
+      "action": "CJ_DROPSHIPPING_SYNC",
+      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
+      "entityType": "cjdropshipping",
+      "entityId": "catalog"
+    },
+    {
+      "id": "aud-1793196746535-cf40",
+      "timestamp": "2026-10-28T14:12:26.535Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "administrator",
+      "action": "CJ_REALTIME_PULL",
+      "details": "Real-time CJ product pull: 0 new products uploaded, 0 updated (0 items processed from CJ catalog).",
+      "entityType": "cjdropshipping",
+      "entityId": "catalog"
+    },
+    {
+      "id": "aud-1793196746127-ad7f",
+      "timestamp": "2026-10-28T14:12:26.127Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_COST_UPDATED",
+      "details": "Admin updated cost/pricing for \"Luxury Ultra-Thin Minimalist Waterproof Quartz Chronograph Mesh Watch\": Cost 9999 FRW, Price 18999 FRW",
+      "entityType": "product",
+      "entityId": "prod-cj-cj-minimalist-quartz-chronograph-17"
+    },
+    {
+      "id": "aud-1793196745934-0ef7",
+      "timestamp": "2026-10-28T14:12:25.934Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "administrator",
+      "action": "CJ_DROPSHIPPING_SYNC",
+      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
+      "entityType": "cjdropshipping",
+      "entityId": "catalog"
+    },
+    {
+      "id": "aud-1793196745162-3857",
+      "timestamp": "2026-10-28T14:12:25.162Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "administrator",
+      "action": "CJ_REALTIME_PULL",
+      "details": "Real-time CJ product pull: 0 new products uploaded, 0 updated (0 items processed from CJ catalog).",
+      "entityType": "cjdropshipping",
+      "entityId": "catalog"
+    },
+    {
+      "id": "aud-1793196744253-ca4f",
+      "timestamp": "2026-10-28T14:12:24.254Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1793196743984-0f12",
+      "timestamp": "2026-10-28T14:12:23.984Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_IMAGES_UPDATED",
+      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
+      "entityType": "product",
+      "entityId": "prod-1793196743603-dcaf98"
+    },
+    {
+      "id": "aud-1793196743805-f241",
+      "timestamp": "2026-10-28T14:12:23.805Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_IMAGES_UPDATED",
+      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
+      "entityType": "product",
+      "entityId": "prod-1793196743603-dcaf98"
+    },
+    {
+      "id": "aud-1793196743603-c854",
+      "timestamp": "2026-10-28T14:12:23.603Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Multi-Angle Gallery Test Sneakers\" (SKU: CRM-FAS-1551) with stock 12",
+      "entityType": "product",
+      "entityId": "prod-1793196743603-dcaf98"
+    },
+    {
+      "id": "aud-1793196743319-b9de",
+      "timestamp": "2026-10-28T14:12:23.319Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Limited Stock Sneaker\"",
+      "entityType": "product",
+      "entityId": "prod-1793196743040-894c99"
+    },
+    {
+      "id": "aud-1793196743040-9fb7",
+      "timestamp": "2026-10-28T14:12:23.040Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Limited Stock Sneaker\" (SKU: CRM-FAS-5711) with stock 2",
+      "entityType": "product",
+      "entityId": "prod-1793196743040-894c99"
+    },
+    {
+      "id": "aud-1793196742853-9441",
+      "timestamp": "2026-10-28T14:12:22.853Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_DELETED",
+      "details": "Deleted product \"Tombstone Test Product\"",
+      "entityType": "product",
+      "entityId": "prod-1793196742665-cba148"
+    },
+    {
+      "id": "aud-1793196742665-7131",
+      "timestamp": "2026-10-28T14:12:22.665Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Tombstone Test Product\" (SKU: CRM-ELE-2700) with stock 5",
+      "entityType": "product",
+      "entityId": "prod-1793196742665-cba148"
+    },
+    {
+      "id": "aud-1793196742478-6b35",
+      "timestamp": "2026-10-28T14:12:22.478Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_DELETED",
+      "details": "Deleted administrator account for Audited Staff Test (staff.test.1793196741894@contactreachmedia.rw)",
+      "entityType": "admin_user",
+      "entityId": "adm-1793196741899-a49c"
+    },
+    {
+      "id": "aud-1793196742276-438e",
+      "timestamp": "2026-10-28T14:12:22.276Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_UPDATED",
+      "details": "Updated administrator account Audited Staff Test (staff.test.1793196741894@contactreachmedia.rw): role=product_manager, active=false",
+      "entityType": "admin_user",
+      "entityId": "adm-1793196741899-a49c"
+    },
+    {
+      "id": "aud-1793196742181-fbdf",
+      "timestamp": "2026-10-28T14:12:22.182Z",
+      "adminName": "Audited Staff Test",
+      "adminRole": "product_manager",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1793196741899-9c84",
+      "timestamp": "2026-10-28T14:12:21.899Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_CREATED",
+      "details": "Created administrator account for Audited Staff Test (staff.test.1793196741894@contactreachmedia.rw) with role product_manager",
+      "entityType": "admin_user",
+      "entityId": "adm-1793196741899-a49c"
+    },
+    {
+      "id": "aud-1793196741694-d449",
+      "timestamp": "2026-10-28T14:12:21.694Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_APPLICATION_REVIEWED",
+      "details": "Supplier application for \"Unverified Vendor Hub\" set to Rejected",
+      "entityType": "supplier_application",
+      "entityId": "supp-app-1793196741571-42d5"
+    },
+    {
+      "id": "aud-1793196741161-6015",
+      "timestamp": "2026-10-28T14:12:21.161Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_UPDATED",
+      "details": "Order #CRM-34130 updated to Cancelled (Paid)",
+      "entityType": "order",
+      "entityId": "ord-1793196740876-a59d70"
+    },
+    {
+      "id": "aud-1793196740962-c910",
+      "timestamp": "2026-10-28T14:12:20.962Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ORDER_UPDATED",
+      "details": "Order #CRM-34130 updated to Confirmed (Paid)",
+      "entityType": "order",
+      "entityId": "ord-1793196740876-a59d70"
+    },
+    {
+      "id": "aud-1793196740651-da53",
+      "timestamp": "2026-10-28T14:12:20.651Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "MAINTENANCE_MODE_DISABLED",
+      "details": "Maintenance Mode was turned OFF by Ruth (System Owner). Public visitors can now access and browse marketplace normally.",
+      "entityType": "settings",
+      "entityId": "global"
+    },
+    {
+      "id": "aud-1793196740356-5e28",
+      "timestamp": "2026-10-28T14:12:20.356Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "MAINTENANCE_MODE_ENABLED",
+      "details": "Maintenance Mode was turned ON by Ruth (System Owner). Public visitors now see \"We’ll Be Back Soon\" screen.",
+      "entityType": "settings",
+      "entityId": "global"
+    },
+    {
+      "id": "aud-1793196740175-c1b2",
+      "timestamp": "2026-10-28T14:12:20.175Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_PAYOUT_DISBURSED",
+      "details": "Disbursed supplier payout of 31,500 FRW to \"Inziza Sound Studio Lab\" (Ref: MOMO-PAY-776611)",
+      "entityType": "supplier_payout",
+      "entityId": "payout-1793196738470-e05d"
+    },
+    {
+      "id": "aud-1793196739889-ee8a",
+      "timestamp": "2026-10-28T14:12:19.889Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PAYMENT_AUDITING",
+      "details": "Payment marked Under Verification for Order #CRM-41912",
+      "entityType": "payment",
+      "entityId": "conf-1793196739792-720e6d"
+    },
+    {
+      "id": "aud-1793196739364-94f5",
+      "timestamp": "2026-10-28T14:12:19.364Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_UPDATED",
+      "details": "Updated product \"Glow Facial Vitamin C Serum (20% OFF Special)\"",
+      "entityType": "product",
+      "entityId": "prod-1793196739178-c807d3"
+    },
+    {
+      "id": "aud-1793196739178-12ac",
+      "timestamp": "2026-10-28T14:12:19.178Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Glow Facial Vitamin C Serum (20% OFF Special)\" (SKU: CRM-HAI-7971) with stock 40",
+      "entityType": "product",
+      "entityId": "prod-1793196739178-c807d3"
+    },
+    {
+      "id": "aud-1793196738470-20b6",
+      "timestamp": "2026-10-28T14:12:18.470Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PAYMENT_APPROVED",
+      "details": "Approved payment of 36500 FRW for Order #CRM-53876 (Txn: TXN1793196738362)",
+      "entityType": "payment",
+      "entityId": "conf-1793196738364-2e01ff"
+    },
+    {
+      "id": "aud-1793196738082-5294",
+      "timestamp": "2026-10-28T14:12:18.082Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_UPDATED",
+      "details": "Updated product \"Wireless Studio Bluetooth Headphones\"",
+      "entityType": "product",
+      "entityId": "prod-1793196737676-c25f8d"
+    },
+    {
+      "id": "aud-1793196737905-e3fa",
+      "timestamp": "2026-10-28T14:12:17.905Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Studio Audio Cable Aux Cord\" (SKU: CRM-ELE-9461) with stock 30",
+      "entityType": "product",
+      "entityId": "prod-1793196737905-7fb459"
+    },
+    {
+      "id": "aud-1793196737676-cac0",
+      "timestamp": "2026-10-28T14:12:17.676Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Wireless Studio Bluetooth Headphones\" (SKU: CRM-ELE-9230) with stock 15",
+      "entityType": "product",
+      "entityId": "prod-1793196737676-c25f8d"
+    },
+    {
+      "id": "aud-1793196737475-c0e2",
+      "timestamp": "2026-10-28T14:12:17.475Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "SUPPLIER_APPLICATION_REVIEWED",
+      "details": "Supplier application for \"Kigali Quality Audio Ltd\" set to Approved",
+      "entityType": "supplier_application",
+      "entityId": "supp-app-1793196737357-d6b0"
+    },
+    {
+      "id": "aud-1793196737230-1e25",
+      "timestamp": "2026-10-28T14:12:17.230Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "FIREBASE_GOOGLE_LOGIN",
+      "details": "Admin signed in with Google Firebase Auth (contactreachmedialimited@gmail.com)"
+    },
+    {
+      "id": "aud-1793196737024-313a",
+      "timestamp": "2026-10-28T14:12:17.024Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
       "id": "aud-1793196219410-af94",
       "timestamp": "2026-10-28T14:03:39.410Z",
       "adminName": "Ruth (System Owner)",
@@ -100946,488 +103151,6 @@
       "details": "Deleted product \"Pure Organic Honey from Nyungwe Forest 500ml\"",
       "entityType": "product",
       "entityId": "prod-1793095516038-94b304"
-    },
-    {
-      "id": "aud-1793095549529-7833",
-      "timestamp": "2026-10-27T10:05:49.529Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Wireless Bluetooth Earbuds with ANC\" (SKU: CRM-YT-ANC-01) with stock 40",
-      "entityType": "product",
-      "entityId": "prod-1793095549529-96e29c"
-    },
-    {
-      "id": "aud-1793095549331-20d4",
-      "timestamp": "2026-10-27T10:05:49.331Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "administrator",
-      "action": "CJ_DROPSHIPPING_SYNC",
-      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
-      "entityType": "cjdropshipping",
-      "entityId": "catalog"
-    },
-    {
-      "id": "aud-1793095549086-9ea4",
-      "timestamp": "2026-10-27T10:05:49.086Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_COST_UPDATED",
-      "details": "Admin updated cost/pricing for \"Luxury Ultra-Thin Minimalist Waterproof Quartz Chronograph Mesh Watch\": Cost 9999 FRW, Price 18999 FRW",
-      "entityType": "product",
-      "entityId": "prod-cj-cj-minimalist-quartz-chronograph-17"
-    },
-    {
-      "id": "aud-1793095548885-35cf",
-      "timestamp": "2026-10-27T10:05:48.885Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "administrator",
-      "action": "CJ_DROPSHIPPING_SYNC",
-      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
-      "entityType": "cjdropshipping",
-      "entityId": "catalog"
-    },
-    {
-      "id": "aud-1793095548602-5555",
-      "timestamp": "2026-10-27T10:05:48.602Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ADMIN_LOGIN",
-      "details": "Admin signed in successfully from 127.0.0.1"
-    },
-    {
-      "id": "aud-1793095548369-6782",
-      "timestamp": "2026-10-27T10:05:48.369Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_IMAGES_UPDATED",
-      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
-      "entityType": "product",
-      "entityId": "prod-1793095548031-836a86"
-    },
-    {
-      "id": "aud-1793095548192-961d",
-      "timestamp": "2026-10-27T10:05:48.192Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_IMAGES_UPDATED",
-      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
-      "entityType": "product",
-      "entityId": "prod-1793095548031-836a86"
-    },
-    {
-      "id": "aud-1793095548031-a688",
-      "timestamp": "2026-10-27T10:05:48.031Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Multi-Angle Gallery Test Sneakers\" (SKU: CRM-FAS-4295) with stock 12",
-      "entityType": "product",
-      "entityId": "prod-1793095548031-836a86"
-    },
-    {
-      "id": "aud-1793095547742-76b1",
-      "timestamp": "2026-10-27T10:05:47.742Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_DELETED",
-      "details": "Deleted product \"Limited Stock Sneaker\"",
-      "entityType": "product",
-      "entityId": "prod-1793095547499-5c105f"
-    },
-    {
-      "id": "aud-1793095547499-cc54",
-      "timestamp": "2026-10-27T10:05:47.499Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Limited Stock Sneaker\" (SKU: CRM-FAS-8397) with stock 2",
-      "entityType": "product",
-      "entityId": "prod-1793095547499-5c105f"
-    },
-    {
-      "id": "aud-1793095547342-fae5",
-      "timestamp": "2026-10-27T10:05:47.342Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_DELETED",
-      "details": "Deleted product \"Tombstone Test Product\"",
-      "entityType": "product",
-      "entityId": "prod-1793095547155-03997c"
-    },
-    {
-      "id": "aud-1793095547155-ca81",
-      "timestamp": "2026-10-27T10:05:47.155Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Tombstone Test Product\" (SKU: CRM-ELE-3886) with stock 5",
-      "entityType": "product",
-      "entityId": "prod-1793095547155-03997c"
-    },
-    {
-      "id": "aud-1793095546902-29b9",
-      "timestamp": "2026-10-27T10:05:46.902Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ADMIN_USER_UPDATED",
-      "details": "Updated administrator account Audited Staff Test (staff.test.1793095546581@contactreachmedia.rw): role=product_manager, active=false",
-      "entityType": "admin_user",
-      "entityId": "adm-1793095546584-abb5"
-    },
-    {
-      "id": "aud-1793095546819-6608",
-      "timestamp": "2026-10-27T10:05:46.819Z",
-      "adminName": "Audited Staff Test",
-      "adminRole": "product_manager",
-      "action": "ADMIN_LOGIN",
-      "details": "Admin signed in successfully from 127.0.0.1"
-    },
-    {
-      "id": "aud-1793095546584-d2e5",
-      "timestamp": "2026-10-27T10:05:46.584Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ADMIN_USER_CREATED",
-      "details": "Created administrator account for Audited Staff Test (staff.test.1793095546581@contactreachmedia.rw) with role product_manager",
-      "entityType": "admin_user",
-      "entityId": "adm-1793095546584-abb5"
-    },
-    {
-      "id": "aud-1793095546417-695e",
-      "timestamp": "2026-10-27T10:05:46.417Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "SUPPLIER_APPLICATION_REVIEWED",
-      "details": "Supplier application for \"Unverified Vendor Hub\" set to Rejected",
-      "entityType": "supplier_application",
-      "entityId": "supp-app-1793095546340-a011"
-    },
-    {
-      "id": "aud-1793095546000-420f",
-      "timestamp": "2026-10-27T10:05:46.000Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ORDER_UPDATED",
-      "details": "Order #CRM-97698 updated to Cancelled (Paid)",
-      "entityType": "order",
-      "entityId": "ord-1793095545772-865a39"
-    },
-    {
-      "id": "aud-1793095545850-979d",
-      "timestamp": "2026-10-27T10:05:45.850Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ORDER_UPDATED",
-      "details": "Order #CRM-97698 updated to Confirmed (Paid)",
-      "entityType": "order",
-      "entityId": "ord-1793095545772-865a39"
-    },
-    {
-      "id": "aud-1793095545617-ce70",
-      "timestamp": "2026-10-27T10:05:45.617Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "MAINTENANCE_MODE_DISABLED",
-      "details": "Maintenance Mode was turned OFF by Ruth (System Owner). Public visitors can now access and browse marketplace normally.",
-      "entityType": "settings",
-      "entityId": "global"
-    },
-    {
-      "id": "aud-1793095545383-778c",
-      "timestamp": "2026-10-27T10:05:45.383Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "MAINTENANCE_MODE_ENABLED",
-      "details": "Maintenance Mode was turned ON by Ruth (System Owner). Public visitors now see \"We’ll Be Back Soon\" screen.",
-      "entityType": "settings",
-      "entityId": "global"
-    },
-    {
-      "id": "aud-1793095545226-a150",
-      "timestamp": "2026-10-27T10:05:45.226Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "SUPPLIER_PAYOUT_DISBURSED",
-      "details": "Disbursed supplier payout of 31,500 FRW to \"Inziza Sound Studio Lab\" (Ref: MOMO-PAY-776611)",
-      "entityType": "supplier_payout",
-      "entityId": "payout-1793095543927-577e"
-    },
-    {
-      "id": "aud-1793095544979-3c7b",
-      "timestamp": "2026-10-27T10:05:44.979Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PAYMENT_AUDITING",
-      "details": "Payment marked Under Verification for Order #CRM-24225",
-      "entityType": "payment",
-      "entityId": "conf-1793095544893-152d6f"
-    },
-    {
-      "id": "aud-1793095544588-9608",
-      "timestamp": "2026-10-27T10:05:44.588Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_UPDATED",
-      "details": "Updated product \"Glow Facial Vitamin C Serum (20% OFF Special)\"",
-      "entityType": "product",
-      "entityId": "prod-1793095544432-ae7fa9"
-    },
-    {
-      "id": "aud-1793095544432-79a9",
-      "timestamp": "2026-10-27T10:05:44.432Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Glow Facial Vitamin C Serum (20% OFF Special)\" (SKU: CRM-HAI-7227) with stock 40",
-      "entityType": "product",
-      "entityId": "prod-1793095544432-ae7fa9"
-    },
-    {
-      "id": "aud-1793095543927-b811",
-      "timestamp": "2026-10-27T10:05:43.927Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PAYMENT_APPROVED",
-      "details": "Approved payment of 36500 FRW for Order #CRM-60838 (Txn: TXN1793095543842)",
-      "entityType": "payment",
-      "entityId": "conf-1793095543843-546eda"
-    },
-    {
-      "id": "aud-1793095543609-0935",
-      "timestamp": "2026-10-27T10:05:43.609Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_UPDATED",
-      "details": "Updated product \"Wireless Studio Bluetooth Headphones\"",
-      "entityType": "product",
-      "entityId": "prod-1793095543271-8fc514"
-    },
-    {
-      "id": "aud-1793095543448-8a20",
-      "timestamp": "2026-10-27T10:05:43.448Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Studio Audio Cable Aux Cord\" (SKU: CRM-ELE-9571) with stock 30",
-      "entityType": "product",
-      "entityId": "prod-1793095543448-aaa336"
-    },
-    {
-      "id": "aud-1793095543271-970a",
-      "timestamp": "2026-10-27T10:05:43.271Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Wireless Studio Bluetooth Headphones\" (SKU: CRM-ELE-1853) with stock 15",
-      "entityType": "product",
-      "entityId": "prod-1793095543271-8fc514"
-    },
-    {
-      "id": "aud-1793095543093-dee6",
-      "timestamp": "2026-10-27T10:05:43.093Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "SUPPLIER_APPLICATION_REVIEWED",
-      "details": "Supplier application for \"Kigali Quality Audio Ltd\" set to Approved",
-      "entityType": "supplier_application",
-      "entityId": "supp-app-1793095543006-4dd5"
-    },
-    {
-      "id": "aud-1793095542890-1621",
-      "timestamp": "2026-10-27T10:05:42.891Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "FIREBASE_GOOGLE_LOGIN",
-      "details": "Admin signed in with Google Firebase Auth (contactreachmedialimited@gmail.com)"
-    },
-    {
-      "id": "aud-1793095542724-f4e7",
-      "timestamp": "2026-10-27T10:05:42.724Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ADMIN_LOGIN",
-      "details": "Admin signed in successfully from 127.0.0.1"
-    },
-    {
-      "id": "aud-1793095518075-21ab",
-      "timestamp": "2026-10-27T10:05:18.075Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ORDER_TRACKING_UPDATED",
-      "details": "Order #CRM-68239 tracking set to LP0069284019284 (AliExpress Standard Shipping)",
-      "entityType": "order",
-      "entityId": "ord-1793095517752-c178dc"
-    },
-    {
-      "id": "aud-1793095517859-dfc4",
-      "timestamp": "2026-10-27T10:05:17.859Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ORDER_SUPPLIER_APPROVAL",
-      "details": "Order #CRM-68239 supplier approval updated from \"Pending Review\" to \"Approved\"",
-      "entityType": "order",
-      "entityId": "ord-1793095517752-c178dc"
-    },
-    {
-      "id": "aud-1793095517566-918b",
-      "timestamp": "2026-10-27T10:05:17.567Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_SUPPLIER_MAPPED",
-      "details": "Product \"Pure Organic Honey from Nyungwe Forest 500ml\" (CRM-NYUNGWE-HONEY) supplier mapping updated",
-      "entityType": "product",
-      "entityId": "prod-1793095516038-94b304"
-    },
-    {
-      "id": "aud-1793095517269-570d",
-      "timestamp": "2026-10-27T10:05:17.270Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "GOOGLE_SHEET_SYNC_PULL",
-      "details": "Synchronized products from Google Sheet (1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk): 0 created, 189 updated, 26 unchanged out of 215 sheet rows."
-    },
-    {
-      "id": "aud-1793095516474-b450",
-      "timestamp": "2026-10-27T10:05:16.474Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "GOOGLE_SHEET_CONFIG_UPDATED",
-      "details": "Updated connected Google Sheet configuration: ID=1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk, AutoSync=true"
-    },
-    {
-      "id": "aud-1793095516304-5105",
-      "timestamp": "2026-10-27T10:05:16.304Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "CJ_CONFIG_UPDATED",
-      "details": "Updated CJ Dropshipping settings (Email: supplier-ops@contactreachmedia.rw, Approval Required: YES, Rate: 1435 RWF, Markup: 40%)"
-    },
-    {
-      "id": "aud-1793095516127-472b",
-      "timestamp": "2026-10-27T10:05:16.127Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "SPREADSHEET_IMPORT",
-      "details": "Bulk imported spreadsheet: 1 created, 1 updated, 0 skipped. (Strategy: upsert)"
-    },
-    {
-      "id": "aud-1793095515883-e640",
-      "timestamp": "2026-10-27T10:05:15.883Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_DELETED",
-      "details": "Deleted product \"Pure Organic Honey from Nyungwe Forest 500ml\"",
-      "entityType": "product",
-      "entityId": "prod-1793093791239-8b604f"
-    },
-    {
-      "id": "aud-1793095515593-43b7",
-      "timestamp": "2026-10-27T10:05:15.593Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Wireless Bluetooth Earbuds with ANC\" (SKU: CRM-YT-ANC-01) with stock 40",
-      "entityType": "product",
-      "entityId": "prod-1793095515593-289e7e"
-    },
-    {
-      "id": "aud-1793095515366-5272",
-      "timestamp": "2026-10-27T10:05:15.366Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "administrator",
-      "action": "CJ_DROPSHIPPING_SYNC",
-      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
-      "entityType": "cjdropshipping",
-      "entityId": "catalog"
-    },
-    {
-      "id": "aud-1793095515126-c1ff",
-      "timestamp": "2026-10-27T10:05:15.126Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_COST_UPDATED",
-      "details": "Admin updated cost/pricing for \"Luxury Ultra-Thin Minimalist Waterproof Quartz Chronograph Mesh Watch\": Cost 9999 FRW, Price 18999 FRW",
-      "entityType": "product",
-      "entityId": "prod-cj-cj-minimalist-quartz-chronograph-17"
-    },
-    {
-      "id": "aud-1793095514931-3062",
-      "timestamp": "2026-10-27T10:05:14.931Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "administrator",
-      "action": "CJ_DROPSHIPPING_SYNC",
-      "details": "CJ Dropshipping automated sync executed: 0 new products uploaded, 13 updated. Exchange rate: 1435 RWF/USD, Markup: 40%.",
-      "entityType": "cjdropshipping",
-      "entityId": "catalog"
-    },
-    {
-      "id": "aud-1793095514634-421f",
-      "timestamp": "2026-10-27T10:05:14.634Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ADMIN_LOGIN",
-      "details": "Admin signed in successfully from 127.0.0.1"
-    },
-    {
-      "id": "aud-1793095514383-de80",
-      "timestamp": "2026-10-27T10:05:14.383Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_IMAGES_UPDATED",
-      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
-      "entityType": "product",
-      "entityId": "prod-1793095514049-4171ba"
-    },
-    {
-      "id": "aud-1793095514222-2066",
-      "timestamp": "2026-10-27T10:05:14.222Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_IMAGES_UPDATED",
-      "details": "Updated picture links for \"Multi-Angle Gallery Test Sneakers\" (4 pictures total)",
-      "entityType": "product",
-      "entityId": "prod-1793095514049-4171ba"
-    },
-    {
-      "id": "aud-1793095514049-142a",
-      "timestamp": "2026-10-27T10:05:14.049Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Multi-Angle Gallery Test Sneakers\" (SKU: CRM-FAS-1318) with stock 12",
-      "entityType": "product",
-      "entityId": "prod-1793095514049-4171ba"
-    },
-    {
-      "id": "aud-1793095513748-8557",
-      "timestamp": "2026-10-27T10:05:13.748Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_DELETED",
-      "details": "Deleted product \"Limited Stock Sneaker\"",
-      "entityType": "product",
-      "entityId": "prod-1793095513517-838723"
-    },
-    {
-      "id": "aud-1793095513517-a055",
-      "timestamp": "2026-10-27T10:05:13.517Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_CREATED",
-      "details": "Created product \"Limited Stock Sneaker\" (SKU: CRM-FAS-4161) with stock 2",
-      "entityType": "product",
-      "entityId": "prod-1793095513517-838723"
-    },
-    {
-      "id": "aud-1793095513356-7511",
-      "timestamp": "2026-10-27T10:05:13.357Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_DELETED",
-      "details": "Deleted product \"Tombstone Test Product\"",
-      "entityType": "product",
-      "entityId": "prod-1793095513195-dd49c4"
     }
   ],
   "customers": [
@@ -101437,8 +103160,8 @@
       "phone": "0788123456",
       "deliveryAddress": "KG 15 Ave, Kimironko",
       "createdAt": "2026-10-19T07:50:46.576Z",
-      "totalOrders": 84,
-      "totalSpent": 3066000
+      "totalOrders": 85,
+      "totalSpent": 3102500
     },
     {
       "id": "cust-1792484463972-89ed",
@@ -101460,8 +103183,8 @@
       "email": "buyer.shopper.1792484893270@gmail.com",
       "deliveryAddress": "KG 622 St, Fair View Plaza",
       "createdAt": "2026-10-20T08:28:13.275Z",
-      "totalOrders": 21,
-      "totalSpent": 198640,
+      "totalOrders": 22,
+      "totalSpent": 207140,
       "status": "Active",
       "accountType": "buyer",
       "lastLogin": "2026-10-20T08:28:13.275Z",
@@ -101476,8 +103199,8 @@
       "phone": "0780112233",
       "deliveryAddress": "Sonatubes near Bank of Kigali",
       "createdAt": "2026-10-21T12:15:21.238Z",
-      "totalOrders": 77,
-      "totalSpent": 2810500
+      "totalOrders": 78,
+      "totalSpent": 2847000
     },
     {
       "id": "cust-g-google_uid_1792584921256",
@@ -101502,8 +103225,8 @@
       "phone": "0788776655",
       "deliveryAddress": "KN 4 Ave, Kigali",
       "createdAt": "2026-10-21T12:15:21.290Z",
-      "totalOrders": 77,
-      "totalSpent": 2810500
+      "totalOrders": 78,
+      "totalSpent": 2847000
     },
     {
       "id": "cust-1792584921330",
@@ -101511,8 +103234,8 @@
       "phone": "0780998877",
       "deliveryAddress": "KG 544 St, Kacyiru",
       "createdAt": "2026-10-21T12:15:21.330Z",
-      "totalOrders": 77,
-      "totalSpent": 2810500
+      "totalOrders": 78,
+      "totalSpent": 2847000
     },
     {
       "id": "cust-1792584921397",
@@ -101520,8 +103243,8 @@
       "phone": "0780991122",
       "deliveryAddress": "KG 12 St",
       "createdAt": "2026-10-21T12:15:21.397Z",
-      "totalOrders": 78,
-      "totalSpent": 2847000
+      "totalOrders": 79,
+      "totalSpent": 2883500
     },
     {
       "id": "cust-1792584921438",
@@ -101529,8 +103252,8 @@
       "phone": "0788998822",
       "deliveryAddress": "KN 20 St",
       "createdAt": "2026-10-21T12:15:21.438Z",
-      "totalOrders": 78,
-      "totalSpent": 5460000
+      "totalOrders": 79,
+      "totalSpent": 5530000
     },
     {
       "id": "cust-g-google_uid_1792585782264",
@@ -101571,8 +103294,8 @@
       "name": "Sam Habimana",
       "phone": "0780445566",
       "createdAt": "2026-10-21T12:30:39.344Z",
-      "totalOrders": 77,
-      "totalSpent": 2810500
+      "totalOrders": 78,
+      "totalSpent": 2847000
     },
     {
       "id": "cust-g-google_uid_1792585967807",
@@ -101800,8 +103523,8 @@
       "name": "Customer A",
       "phone": "0789111222",
       "createdAt": "2026-10-22T09:47:40.032Z",
-      "totalOrders": 65,
-      "totalSpent": 1950000
+      "totalOrders": 66,
+      "totalSpent": 1980000
     },
     {
       "id": "cust-g-google_uid_1792662801890",
@@ -102829,8 +104552,8 @@
       "phone": "0788998877",
       "deliveryAddress": "Remera, Kigali",
       "createdAt": "2026-10-28T13:32:51.145Z",
-      "totalOrders": 7,
-      "totalSpent": 59500
+      "totalOrders": 8,
+      "totalSpent": 68000
     },
     {
       "id": "cust-1793194371267",
@@ -102838,8 +104561,8 @@
       "phone": "0788223344",
       "deliveryAddress": "Kacyiru, Kigali",
       "createdAt": "2026-10-28T13:32:51.267Z",
-      "totalOrders": 5,
-      "totalSpent": 77500
+      "totalOrders": 6,
+      "totalSpent": 93000
     },
     {
       "id": "cust-g-google_uid_1793195643706",
@@ -102908,6 +104631,23 @@
       "googleUid": "google_uid_1793196206439",
       "authProvider": "google",
       "isRegisteredBuyer": true
+    },
+    {
+      "id": "cust-g-google_uid_1793196738955",
+      "name": "Gisele Uwase",
+      "phone": "0789123456",
+      "email": "buyer.shopper.1793196738955@gmail.com",
+      "deliveryAddress": "Kigali, Kicukiro, Sonatubes",
+      "createdAt": "2026-10-28T14:12:18.961Z",
+      "totalOrders": 0,
+      "totalSpent": 0,
+      "status": "Active",
+      "accountType": "buyer",
+      "lastLogin": "2026-10-28T14:12:18.961Z",
+      "photoURL": "https://lh3.googleusercontent.com/a/default-user",
+      "googleUid": "google_uid_1793196738955",
+      "authProvider": "google",
+      "isRegisteredBuyer": true
     }
   ],
   "adminUsers": [
@@ -102918,7 +104658,7 @@
       "role": "owner",
       "active": true,
       "phone": "+250 780 022 600",
-      "lastLogin": "2026-10-28T14:03:31.874Z"
+      "lastLogin": "2026-10-28T14:12:24.173Z"
     },
     {
       "id": "adm-owner-thierry",
@@ -103071,7 +104811,7 @@
       "role": "owner",
       "active": true,
       "phone": "0792412177",
-      "lastLogin": "2026-10-28T14:03:37.846Z"
+      "lastLogin": "2026-10-28T14:12:31.962Z"
     },
     {
       "id": "adm-1793192442437-51ce",
@@ -103191,10 +104931,54 @@
       "role": "administrator",
       "active": false,
       "lastLogin": "2026-10-28T14:03:39.244Z"
+    },
+    {
+      "id": "adm-1793196752297-d71b",
+      "name": "Gisozi Shop Manager",
+      "email": "shopmgr-1793196752294@contactreachmedia.rw",
+      "role": "shop_manager",
+      "phone": "0788990011",
+      "active": true,
+      "lastLogin": "2026-10-28T14:12:32.569Z"
+    },
+    {
+      "id": "adm-1793196754110-5212",
+      "name": "Temporary Admin",
+      "email": "deact-1793196754108@contactreachmedia.rw",
+      "role": "administrator",
+      "active": false,
+      "lastLogin": "2026-10-28T14:12:34.476Z"
     }
   ],
   "reviews": [],
   "supplierApplications": [
+    {
+      "id": "supp-app-1793196741571-42d5",
+      "businessName": "Unverified Vendor Hub",
+      "ownerName": "Unknown",
+      "phone": "0780000000",
+      "location": "Remote",
+      "category": "electronics",
+      "description": "No documentation provided.",
+      "status": "Rejected",
+      "createdAt": "2026-10-28T14:12:21.571Z",
+      "reviewedBy": "Ruth (System Owner)",
+      "reviewedAt": "2026-10-28T14:12:21.694Z"
+    },
+    {
+      "id": "supp-app-1793196737357-d6b0",
+      "businessName": "Kigali Quality Audio Ltd",
+      "ownerName": "Jean Paul",
+      "phone": "0788990011",
+      "email": "jeanpaul@qualityaudio.rw",
+      "location": "Downtown Kigali, Quartier Commercial",
+      "category": "electronics",
+      "description": "Authorized importer of sound systems and smart audio accessories.",
+      "status": "Approved",
+      "createdAt": "2026-10-28T14:12:17.357Z",
+      "reviewedBy": "Ruth (System Owner)",
+      "reviewedAt": "2026-10-28T14:12:17.475Z"
+    },
     {
       "id": "supp-app-1793196209047-4eac",
       "businessName": "Unverified Vendor Hub",
@@ -105435,6 +107219,35 @@
   ],
   "supplierPayouts": [
     {
+      "id": "payout-1793196756214-66c2e4",
+      "shopId": "shop-inziza-crafts-provisions-8836",
+      "shopName": "Inziza Crafts & Provisions",
+      "orderId": "ord-1793196756062-4034f7",
+      "orderNumber": "CRM-32853",
+      "orderTotal": 14000,
+      "commissionRate": 10,
+      "commissionEarned": 1400,
+      "payoutAmount": 12600,
+      "status": "Cancelled",
+      "createdAt": "2026-10-28T14:12:36.214Z"
+    },
+    {
+      "id": "payout-1793196738470-e05d",
+      "shopId": "shop-inziza-sound-studio-lab-5019",
+      "shopName": "Inziza Sound Studio Lab",
+      "orderId": "ord-1793196738266-0a6d68",
+      "orderNumber": "CRM-53876",
+      "orderTotal": 36500,
+      "commissionRate": 10,
+      "commissionEarned": 3500,
+      "payoutAmount": 31500,
+      "status": "Paid",
+      "createdAt": "2026-10-28T14:12:18.470Z",
+      "paymentReference": "MOMO-PAY-776611",
+      "paidAt": "2026-10-28T14:12:20.175Z",
+      "approvedBy": "Ruth (System Owner)"
+    },
+    {
       "id": "payout-1793196220321-516aa5",
       "shopId": "shop-inziza-crafts-provisions-8836",
       "shopName": "Inziza Crafts & Provisions",
@@ -106734,6 +108547,24 @@
   ],
   "paymentTransactions": [
     {
+      "id": "TXN-CRM-CRM-97402-DFC710",
+      "orderId": "ord-1793196755572-97ec95",
+      "orderNumber": "CRM-97402",
+      "customerPhone": "0788998877",
+      "amount": 8500,
+      "currency": "RWF",
+      "paymentMethod": "MTN Mobile Money",
+      "provider": "MTN Mobile Money",
+      "status": "Pending",
+      "idempotencyKey": "idemp-1793196755716",
+      "metadata": {
+        "itemsCount": 1,
+        "deliveryLocation": "Gasabo"
+      },
+      "createdAt": "2026-10-28T14:12:35.717Z",
+      "updatedAt": "2026-10-28T14:12:35.717Z"
+    },
+    {
       "id": "TXN-CRM-CRM-72224-B51BA9",
       "orderId": "ord-1793196219897-2933b6",
       "orderNumber": "CRM-72224",
@@ -106863,16 +108694,16 @@
         "uploadedCount": 0,
         "updatedCount": 13,
         "totalCjProducts": 13,
-        "timestamp": "2026-10-28T14:03:34.505Z",
+        "timestamp": "2026-10-28T14:12:26.756Z",
         "status": "success",
         "message": "Successfully synchronized 13 CJ dropshipping products (0 newly uploaded, 13 updated)."
       },
-      "lastSyncAt": "2026-10-28T14:03:34.505Z",
+      "lastSyncAt": "2026-10-28T14:12:26.756Z",
       "requireAdminApproval": true,
       "isConnected": true,
       "connectionStatus": "connected",
       "lastConnectedEmail": "supplier-ops@contactreachmedia.rw",
-      "accessTokenExpiry": "2027-04-26T14:03:35.565Z",
+      "accessTokenExpiry": "2027-04-26T14:12:27.863Z",
       "openId": "cj-sandbox-openid-9988"
     },
     "driveBackupStatus": {
@@ -106893,14 +108724,14 @@
       "connectedAt": "2026-10-26T11:14:16.530Z",
       "lastSyncStats": {
         "status": "success",
-        "timestamp": "2026-10-28T14:03:36.788Z",
+        "timestamp": "2026-10-28T14:12:30.497Z",
         "createdCount": 0,
         "updatedCount": 5,
-        "totalProducts": 252,
+        "totalProducts": 256,
         "syncedCount": 215,
         "message": "Pulled 215 rows (0 new, 5 updated, 210 unchanged)"
       },
-      "lastSyncAt": "2026-10-28T14:03:36.788Z"
+      "lastSyncAt": "2026-10-28T14:12:30.497Z"
     },
     "alibabaConfig": {
       "appKey": "",
@@ -106937,7 +108768,7 @@
         "message": "Ready to import and synchronize Alibaba catalog"
       }
     },
-    "maintenanceUpdatedAt": "2026-10-28T14:03:28.183Z"
+    "maintenanceUpdatedAt": "2026-10-28T14:12:20.651Z"
   },
   "deletedRecordIds": [
     "adm-1793191508164-78d6",
@@ -106978,7 +108809,12 @@
     "prod-1793196210235-a6c959",
     "prod-1793196210652-bc3d4c",
     "prod-1793196150691-603154",
-    "prod-1793196218454-6848bb"
+    "prod-1793196218454-6848bb",
+    "adm-1793196741899-a49c",
+    "prod-1793196742665-cba148",
+    "prod-1793196743040-894c99",
+    "prod-1793196215195-9d3522",
+    "prod-1793196752879-f15d0c"
   ],
   "adminTokens": [
     [
@@ -110130,6 +111966,81 @@
         },
         "expiresAt": 1795788218230
       }
+    ],
+    [
+      "0b408ddf12fb25b3fbb2bd5e13c192a81233df606c936b2d24a1b4eb054d8dc5",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-28T14:12:24.173Z"
+        },
+        "expiresAt": 1795788736900
+      }
+    ],
+    [
+      "de0741abb0d57b3691d7ba914959775b7253b7f20df0c8e89cddde462bcbfa38",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-28T14:12:24.173Z"
+        },
+        "expiresAt": 1795788737133
+      }
+    ],
+    [
+      "f57fba0a0e448f7f46c06cbdc06f604f9ef59585957893108108b983d882730b",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-28T14:12:24.173Z"
+        },
+        "expiresAt": 1795788744173
+      }
+    ],
+    [
+      "78c78c1026d140377c4f296f3ff5323f3178e58a99598c943dee70afa61299fc",
+      {
+        "user": {
+          "id": "adm-owner-thierry-coss",
+          "name": "Thierry Maniriho (Platform Owner)",
+          "email": "manirihocoss@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "0792412177",
+          "lastLogin": "2026-10-28T14:12:31.962Z"
+        },
+        "expiresAt": 1795788751962
+      }
+    ],
+    [
+      "4ccf88969a80edffcef57a36ae9f0f967b61361d728bc7ef71bfb69627dd0ca1",
+      {
+        "user": {
+          "id": "adm-1793196752297-d71b",
+          "name": "Gisozi Shop Manager",
+          "email": "shopmgr-1793196752294@contactreachmedia.rw",
+          "role": "shop_manager",
+          "phone": "0788990011",
+          "active": true,
+          "lastLogin": "2026-10-28T14:12:32.569Z"
+        },
+        "expiresAt": 1795788752569
+      }
     ]
   ],
   "customerTokens": [
@@ -110544,6 +112455,13 @@
       {
         "customerId": "cust-g-google_uid_1793196206439",
         "expiresAt": 1795788206444
+      }
+    ],
+    [
+      "buyer_g_ad2d63b0517a282e13740483a0445e497297536aa48da225",
+      {
+        "customerId": "cust-g-google_uid_1793196738955",
+        "expiresAt": 1795788738961
       }
     ]
   ]

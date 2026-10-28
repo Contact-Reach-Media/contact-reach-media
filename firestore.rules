@@ -8,14 +8,16 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'contactreachmedialimited@gmail.com' ||
-        request.auth.token.email == 'umuhuzamarket@gmail.com' ||
-        request.auth.token.email == 'manirihocoss@gmail.com' ||
-        request.auth.token.email == 'manirihothierry250@gmail.com' ||
-        request.auth.token.email == 'manirihothierry36@gmail.com' ||
-        request.auth.token.email == 'manirihothierry6@gmail.com' ||
-        request.auth.token.email == 'manirihothierry11@gmail.com' ||
-        request.auth.token.email.matches('.*@contactreachmedia\\.rw') ||
+        (request.auth.token.email_verified == true && (
+          request.auth.token.email == 'contactreachmedialimited@gmail.com' ||
+          request.auth.token.email == 'umuhuzamarket@gmail.com' ||
+          request.auth.token.email == 'manirihocoss@gmail.com' ||
+          request.auth.token.email == 'manirihothierry250@gmail.com' ||
+          request.auth.token.email == 'manirihothierry36@gmail.com' ||
+          request.auth.token.email == 'manirihothierry6@gmail.com' ||
+          request.auth.token.email == 'manirihothierry11@gmail.com' ||
+          request.auth.token.email.matches('.*@contactreachmedia\\.rw$')
+        )) ||
         request.auth.token.admin == true ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
@@ -45,11 +47,14 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
-    // Orders: anyone can create (checkout), readable only by authorized admins or matching customer
+    // Orders: creation restricted to New/Pending Payment, listing restricted to admins, single order read restricted to admins or verified customer owner
     match /orders/{orderId} {
-      allow create: if true;
+      allow create: if request.resource.data.status == 'New' && request.resource.data.paymentStatus == 'Pending Payment' && request.resource.data.totalAmount >= 0;
       allow list: if isAdmin();
-      allow get: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get: if isAdmin() || (isSignedIn() && (
+        (resource.data.userId != null && resource.data.userId == request.auth.uid) ||
+        (resource.data.customerEmail != null && request.auth.token.email_verified == true && resource.data.customerEmail == request.auth.token.email)
+      ));
       allow update, delete: if isAdmin();
     }
 
