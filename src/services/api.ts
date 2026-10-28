@@ -3548,6 +3548,28 @@ export const api = {
     return parsed.json;
   },
 
+  async adminImport1000AlibabaProducts(payload?: { autoPublish?: boolean; category?: string }): Promise<{
+    success: boolean;
+    message: string;
+    uploadedCount: number;
+    updatedCount: number;
+    totalAlibaba: number;
+    pendingReview: number;
+    approvedLive: number;
+    stagedForReview: boolean;
+  }> {
+    const res = await fetch('/api/admin/alibaba/import-1000', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload || { autoPublish: true })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to import 1,000 Alibaba products');
+    }
+    return parsed.json;
+  },
+
   async adminGetAlibabaStaging(params?: { status?: string; category?: string; search?: string; page?: number; pageSize?: number }): Promise<{
     total: number;
     page: number;

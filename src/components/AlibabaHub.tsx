@@ -39,6 +39,7 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [bulkApproving, setBulkApproving] = useState(false);
   const [importing300, setImporting300] = useState(false);
+  const [importing1000, setImporting1000] = useState(false);
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
 
   // Search & Import state
@@ -302,6 +303,21 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
     }
   };
 
+  const handleImport1000 = async (autoPublish: boolean = true) => {
+    setImporting1000(true);
+    try {
+      const res = await api.adminImport1000AlibabaProducts({ autoPublish });
+      showToast(res.message, 'success');
+      onRefreshData();
+      await fetchStaging();
+      setSubTab(autoPublish ? 'catalog' : 'staging');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to import 1,000 Alibaba products', 'error');
+    } finally {
+      setImporting1000(false);
+    }
+  };
+
   const handleApproveProduct = async (id: string) => {
     setApprovingId(id);
     try {
@@ -381,12 +397,21 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
-              onClick={() => handleImport300(false)}
-              disabled={importing300}
+              onClick={() => handleImport1000(true)}
+              disabled={importing1000}
               className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
             >
-              <Package className={`w-4 h-4 ${importing300 ? 'animate-spin' : ''}`} />
-              <span>{importing300 ? 'Importing 300...' : '📦 Import 300 Products (Review Queue)'}</span>
+              <Package className={`w-4 h-4 ${importing1000 ? 'animate-spin' : ''}`} />
+              <span>{importing1000 ? 'Importing 1000...' : '📦 Import 1000 Products (Live Store)'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleImport1000(false)}
+              disabled={importing1000}
+              className="px-3.5 py-2.5 bg-amber-200/90 hover:bg-amber-100 text-slate-950 text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+            >
+              <Layers className="w-4 h-4 text-slate-800" />
+              <span>{importing1000 ? 'Importing...' : 'Review Staging'}</span>
             </button>
             <button
               type="button"
@@ -439,12 +464,12 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={() => handleImport300(false)}
-              disabled={importing300}
+              onClick={() => handleImport1000(false)}
+              disabled={importing1000}
               className="px-3.5 py-2.5 bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-950 text-xs font-black rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
             >
               <Layers className="w-4 h-4 text-amber-700" />
-              <span>{importing300 ? 'Importing...' : '📦 Import 300 to Staging'}</span>
+              <span>{importing1000 ? 'Importing...' : '📦 Import 1000 to Staging'}</span>
             </button>
             <button
               type="button"
@@ -707,12 +732,12 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => handleImport300(false)}
-                  disabled={importing300}
+                  onClick={() => handleImport1000(false)}
+                  disabled={importing1000}
                   className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
                 >
-                  <RefreshCw className={`w-4 h-4 ${importing300 ? 'animate-spin' : ''}`} />
-                  <span>{importing300 ? 'Importing 300...' : '📦 Re-Import 300 Products'}</span>
+                  <RefreshCw className={`w-4 h-4 ${importing1000 ? 'animate-spin' : ''}`} />
+                  <span>{importing1000 ? 'Importing 1000...' : '📦 Re-Import 1000 Products'}</span>
                 </button>
               </div>
             </div>
@@ -821,15 +846,15 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
                 <Package className="w-12 h-12 text-slate-300 mx-auto" />
                 <p className="text-sm font-bold text-slate-700">No products match current staging filters</p>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Click below to import all 300 authentic Alibaba products covering all 10 store categories into this queue.
+                  Click below to import all 1000 authentic Alibaba products covering all 10 store categories into this queue.
                 </p>
                 <button
                   type="button"
-                  onClick={() => handleImport300(false)}
-                  disabled={importing300}
+                  onClick={() => handleImport1000(false)}
+                  disabled={importing1000}
                   className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl cursor-pointer"
                 >
-                  {importing300 ? 'Importing 300 Products...' : '📦 Import 300 Alibaba Products to Staging Queue'}
+                  {importing1000 ? 'Importing 1000 Products...' : '📦 Import 1000 Alibaba Products to Staging Queue'}
                 </button>
               </div>
             ) : (

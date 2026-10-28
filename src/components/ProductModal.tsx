@@ -513,24 +513,57 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 <p className="whitespace-pre-line">{product.description}</p>
 
                 {product.source === 'alibaba' && (
-                  <div className="mt-3 p-3 bg-orange-50/70 border border-orange-200 rounded-xl space-y-1.5">
+                  <div className="mt-3 p-3.5 bg-gradient-to-br from-orange-50/90 to-amber-50/70 border border-orange-200/90 rounded-2xl space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold text-orange-950 flex-wrap gap-1">
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1.5 font-extrabold">
                         <Truck className="w-4 h-4 text-orange-600" />
                         Alibaba Logistics Air Freight to Kigali (KGL Hub)
                       </span>
                       {product.alibabaTradeAssurance && (
-                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                          Trade Assurance Protected
+                        <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full border border-amber-300">
+                          Trade Assurance 100% Protected
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-600">
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 py-1 text-[11px]">
+                      <div className="bg-white/80 p-2 rounded-xl border border-orange-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Shipping to Rwanda</span>
+                        <span className="font-extrabold font-mono text-orange-700">
+                          {product.alibabaShippingCostRwf ? `${product.alibabaShippingCostRwf.toLocaleString()} RWF` : 'Included'}
+                        </span>
+                        {product.alibabaShippingCostUsd !== undefined && (
+                          <span className="text-[10px] text-slate-400 font-mono block">(${product.alibabaShippingCostUsd.toFixed(2)})</span>
+                        )}
+                      </div>
+
+                      <div className="bg-white/80 p-2 rounded-xl border border-orange-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Gross Weight / Dims</span>
+                        <span className="font-bold text-slate-800">
+                          {product.alibabaWeightKg ? `${product.alibabaWeightKg} kg` : 'Standard'}
+                        </span>
+                        {product.alibabaDimensionsCm && (
+                          <span className="text-[10px] text-slate-400 block">
+                            {product.alibabaDimensionsCm.length}x{product.alibabaDimensionsCm.width}x{product.alibabaDimensionsCm.height}cm
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="bg-white/80 p-2 rounded-xl border border-orange-100 col-span-2 sm:col-span-1">
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Landed Price Formula</span>
+                        <span className="font-mono text-[10px] font-bold text-emerald-700">
+                          (Cost + Freight) × 1.10
+                        </span>
+                        <span className="text-[9px] text-slate-400 block">Official markup</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 leading-snug">
                       Dispatched via official Alibaba Air Express directly to Kigali International Airport with customs clearance at MAGERWA Gikondo. Delivery timeframe: 7 - 12 business days.
                     </p>
                     {product.alibabaShippingMethod && (
                       <p className="text-[10px] font-mono text-slate-500">
-                        Method: {product.alibabaShippingMethod}
+                        Carrier Method: {product.alibabaShippingMethod}
                       </p>
                     )}
                   </div>

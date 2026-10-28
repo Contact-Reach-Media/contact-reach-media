@@ -152,7 +152,7 @@ export default function App() {
   const [isBuyerAccountOpen, setIsBuyerAccountOpen] = useState(false);
 
   // Product quantity display limit for "Reba ibindi"
-  const [visibleRecommendedCount, setVisibleRecommendedCount] = useState(10);
+  const [visibleRecommendedCount, setVisibleRecommendedCount] = useState(20);
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -839,7 +839,7 @@ export default function App() {
                   {visibleRecommendedCount < products.length && (
                     <div className="text-center mt-8">
                       <button
-                        onClick={() => setVisibleRecommendedCount(prev => Math.min(products.length, prev + 5))}
+                        onClick={() => setVisibleRecommendedCount(prev => Math.min(products.length, prev + 20))}
                         className="py-2.5 px-6 rounded-full bg-[#18191C] hover:bg-black text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
                       >
                         {t.showMore || (currentLang === 'en' ? 'Show More' : 'Reba ibindi')}

@@ -28,6 +28,7 @@ import {
 } from './src/types.ts';
 import { ALIBABA_CURATED_FEED, AlibabaCuratedItem } from './src/data/alibabaFeed.ts';
 import { ALIBABA_300_CATALOG, Alibaba300Item } from './src/data/alibaba300Feed.ts';
+import { ALIBABA_1000_CATALOG, Alibaba1000Item } from './src/data/alibaba1000Feed.ts';
 import { calculateAlibabaShipping, calculateAlibabaLandedPricing } from './src/utils/alibabaShipping.ts';
 
 
@@ -6405,13 +6406,15 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
           adminName: admin?.name || 'Administrator',
           autoPublish: autoPublish !== false
         });
-        return res.json({
-          success: true,
-          message: `Live CJ Dropshipping sync complete: ${livePull.uploadedCount} products added, ${livePull.updatedCount} products updated from live CJ catalog.`,
-          uploadedCount: livePull.uploadedCount,
-          updatedCount: livePull.updatedCount,
-          stats: livePull
-        });
+        if (livePull.uploadedCount > 0 || livePull.updatedCount > 0) {
+          return res.json({
+            success: true,
+            message: `Live CJ Dropshipping sync complete: ${livePull.uploadedCount} products added, ${livePull.updatedCount} products updated from live CJ catalog.`,
+            uploadedCount: livePull.uploadedCount,
+            updatedCount: livePull.updatedCount,
+            stats: livePull
+          });
+        }
       } catch (liveErr) {
         console.warn('[CJ Dropshipping] Live sync notice, falling back to standard feed:', liveErr);
       }
@@ -6546,7 +6549,7 @@ async function syncAlibabaProducts(categoryFilter?: string, adminName: string = 
   const usdRate = Number(alibabaCfg.usdToRwfRate) || 1435;
   const markupPercent = 10; // Strictly 10% as required: Selling Price = (Product Cost + Shipping Cost) * 1.10
 
-  let feed = ALIBABA_300_CATALOG;
+  let feed: any[] = ALIBABA_1000_CATALOG;
   if (categoryFilter && categoryFilter !== 'all') {
     feed = feed.filter(item => item.category === categoryFilter);
   }
@@ -7044,7 +7047,7 @@ app.get('/api/admin/alibaba/products/search', requireAdminAuth, (req: Request, r
   const usdRate = Number(alibabaCfg.usdToRwfRate) || 1435;
   const markupPercent = 10;
 
-  let results = ALIBABA_300_CATALOG;
+  let results: any[] = ALIBABA_1000_CATALOG;
 
   if (category && category !== 'all') {
     results = results.filter(item => item.category === category);
@@ -7266,10 +7269,10 @@ app.post('/api/admin/alibaba/import', requireAdminAuth, requireRole(['owner', 'a
   });
 });
 
-// 6b. Import All 300 Verified Products with Kigali Air Freight & 10% Markup Formula
-app.post('/api/admin/alibaba/import-300', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
+// 6b. Import All 1,000 Verified Products with Kigali Air Freight & 10% Markup Formula
+app.post('/api/admin/alibaba/import-1000', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const { autoPublish = false, category } = req.body;
+  const { autoPublish = true, category } = req.body;
 
   try {
     const result = await syncAlibabaProducts(category, admin?.name || 'Administrator', Boolean(autoPublish));
@@ -7277,8 +7280,8 @@ app.post('/api/admin/alibaba/import-300', requireAdminAuth, requireRole(['owner'
     try {
       logAudit(
         admin,
-        'ALIBABA_300_IMPORT',
-        `Imported/Refreshed 300 verified Alibaba products with Kigali shipping and 10% markup (autoPublish: ${Boolean(autoPublish)}).`,
+        'ALIBABA_1000_IMPORT',
+        `Imported/Refreshed 1,000 verified Alibaba products with Kigali shipping and 10% markup (autoPublish: ${Boolean(autoPublish)}).`,
         'alibaba',
         'catalog'
       );
@@ -7291,8 +7294,8 @@ app.post('/api/admin/alibaba/import-300', requireAdminAuth, requireRole(['owner'
     return res.json({
       success: true,
       message: Boolean(autoPublish)
-        ? `Successfully imported 300 verified Alibaba products directly to live website with authentic Kigali shipping & 10% markup.`
-        : `Successfully imported 300 verified Alibaba products into the Staging Queue for admin review.`,
+        ? `Successfully imported 1,000 verified Alibaba products directly to live website with authentic Kigali shipping & 10% markup.`
+        : `Successfully imported 1,000 verified Alibaba products into the Staging Queue for admin review.`,
       uploadedCount: result.uploadedCount,
       updatedCount: result.updatedCount,
       totalAlibaba,
@@ -7301,7 +7304,46 @@ app.post('/api/admin/alibaba/import-300', requireAdminAuth, requireRole(['owner'
       stagedForReview: !autoPublish
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message || 'Failed to import 300 Alibaba products' });
+    return res.status(500).json({ error: err?.message || 'Failed to import 1,000 Alibaba products' });
+  }
+});
+
+// 6b-compat. Import 300 / 1000 Verified Products (Backwards Compatibility)
+app.post('/api/admin/alibaba/import-300', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { autoPublish = false, category } = req.body;
+
+  try {
+    const result = await syncAlibabaProducts(category, admin?.name || 'Administrator', Boolean(autoPublish));
+    
+    try {
+      logAudit(
+        admin,
+        'ALIBABA_300_IMPORT',
+        `Imported/Refreshed verified Alibaba products with Kigali shipping and 10% markup (autoPublish: ${Boolean(autoPublish)}).`,
+        'alibaba',
+        'catalog'
+      );
+    } catch {}
+
+    const totalAlibaba = db.products.filter(p => p.source === 'alibaba' || Boolean(p.alibabaProductId) || p.sku?.startsWith('ALI-')).length;
+    const pendingReview = db.products.filter(p => (p.source === 'alibaba' || Boolean(p.alibabaProductId) || p.sku?.startsWith('ALI-')) && p.reviewStatus === 'Pending Approval').length;
+    const approvedLive = db.products.filter(p => (p.source === 'alibaba' || Boolean(p.alibabaProductId) || p.sku?.startsWith('ALI-')) && p.reviewStatus === 'Approved').length;
+
+    return res.json({
+      success: true,
+      message: Boolean(autoPublish)
+        ? `Successfully imported verified Alibaba products directly to live website with authentic Kigali shipping & 10% markup.`
+        : `Successfully imported verified Alibaba products into the Staging Queue for admin review.`,
+      uploadedCount: result.uploadedCount,
+      updatedCount: result.updatedCount,
+      totalAlibaba,
+      pendingReview,
+      approvedLive,
+      stagedForReview: !autoPublish
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to import Alibaba products' });
   }
 });
 
@@ -7484,7 +7526,7 @@ app.post('/api/admin/alibaba/sync-stock-prices', requireAdminAuth, async (req: R
   let updatedCount = 0;
 
   for (const prod of alibabaProducts) {
-    const feedItem = ALIBABA_300_CATALOG.find(f => f.pid === prod.alibabaProductId || f.productSku === prod.sku) || ALIBABA_CURATED_FEED.find(f => f.pid === prod.alibabaProductId || f.productSku === prod.sku);
+    const feedItem: any = ALIBABA_1000_CATALOG.find(f => f.pid === prod.alibabaProductId || f.productSku === prod.sku) || ALIBABA_300_CATALOG.find(f => f.pid === prod.alibabaProductId || f.productSku === prod.sku) || ALIBABA_CURATED_FEED.find(f => f.pid === prod.alibabaProductId || f.productSku === prod.sku);
     const usdCost = feedItem?.unitCostUsd || prod.alibabaOriginalCostUsd || 15;
     const weightKg = feedItem?.weightKg || prod.alibabaWeightKg || 1.0;
     const dimensionsCm = feedItem?.dimensionsCm || prod.alibabaDimensionsCm;
