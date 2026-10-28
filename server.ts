@@ -4809,6 +4809,12 @@ const CJ_CURATED_FEED: CjCuratedItem[] = [
 function parseCjPrice(rawPrice: any, fallback: number = 12): number {
   if (typeof rawPrice === 'number' && !isNaN(rawPrice) && rawPrice > 0) return rawPrice;
   if (typeof rawPrice === 'string') {
+    if (rawPrice.includes('--')) {
+      const parts = rawPrice.split('--').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+      if (parts.length > 0) {
+        return Math.max(...parts);
+      }
+    }
     const match = rawPrice.match(/([0-9]+(?:\.[0-9]+)?)/);
     if (match) {
       const parsed = parseFloat(match[1]);
@@ -4857,8 +4863,8 @@ async function authenticateWithCjApi(apiKeyInput?: string, emailInput?: string):
     };
   }
 
-  // Already a full JWT / CJ Access Token or API token
-  if (apiKey.startsWith('API@') || apiKey.includes('eyJ') || apiKey.includes('@api@')) {
+  // Already a full JWT / CJ Access Token (starts with API@ and contains JWT eyJ)
+  if (apiKey.startsWith('API@') && apiKey.includes('eyJ')) {
     // If it looks like a token, verify it with a real request to CJ product list
     try {
       const verifyRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=1&pageSize=1', {
@@ -4954,6 +4960,266 @@ async function getCjAccessToken(rawKey?: string, email?: string): Promise<string
   return auth.success && auth.accessToken ? auth.accessToken : null;
 }
 
+// Maps CJ Dropshipping category names to ContactReach Market store categories
+function mapCjCategoryToLocalCategory(cjCategoryName?: string): string {
+  if (!cjCategoryName) return 'electronics';
+  const c = cjCategoryName.toLowerCase();
+  if (c.includes('ring') || c.includes('necklace') || c.includes('watch') || c.includes('jewel') || c.includes('bracelet') || c.includes('earring') || c.includes('brooch') || c.includes('amasaha')) {
+    return 'amasaha';
+  }
+  if (c.includes('cloth') || c.includes('dress') || c.includes('shirt') || c.includes('apparel') || c.includes('fashion') || c.includes('pant') || c.includes('shoe') || c.includes('hoodie') || c.includes('jacket') || c.includes('sweater') || c.includes('coat') || c.includes('underwear') || c.includes('sneaker')) {
+    return 'fashion';
+  }
+  if (c.includes('light') || c.includes('lamp') || c.includes('led') || c.includes('decor') || c.includes('candle') || c.includes('amatara') || c.includes('bulb')) {
+    return 'amatara';
+  }
+  if (c.includes('beauty') || c.includes('hair') || c.includes('cosmetic') || c.includes('skin') || c.includes('makeup') || c.includes('wig') || c.includes('nail') || c.includes('wellness') || c.includes('care')) {
+    return 'hair-beauty';
+  }
+  if (c.includes('bag') || c.includes('backpack') || c.includes('luggage') || c.includes('wallet') || c.includes('purse') || c.includes('handbag') || c.includes('ibikapu')) {
+    return 'ibikapu';
+  }
+  if (c.includes('sport') || c.includes('fitness') || c.includes('gym') || c.includes('yoga') || c.includes('cycling') || c.includes('outdoor') || c.includes('exercise')) {
+    return 'sports';
+  }
+  if (c.includes('toy') || c.includes('baby') || c.includes('kid') || c.includes('child') || c.includes('plush') || c.includes('abana')) {
+    return 'abana';
+  }
+  if (c.includes('kitchen') || c.includes('cook') || c.includes('home') || c.includes('dining') || c.includes('gift') || c.includes('flask') || c.includes('cup') || c.includes('bottle') || c.includes('impano')) {
+    return 'impano';
+  }
+  return 'electronics';
+}
+
+// Real-time CJ product pull directly from official CJ Dropshipping Developers API v2.0
+async function pullLiveCjProducts(options?: {
+  pages?: number;
+  pageSize?: number;
+  categoryFilter?: string;
+  adminName?: string;
+  autoPublish?: boolean;
+}): Promise<{
+  success: boolean;
+  uploadedCount: number;
+  updatedCount: number;
+  totalFetched: number;
+  totalCjCatalog: number;
+  message: string;
+  products: Product[];
+}> {
+  const adminName = options?.adminName || 'CJ Real-Time Automation';
+  const pagesToFetch = Math.max(1, Math.min(options?.pages || 2, 5));
+  const pageSize = Math.max(10, Math.min(options?.pageSize || 50, 50));
+  const categoryFilter = options?.categoryFilter;
+  const config: CjDropshippingConfig = db.settings?.cjConfig || initialSettings.cjConfig!;
+  const usdRate = config.usdToRwfRate || 1435;
+  const markupPercent = config.defaultMarkupPercent || 35;
+  const shouldRequireApproval = options?.autoPublish !== undefined 
+    ? !options.autoPublish 
+    : (config.requireAdminApproval !== undefined ? config.requireAdminApproval : false);
+
+  const effectiveKey = (config.apiKey || process.env.CJ_DROPSHIPPING_API_KEY || '').trim();
+  const liveToken = await getCjAccessToken(effectiveKey, config.email);
+
+  if (!liveToken) {
+    throw new Error('Unable to authenticate with CJdropshipping API. Please check your API credentials.');
+  }
+
+  const { shopId, shopName } = resolveOrCreateShop(
+    'CJ Dropshipping Fulfillment',
+    undefined,
+    {
+      location: 'Kigali Express / Global Air Dispatch',
+      phone: '+250780022600',
+      category: 'Dropshipping Supplier',
+      description: 'Automated global dropshipping fulfillment integrated directly with ContactReach Market.'
+    },
+    adminName
+  );
+
+  let uploadedCount = 0;
+  let updatedCount = 0;
+  let totalFetched = 0;
+  let totalCjCatalog = 0;
+  const processedProducts: Product[] = [];
+
+  for (let page = 1; page <= pagesToFetch; page++) {
+    try {
+      let url = `https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=${page}&pageSize=${pageSize}`;
+      if (categoryFilter && categoryFilter !== 'all') {
+        url += `&categoryName=${encodeURIComponent(categoryFilter)}`;
+      }
+
+      const res = await fetch(url, {
+        headers: { 'CJ-Access-Token': liveToken },
+        signal: AbortSignal.timeout(12000)
+      });
+
+      if (!res.ok) {
+        console.warn(`[CJ Dropshipping] Page ${page} HTTP status ${res.status}`);
+        continue;
+      }
+
+      const cjData = await res.json();
+      if (!cjData || (cjData.code !== 200 && cjData.result !== true) || !Array.isArray(cjData.data?.list)) {
+        console.warn(`[CJ Dropshipping] Page ${page} failed or empty:`, cjData?.message);
+        continue;
+      }
+
+      totalCjCatalog = cjData.data.total || totalCjCatalog;
+      const rawList = cjData.data.list;
+      totalFetched += rawList.length;
+
+      for (const p of rawList) {
+        const rawPid = String(p.pid || p.id || '').trim();
+        if (!rawPid) continue;
+
+        const pid = rawPid;
+        const sku = (p.productSku || `CJ-LIVE-${pid}`).trim();
+        const productName = (p.productNameEn || p.productName || 'CJ Dropshipping Product').trim();
+        const sellPriceUsd = parseCjPrice(p.sellPrice || p.price, 12);
+        const costInFrw = Math.round(sellPriceUsd * usdRate);
+        const suggestedSellingPrice = Math.round(costInFrw * (1 + markupPercent / 100));
+
+        const primaryImage = (p.productImage || (Array.isArray(p.productImageSet) && p.productImageSet[0]) || '').trim();
+        const imageSet = Array.isArray(p.productImageSet) && p.productImageSet.length > 0
+          ? p.productImageSet.filter(Boolean)
+          : (primaryImage ? [primaryImage] : []);
+
+        const mappedCategory = mapCjCategoryToLocalCategory(p.categoryName || categoryFilter);
+
+        const existingIndex = db.products.findIndex(existing =>
+          existing.cjProductId === pid ||
+          (existing.sku && existing.sku === sku) ||
+          existing.id === `prod-cj-${pid}`
+        );
+
+        if (existingIndex !== -1) {
+          const existing = db.products[existingIndex];
+          if (!existing.costOverriddenByAdmin) {
+            existing.costPrice = costInFrw;
+            existing.price = suggestedSellingPrice;
+            existing.profitMargin = suggestedSellingPrice - costInFrw;
+          }
+          existing.cjOriginalCostUsd = sellPriceUsd;
+          existing.cjLastSyncAt = new Date().toISOString();
+          existing.updatedAt = new Date().toISOString();
+          if (imageSet.length > 0 && (!existing.images || existing.images.length === 0)) {
+            existing.images = imageSet;
+            existing.imageUrl = primaryImage || imageSet[0];
+          }
+          if (existing.stock === 0) existing.stock = 50;
+          if (existing.status === 'Hidden' && !shouldRequireApproval) {
+            existing.status = 'Available';
+            existing.reviewStatus = 'Approved';
+          }
+          saveToFirestoreAsync('products', existing.id, existing);
+          processedProducts.push(existing);
+          updatedCount++;
+        } else {
+          const newProduct: Product = {
+            id: `prod-cj-${pid}`,
+            name: productName,
+            sku,
+            description: p.description || p.productNameEn || 'Imported directly from verified CJ Dropshipping fulfillment center.',
+            source: 'cjdropshipping',
+            cjProductId: pid,
+            cjProductSku: sku,
+            cjOriginalCostUsd: sellPriceUsd,
+            costPrice: costInFrw,
+            costOverriddenByAdmin: false,
+            price: suggestedSellingPrice,
+            profitMargin: suggestedSellingPrice - costInFrw,
+            category: mappedCategory,
+            stock: 50,
+            imageUrl: primaryImage || (imageSet[0] || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'),
+            images: imageSet.length > 0 ? imageSet : [primaryImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
+            shopName,
+            shopId,
+            receiverName: db.settings.receiverName || 'Ruth',
+            paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
+            merchantCode: db.settings.merchantCode || '078002',
+            receiverPhone: db.settings.paymentNumber || '078002260',
+            location: 'Kigali Express / Global Dispatch',
+            deliveryInfo: 'Kigali delivery within 24-48 hrs',
+            status: shouldRequireApproval ? 'Hidden' : 'Available',
+            reviewStatus: shouldRequireApproval ? 'Pending Approval' : 'Approved',
+            isFeatured: false,
+            isNewArrival: true,
+            isBestSeller: false,
+            brand: p.brand || 'CJ Partner',
+            unit: 'Piece',
+            rating: 5.0,
+            reviewsCount: 0,
+            cjLastSyncAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            history: [{
+              timestamp: new Date().toISOString(),
+              action: shouldRequireApproval ? 'Imported from CJ Dropshipping (Staged)' : 'Real-time pull & published from CJ Dropshipping',
+              user: adminName
+            }]
+          };
+
+          db.products.unshift(newProduct);
+          saveToFirestoreAsync('products', newProduct.id, newProduct);
+
+          db.inventoryLogs.unshift({
+            id: `inv-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+            productId: newProduct.id,
+            productName: newProduct.name,
+            previousStock: 0,
+            newStock: newProduct.stock,
+            changeAmount: newProduct.stock,
+            reason: 'Real-time live CJ Dropshipping product pull',
+            adminName,
+            timestamp: new Date().toISOString()
+          });
+
+          processedProducts.push(newProduct);
+          uploadedCount++;
+        }
+      }
+    } catch (pageErr) {
+      console.warn(`[CJ Dropshipping] Page ${page} exception:`, pageErr);
+    }
+  }
+
+  // Update sync stats
+  db.settings.cjConfig = {
+    ...config,
+    lastSyncAt: new Date().toISOString(),
+    lastSyncStats: {
+      uploadedCount,
+      updatedCount,
+      totalCjProducts: totalCjCatalog || totalFetched,
+      timestamp: new Date().toISOString(),
+      status: 'success',
+      message: `Real-time CJ sync pulled ${totalFetched} items (${uploadedCount} newly added, ${updatedCount} updated). Live CJ catalog: ${totalCjCatalog ? totalCjCatalog.toLocaleString() : '1.68M'} items.`
+    }
+  };
+
+  saveDbToDisk();
+  saveToFirestoreAsync('settings', 'global', db.settings);
+
+  logAudit(
+    { name: adminName, role: 'administrator' },
+    'CJ_REALTIME_PULL',
+    `Real-time CJ product pull: ${uploadedCount} new products uploaded, ${updatedCount} updated (${totalFetched} items processed from CJ catalog).`,
+    'cjdropshipping',
+    'catalog'
+  );
+
+  return {
+    success: true,
+    uploadedCount,
+    updatedCount,
+    totalFetched,
+    totalCjCatalog,
+    message: `Successfully synchronized ${totalFetched} live CJ products (${uploadedCount} newly added, ${updatedCount} updated). Total live CJ catalog: ${totalCjCatalog ? totalCjCatalog.toLocaleString() : '1.68M'} products.`,
+    products: processedProducts
+  };
+}
+
 // Helper to perform automated product upload from CJ Dropshipping
 async function syncCjDropshippingProducts(categoryFilter?: string, adminName: string = 'System Automation'): Promise<{
   uploadedCount: number;
@@ -4973,26 +5239,26 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
     try {
       const liveToken = await getCjAccessToken(effectiveCjKey, config.email);
       if (liveToken) {
-        const url = `https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=1&pageSize=20${categoryFilter && categoryFilter !== 'all' ? `&categoryName=${encodeURIComponent(categoryFilter)}` : ''}`;
+        const url = `https://developers.cjdropshipping.com/api2.0/v1/product/list?pageNum=1&pageSize=50${categoryFilter && categoryFilter !== 'all' ? `&categoryName=${encodeURIComponent(categoryFilter)}` : ''}`;
         const cjRes = await fetch(url, {
           method: 'GET',
           headers: {
             'CJ-Access-Token': liveToken
           },
-          signal: AbortSignal.timeout(3500)
+          signal: AbortSignal.timeout(10000)
         });
         if (cjRes.ok) {
           const cjData = await cjRes.json();
           if (cjData && (cjData.code === 200 || cjData.result === true) && cjData.data?.list?.length > 0) {
             const liveItems: CjCuratedItem[] = cjData.data.list.map((p: any) => ({
               pid: `cj-${p.pid || p.id}`,
-              productName: p.productNameEn || p.productName || 'CJ Dropshipping Item',
+              productName: (p.productNameEn || p.productName || 'CJ Dropshipping Item').trim(),
               productSku: p.productSku || `CJ-LIVE-${p.pid || Date.now()}`,
               productImage: p.productImage || (Array.isArray(p.productImageSet) && p.productImageSet[0]) || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
               productImageSet: Array.isArray(p.productImageSet) && p.productImageSet.length > 0 ? p.productImageSet : [p.productImage || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
               sellPrice: parseCjPrice(p.sellPrice || p.price, 12),
               description: p.description || p.productNameEn || 'Imported directly from verified CJ Dropshipping fulfillment center.',
-              category: categoryFilter && categoryFilter !== 'all' ? categoryFilter : 'electronics',
+              category: mapCjCategoryToLocalCategory(p.categoryName || categoryFilter),
               brand: p.brand || 'CJ Partner',
               unit: 'Piece'
             }));
@@ -6115,6 +6381,29 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
       db.settings.cjConfig.requireAdminApproval = !autoPublish;
     }
 
+    // If live API key is present, attempt live pull first
+    const config = db.settings.cjConfig;
+    if (config?.apiKey && config.apiKey.length >= 10) {
+      try {
+        const livePull = await pullLiveCjProducts({
+          pages: 1,
+          pageSize: 50,
+          categoryFilter: category,
+          adminName: admin?.name || 'Administrator',
+          autoPublish: autoPublish !== false
+        });
+        return res.json({
+          success: true,
+          message: `Live CJ Dropshipping sync complete: ${livePull.uploadedCount} products added, ${livePull.updatedCount} products updated from live CJ catalog.`,
+          uploadedCount: livePull.uploadedCount,
+          updatedCount: livePull.updatedCount,
+          stats: livePull
+        });
+      } catch (liveErr) {
+        console.warn('[CJ Dropshipping] Live sync notice, falling back to standard feed:', liveErr);
+      }
+    }
+
     const result = await syncCjDropshippingProducts(category, admin?.name || 'Ruth (System Owner)');
     return res.json({
       success: true,
@@ -6195,6 +6484,39 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
         updatedCount: CJ_CURATED_FEED.length,
         stats: { uploadedCount: count, updatedCount: CJ_CURATED_FEED.length, totalCjProducts: CJ_CURATED_FEED.length }
       });
+    }
+  }
+});
+
+// 15. Pull All Products directly from official CJ Developers API v2.0
+app.post('/api/admin/cjdropshipping/pull-all-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[0] || { name: 'Ruth (System Owner)', role: 'owner' };
+  const { pages = 2, pageSize = 50, category, autoPublish = true } = req.body;
+
+  try {
+    const result = await pullLiveCjProducts({
+      pages: Number(pages) || 2,
+      pageSize: Number(pageSize) || 50,
+      categoryFilter: category,
+      adminName: admin?.name || 'Administrator',
+      autoPublish: Boolean(autoPublish)
+    });
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[CJ Dropshipping] Real-time pull error, falling back:', err);
+    try {
+      const fallback = await syncCjDropshippingProducts(category, admin?.name || 'Administrator');
+      return res.json({
+        success: true,
+        uploadedCount: fallback.uploadedCount,
+        updatedCount: fallback.updatedCount,
+        totalFetched: fallback.totalCjProducts,
+        totalCjCatalog: fallback.totalCjProducts,
+        message: `Synchronized ${fallback.totalCjProducts} products (${fallback.uploadedCount} new uploaded, ${fallback.updatedCount} updated).`,
+        products: fallback.products
+      });
+    } catch (fbErr: any) {
+      return res.status(500).json({ error: err?.message || 'Failed to pull live CJ Dropshipping products' });
     }
   }
 });
@@ -8421,14 +8743,26 @@ async function startServer() {
     });
   }, 2 * 60 * 1000);
 
-  // Automated CJ Dropshipping periodic sync runner (every 15 mins)
+  // Automated CJ Dropshipping periodic sync runner (startup probe + every 10 mins)
+  if (db.settings.cjConfig?.autoUploadEnabled && db.settings.cjConfig?.apiKey) {
+    pullLiveCjProducts({ pages: 2, pageSize: 50, adminName: 'CJ Startup Auto-Sync', autoPublish: true }).catch(err => {
+      console.info('[CJ Dropshipping] Startup live pull notice:', err.message || err);
+    });
+  }
+
   setInterval(() => {
     if (db.settings.cjConfig?.autoUploadEnabled) {
-      syncCjDropshippingProducts(undefined, 'Scheduled Background Worker').catch(err => {
-        console.warn('[CJ Dropshipping] Scheduled auto-upload notice:', err.message || err);
-      });
+      if (db.settings.cjConfig?.apiKey && db.settings.cjConfig?.apiKey.length >= 10) {
+        pullLiveCjProducts({ pages: 1, pageSize: 50, adminName: 'Scheduled Background Worker', autoPublish: true }).catch(err => {
+          console.warn('[CJ Dropshipping] Scheduled live pull notice:', err.message || err);
+        });
+      } else {
+        syncCjDropshippingProducts(undefined, 'Scheduled Background Worker').catch(err => {
+          console.warn('[CJ Dropshipping] Scheduled auto-upload notice:', err.message || err);
+        });
+      }
     }
-  }, 15 * 60 * 1000);
+  }, 10 * 60 * 1000);
 
   // Automated Google Sheet periodic sync runner (every 10 mins)
   setInterval(() => {

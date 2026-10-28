@@ -2455,6 +2455,27 @@ export const api = {
     };
   },
 
+  async adminPullAllCjProducts(options?: { pages?: number; pageSize?: number; category?: string; autoPublish?: boolean }): Promise<{
+    success: boolean;
+    uploadedCount: number;
+    updatedCount: number;
+    totalFetched: number;
+    totalCjCatalog: number;
+    message: string;
+    products: Product[];
+  }> {
+    const res = await fetch('/api/admin/cjdropshipping/pull-all-products', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(options || {})
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to pull live CJ Dropshipping products');
+  },
+
   async adminGetCjCategories(): Promise<Array<{ id: string; name: string; localCategoryId: string; localCategoryName: string; icon: string }>> {
     const res = await fetch('/api/admin/cjdropshipping/categories', {
       headers: getAuthHeaders()
