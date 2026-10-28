@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Star, Camera, Youtube, Truck } from 'lucide-react';
+import { Heart, Star, Camera, Youtube } from 'lucide-react';
 import { Product } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
@@ -178,13 +178,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           >
             {product.name}
           </h3>
-
-          {product.source === 'alibaba' && (
-            <div className="flex items-center gap-1 text-[9px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded-md mt-1.5 w-fit border border-emerald-100">
-              <Truck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-              <span>Direct Kigali Delivery Included</span>
-            </div>
-          )}
         </div>
 
         {/* Subtle rating & stock indicator */}

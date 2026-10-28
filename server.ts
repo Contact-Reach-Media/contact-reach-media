@@ -336,26 +336,14 @@ function loadDbFromDisk() {
 
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
-      if (parsed.products && Array.isArray(parsed.products)) {
-        db.products = parsed.products;
-        const existingIds = new Set(db.products.map((p: any) => p.id));
-        const existingAliPids = new Set(db.products.map((p: any) => p.alibabaProductId).filter(Boolean));
-        const missingInitial = initialProducts.filter((p: any) => !existingIds.has(p.id) && !(p.alibabaProductId && existingAliPids.has(p.alibabaProductId)));
-        if (missingInitial.length > 0) {
-          db.products = [...db.products, ...missingInitial];
-        }
-      }
+      if (parsed.products && Array.isArray(parsed.products)) db.products = parsed.products;
       if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
       if (parsed.categories && Array.isArray(parsed.categories)) {
         const existingIds = new Set(parsed.categories.map((c: any) => c.id));
         const missingInitial = initialCategories.filter(c => !existingIds.has(c.id));
         db.categories = [...parsed.categories, ...missingInitial];
       }
-      if (parsed.shops && Array.isArray(parsed.shops)) {
-        const existingShopIds = new Set(parsed.shops.map((s: any) => s.id));
-        const missingShops = initialShops.filter(s => !existingShopIds.has(s.id));
-        db.shops = [...parsed.shops, ...missingShops];
-      }
+      if (parsed.shops && Array.isArray(parsed.shops)) db.shops = parsed.shops;
       if (parsed.orders && Array.isArray(parsed.orders)) db.orders = parsed.orders;
       if (parsed.paymentConfirmations && Array.isArray(parsed.paymentConfirmations)) db.paymentConfirmations = parsed.paymentConfirmations;
       if (parsed.paymentMethodsConfig && Array.isArray(parsed.paymentMethodsConfig)) db.paymentMethodsConfig = parsed.paymentMethodsConfig;
@@ -6605,8 +6593,7 @@ async function syncAlibabaProducts(categoryFilter?: string, adminName: string = 
       const existing = db.products[existingIdx];
       // Keep price and stock synchronized without altering original description and images
       existing.price = finalSellingPrice;
-      existing.costPrice = productCostFrw;
-      existing.shippingCostRwf = shippingCostFrw;
+      existing.costPrice = totalLandedCostFrw;
       existing.profitMargin = profitMargin;
       existing.alibabaOriginalCostUsd = wholesaleUsd;
       existing.alibabaShippingCostUsd = quote.costUsd;
@@ -6658,8 +6645,7 @@ async function syncAlibabaProducts(categoryFilter?: string, adminName: string = 
         alibabaTradeAssurance: item.tradeAssurance,
         alibabaVerifiedSupplier: item.verifiedSupplier,
         alibabaLastSyncAt: new Date().toISOString(),
-        costPrice: productCostFrw,
-        shippingCostRwf: shippingCostFrw,
+        costPrice: totalLandedCostFrw,
         price: finalSellingPrice,
         profitMargin,
         category: item.category,
@@ -6975,8 +6961,7 @@ Origin: Direct Factory Dispatch (China)`,
         alibabaTradeAssurance: item.tradeAssurance,
         alibabaVerifiedSupplier: item.verifiedSupplier,
         alibabaLastSyncAt: new Date().toISOString(),
-        costPrice: pricing.productCostRwf,
-        shippingCostRwf: quote.costRwf,
+        costPrice: pricing.totalCostRwf,
         price: pricing.sellingPrice,
         profitMargin: pricing.profitMargin,
         category: item.category,
@@ -7163,8 +7148,7 @@ app.post('/api/admin/alibaba/import', requireAdminAuth, requireRole(['owner', 'a
     if (existingIdx !== -1) {
       const existing = db.products[existingIdx];
       existing.price = pricing.sellingPrice;
-      existing.costPrice = pricing.productCostRwf;
-      existing.shippingCostRwf = quote.costRwf;
+      existing.costPrice = pricing.totalCostRwf;
       existing.profitMargin = pricing.profitMargin;
       existing.alibabaOriginalCostUsd = wholesaleUsd;
       existing.alibabaShippingCostUsd = quote.costUsd;
@@ -7206,8 +7190,7 @@ app.post('/api/admin/alibaba/import', requireAdminAuth, requireRole(['owner', 'a
         alibabaTradeAssurance: item.tradeAssurance !== false,
         alibabaVerifiedSupplier: item.verifiedSupplier !== false,
         alibabaLastSyncAt: new Date().toISOString(),
-        costPrice: pricing.productCostRwf,
-        shippingCostRwf: quote.costRwf,
+        costPrice: pricing.totalCostRwf,
         price: pricing.sellingPrice,
         profitMargin: pricing.profitMargin,
         category: targetCategory || item.category || 'electronics',
