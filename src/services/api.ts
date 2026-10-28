@@ -2138,6 +2138,18 @@ export const api = {
   },
 
   // Admin Team & Roles Management
+  async adminGetMe(): Promise<AdminUser | null> {
+    try {
+      const res = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<AdminUser>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        setAdminToken(getAdminToken() || '', parsed.json);
+        return parsed.json;
+      }
+    } catch {}
+    return getStoredAdminUser();
+  },
+
   async adminGetUsers(): Promise<AdminUser[]> {
     const res = await fetch('/api/admin/users', {
       headers: getAuthHeaders()

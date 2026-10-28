@@ -10,6 +10,11 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.email == 'contactreachmedialimited@gmail.com' ||
         request.auth.token.email == 'umuhuzamarket@gmail.com' ||
+        request.auth.token.email == 'manirihocoss@gmail.com' ||
+        request.auth.token.email == 'manirihothierry250@gmail.com' ||
+        request.auth.token.email == 'manirihothierry36@gmail.com' ||
+        request.auth.token.email == 'manirihothierry6@gmail.com' ||
+        request.auth.token.email == 'manirihothierry11@gmail.com' ||
         request.auth.token.email.matches('.*@contactreachmedia\\.rw') ||
         request.auth.token.admin == true ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
@@ -40,10 +45,11 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
-    // Orders: anyone can create (checkout), readable by admins or matching customer
+    // Orders: anyone can create (checkout), readable only by authorized admins or matching customer
     match /orders/{orderId} {
       allow create: if true;
-      allow read: if true;
+      allow list: if isAdmin();
+      allow get: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
@@ -96,9 +102,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Admins profile table: only admins can read and write
+    // Admins profile table: admins can read/write; authenticated admins can read their record
     match /admins/{adminUid} {
-      allow read, write: if isAdmin();
+      allow read: if isSignedIn() && (request.auth.uid == adminUid || isAdmin());
+      allow write: if isAdmin();
     }
 
     // Customer contact messages: anyone can submit, admins can read/reply

@@ -183,6 +183,14 @@ const defaultAdminUsers: AdminUser[] = [
     phone: '0780022600'
   },
   {
+    id: 'adm-owner-thierry-coss',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihocoss@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
     id: 'adm-owner-thierry-250',
     name: 'Thierry Maniriho (Platform Owner)',
     email: 'manirihothierry250@gmail.com',
@@ -814,6 +822,15 @@ async function syncWithFirestore() {
       console.warn('[Firebase] Customers sync notice:', err.message || err);
     }
 
+    // 11. Authoritatively sync active administrators to Firestore admins collection for rules authorization
+    try {
+      db.adminUsers.filter(a => a.active).forEach(adm => {
+        saveToFirestoreAsync('admins', adm.id, adm);
+      });
+    } catch (admErr: any) {
+      console.warn('[Firebase] Admins sync notice:', admErr.message || admErr);
+    }
+
     saveDbToDisk();
     console.log('[Firebase] Cloud Firestore authoritative catalog, orders & settings synchronization completed.');
   } catch (err: any) {
@@ -927,6 +944,9 @@ function requireRole(allowedRoles: AdminRole[]) {
     });
   };
 }
+
+// Roles permitted to create, edit, unpublish, and manage products and inventory
+const PRODUCT_ADMIN_ROLES: AdminRole[] = ['owner', 'administrator', 'product_manager', 'shop_manager'];
 
 // -------------------------------------------------------------
 // PUBLIC API: SYSTEM HEALTH & MONITORING
@@ -2193,6 +2213,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   }
 
   const isOwnerEmail = normalizedEmail === 'contactreachmedialimited@gmail.com' ||
+                       normalizedEmail === 'manirihocoss@gmail.com' ||
                        normalizedEmail === 'manirihothierry250@gmail.com' ||
                        normalizedEmail === 'manirihothierry36@gmail.com' ||
                        normalizedEmail === 'manirihothierry6@gmail.com' ||
@@ -2287,6 +2308,7 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
   }
 
   const isOwner = verifiedEmail === 'contactreachmedialimited@gmail.com' ||
+                  verifiedEmail === 'manirihocoss@gmail.com' ||
                   verifiedEmail === 'manirihothierry250@gmail.com' ||
                   verifiedEmail === 'manirihothierry36@gmail.com' ||
                   verifiedEmail === 'manirihothierry6@gmail.com' ||
@@ -2319,6 +2341,18 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
     });
     saveDbToDisk();
+
+    // Authoritative sync to Firestore admins collection for rules validation
+    if (verifiedUid) {
+      saveToFirestoreAsync('admins', verifiedUid, {
+        id: verifiedUid,
+        email: verifiedEmail,
+        name: adminUser.name,
+        role: adminUser.role,
+        active: true,
+        lastLogin: adminUser.lastLogin
+      });
+    }
 
     logAudit({ name: adminUser.name, role: adminUser.role }, 'FIREBASE_GOOGLE_LOGIN', `Admin signed in with Google Firebase Auth (${verifiedEmail})`);
 
@@ -2559,7 +2593,7 @@ app.post('/api/admin/orders/:id/tracking', requireAdminAuth, requireRole(['owner
 });
 
 // Admin Update Supplier Mapping for a Product (AliExpress URL & Supplier Variant)
-app.patch('/api/admin/products/:id/supplier-mapping', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.patch('/api/admin/products/:id/supplier-mapping', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const product = db.products.find(p => p.id === req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -2589,7 +2623,7 @@ app.patch('/api/admin/products/:id/supplier-mapping', requireAdminAuth, requireR
 });
 
 // Admin Bulk Update Supplier Mappings
-app.post('/api/admin/products/supplier-mapping/bulk', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/products/supplier-mapping/bulk', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { mappings } = req.body;
   if (!Array.isArray(mappings) || mappings.length === 0) {
@@ -2687,7 +2721,7 @@ function resolveOrCreateShop(
   return { shopId: newShopRecord.id, shopName: newShopRecord.name, createdShop: newShopRecord };
 }
 
-app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const {
     name,
@@ -2828,7 +2862,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
     res.status(201).json(newProduct);
   });
 
-  app.put('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+  app.put('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
     const admin = (req as any).adminUser;
     const productIndex = db.products.findIndex(p => p.id === req.params.id);
     if (productIndex === -1) return res.status(404).json({ error: 'Product not found' });
@@ -2952,7 +2986,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(['owner', 'adminis
 });
 
 // Update or Append Multiple Picture Links on a Product
-app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const product = db.products.find(p => p.id === req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -2993,7 +3027,7 @@ app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(['owne
 });
 
 // Update Product Cost & Selling Price (Admin Product Cost Control)
-app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const product = db.products.find(p => p.id === req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -3043,7 +3077,7 @@ app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(['owner'
 });
 
 // Duplicate product
-app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const source = db.products.find(p => p.id === req.params.id);
   if (!source) return res.status(404).json({ error: 'Source product not found' });
@@ -3065,7 +3099,7 @@ app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(['ow
   res.status(201).json(duplicated);
 });
 
-app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const index = db.products.findIndex(p => p.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Product not found' });
@@ -3082,7 +3116,7 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(['owner', 'a
 });
 
 // Bulk delete products simultaneously
-app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { productIds } = req.body;
 
@@ -3124,7 +3158,7 @@ app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(['owne
 });
 
 // Bulk status update for products
-app.post('/api/admin/products/bulk-status', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/products/bulk-status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { productIds, status } = req.body;
 
@@ -3299,7 +3333,7 @@ app.post('/api/admin/products/bulk-preview', requireAdminAuth, (req: Request, re
 });
 
 // Commit validated products to the database with conflict resolution
-app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { products, conflictStrategy = 'upsert' } = req.body;
 
@@ -3490,7 +3524,7 @@ app.get('/api/admin/categories', requireAdminAuth, (req: Request, res: Response)
   res.json(categoriesWithCounts);
 });
 
-app.post('/api/admin/categories', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/categories', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { nameEn, nameRw, icon, description, subcategories, imageUrl } = req.body;
   if (!nameEn || !nameRw) return res.status(400).json({ error: 'English and Kinyarwanda category names are required.' });
@@ -3519,7 +3553,7 @@ app.post('/api/admin/categories', requireAdminAuth, requireRole(['owner', 'admin
   res.status(201).json(newCat);
 });
 
-app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const cat = db.categories.find(c => c.id === req.params.id);
   if (!cat) return res.status(404).json({ error: 'Category not found' });
@@ -3939,7 +3973,7 @@ app.get('/api/admin/inventory/logs', requireAdminAuth, (req: Request, res: Respo
   res.json(db.inventoryLogs);
 });
 
-app.post('/api/admin/inventory/adjust', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/inventory/adjust', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { productId, changeAmount, reason } = req.body;
   if (!productId || changeAmount === undefined || !reason) {
@@ -4268,6 +4302,7 @@ app.post('/api/admin/users', requireAdminAuth, requireRole(['owner']), (req: Req
   logAudit(admin, 'ADMIN_USER_CREATED', `Created administrator account for ${newAdmin.name} (${newAdmin.email}) with role ${newAdmin.role}`, 'admin_user', newAdmin.id);
   saveDbToDisk();
   saveToFirestoreAsync('adminUsers', newAdmin.id, newAdmin);
+  saveToFirestoreAsync('admins', newAdmin.id, newAdmin);
 
   res.status(201).json(newAdmin);
 });
@@ -4306,6 +4341,11 @@ app.patch('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (req
   logAudit(admin, 'ADMIN_USER_UPDATED', `Updated administrator account ${user.name} (${user.email}): role=${user.role}, active=${user.active}`, 'admin_user', user.id);
   saveDbToDisk();
   saveToFirestoreAsync('adminUsers', user.id, user);
+  if (user.active) {
+    saveToFirestoreAsync('admins', user.id, user);
+  } else {
+    deleteFromFirestoreAsync('admins', user.id);
+  }
 
   res.json({ message: 'Administrator account updated', user });
 });
@@ -4336,6 +4376,7 @@ app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (re
   logAudit(admin, 'ADMIN_USER_DELETED', `Deleted administrator account for ${removed.name} (${removed.email})`, 'admin_user', removed.id);
   saveDbToDisk();
   deleteFromFirestoreAsync('adminUsers', removed.id);
+  deleteFromFirestoreAsync('admins', removed.id);
 
   res.json({ message: 'Administrator account removed successfully', removed });
 });

@@ -1694,7 +1694,168 @@ async function runTests() {
     assert.strictEqual(publicTrack.trackingCarrier, 'AliExpress Standard Shipping');
   });
 
+  // TEST 43: Customer Order Privacy & Protection Against Unauthorized Snooping
+  await test('Customer privacy: Orders cannot be listed or inspected without authorization', async () => {
+    // Unauthenticated request to admin orders must be rejected
+    const unauthOrders = await fetch(`${BASE_URL}/api/admin/orders`);
+    assert.strictEqual(unauthOrders.status, 401, 'Public request to admin orders must return 401');
 
+    // Customer order tracking without phone or tracking token must be rejected
+    const testOrderRes = await fetch(`${BASE_URL}/api/orders/CRM-99999`);
+    assert(testOrderRes.status === 404 || testOrderRes.status === 403, 'Snooping without phone or token must be rejected');
+  });
+
+  // TEST 44: Owner Authorization for manirihocoss@gmail.com
+  let cossToken = '';
+  await test('Platform Owner manirihocoss@gmail.com can sign in and obtain valid owner session', async () => {
+    const loginRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'manirihocoss@gmail.com',
+        displayName: 'Thierry Maniriho (Platform Owner)',
+        uid: 'thierry-coss-firebase-uid-789'
+      })
+    });
+    assert.strictEqual(loginRes.status, 200, 'manirihocoss login must succeed with 200');
+    const data = await loginRes.json();
+    assert.strictEqual(data.admin.role, 'owner', 'Role must be owner');
+    assert(data.token, 'Must return session token');
+    cossToken = data.token;
+  });
+
+  // TEST 45: Shop Manager & Product Manager Product Creation & Management
+  await test('Shop Manager role can create and update products in the catalog', async () => {
+    // Create a temporary admin with shop_manager role
+    const newAdminEmail = `shopmgr-${Date.now()}@contactreachmedia.rw`;
+    const createAdminRes = await fetch(`${BASE_URL}/api/admin/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Gisozi Shop Manager',
+        email: newAdminEmail,
+        role: 'shop_manager',
+        phone: '0788990011'
+      })
+    });
+    assert.strictEqual(createAdminRes.status, 201, 'Creating shop_manager must succeed');
+    const createdAdmin = await createAdminRes.json();
+    assert.strictEqual(createdAdmin.role, 'shop_manager');
+
+    // Sign in as this shop_manager
+    const smLoginRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: newAdminEmail,
+        displayName: 'Gisozi Shop Manager',
+        uid: `uid-${createdAdmin.id}`
+      })
+    });
+    assert.strictEqual(smLoginRes.status, 200);
+    const smAuth = await smLoginRes.json();
+    const smToken = smAuth.token;
+
+    // Upload a product as shop_manager
+    const uploadRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${smToken}`
+      },
+      body: JSON.stringify({
+        name: 'Shop Manager Tested Handbag',
+        price: 28000,
+        category: 'ibikapu',
+        description: 'Quality tested leather handbag uploaded by shop manager',
+        stock: 12,
+        shopName: 'Gisozi Boutique'
+      })
+    });
+    assert.strictEqual(uploadRes.status, 201, 'shop_manager must be permitted to create products');
+    const createdProd = await uploadRes.json();
+    assert.strictEqual(createdProd.name, 'Shop Manager Tested Handbag');
+
+    // Edit product as shop_manager
+    const editRes = await fetch(`${BASE_URL}/api/admin/products/${createdProd.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${smToken}`
+      },
+      body: JSON.stringify({
+        price: 30000,
+        stock: 15
+      })
+    });
+    assert.strictEqual(editRes.status, 200, 'shop_manager must be permitted to edit products');
+    const updatedProd = await editRes.json();
+    assert.strictEqual(updatedProd.price, 30000);
+    assert.strictEqual(updatedProd.stock, 15);
+
+    // Clean up created product
+    await fetch(`${BASE_URL}/api/admin/products/${createdProd.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${smToken}` }
+    });
+  });
+
+  // TEST 46: Deactivated Admin Account Revocation
+  await test('Deactivated administrator accounts have session revoked and are denied access', async () => {
+    // Create an admin to deactivate
+    const deactEmail = `deact-${Date.now()}@contactreachmedia.rw`;
+    const crRes = await fetch(`${BASE_URL}/api/admin/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Temporary Admin',
+        email: deactEmail,
+        role: 'administrator'
+      })
+    });
+    const deactUser = await crRes.json();
+
+    // Login to get token
+    const lgRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: deactEmail,
+        displayName: 'Temporary Admin',
+        uid: `uid-${deactUser.id}`
+      })
+    });
+    const { token: userToken } = await lgRes.json();
+
+    // Verify access works before deactivation
+    const testWorkRes = await fetch(`${BASE_URL}/api/admin/stats`, {
+      headers: { Authorization: `Bearer ${userToken}` }
+    });
+    assert.strictEqual(testWorkRes.status, 200);
+
+    // Deactivate user as owner
+    const deactPatch = await fetch(`${BASE_URL}/api/admin/users/${deactUser.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ active: false })
+    });
+    assert.strictEqual(deactPatch.status, 200);
+
+    // Verify token is immediately revoked
+    const revokedRes = await fetch(`${BASE_URL}/api/admin/stats`, {
+      headers: { Authorization: `Bearer ${userToken}` }
+    });
+    assert.strictEqual(revokedRes.status, 403, 'Deactivated admin token must be rejected with 403');
+  });
 
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);

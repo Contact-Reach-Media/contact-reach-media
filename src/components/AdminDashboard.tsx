@@ -629,6 +629,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedDriveStatus) {
         setDriveStatus(fetchedDriveStatus);
       }
+      // Dynamically verify and refresh active admin identity and role permissions
+      api.adminGetMe().then((me: AdminUser | null) => {
+        if (me && me.role) {
+          setCurrentUser(me);
+          localStorage.setItem('crm_admin_user', JSON.stringify(me));
+        }
+      }).catch(() => {});
+
       setLastSyncTime(new Date());
     } catch (err) {
       console.error('Error fetching admin data:', err);
@@ -1511,7 +1519,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       showToast(`Products catalog (${result.productCount} items) backed up to Google Drive & Firebase!`);
       fetchAllData();
     } catch (err: any) {
-      showToast(err.message || 'Failed to backup to Google Drive', 'error');
+      const msg = err.message?.includes('not available') || err.message?.includes('authorize')
+        ? 'Google Drive authorization required. Please sign in with Google or export your catalog via the Excel / CSV button.'
+        : (err.message || 'Failed to backup to Google Drive');
+      showToast(msg, 'error');
     } finally {
       setSyncingToDrive(false);
     }
@@ -1528,7 +1539,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
 
       if (!token) {
-        throw new Error('Please authorize Google Drive access to auto-fill products.');
+        throw new Error('Google Drive authorization required. Please sign in with Google to auto-fill products, or import your catalog via the Excel / CSV spreadsheet button.');
       }
 
       // Execute authoritative backend import & sync
@@ -1547,7 +1558,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       fetchAllData();
       onRefreshPublicData();
     } catch (err: any) {
-      showToast(err.message || 'Failed to auto-fill products from Google Drive', 'error');
+      const msg = err.message?.includes('not available') || err.message?.includes('authorize')
+        ? 'Google Drive authorization required. Please sign in with Google or import catalog files via the Excel / Google Sheets modal.'
+        : (err.message || 'Failed to auto-fill products from Google Drive');
+      showToast(msg, 'error');
     } finally {
       setImportingFromDrive(false);
     }
@@ -1692,60 +1706,107 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Image Upload Handlers (FileReader -> base64 Data URL) - supports single or multiple file selection
-  const handleProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // Helper to compress uploaded image files to crisp web quality (< 200KB) to prevent Firestore 1MB document rejection
+  const compressImageFile = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      if (file.type === 'image/svg+xml') {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+        return;
+      }
 
-    const fileList = Array.from(files);
-    const validFiles = fileList.filter(f => f.size <= 5 * 1024 * 1024);
-    if (validFiles.length < fileList.length) {
-      showToast('Some files exceeded the 5MB limit and were skipped.', 'error');
-    }
-    if (validFiles.length === 0) return;
-
-    let loadedCount = 0;
-    const newBase64Images: string[] = [];
-
-    validFiles.forEach(file => {
       const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        newBase64Images.push(result);
-        loadedCount++;
-        if (loadedCount === validFiles.length) {
-          setProdForm(prev => {
-            const existingList = getParsedImageList(prev.imagesText, prev.imageUrl);
-            const combined = [...existingList, ...newBase64Images.filter(img => !existingList.includes(img))];
-            return {
-              ...prev,
-              imageUrl: prev.imageUrl || combined[0],
-              imagesText: combined.join('\n')
-            };
-          });
-          showToast(`Uploaded ${newBase64Images.length} picture${newBase64Images.length > 1 ? 's' : ''}!`);
-        }
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(dataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
       };
+      reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
     });
   };
 
-  const handleCategoryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload Handlers (Client-Side Resizing & Compression -> base64 Data URL) - supports single or multiple file selection
+  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    const validFiles = fileList.filter(f => f.size <= 10 * 1024 * 1024);
+    if (validFiles.length < fileList.length) {
+      showToast('Some files exceeded 10MB and were skipped.', 'error');
+    }
+    if (validFiles.length === 0) return;
+
+    showToast(`Processing & optimizing ${validFiles.length} image${validFiles.length > 1 ? 's' : ''}...`);
+
+    try {
+      const compressedImages = await Promise.all(validFiles.map(f => compressImageFile(f)));
+      const filtered = compressedImages.filter(Boolean);
+      if (filtered.length === 0) return;
+
+      setProdForm(prev => {
+        const existingList = getParsedImageList(prev.imagesText, prev.imageUrl);
+        const combined = [...existingList, ...filtered.filter(img => !existingList.includes(img))];
+        return {
+          ...prev,
+          imageUrl: prev.imageUrl || combined[0],
+          imagesText: combined.join('\n')
+        };
+      });
+      showToast(`Successfully uploaded & optimized ${filtered.length} picture${filtered.length > 1 ? 's' : ''}!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to process image uploads', 'error');
+    }
+  };
+
+  const handleCategoryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Image file too large. Please select an image under 5MB.', 'error');
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Image file too large. Please select an image under 10MB.', 'error');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setCatImageUrl(result);
-      showToast('Category image uploaded!');
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file, 800, 800, 0.85);
+      if (compressed) {
+        setCatImageUrl(compressed);
+        showToast('Category image uploaded & optimized!');
+      }
+    } catch {
+      showToast('Failed to upload category image', 'error');
+    }
   };
 
   // Promo Code Create & Edit Handler
