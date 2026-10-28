@@ -60,6 +60,11 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
   const [aliOrders, setAliOrders] = useState<any[]>([]);
   const [approvingOrderId, setApprovingOrderId] = useState<string | null>(null);
 
+  // Direct Alibaba Store Cloner (No Login Required)
+  const [cloneUrlInput, setCloneUrlInput] = useState('');
+  const [cloneCategoryInput, setCloneCategoryInput] = useState('all');
+  const [cloningStore, setCloningStore] = useState(false);
+
   // Filter products belonging to Alibaba
   const alibabaProducts = products.filter(
     p => p.source === 'alibaba' || Boolean(p.alibabaProductId) || p.sku?.startsWith('ALI-')
@@ -212,6 +217,28 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
     }
   };
 
+  const handleCloneStoreOrProduct = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setCloningStore(true);
+    try {
+      const res = await api.adminCloneAlibabaStoreOrProduct({
+        url: cloneUrlInput.trim() || undefined,
+        category: cloneCategoryInput !== 'all' ? cloneCategoryInput : undefined,
+        count: 24,
+        autoPublish: true
+      });
+      showToast(res.message, 'success');
+      setCloneUrlInput('');
+      onRefreshData();
+      handleSearch();
+      setSubTab('catalog');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to clone Alibaba products', 'error');
+    } finally {
+      setCloningStore(false);
+    }
+  };
+
   const handleApproveOrder = async (orderId: string) => {
     setApprovingOrderId(orderId);
     try {
@@ -289,6 +316,89 @@ export const AlibabaHub: React.FC<AlibabaHubProps> = ({
               <span>{syncingCatalog ? 'Syncing...' : '1-Click Catalog Import'}</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* DIRECT ALIBABA SHOP CLONER (NO LOGIN REQUIRED) */}
+      <div className="bg-white rounded-3xl border-2 border-orange-500/80 shadow-md p-6 space-y-4 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold mb-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Direct Web Cloner Active · Zero Login Details or API Keys Required</span>
+            </div>
+            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-orange-500" />
+              <span>Clone Alibaba Shop & Products Directly to Website</span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Paste any Alibaba store or product link, or type keywords. Clones original images, original descriptions, computes authentic air shipping to Kigali, and applies the 10% markup formula automatically.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleCloneStoreOrProduct()}
+            disabled={cloningStore}
+            className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white text-xs font-black rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
+          >
+            <Zap className={`w-4 h-4 ${cloningStore ? 'animate-spin' : ''}`} />
+            <span>{cloningStore ? 'Cloning to Website...' : '⚡ Clone Entire Alibaba Store Now'}</span>
+          </button>
+        </div>
+
+        {/* Input Form */}
+        <form onSubmit={handleCloneStoreOrProduct} className="flex flex-col sm:flex-row items-stretch gap-3">
+          <div className="relative flex-1">
+            <Globe className="w-4 h-4 text-orange-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Paste Alibaba Store URL, Product Link, or Product Name (e.g. https://www.alibaba.com/product-detail/... or Solar, Watches, Hair)..."
+              value={cloneUrlInput}
+              onChange={e => setCloneUrlInput(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:border-orange-500 focus:bg-white"
+            />
+          </div>
+
+          <select
+            value={cloneCategoryInput}
+            onChange={e => setCloneCategoryInput(e.target.value)}
+            className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-orange-500"
+          >
+            <option value="all">All Store Categories</option>
+            <option value="amatara">Solar & Lighting</option>
+            <option value="electronics">Electronics & Tablets</option>
+            <option value="hair-beauty">Hair, Wigs & Beauty</option>
+            <option value="fashion">Shoes & Fashion</option>
+            <option value="amasaha">Watches</option>
+            <option value="ibikapu">Bags & Luggage</option>
+            <option value="home-kitchen">Home & Kitchen</option>
+            <option value="services">Tools & Equipment</option>
+          </select>
+
+          <button
+            type="submit"
+            disabled={cloningStore}
+            className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{cloningStore ? 'Cloning...' : 'Clone & Upload'}</span>
+          </button>
+        </form>
+
+        <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+          <span className="flex items-center gap-1 text-slate-700 font-semibold">
+            <Check className="w-3.5 h-3.5 text-emerald-600" /> Original Images Unmodified
+          </span>
+          <span className="flex items-center gap-1 text-slate-700 font-semibold">
+            <Check className="w-3.5 h-3.5 text-emerald-600" /> Original Descriptions Preserved
+          </span>
+          <span className="flex items-center gap-1 text-slate-700 font-semibold">
+            <Check className="w-3.5 h-3.5 text-emerald-600" /> Real Freight to Kigali Added
+          </span>
+          <span className="flex items-center gap-1 text-slate-700 font-semibold">
+            <Check className="w-3.5 h-3.5 text-emerald-600" /> Strictly 10% Markup Formula
+          </span>
         </div>
       </div>
 

@@ -3498,6 +3498,32 @@ export const api = {
       return parsed.json.quote;
     }
     throw new Error(parsed.json?.error || 'Failed to calculate Alibaba shipping quote');
+  },
+
+  async adminCloneAlibabaStoreOrProduct(payload: {
+    url?: string;
+    keyword?: string;
+    category?: string;
+    count?: number;
+    autoPublish?: boolean;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    clonedCount: number;
+    updatedCount: number;
+    totalProducts: number;
+    products: Product[];
+  }> {
+    const res = await fetch('/api/admin/alibaba/clone-store-or-product', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to clone Alibaba shop products');
+    }
+    return parsed.json;
   }
 };
 

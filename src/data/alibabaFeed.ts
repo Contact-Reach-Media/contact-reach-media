@@ -493,5 +493,473 @@ Weight: Ultralight 310g per shoe (Size 42)`,
       { name: 'Color', options: ['Pure Black', 'Phantom Gray', 'Volt White'] },
       { name: 'Size', options: ['EU 40', 'EU 41', 'EU 42', 'EU 43', 'EU 44', 'EU 45'] }
     ]
+  },
+  {
+    pid: 'ali-1600812934001',
+    productName: 'Commercial 300W Solar Street Light IP67 Waterproof Dusk-to-Dawn Radar Sensor with Mounting Pole',
+    productSku: 'ALI-SOLAR-STR300',
+    originalDescription: `Product Name: All-in-One Commercial Solar LED Street Light
+Model: SSL-300W Heavy Duty
+Solar Panel: High-Efficiency Monocrystalline Silicon 6V 35W (22.5% Conversion Efficiency)
+Battery: High-Capacity LiFePO4 3.2V 36,000mAh (Over 2500 Charge Cycles)
+LED Chips: 480pcs Sanan Optoelectronics SMD5730 Ultra-Bright LED Beads
+Luminous Flux: 36,000 Lumens (Daylight 6500K)
+Lighting Angle: 120° Wide-Angle Batwing Optical Lens Distribution
+Charging Time: 6 - 8 Hours Direct Sunlight
+Discharging Time: 18 - 36 Hours Continuous Lighting (Supports 3 Rainy Days)
+Work Mode: Light Control Dusk-to-Dawn + Radar Microwave Motion Sensor + Multi-Function Infrared Remote Control
+Material: Rugged Die-Cast Aluminum Housing + Toughened Glass Lens (Anti-Corrosion, UV-Proof)
+Waterproof Grade: IP67 Certified Outdoor Stormproof & Dustproof
+Operating Temperature: -25°C to 65°C
+Mounting Height: 4m - 7m (Mounting Pole & Hardware Bracket Kit Included)`,
+    productImages: [
+      'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1508873696983-2df5293cb32f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 42.50,
+    weightKg: 4.8,
+    dimensionsCm: { length: 58, width: 26, height: 12 },
+    supplierName: 'Zhongshan Jinglong Solar Lighting Technology Co., Ltd.',
+    supplierLocation: 'Guangdong, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 5,
+    category: 'amatara',
+    brand: 'Jinglong Solar',
+    unit: 'Set',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/300W-Solar-Street-Light-Outdoor_1600812934001.html'
+  },
+  {
+    pid: 'ali-1600923847112',
+    productName: '10.1 Inch 4G LTE Android 13 Tablet PC Octa-Core 8GB RAM 256GB ROM with Magnetic Keyboard & Stylus Pen',
+    productSku: 'ALI-TAB-PRO10',
+    originalDescription: `Device Type: 2-in-1 Smart Android Tablet Workstation with Docking Keyboard
+Model: Pad Pro 10.1 LTE
+Screen Display: 10.1 Inch IPS Full HD 1920x1200 Capacitive Multi-Touch (16:10 Ratio, Eye Comfort Certification)
+Processor: Unisoc T616 64-bit Octa-Core (2x Cortex-A75 @ 2.0GHz + 6x Cortex-A55 @ 1.8GHz)
+Graphics GPU: Mali-G57 MP1
+System Memory: 8GB LPDDR4X RAM + Up to 8GB Virtual RAM Expansion
+Storage: 256GB High-Speed UFS Storage (MicroSD Card Slot expandable up to 1TB)
+Operating System: Pure Android 13 with Google Mobile Services (GMS), Widevine L1 Full HD Streaming
+Network & SIM: Dual Nano SIM Dual Standby (4G LTE FDD/TDD, 3G WCDMA, 2G GSM)
+WiFi & Bluetooth: Dual-Band WiFi 802.11ac (2.4GHz + 5GHz) & Bluetooth 5.0
+Cameras: 13MP Auto-Focus Rear Camera with LED Flash + 8MP Front Selfie & Video Conference Camera
+Battery: 7500mAh Li-Polymer with 18W USB-PD Fast Charging (10 Hours Video Playback)
+Audio: Quad Stereo Box Speakers with Smart PA Amplifier
+Included Accessories: 1x Magnetic Keyboard Case, 1x Active Stylus Pen, 1x Tempered Glass Screen Protector, 1x 18W Charger, 1x Type-C Cable`,
+    productImages: [
+      'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1585790050230-5dd28404ccb9?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1561154464-82e9adf32764?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 89.00,
+    weightKg: 1.15,
+    dimensionsCm: { length: 28, width: 20, height: 6 },
+    supplierName: 'Shenzhen Yotta Electronic Technology Co., Ltd.',
+    supplierLocation: 'Guangdong, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 4,
+    category: 'electronics',
+    brand: 'Yotta Pad',
+    unit: 'Set',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/10-inch-Android-13-Tablet_1600923847112.html',
+    variations: [
+      { name: 'Color', options: ['Space Gray', 'Glacier Silver', 'Deep Navy'] }
+    ]
+  },
+  {
+    pid: 'ali-1600781920334',
+    productName: 'Active Noise Cancelling Wireless Earbuds Bluetooth 5.4 Hi-Res Audio 48-Hour Battery with LED Power Display',
+    productSku: 'ALI-AUDIO-ANC90',
+    originalDescription: `Product Category: True Wireless Stereo (TWS) Earbuds with Hybrid Active Noise Cancellation
+Model: ANC-90 Pro Max
+Chipset: BES2600IHC Bluetooth 5.4 Low-Latency Gaming & Audio DSP
+Noise Cancellation Depth: -42dB Hybrid ANC (Feedforward + Feedback Dual Mic System)
+Operating Modes: 
+1. ANC Mode: Blocks low-frequency engine, commute and traffic ambient noise
+2. Transparency Mode: Hear surrounding announcements and conversations clearly without removing earbuds
+3. Low-Latency Gaming Mode: 38ms ultra-low latency for synchronization
+Drivers: 13mm Titanium-Coated Dynamic Drivers with Deep Bass Resonance Chamber
+Microphones: 6-Mic ENC (Environmental Noise Cancellation) for crystal clear HD phone calls in windy conditions
+Battery Capacity: 45mAh per earbud + 500mAh Smart Digital LED Display Charging Case
+Playtime: 8 Hours on single charge (ANC off) / 48 Hours total with charging case
+Charging: USB-C Fast Charge (10 mins charge = 2 hours playtime) + Qi Wireless Charging Compatible
+Water Resistance: IPX7 Sweatproof & Rainproof Nano-Coating
+Controls: Sensitive Smart Touch Control (Play/Pause, Track Skip, Volume, ANC Switch, Siri/Google Assistant)`,
+    productImages: [
+      'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1572536147248-ac59a8abfa4b?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 14.50,
+    weightKg: 0.18,
+    dimensionsCm: { length: 12, width: 9, height: 4 },
+    supplierName: 'Dongguan QCY Acoustic Technology Co., Ltd.',
+    supplierLocation: 'Guangdong, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 3,
+    category: 'electronics',
+    brand: 'QCY Acoustic',
+    unit: 'Piece',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/ANC-Wireless-Bluetooth-Earbuds_1600781920334.html',
+    variations: [
+      { name: 'Color', options: ['Matte Black', 'Pearl White', 'Midnight Blue'] }
+    ]
+  },
+  {
+    pid: 'ali-1600889211045',
+    productName: '60000mAh 65W PD Fast Charging Power Bank with LED Digital Display & Built-in Emergency Flashlight',
+    productSku: 'ALI-POWER-60K65W',
+    originalDescription: `Product Name: Ultra-High Capacity 65W Two-Way Fast Charging Outdoor Power Bank
+Model: PB-60K-PRO
+Battery Cell: Grade-A High-Density Polymer Lithium-Ion (Safe & Airline Ground Certified)
+Battery Capacity: 60,000mAh / 222Wh
+Total Max Output: 65W Max USB-PD
+Input Ports:
+- USB-C 1 Input: 5V/3A, 9V/3A, 12V/3A, 15V/3A, 20V/3.25A (65W Fast Recharge)
+- Micro USB Input: 5V/2A, 9V/2A, 12V/1.5A (18W)
+Output Ports:
+- Type-C Output: 65W Max (Can fast-charge MacBook, Dell XPS, HP laptops, iPad Pro, and iPhones/Samsung)
+- USB 1 (Orange QC3.0): 22.5W Huawei SuperCharge / Quick Charge 3.0
+- USB 2 & USB 3: 5V/2.4A Smart Balance
+Simultaneous Charging: Supports charging 4 devices simultaneously
+Display: High-Definition LED Smart Display showing accurate battery %, voltage and fast charge protocol
+LED Flashlight: 500 Lumens Camping Flashlight with SOS Emergency Strobe Mode
+Safety Protection: Multi-Layer BMS Chip against Overcharge, Overcurrent, Overheating and Short-Circuit`,
+    productImages: [
+      'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 28.00,
+    weightKg: 1.25,
+    dimensionsCm: { length: 18, width: 9, height: 7 },
+    supplierName: 'Shenzhen Baseus Technology Co., Ltd.',
+    supplierLocation: 'Guangdong, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 4,
+    category: 'electronics',
+    brand: 'Baseus Partner',
+    unit: 'Piece',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/60000mAh-65W-Power-Bank_1600889211045.html'
+  },
+  {
+    pid: 'ali-1600912445882',
+    productName: '13x4 HD Transparent Lace Front Human Hair Wig 180% Density Virgin Brazilian Body Wave Pre-Plucked',
+    productSku: 'ALI-HAIR-13X4-BW24',
+    originalDescription: `Product Name: 13x4 Glueless HD Transparent Swiss Lace Front Human Hair Wig
+Hair Material: 100% Unprocessed Virgin Brazilian Remy Human Hair (Single Donor Cut)
+Hair Texture: Luxurious Silky Body Wave (Holds curls after washing)
+Hair Density: 180% Full & Thick Density (No shedding, no tangling, true to length)
+Lace Type: Real HD Transparent Swiss Lace (Blends invisibly with all African & Melanin skin tones)
+Lace Size: 13x4 Inch Deep Parting Free Part Lace Frontal (Allows high ponytail and half-up styles)
+Cap Construction: Breathable Elastic Dome Cap with 4 Secure Combs and Adjustable Straps (Circumference 21.5 - 22.5 inches)
+Hairline: Pre-Plucked Natural Hairline with Baby Hairs around perimeter
+Bleached Knots: Clean Micro-Knots Bleached to perfection for undetectable scalp appearance
+Dye & Perm: Can be dyed, bleached to #27 or #613, straightened and restyled with heat up to 180°C
+Lifespan: 1 - 2 Years with proper conditioning and satin bonnet care
+Package: Includes Wig, 2x Breathable HD Wig Caps, 1x Elastic Melt Band, 1x 3D Mink Lashes Pair`,
+    productImages: [
+      'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 78.00,
+    weightKg: 0.42,
+    dimensionsCm: { length: 30, width: 20, height: 6 },
+    supplierName: 'Xuchang Beauty Hair Products Co., Ltd.',
+    supplierLocation: 'Henan, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 3,
+    category: 'hair-beauty',
+    brand: 'Beauty Virgin Hair',
+    unit: 'Piece',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/13x4-HD-Lace-Front-Human-Hair-Wig_1600912445882.html',
+    variations: [
+      { name: 'Length', options: ['20 Inch', '24 Inch', '28 Inch', '30 Inch'] }
+    ]
+  },
+  {
+    pid: 'ali-1600854332119',
+    productName: 'Professional 110,000 RPM High-Speed Ionic Hair Dryer Low Noise Brushless Motor with Magnetic Nozzles',
+    productSku: 'ALI-BEAUTY-DRYER01',
+    originalDescription: `Product Name: Negative Ion High-Speed Salon Hair Dryer
+Model: Cyclone-X 110K Pro
+Motor Type: Advanced 110,000 RPM Ultra-High-Speed Brushless Digital Motor (Airflow Speed 22m/s)
+Fast Drying: Dries shoulder-length hair in just 3 - 5 minutes without extreme heat damage
+Ion Generator: Emits 200 Million High-Concentration Negative Ions per cubic centimeter to eliminate static frizz and lock in hair cuticle moisture
+Smart Thermal Control: Microprocessor temperature sensor monitors air temperature 100 times per second to prevent heat damage
+Temperature Settings: 4 Temperature Modes (Cool Air 25°C, Warm 50°C, Hot 80°C, Smart Hot/Cold Cycling Mode) with RGB LED Ring Indicator
+Speed Settings: 2 Speed Levels (High / Gentle)
+Noise Level: Acoustic Noise Reduction Technology < 59dB (Whisper quiet operation)
+Filter: Double-Layer Magnetic 0.2mm Ultra-Fine Air Inlet Filter prevents hair suction
+Weight: Ultralight 407g Ergonomic Handheld Balance
+Accessories: 1x 360° Magnetic Styling Concentrator Nozzle, 1x Magnetic Curly Hair Diffuser, 1x Wall Mount Bracket`,
+    productImages: [
+      'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 34.00,
+    weightKg: 0.95,
+    dimensionsCm: { length: 32, width: 18, height: 10 },
+    supplierName: 'Ningbo Enmu Beauty Appliance Co., Ltd.',
+    supplierLocation: 'Zhejiang, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 4,
+    category: 'hair-beauty',
+    brand: 'Enmu Salon Pro',
+    unit: 'Set',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/High-Speed-Ionic-Hair-Dryer_1600854332119.html',
+    variations: [
+      { name: 'Color', options: ['Iron Gray & Rose Gold', 'Pearl White', 'Matte Sage Green'] }
+    ]
+  },
+  {
+    pid: 'ali-1600976541223',
+    productName: '1.43 Inch AMOLED Smart Watch Bluetooth Phone Calling AI Voice IP68 Waterproof Health Tracker',
+    productSku: 'ALI-WATCH-AM143',
+    originalDescription: `Device Name: AMOLED Military Rugged Bluetooth Call Smart Watch
+Model: Ultra-Armor GT4
+Display Screen: 1.43 Inch Super Retina AMOLED Full Touch Screen (466x466 Pixels, 1000 Nits Outdoor Sunlight Readable)
+Always-On Display (AOD): Supports AOD Digital & Analog Clock Watch Faces
+Calling Function: Built-in Waterproof Hi-Fi Speaker & Noise-Cancelling Mic for Bluetooth Hands-Free Dialing and Answering
+Health Sensors:
+- 24/7 PPG Dynamic Optical Heart Rate Monitor
+- True Blood Oxygen Saturation (SpO2) Sensor
+- Sleep Quality Analysis & Deep Sleep Stages
+- Blood Pressure Trend & All-Day Stress Level Tracker
+Sports Modes: 100+ Professional Indoor & Outdoor Sports Tracking (Running, Football, Basketball, Cycling, Hiking)
+Water Resistance: IP68 & 3ATM Deep Waterproof (Supports handwashing, rain, and swimming)
+Battery Life: 400mAh High-Density Cobalt Battery (10 - 15 Days Typical Use, 30 Days Standby)
+Smart Notifications: WhatsApp, SMS, Incoming Calls, Facebook, Instagram, Gmail Alerts
+Other Tools: AI Voice Assistant (Siri / Google), Music Playback Control, Remote Camera Shutter, Calculator, Weather Forecast, Stopwatch
+Compatibility: Compatible with Android 5.0+ and iOS 10.0+ smartphones (DaFit / GloryFit App)`,
+    productImages: [
+      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 18.50,
+    weightKg: 0.28,
+    dimensionsCm: { length: 16, width: 10, height: 4 },
+    supplierName: 'Shenzhen Kospet Technology Co., Ltd.',
+    supplierLocation: 'Guangdong, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 3,
+    category: 'amasaha',
+    brand: 'Kospet Armor',
+    unit: 'Piece',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/AMOLED-Bluetooth-Calling-Smart-Watch_1600976541223.html',
+    variations: [
+      { name: 'Color', options: ['Tactical Black', 'Titanium Silver', 'Army Green'] }
+    ]
+  },
+  {
+    pid: 'ali-1600865432990',
+    productName: 'Luxury Business Men Waterproof Chronograph Quartz Watch Solid Stainless Steel Luminous Date Wristwatch',
+    productSku: 'ALI-WATCH-CHRONO-M',
+    originalDescription: `Watch Category: Luxury Men's Multi-Function Chronograph Wristwatch
+Brand / Model: OUPINKE / LIGE Classic 8936
+Movement: Original High-Precision Japanese Seiko VK63 Quartz Movement
+Case Material: 316L Solid Surgical Stainless Steel (Mirror Polished & Brushed Finish)
+Dial Window: Synthetic Sapphire Crystal Glass (Anti-Scratch & Anti-Reflective Coating)
+Chronograph Sub-Dials:
+- 1/10 Second Chronograph Sub-Dial at 12 o'clock
+- 60 Seconds Running Sub-Dial at 6 o'clock
+- 60 Minutes Stopwatch Register Sub-Dial at 9 o'clock
+- Auto Calendar Date Window at 4:30 position
+Luminous Display: Swiss Super-LumiNova on hands and hour markers for bright glow in total darkness
+Water Resistance: 30M / 3ATM (Rainproof, Splashproof, Handwashing safe)
+Band Material: Solid Stainless Steel Link Bracelet with Double-Push Hidden Butterfly Folding Clasp
+Case Diameter: 42mm | Case Thickness: 12mm | Band Width: 22mm | Total Weight: 148g
+Packaging: Luxury Leather Presentation Watch Box, Warranty Card, Microfiber Cleaning Cloth, Strap Link Removal Tool`,
+    productImages: [
+      'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 16.00,
+    weightKg: 0.35,
+    dimensionsCm: { length: 15, width: 11, height: 7 },
+    supplierName: 'Guangzhou Lige Watch Industry Co., Ltd.',
+    supplierLocation: 'Guangdong, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 3,
+    category: 'amasaha',
+    brand: 'Lige Chrono',
+    unit: 'Piece',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/Luxury-Stainless-Steel-Quartz-Watch_1600865432990.html',
+    variations: [
+      { name: 'Dial Style', options: ['Emerald Green & Gold', 'Deep Royal Blue', 'Obsidian Black', 'Classic Silver'] }
+    ]
+  },
+  {
+    pid: 'ali-1600945678221',
+    productName: 'Large Capacity Expandable Anti-Theft Waterproof Business Travel Laptop Backpack with USB Charging Port',
+    productSku: 'ALI-BAG-LAPTOP35L',
+    originalDescription: `Item Type: Multi-Functional Expandable Business Travel & Commuter Backpack
+Model: Mark Ryden Anti-Theft Series 35L
+Main Material: High-Density 900D Water-Repellent & Scratch-Resistant Oxford Fabric
+Lining Material: Smooth Tear-Resistant Polyester
+Zipper: Heavy Duty Waterproof SBS Dual Zippers with Lockable Metal Pulls
+Laptop Compartment: Dedicated Shockproof Velvet Padded Sleeve fits up to 17.3 Inch Gaming & Work Laptops + 11 Inch iPad
+Capacity: 25L Standard, Expands to 35L via Peripheral Zipper (Equivalent to a 20-inch carry-on suitcase)
+Special Functional Features:
+- 180° Lay-Flat Opening for quick TSA airport security scans
+- External USB 3.0 Charging Port with internal cable route to your power bank
+- Hidden Anti-Theft Back Zipper Pocket for passport, wallet and valuables
+- Luggage Trolley Pass-Through Sleeve to slide over rolling suitcase handles
+- Ergonomic S-Curve Breathable Honeycomb Mesh Shoulder Straps with Chest Sternum Buckle
+- Side Insulated Thermal Pocket for water bottle or umbrella
+Dimensions: 46cm × 32cm × 18cm (Expands to 26cm depth) | Weight: 1.1kg`,
+    productImages: [
+      'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1546938576-6e6a64f317cc?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 19.50,
+    weightKg: 1.15,
+    dimensionsCm: { length: 48, width: 34, height: 12 },
+    supplierName: 'Guangzhou Mark Ryden Leather Goods Co., Ltd.',
+    supplierLocation: 'Guangdong, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 4,
+    category: 'ibikapu',
+    brand: 'Mark Ryden',
+    unit: 'Piece',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/Expandable-Laptop-Backpack-USB-Charging_1600945678221.html',
+    variations: [
+      { name: 'Color', options: ['Carbon Black', 'Executive Gray'] }
+    ]
+  },
+  {
+    pid: 'ali-1600834512998',
+    productName: 'Women Luxury Designer Embossed Leather Handbag 3-Piece Set Shoulder Crossbody Tote & Clutch Wallet',
+    productSku: 'ALI-BAG-WOMEN3PC',
+    originalDescription: `Product Name: 3-in-1 Luxury Women's Designer Handbag Set
+Package Includes: 1x Large Capacity Tote Bag, 1x Medium Crossbody Shoulder Bag, 1x Zipper Clutch Purse Wallet
+Material: Premium Quality PU Leather with Elegant Crocodile Grain Embossed Texture
+Hardware: Polished Multi-Layer Electroplated Pale Gold Alloy Hardware (Anti-Oxidant, Anti-Rust)
+Lining: Polyester Peach Skin Fabric
+Closure: Smooth Top Metal Zipper with reinforced stitching on load-bearing handle points
+Sizes & Dimensions:
+1. Large Tote Bag: 33cm (L) × 14cm (W) × 26cm (H) - Fits iPad, cosmetics bag, umbrella, notebook and smartphone
+2. Medium Crossbody: 24cm (L) × 8cm (W) × 17cm (H) - Includes detachable adjustable shoulder strap
+3. Clutch Wallet: 19cm (L) × 2cm (W) × 12cm (H) - Card slots and coin zipper pocket
+Features: Bottom Metal Protective Feet studs prevent scuffing and wear when placed on tables
+Occasions: Perfect for Office Work, Business Meetings, Shopping, Church, Wedding Parties, and Gifting`,
+    productImages: [
+      'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1591561954557-26941169b49e?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 14.80,
+    weightKg: 1.10,
+    dimensionsCm: { length: 36, width: 28, height: 14 },
+    supplierName: 'Baoding Baigou Tianshangxing Bag Co., Ltd.',
+    supplierLocation: 'Hebei, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 4,
+    category: 'ibikapu',
+    brand: 'Tianshangxing Bags',
+    unit: 'Set',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/3Pcs-Women-Handbag-Tote-Set_1600834512998.html',
+    variations: [
+      { name: 'Color', options: ['Wine Burgundy', 'Classic Black', 'Caramel Brown', 'Emerald Green'] }
+    ]
+  },
+  {
+    pid: 'ali-1600987654311',
+    productName: '6.5L Digital Touchscreen Air Fryer 1800W 8-in-1 Oil-Free Electric Oven with Viewing Window',
+    productSku: 'ALI-KITCH-AIRFRY65',
+    originalDescription: `Appliance Type: Visual Smart Digital Touchscreen Electric Air Fryer
+Model: AF-650-PRO Window Edition
+Capacity: 6.5 Liters Large Family Capacity (Can roast whole 2.5kg chicken or 1kg french fries)
+Rated Power: 1800W High Power Fast Heating
+Rated Voltage: 220V - 240V 50Hz/60Hz (Standard Rwanda & East Africa Plug Compatible)
+Viewing Window: Transparent Heat-Resistant Double-Layer Tempered Glass Window with Internal Halogen Oven Lamp (Monitor cooking progress without opening basket)
+Technology: 360° Rapid Hot Air Cyclone Circulation (Requires up to 85% less cooking oil than traditional deep frying)
+Display: Top-Mounted IMD Digital Color LED Touchscreen Panel
+Presets: 8 One-Touch Cooking Menus (Fries, Chicken Wings, Steak, Fish, Shrimp, Cake, Pizza, Dehydrate)
+Temperature Range: 80°C to 200°C (Adjustable in 5°C increments)
+Timer: 0 - 60 Minutes Auto-Shutoff Timer with audible ready bell
+Basket: Food-Grade Non-Stick Ceramic Coated Fry Basket & Removable Crisp Plate (BPA-Free, PFOA-Free, Dishwasher Safe)
+Safety Features: Auto Power-Off Protection when basket is pulled out; Overheat Protection`,
+    productImages: [
+      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1556912172-45b7abe8b7e1?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 31.00,
+    weightKg: 4.80,
+    dimensionsCm: { length: 35, width: 35, height: 38 },
+    supplierName: 'Zhejiang Haike Electric Appliance Co., Ltd.',
+    supplierLocation: 'Zhejiang, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 5,
+    category: 'home-kitchen',
+    brand: 'Haike Kitchen',
+    unit: 'Piece',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/6-5L-Visual-Window-Air-Fryer_1600987654311.html'
+  },
+  {
+    pid: 'ali-1600876543201',
+    productName: 'Cordless Brushless Impact Drill 21V Cordless Hammer Screwdriver Kit with 2x Lithium Batteries & 24 Accessories',
+    productSku: 'ALI-TOOL-DRILL21V',
+    originalDescription: `Tool Type: Heavy Duty 21V Cordless Brushless Impact Hammer Drill & Driver Set
+Model: BL-21V-MAX Impact Edition
+Motor: Pure Copper High-Efficiency Brushless Motor (No carbon brush spark, 50% longer motor life, 30% more power)
+Torque: 65 N.m Max Torque Output
+Chuck Type: 3/8 Inch (10mm) Keyless All-Metal Auto-Locking Ratchet Chuck
+Clutch Settings: 25+3 Position Adjustable Torque Clutch (Drill / Screwdriver / Hammer Impact 3 Modes)
+Variable Speed: 2-Speed Mechanical Gearbox:
+- Low Gear (0-450 RPM): High torque for heavy screw driving and drilling large holes in steel
+- High Gear (0-1650 RPM): High speed for rapid wood and masonry hammer drilling
+Batteries: 2x 21V 4000mAh High-Drain Rechargeable Lithium-Ion Battery Packs (Real battery capacity with power level indicator)
+Charger: 100V-240V 1.5A Fast Desktop Charger (60 minutes rapid full charge)
+Features: Forward/Reverse Switch with Safety Lock, Built-in High-Intensity LED Work Light, Ergonomic Rubberized Anti-Slip Handle
+Tool Box Contents: 1x 21V Drill, 2x Lithium Batteries, 1x Fast Charger, 9x Hex Sockets (5-13mm), 6x Screwdriver Bits, 6x Twist Drill Bits, 1x Flexible Extension Shaft, 1x Heavy Duty Molded Carry Case`,
+    productImages: [
+      'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1572981779307-38b8cabb2407?auto=format&fit=crop&w=800&q=80'
+    ],
+    unitCostUsd: 26.50,
+    weightKg: 2.85,
+    dimensionsCm: { length: 31, width: 27, height: 10 },
+    supplierName: 'Yongkang Jialong Hardware & Tools Co., Ltd.',
+    supplierLocation: 'Zhejiang, China',
+    tradeAssurance: true,
+    verifiedSupplier: true,
+    moq: 1,
+    leadTimeDays: 4,
+    category: 'services',
+    brand: 'Jialong Power Tools',
+    unit: 'Set',
+    alibabaItemUrl: 'https://www.alibaba.com/product-detail/21V-Brushless-Cordless-Impact-Drill_1600876543201.html'
   }
 ];
+
