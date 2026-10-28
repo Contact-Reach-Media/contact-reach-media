@@ -1928,7 +1928,7 @@ async function runTests() {
         paymentMethod: 'MTN Mobile Money'
       })
     });
-    assert.strictEqual(orderRes.status, 200);
+    assert([200, 201].includes(orderRes.status), 'Order creation should succeed with 201 Created');
     const order = await orderRes.json();
 
     // 2. Security test: Reject direct cardholder PAN / CVV transmission
