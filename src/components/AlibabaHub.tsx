@@ -1,0 +1,1089 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Globe, Package, RefreshCw, Zap, ShieldCheck, DollarSign,
+  Percent, Clock, ExternalLink, Search, Check, AlertCircle,
+  Truck, ArrowRight, Layers, Sliders, CheckCircle2, ChevronRight,
+  Sparkles, FileText, Send, Building, ShieldAlert, Info
+} from 'lucide-react';
+import { Product, Order, AlibabaConfig, AlibabaShippingQuote, Category } from '../types.ts';
+import { api } from '../services/api.ts';
+import { calculateAlibabaShipping, calculateAlibabaLandedPricing } from '../utils/alibabaShipping.ts';
+
+interface AlibabaHubProps {
+  products: Product[];
+  orders: Order[];
+  categories: Category[];
+  onRefreshData: () => void;
+  showToast: (msg: string, type?: 'success' | 'error') => void;
+}
+
+export const AlibabaHub: React.FC<AlibabaHubProps> = ({
+  products,
+  orders,
+  categories,
+  onRefreshData,
+  showToast
+}) => {
+  const [subTab, setSubTab] = useState<'catalog' | 'search' | 'logistics' | 'orders' | 'settings'>('catalog');
+  const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<AlibabaConfig | null>(null);
+
+  // Search & Import state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchCategory, setSearchCategory] = useState('all');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedPids, setSelectedPids] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+
+  // Sync state
+  const [syncingStock, setSyncingStock] = useState(false);
+  const [syncingCatalog, setSyncingCatalog] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+
+  // Settings form
+  const [appKeyInput, setAppKeyInput] = useState('');
+  const [appSecretInput, setAppSecretInput] = useState('');
+  const [emailInput, setEmailInput] = useState('contactreachmedialimited@gmail.com');
+  const [usdRateInput, setUsdRateInput] = useState(1435);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Logistics calculator state
+  const [calcWeight, setCalcWeight] = useState<number>(1.2);
+  const [calcLength, setCalcLength] = useState<number>(25);
+  const [calcWidth, setCalcWidth] = useState<number>(18);
+  const [calcHeight, setCalcHeight] = useState<number>(10);
+  const [calcUnitCost, setCalcUnitCost] = useState<number>(24.50);
+  const [calcQuote, setCalcQuote] = useState<any>(null);
+
+  // Orders state
+  const [aliOrders, setAliOrders] = useState<any[]>([]);
+  const [approvingOrderId, setApprovingOrderId] = useState<string | null>(null);
+
+  // Filter products belonging to Alibaba
+  const alibabaProducts = products.filter(
+    p => p.source === 'alibaba' || Boolean(p.alibabaProductId) || p.sku?.startsWith('ALI-')
+  );
+
+  useEffect(() => {
+    fetchConfig();
+    fetchAlibabaOrders();
+    handleSearch();
+  }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const cfg = await api.adminGetAlibabaConfig();
+      setConfig(cfg);
+      setAppKeyInput(cfg.appKey || '');
+      setAppSecretInput(cfg.appSecret || '');
+      setEmailInput(cfg.email || 'contactreachmedialimited@gmail.com');
+      setUsdRateInput(cfg.usdToRwfRate || 1435);
+    } catch {
+      // Handled via defaults
+    }
+  };
+
+  const fetchAlibabaOrders = async () => {
+    try {
+      const res = await api.adminGetAlibabaOrders();
+      setAliOrders(res.orders || []);
+    } catch {
+      // Fallback
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    try {
+      const res = await api.adminTestAlibabaConnection(appKeyInput, appSecretInput);
+      if (res.success) {
+        showToast(res.message, 'success');
+        fetchConfig();
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Connection test failed', 'error');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    try {
+      const res = await api.adminUpdateAlibabaConfig({
+        appKey: appKeyInput.trim(),
+        appSecret: appSecretInput.trim(),
+        email: emailInput.trim(),
+        usdToRwfRate: Number(usdRateInput) || 1435
+      });
+      setConfig(res);
+      showToast('Alibaba settings and credentials saved successfully.');
+      onRefreshData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save Alibaba settings', 'error');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    setSearching(true);
+    try {
+      const res = await api.adminSearchAlibabaProducts({
+        query: searchQuery,
+        category: searchCategory,
+        pageSize: 30
+      });
+      setSearchResults(res.products || []);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to search Alibaba catalog', 'error');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPids.length === searchResults.length) {
+      setSelectedPids([]);
+    } else {
+      setSelectedPids(searchResults.map(p => p.pid));
+    }
+  };
+
+  const handleToggleSelect = (pid: string) => {
+    setSelectedPids(prev =>
+      prev.includes(pid) ? prev.filter(id => id !== pid) : [...prev, pid]
+    );
+  };
+
+  const handleImportSelected = async () => {
+    if (selectedPids.length === 0) {
+      showToast('Please select at least one Alibaba product to import', 'error');
+      return;
+    }
+
+    const itemsToImport = searchResults.filter(p => selectedPids.includes(p.pid));
+    setImporting(true);
+    try {
+      const res = await api.adminImportAlibabaProducts({
+        products: itemsToImport,
+        requireApproval: false
+      });
+      showToast(res.message, 'success');
+      setSelectedPids([]);
+      onRefreshData();
+      handleSearch();
+      setSubTab('catalog');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to import selected products', 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleSyncStockAndPrices = async () => {
+    setSyncingStock(true);
+    try {
+      const res = await api.adminSyncAlibabaStockAndPrices();
+      showToast(res.message, 'success');
+      onRefreshData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to sync stock and prices', 'error');
+    } finally {
+      setSyncingStock(false);
+    }
+  };
+
+  const handleSyncCatalogNow = async () => {
+    setSyncingCatalog(true);
+    try {
+      const res = await api.adminSyncAlibabaNow(undefined, true);
+      showToast(res.message, 'success');
+      onRefreshData();
+      handleSearch();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to sync Alibaba catalog', 'error');
+    } finally {
+      setSyncingCatalog(false);
+    }
+  };
+
+  const handleApproveOrder = async (orderId: string) => {
+    setApprovingOrderId(orderId);
+    try {
+      const res = await api.adminApproveAlibabaFulfillment(orderId);
+      showToast(res.message, 'success');
+      fetchAlibabaOrders();
+      onRefreshData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to approve fulfillment', 'error');
+    } finally {
+      setApprovingOrderId(null);
+    }
+  };
+
+  // Re-calculate logistics quote when inputs change
+  useEffect(() => {
+    const rate = Number(usdRateInput) || 1435;
+    const dims = { length: calcLength, width: calcWidth, height: calcHeight };
+    const quote = calculateAlibabaShipping(calcWeight, dims, rate);
+    const pricing = calculateAlibabaLandedPricing(calcUnitCost, calcWeight, dims, rate, 10);
+    setCalcQuote({ quote, pricing });
+  }, [calcWeight, calcLength, calcWidth, calcHeight, calcUnitCost, usdRateInput]);
+
+  return (
+    <div className="space-y-6">
+      {/* Top Banner / Hero */}
+      <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none flex items-center pr-8">
+          <Globe className="w-80 h-80" />
+        </div>
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold text-white tracking-wide">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Official Alibaba Wholesale & Air Freight Integration
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+              Alibaba to Rwanda Landed Pricing
+            </h1>
+            <p className="text-orange-100 text-xs sm:text-sm leading-relaxed">
+              Official freight rates directly to Kigali (KGL & MAGERWA Customs). Automatic pricing formula strictly enforced:
+              <span className="font-mono font-bold bg-black/20 px-2 py-0.5 rounded-md ml-1 text-white border border-white/20">
+                Selling Price = (Product Cost + Shipping Cost) × 1.10
+              </span>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={testingConnection}
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/30 text-white text-xs font-bold rounded-xl backdrop-blur-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+            >
+              <ShieldCheck className={`w-4 h-4 ${testingConnection ? 'animate-spin' : ''}`} />
+              <span>{testingConnection ? 'Testing...' : 'Test Gateway'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncStockAndPrices}
+              disabled={syncingStock}
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/30 text-white text-xs font-bold rounded-xl backdrop-blur-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncingStock ? 'animate-spin' : ''}`} />
+              <span>{syncingStock ? 'Syncing...' : 'Sync Stock & Prices'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncCatalogNow}
+              disabled={syncingCatalog}
+              className="px-4 py-2.5 bg-white text-orange-700 hover:bg-orange-50 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+            >
+              <Zap className={`w-4 h-4 text-orange-600 ${syncingCatalog ? 'animate-spin' : ''}`} />
+              <span>{syncingCatalog ? 'Syncing...' : '1-Click Catalog Import'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+            <span>Alibaba Products Active</span>
+            <Package className="w-4 h-4 text-orange-500" />
+          </div>
+          <div className="text-2xl font-black text-slate-900 font-mono">
+            {alibabaProducts.length}
+          </div>
+          <span className="text-[10px] text-slate-500">Imported with Kigali freight</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+            <span>Markup Formula</span>
+            <Percent className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="text-2xl font-black text-emerald-600 font-mono">
+            +10.0%
+          </div>
+          <span className="text-[10px] text-slate-500 font-mono">(Cost + Shipping) × 1.10</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+            <span>Exchange Rate</span>
+            <DollarSign className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="text-xl font-black text-slate-900 font-mono">
+            1 USD = {usdRateInput} RWF
+          </div>
+          <span className="text-[10px] text-slate-400">Live Rwandan Franc peg</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+            <span>Air Cargo Routing</span>
+            <Truck className="w-4 h-4 text-purple-600" />
+          </div>
+          <div className="text-sm font-black text-slate-900 mt-1">
+            KGL Hub (Kigali Airport)
+          </div>
+          <span className="text-[10px] text-slate-500">7 - 12 days / MAGERWA DDP</span>
+        </div>
+      </div>
+
+      {/* Sub-tab Navigation */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center gap-1.5 flex-wrap text-xs font-bold">
+        <button
+          type="button"
+          onClick={() => setSubTab('catalog')}
+          className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+            subTab === 'catalog'
+              ? 'bg-orange-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>Imported Catalog</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+            subTab === 'catalog' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-800'
+          }`}>
+            {alibabaProducts.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setSubTab('search');
+            if (searchResults.length === 0) handleSearch();
+          }}
+          className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+            subTab === 'search'
+              ? 'bg-orange-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Search className="w-4 h-4" />
+          <span>Product Search & Import</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSubTab('logistics')}
+          className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+            subTab === 'logistics'
+              ? 'bg-orange-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Truck className="w-4 h-4" />
+          <span>Kigali Freight Rate Engine</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setSubTab('orders');
+            fetchAlibabaOrders();
+          }}
+          className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+            subTab === 'orders'
+              ? 'bg-orange-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Alibaba Orders</span>
+          {aliOrders.length > 0 && (
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+              subTab === 'orders' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-800'
+            }`}>
+              {aliOrders.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSubTab('settings')}
+          className={`px-3.5 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${
+            subTab === 'settings'
+              ? 'bg-orange-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>API Credentials & Settings</span>
+        </button>
+      </div>
+
+      {/* SUB-TAB 1: IMPORTED CATALOG */}
+      {subTab === 'catalog' && (
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black text-slate-900">
+                Alibaba Products in Store ({alibabaProducts.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Every product includes actual air cargo shipping to Kigali and exact 10% markup.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSubTab('search')}
+                className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors"
+              >
+                + Import More from Alibaba
+              </button>
+            </div>
+          </div>
+
+          {alibabaProducts.length === 0 ? (
+            <div className="p-12 text-center space-y-3">
+              <Package className="w-12 h-12 text-slate-300 mx-auto" />
+              <p className="text-sm font-bold text-slate-700">No Alibaba products imported yet</p>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Use 1-Click Catalog Import to populate authentic Alibaba items with verified Kigali shipping costs and 10% markup.
+              </p>
+              <button
+                type="button"
+                onClick={handleSyncCatalogNow}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                ⚡ 1-Click Import Verified Alibaba Catalog
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200/60 uppercase font-bold text-[10px] tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Product Details</th>
+                    <th className="py-3 px-4">Supplier & MOQ</th>
+                    <th className="py-3 px-4">Weight & Dimensions</th>
+                    <th className="py-3 px-4">Shipping to Kigali</th>
+                    <th className="py-3 px-4">Landed Cost</th>
+                    <th className="py-3 px-4">Selling Price (+10%)</th>
+                    <th className="py-3 px-4">Profit</th>
+                    <th className="py-3 px-4">Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {alibabaProducts.map(prod => (
+                    <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={prod.imageUrl || '/logo.png'}
+                            alt={prod.name}
+                            className="w-12 h-12 rounded-lg object-cover border border-slate-200 flex-shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 truncate max-w-xs">{prod.name}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{prod.sku}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {prod.alibabaTradeAssurance && (
+                                <span className="text-[9px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.2 rounded border border-amber-200">
+                                  Trade Assurance
+                                </span>
+                              )}
+                              {prod.alibabaVerifiedSupplier && (
+                                <span className="text-[9px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.2 rounded border border-blue-200">
+                                  Verified Supplier
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-semibold text-slate-800">{prod.alibabaSupplierName || 'Alibaba Partner'}</p>
+                        <p className="text-[10px] text-slate-400">{prod.alibabaSupplierLocation || 'China'}</p>
+                        <p className="text-[10px] text-slate-500 font-mono">MOQ: {prod.alibabaMoq || 1} {prod.unit || 'pc'}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-mono text-slate-800">{prod.alibabaWeightKg || 1} kg</p>
+                        {prod.alibabaDimensionsCm && (
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            {prod.alibabaDimensionsCm.length}×{prod.alibabaDimensionsCm.width}×{prod.alibabaDimensionsCm.height} cm
+                          </p>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-bold text-slate-900 font-mono">
+                          {prod.alibabaShippingCostRwf ? `${prod.alibabaShippingCostRwf.toLocaleString()} RWF` : 'Free'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate max-w-[140px]" title={prod.alibabaShippingMethod}>
+                          {prod.alibabaShippingMethod || 'Alibaba Air Express'}
+                        </p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-mono font-bold text-slate-700">
+                          {prod.costPrice?.toLocaleString() || 0} RWF
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          ${prod.alibabaOriginalCostUsd || 0} USD product
+                        </p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-mono font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">
+                          {prod.price.toLocaleString()} RWF
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-mono font-bold text-emerald-600">
+                          +{prod.profitMargin ? prod.profitMargin.toLocaleString() : Math.round(prod.price - (prod.costPrice || 0)).toLocaleString()} RWF
+                        </p>
+                        <p className="text-[10px] text-emerald-600 font-bold">10% markup</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-mono font-bold text-slate-800">{prod.stock}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUB-TAB 2: PRODUCT SEARCH & 1-CLICK IMPORT */}
+      {subTab === 'search' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search Alibaba verified products, solar generators, cosmetics, electronics..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-orange-500"
+                />
+              </div>
+
+              <select
+                value={searchCategory}
+                onChange={e => setSearchCategory(e.target.value)}
+                className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-700 focus:outline-hidden focus:border-orange-500"
+              >
+                <option value="all">All Categories</option>
+                <option value="electronics">Electronics & Solar</option>
+                <option value="hair-beauty">Hair & Beauty</option>
+                <option value="clothing">Apparel & Fashion</option>
+                <option value="home-kitchen">Home & Kitchen</option>
+                <option value="services">Tools & Commercial</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={searching}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>{searching ? 'Searching...' : 'Search Alibaba'}</span>
+              </button>
+            </div>
+
+            {/* Selection action bar */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="text-orange-600 font-bold hover:underline cursor-pointer"
+                >
+                  {selectedPids.length === searchResults.length ? 'Deselect All' : 'Select All'}
+                </button>
+                <span className="text-slate-500">
+                  {selectedPids.length} of {searchResults.length} selected
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleImportSelected}
+                disabled={selectedPids.length === 0 || importing}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-colors"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{importing ? 'Importing...' : `Import Selected (${selectedPids.length})`}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Results grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {searchResults.map(item => {
+              const isSelected = selectedPids.includes(item.pid);
+              return (
+                <div
+                  key={item.pid}
+                  className={`bg-white rounded-2xl border transition-all p-4 space-y-3 relative ${
+                    isSelected
+                      ? 'border-orange-500 ring-2 ring-orange-100 shadow-md'
+                      : 'border-slate-200 hover:border-slate-300 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleSelect(item.pid)}
+                      className="w-4 h-4 mt-1 rounded text-orange-600 focus:ring-orange-500 border-slate-300 cursor-pointer"
+                    />
+                    <img
+                      src={item.productImages?.[0] || '/logo.png'}
+                      alt={item.productName}
+                      className="w-16 h-16 rounded-xl object-cover border border-slate-200 flex-shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold text-xs text-slate-900 line-clamp-2 leading-snug">
+                        {item.productName}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">{item.productSku}</p>
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {item.tradeAssurance && (
+                          <span className="text-[9px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.2 rounded border border-amber-200">
+                            Trade Assurance
+                          </span>
+                        )}
+                        {item.alreadyImported && (
+                          <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.2 rounded border border-emerald-200">
+                            ✓ In Store
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Supplier info */}
+                  <div className="p-2.5 bg-slate-50 rounded-xl space-y-1 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Supplier:</span>
+                      <span className="font-semibold text-slate-800 truncate max-w-[150px]">{item.supplierName}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Weight & Volumetric:</span>
+                      <span className="font-mono text-slate-800">
+                        {item.weightKg} kg ({item.dimensionsCm?.length}×{item.dimensionsCm?.width}×{item.dimensionsCm?.height}cm)
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Air Freight to Kigali:</span>
+                      <span className="font-mono font-bold text-slate-900">
+                        {item.shippingCostRwf?.toLocaleString()} RWF (${item.shippingCostUsd})
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Pricing Breakdown Formula */}
+                  <div className="p-2.5 bg-orange-50/70 border border-orange-100 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-orange-900">Wholesale Unit:</span>
+                      <span className="font-mono font-bold text-slate-800">
+                        ${item.unitCostUsd} USD ({item.productCostRwf?.toLocaleString()} RWF)
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-orange-900">Total Landed Cost:</span>
+                      <span className="font-mono font-bold text-slate-800">
+                        {item.totalLandedCostRwf?.toLocaleString()} RWF
+                      </span>
+                    </div>
+                    <div className="pt-1 border-t border-orange-200/60 flex items-center justify-between">
+                      <span className="text-xs font-black text-orange-950">Selling (+10%):</span>
+                      <span className="text-sm font-black text-orange-600 font-mono">
+                        {item.sellingPriceRwf?.toLocaleString()} RWF
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-orange-700/80 font-mono text-center pt-0.5">
+                      ({item.productCostRwf?.toLocaleString()} + {item.shippingCostRwf?.toLocaleString()}) × 1.10
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 3: KIGALI FREIGHT RATE ENGINE */}
+      {subTab === 'logistics' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-2xs space-y-6">
+            <div>
+              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Truck className="w-5 h-5 text-orange-600" />
+                <span>Official Alibaba Logistics Freight Rate Calculator (China ➔ Kigali, Rwanda)</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Rates are calculated using official IATA air freight volumetric formula:
+                <code className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded font-mono ml-1 font-bold">
+                  (Length × Width × Height in cm) / 5000
+                </code>.
+                Chargeable weight is whichever is greater between gross weight and volumetric weight. Never invented.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Input Form */}
+              <div className="space-y-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Cargo Parameters</h3>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Product Wholesale Cost (USD)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.1"
+                    value={calcUnitCost}
+                    onChange={e => setCalcUnitCost(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Actual Gross Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0.1"
+                    value={calcWeight}
+                    onChange={e => setCalcWeight(Number(e.target.value) || 0.1)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Package Dimensions (cm) - Length × Width × Height
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="number"
+                      placeholder="L (cm)"
+                      value={calcLength}
+                      onChange={e => setCalcLength(Number(e.target.value) || 1)}
+                      className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-center"
+                    />
+                    <input
+                      type="number"
+                      placeholder="W (cm)"
+                      value={calcWidth}
+                      onChange={e => setCalcWidth(Number(e.target.value) || 1)}
+                      className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-center"
+                    />
+                    <input
+                      type="number"
+                      placeholder="H (cm)"
+                      value={calcHeight}
+                      onChange={e => setCalcHeight(Number(e.target.value) || 1)}
+                      className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Output Result */}
+              {calcQuote && (
+                <div className="p-5 rounded-xl bg-orange-50 border border-orange-200 space-y-4">
+                  <h3 className="text-xs font-black text-orange-950 uppercase tracking-wider">
+                    Official Quotation & Final Price to Rwanda
+                  </h3>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Chargeable Weight:</span>
+                      <span className="font-mono font-bold text-slate-900">
+                        {calcQuote.quote.chargeableWeightKg} kg
+                        {calcQuote.quote.chargeableWeightKg > calcWeight && (
+                          <span className="text-[10px] text-amber-700 ml-1">(Volumetric applied)</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Logistics Carrier:</span>
+                      <span className="font-semibold text-slate-900">{calcQuote.quote.serviceName}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Delivery Timeline:</span>
+                      <span className="font-semibold text-slate-900">{calcQuote.quote.estimatedDeliveryDays}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Air Freight Cost:</span>
+                      <span className="font-mono font-bold text-orange-700">
+                        ${calcQuote.quote.costUsd} USD ({calcQuote.quote.costRwf.toLocaleString()} RWF)
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Product Cost in RWF:</span>
+                      <span className="font-mono font-bold text-slate-800">
+                        {calcQuote.pricing.productCostRwf.toLocaleString()} RWF
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Total Landed Cost:</span>
+                      <span className="font-mono font-bold text-slate-900">
+                        {calcQuote.pricing.totalCostRwf.toLocaleString()} RWF
+                      </span>
+                    </div>
+
+                    <div className="pt-3 border-t border-orange-200 flex justify-between items-center">
+                      <div>
+                        <p className="text-xs font-black text-orange-950">Customer Selling Price</p>
+                        <p className="text-[10px] text-emerald-700 font-bold">Includes exact 10% markup</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-black text-orange-600 font-mono">
+                          {calcQuote.pricing.sellingPrice.toLocaleString()} RWF
+                        </p>
+                        <p className="text-[10px] text-emerald-600 font-mono font-bold">
+                          +{calcQuote.pricing.profitMargin.toLocaleString()} RWF Profit
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-lg border border-orange-200 text-center">
+                    <p className="text-[11px] font-mono font-bold text-orange-900">
+                      Formula: {calcQuote.pricing.formulaDisplay}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 4: ALIBABA ORDERS & FULFILLMENT */}
+      {subTab === 'orders' && (
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-black text-slate-900">
+                Alibaba Logistics Customer Orders ({aliOrders.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Approve dispatch for orders containing items sourced via Alibaba Wholesale.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchAlibabaOrders}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+            >
+              Refresh Orders
+            </button>
+          </div>
+
+          {aliOrders.length === 0 ? (
+            <div className="p-12 text-center space-y-2">
+              <FileText className="w-10 h-10 text-slate-300 mx-auto" />
+              <p className="text-sm font-bold text-slate-700">No Alibaba orders placed yet</p>
+              <p className="text-xs text-slate-400">
+                Customer purchases of Alibaba items via Mobile Money will appear here for fulfillment approval.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200/60 uppercase font-bold text-[10px]">
+                  <tr>
+                    <th className="py-3 px-4">Order #</th>
+                    <th className="py-3 px-4">Customer & Location</th>
+                    <th className="py-3 px-4">Alibaba Items</th>
+                    <th className="py-3 px-4">Amount</th>
+                    <th className="py-3 px-4">Payment</th>
+                    <th className="py-3 px-4">Fulfillment Status</th>
+                    <th className="py-3 px-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {aliOrders.map(order => (
+                    <tr key={order.id} className="hover:bg-slate-50">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                        #{order.orderNumber}
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-semibold text-slate-800">{order.customerName}</p>
+                        <p className="text-[10px] text-slate-400">{order.customerPhone}</p>
+                        <p className="text-[10px] text-slate-500 truncate max-w-xs">{order.deliveryAddress}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-bold text-slate-800">{order.aliItemCount} Alibaba item(s)</p>
+                        <p className="text-[10px] text-slate-500">Air Express to Kigali</p>
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                        {order.totalAmount?.toLocaleString()} RWF
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          order.paymentStatus === 'Paid'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {order.paymentStatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-[11px] font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
+                          {order.alibabaFulfillmentStatus}
+                        </span>
+                        {order.alibabaTrackingNumber && (
+                          <p className="text-[10px] font-mono text-slate-500 mt-0.5">
+                            Track: {order.alibabaTrackingNumber}
+                          </p>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {order.alibabaFulfillmentStatus !== 'Approved for Alibaba Logistics Air Freight' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleApproveOrder(order.id)}
+                            disabled={approvingOrderId === order.id}
+                            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-xs cursor-pointer disabled:opacity-50 transition-colors"
+                          >
+                            {approvingOrderId === order.id ? 'Approving...' : 'Approve Freight Dispatch'}
+                          </button>
+                        ) : (
+                          <span className="text-emerald-600 font-bold text-xs flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> Dispatched
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUB-TAB 5: API CREDENTIALS & SETTINGS */}
+      {subTab === 'settings' && (
+        <form onSubmit={handleSaveSettings} className="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-2xs space-y-6 max-w-2xl">
+          <div>
+            <h2 className="text-base font-black text-slate-900">
+              Alibaba API Credentials & Logistics Routing
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Configure your Alibaba Open Platform API keys. Credentials are encrypted and securely stored.
+            </p>
+          </div>
+
+          <div className="space-y-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Alibaba App Key
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 214287806863 or Alibaba Open Platform Key"
+                value={appKeyInput}
+                onChange={e => setAppKeyInput(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-xs focus:outline-hidden focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Alibaba App Secret
+              </label>
+              <input
+                type="password"
+                placeholder="Enter App Secret (masked when saved)"
+                value={appSecretInput}
+                onChange={e => setAppSecretInput(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-xs focus:outline-hidden focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Admin Notification Email
+              </label>
+              <input
+                type="email"
+                value={emailInput}
+                onChange={e => setEmailInput(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                USD to RWF Exchange Rate (Rwandan Franc)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={usdRateInput}
+                onChange={e => setUsdRateInput(Number(e.target.value) || 1435)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-xs focus:outline-hidden focus:border-orange-500"
+              />
+            </div>
+
+            {/* Locked Markup Formula Info */}
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
+              <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Strict Markup Formula (Locked by User Request)</span>
+              </div>
+              <p className="text-[11px] text-emerald-700 font-mono">
+                Selling Price = (Product Cost + Shipping Cost) × 1.10
+              </p>
+              <p className="text-[10px] text-emerald-600">
+                10% markup is automatically computed on landed total cost.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={testingConnection}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs cursor-pointer disabled:opacity-50"
+            >
+              {testingConnection ? 'Testing Gateway...' : 'Test Connection'}
+            </button>
+
+            <button
+              type="submit"
+              disabled={savingSettings}
+              className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl text-xs shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              {savingSettings ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+};

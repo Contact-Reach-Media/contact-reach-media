@@ -27,6 +27,7 @@ import { MaintenancePage } from './MaintenancePage.tsx';
 import { ProductSpreadsheetModal } from './ProductSpreadsheetModal.tsx';
 import { FirebaseSyncModal } from './FirebaseSyncModal.tsx';
 import { DsersFulfillmentTab } from './DsersFulfillmentTab.tsx';
+import { AlibabaHub } from './AlibabaHub.tsx';
 import {
   exportProductsToExcel,
   exportProductsToCsv,
@@ -47,6 +48,7 @@ type TabType =
   | 'shops'
   | 'suppliers'
   | 'payouts'
+  | 'alibaba'
   | 'cjdropshipping'
   | 'dsers'
   | 'orders'
@@ -2159,6 +2161,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {supplierPayouts.length}
                 </span>
               )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('alibaba')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'alibaba' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 text-orange-500" />
+                <span>Alibaba Wholesale</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'alibaba' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700'
+              }`}>
+                {products.filter(p => p.source === 'alibaba').length}
+              </span>
             </button>
 
             <button
@@ -5054,6 +5073,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* TAB: ALIBABA B2B & WHOLESALE HUB */}
+          {activeTab === 'alibaba' && (
+            <AlibabaHub
+              products={products}
+              orders={orders}
+              categories={categories}
+              onRefreshData={() => {
+                fetchAllData();
+                onRefreshPublicData();
+              }}
+              showToast={showToast}
+            />
           )}
 
           {/* TAB: CJ DROPSHIPPING & AUTOMATED PRODUCT FEED */}

@@ -109,6 +109,41 @@ export const initialSettings: AppSettings = {
     },
     "lastSyncAt": "2026-10-27T10:07:02.254Z"
   },
+  "alibabaConfig": {
+    "appKey": "",
+    "hasAppKey": false,
+    "appSecret": "",
+    "hasAppSecret": false,
+    "accessToken": "",
+    "hasAccessToken": false,
+    "email": "contactreachmedialimited@gmail.com",
+    "autoUploadEnabled": true,
+    "syncFrequency": "daily",
+    "defaultMarkupPercent": 10,
+    "usdToRwfRate": 1435,
+    "autoPublish": true,
+    "requireAdminApproval": false,
+    "destinationCountry": "RW",
+    "destinationCity": "Kigali",
+    "destinationPostalCode": "00000",
+    "selectedCategories": [
+      "electronics",
+      "fashion",
+      "amatara",
+      "hair-beauty",
+      "amasaha",
+      "ibikapu",
+      "sports"
+    ],
+    "lastSyncStats": {
+      "uploadedCount": 0,
+      "updatedCount": 0,
+      "totalAlibabaProducts": 0,
+      "timestamp": "2026-10-28T01:30:00.000Z",
+      "status": "idle",
+      "message": "Ready to import and synchronize Alibaba catalog"
+    }
+  },
   "maintenanceUpdatedAt": "2026-10-27T10:06:55.907Z"
 };
 

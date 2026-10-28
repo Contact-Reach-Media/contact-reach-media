@@ -50,14 +50,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       onClick={() => onViewProduct(product)}
       className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer relative hover:-translate-y-0.5 text-start"
     >
-      {/* Top Floating Discount % Badge */}
-      {hasDiscount && discountPercent > 0 && (
-        <div className="absolute top-2.5 start-2.5 z-10">
+      {/* Top Floating Discount % & Alibaba Badges */}
+      <div className="absolute top-2.5 start-2.5 z-10 flex flex-col gap-1 items-start">
+        {hasDiscount && discountPercent > 0 && (
           <span className="bg-[#FF6000] text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center gap-0.5 tracking-tight">
             -{discountPercent}%
           </span>
-        </div>
-      )}
+        )}
+        {product.source === 'alibaba' && (
+          <span className="bg-gradient-to-r from-orange-600 to-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs tracking-tight">
+            Alibaba Verified
+          </span>
+        )}
+      </div>
 
       {/* Top Floating Wishlist Button */}
       <div className="absolute top-2.5 end-2.5 z-10">

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   X, Star, ShoppingBag, Truck, RotateCcw, Heart, Plus, Minus,
   MessageCircle, Maximize2, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft, Tag, Camera,
-  Youtube, ExternalLink, Play
+  Youtube, ExternalLink, Play, Globe, ShieldCheck
 } from 'lucide-react';
 import { Product, ProductReview } from '../types.ts';
 import { Language, translations } from '../translations.ts';
@@ -294,6 +294,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         SKU: {product.sku}
                       </span>
                     )}
+                    {product.source === 'alibaba' && (
+                      <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Globe className="w-3 h-3 text-orange-600" />
+                        Alibaba Verified Wholesale
+                      </span>
+                    )}
                   </div>
                   <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 leading-snug">
                     {product.name}
@@ -504,7 +510,32 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
             {activeTab === 'description' ? (
               <div className="text-xs text-slate-700 leading-relaxed space-y-3 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
-                <p>{product.description}</p>
+                <p className="whitespace-pre-line">{product.description}</p>
+
+                {product.source === 'alibaba' && (
+                  <div className="mt-3 p-3 bg-orange-50/70 border border-orange-200 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold text-orange-950 flex-wrap gap-1">
+                      <span className="flex items-center gap-1.5">
+                        <Truck className="w-4 h-4 text-orange-600" />
+                        Alibaba Logistics Air Freight to Kigali (KGL Hub)
+                      </span>
+                      {product.alibabaTradeAssurance && (
+                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                          Trade Assurance Protected
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      Dispatched via official Alibaba Air Express directly to Kigali International Airport with customs clearance at MAGERWA Gikondo. Delivery timeframe: 7 - 12 business days.
+                    </p>
+                    {product.alibabaShippingMethod && (
+                      <p className="text-[10px] font-mono text-slate-500">
+                        Method: {product.alibabaShippingMethod}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {product.deliveryInfo && (
                   <div className="flex items-center gap-2 text-slate-600 pt-2 border-t border-slate-200/60">
                     <Truck className="w-4 h-4 text-orange-600 shrink-0" />

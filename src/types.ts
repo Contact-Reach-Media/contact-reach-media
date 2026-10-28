@@ -107,8 +107,8 @@ export interface Product {
   rating?: number;
   reviewsCount?: number;
   unit?: string;
-  // CJ Dropshipping & Supplier Cost Automation & Google Drive
-  source?: 'local' | 'cjdropshipping' | 'googledrive';
+  // CJ Dropshipping & Supplier Cost Automation & Google Drive & Alibaba
+  source?: 'local' | 'cjdropshipping' | 'googledrive' | 'alibaba';
   cjProductId?: string;
   cjProductSku?: string;
   cjOriginalCostUsd?: number;
@@ -116,6 +116,22 @@ export interface Product {
   profitMargin?: number; // Calculated profit margin in RWF
   cjLastSyncAt?: string;
   reviewStatus?: 'Pending Approval' | 'Approved' | 'Rejected';
+  // Alibaba Official Dropshipping & Wholesale Integration
+  alibabaProductId?: string;
+  alibabaItemUrl?: string;
+  alibabaSupplierName?: string;
+  alibabaSupplierLocation?: string;
+  alibabaMoq?: number;
+  alibabaWeightKg?: number;
+  alibabaDimensionsCm?: { length: number; width: number; height: number };
+  alibabaOriginalCostUsd?: number;
+  alibabaShippingCostUsd?: number;
+  alibabaShippingCostRwf?: number;
+  alibabaShippingMethod?: string;
+  alibabaLeadTimeDays?: number;
+  alibabaTradeAssurance?: boolean;
+  alibabaVerifiedSupplier?: boolean;
+  alibabaLastSyncAt?: string;
   // DSers & AliExpress Supplier Mapping
   aliExpressUrl?: string; // Exact AliExpress Product URL for DSers mapping
   supplierVariant?: string; // Exact supplier variant string (e.g. "Color: Black, Size: XL")
@@ -214,6 +230,13 @@ export interface Order {
   cjFulfillmentApprovedAt?: string;
   cjFulfillmentApprovedBy?: string;
   cjTrackingNumber?: string;
+  // Alibaba Supplier Fulfillment Approval
+  alibabaFulfillmentStatus?: 'Pending Admin Approval' | 'Approved for Alibaba Dispatch' | 'Approved for Alibaba Logistics Air Freight' | 'Dispatched via Alibaba Logistics' | 'Delivered' | 'Not Applicable';
+  alibabaFulfillmentApprovedAt?: string;
+  alibabaFulfillmentApprovedBy?: string;
+  alibabaOrderRef?: string;
+  alibabaTrackingNumber?: string;
+  alibabaShippingMethod?: string;
   statusHistory: {
     status: OrderStatus;
     paymentStatus?: PaymentStatus;
@@ -308,6 +331,60 @@ export interface AppSettings {
   driveBackupStatus?: GoogleDriveBackupStatus;
   // Google Sheets Direct Product Sync
   googleSheetConfig?: GoogleSheetSyncConfig;
+  // Alibaba Dropshipping & Wholesale Integration
+  alibabaConfig?: AlibabaConfig;
+}
+
+export interface AlibabaConfig {
+  appKey?: string;
+  hasAppKey?: boolean;
+  appSecret?: string;
+  hasAppSecret?: boolean;
+  hasCredentials?: boolean;
+  accessToken?: string;
+  hasAccessToken?: boolean;
+  email?: string;
+  autoUploadEnabled: boolean;
+  autoSyncEnabled?: boolean;
+  syncFrequency: 'hourly' | 'daily' | 'manual';
+  defaultMarkupPercent: number; // 10% strictly per formula: (Cost + Shipping) * 1.10
+  usdToRwfRate: number; // e.g. 1435 RWF per USD
+  autoPublish: boolean;
+  requireAdminApproval: boolean;
+  destinationCountry: string; // 'RW'
+  destinationCity: string; // 'Kigali'
+  destinationHub?: string;
+  destinationPostalCode: string; // '00000'
+  selectedCategories: string[];
+  lastSyncAt?: string;
+  status?: string;
+  isConnected?: boolean;
+  connectionStatus?: 'connected' | 'disconnected' | 'error' | 'ready';
+  connectedAt?: string;
+  lastConnectedEmail?: string;
+  lastError?: string;
+  lastSyncStats?: {
+    uploadedCount: number;
+    updatedCount: number;
+    totalAlibabaProducts: number;
+    timestamp: string;
+    status: 'success' | 'failed' | 'idle';
+    message?: string;
+  };
+}
+
+export interface AlibabaShippingQuote {
+  serviceName: string;
+  carrierCode: string;
+  estimatedDeliveryDays: string;
+  costUsd: number;
+  costRwf: number;
+  weightKg: number;
+  chargeableWeightKg: number;
+  isFreeShipping: boolean;
+  originCountry: string;
+  destinationCountry: string;
+  trackingAvailable: boolean;
 }
 
 export interface GoogleSheetSyncConfig {
