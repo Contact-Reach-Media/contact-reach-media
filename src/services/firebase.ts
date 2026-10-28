@@ -91,10 +91,13 @@ setLogLevel('silent');
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Dedicated provider specifically for Google Workspace integrations (Drive & Sheets)
+// Dedicated provider specifically for Google Workspace integrations (Drive & Sheets for Admin)
 export const workspaceProvider = new GoogleAuthProvider();
+workspaceProvider.addScope('https://www.googleapis.com/auth/drive');
 workspaceProvider.addScope('https://www.googleapis.com/auth/drive.file');
+workspaceProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
 workspaceProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+workspaceProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 workspaceProvider.setCustomParameters({ prompt: 'consent' });
 
 // In-memory access token cache for Google Workspace APIs

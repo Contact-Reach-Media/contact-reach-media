@@ -405,9 +405,12 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
                   Excel · CSV · Google Sheets
                 </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                  Admin Only
+                </span>
               </div>
               <p className="text-xs text-slate-500">
-                Automatic column mapping, duplicate detection, stock & price validation with pre-save review
+                Administrative catalog management, Google Sheets live sync & Google Drive backups
               </p>
             </div>
           </div>
@@ -443,6 +446,9 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
             >
               <Layers className="w-4 h-4" />
               <span>Google Sheets Integration</span>
+              <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 text-[9px] font-black uppercase">
+                Admin
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('export')}
