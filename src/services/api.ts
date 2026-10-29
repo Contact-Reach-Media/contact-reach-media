@@ -282,9 +282,6 @@ export const api = {
       const res = await fetch('/api/categories');
       const parsed = await safeParseResponse<Category[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
-        if (typeof window !== 'undefined') {
-          try { localStorage.setItem('crm_db_categories', JSON.stringify(parsed.json)); } catch {}
-        }
         return parsed.json;
       }
     } catch {}
@@ -292,23 +289,10 @@ export const api = {
     // Fallback to live Cloud Firestore
     try {
       const fsCategories = await getCategoriesFromFirestore();
-      if (fsCategories && fsCategories.length > 0) {
-        if (typeof window !== 'undefined') {
-          try { localStorage.setItem('crm_db_categories', JSON.stringify(fsCategories)); } catch {}
-        }
-        return fsCategories;
-      }
+      if (fsCategories && fsCategories.length > 0) return fsCategories;
     } catch {}
 
-    // Fallback to client cache
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_categories');
-        if (cached) return JSON.parse(cached);
-      } catch {}
-    }
-
-    return [];
+    return initialCategories;
   },
 
   // Public Shops
@@ -317,9 +301,6 @@ export const api = {
       const res = await fetch('/api/shops');
       const parsed = await safeParseResponse<VendorShop[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
-        if (typeof window !== 'undefined') {
-          try { localStorage.setItem('crm_db_shops', JSON.stringify(parsed.json)); } catch {}
-        }
         return parsed.json;
       }
     } catch {}
@@ -327,23 +308,10 @@ export const api = {
     // Fallback to live Cloud Firestore
     try {
       const fsShops = await getShopsFromFirestore();
-      if (fsShops && fsShops.length > 0) {
-        if (typeof window !== 'undefined') {
-          try { localStorage.setItem('crm_db_shops', JSON.stringify(fsShops)); } catch {}
-        }
-        return fsShops;
-      }
+      if (fsShops && fsShops.length > 0) return fsShops;
     } catch {}
 
-    // Fallback to client cache
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_shops');
-        if (cached) return JSON.parse(cached);
-      } catch {}
-    }
-
-    return [];
+    return initialShops;
   },
 
   async getShopById(id: string): Promise<{ shop: VendorShop; products: Product[] } | null> {
@@ -397,11 +365,6 @@ export const api = {
       const res = await fetch(`/api/products?${query.toString()}`);
       const parsed = await safeParseResponse<Product[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
-        if (!params || Object.keys(params).length === 0) {
-          if (typeof window !== 'undefined') {
-            try { localStorage.setItem('crm_db_products', JSON.stringify(parsed.json)); } catch {}
-          }
-        }
         return parsed.json;
       }
     } catch {}
@@ -421,25 +384,7 @@ export const api = {
       }
     } catch {}
 
-    // Fallback to client cache
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_products');
-        if (cached) {
-          let cachedList: Product[] = JSON.parse(cached);
-          if (params?.category && params.category !== 'all') {
-            cachedList = cachedList.filter(p => p.category === params.category);
-          }
-          if (params?.search) {
-            const q = params.search.toLowerCase();
-            cachedList = cachedList.filter(p => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
-          }
-          return cachedList.filter(p => p.status !== 'Hidden');
-        }
-      } catch {}
-    }
-
-    return [];
+    return initialProducts;
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -457,18 +402,7 @@ export const api = {
       if (found) return found;
     } catch {}
 
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_products');
-        if (cached) {
-          const list: Product[] = JSON.parse(cached);
-          const found = list.find(p => p.id === id);
-          if (found) return found;
-        }
-      } catch {}
-    }
-
-    return null;
+    return initialProducts.find(p => p.id === id) || null;
   },
 
   // Customer Place Order
@@ -2355,31 +2289,6 @@ export const api = {
     return parsed.json;
   },
 
-  async adminDeleteCustomer(id: string): Promise<any> {
-    const res = await fetch(`/api/admin/buyers/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson) {
-      throw new Error(parsed.json?.error || 'Failed to remove buyer customer');
-    }
-    return parsed.json;
-  },
-
-  async adminGetMe(): Promise<AdminUser | null> {
-    try {
-      const res = await fetch('/api/admin/auth/me', {
-        headers: getAuthHeaders()
-      });
-      const parsed = await safeParseResponse<any>(res);
-      if (res.ok && parsed.isJson && parsed.json) {
-        return parsed.json;
-      }
-    } catch {}
-    return getStoredAdminUser();
-  },
-
   async getHealthCheck(): Promise<any> {
     const res = await fetch('/api/health');
     const parsed = await safeParseResponse<any>(res);
@@ -3737,28 +3646,6 @@ export const api = {
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson || !parsed.json) {
       throw new Error(parsed.json?.error || 'Failed to import 300 Alibaba products');
-    }
-    return parsed.json;
-  },
-
-  async adminImport1000AlibabaProducts(payload?: { autoPublish?: boolean; category?: string }): Promise<{
-    success: boolean;
-    message: string;
-    uploadedCount: number;
-    updatedCount: number;
-    totalAlibaba: number;
-    pendingReview: number;
-    approvedLive: number;
-    stagedForReview: boolean;
-  }> {
-    const res = await fetch('/api/admin/alibaba/import-1000', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload || {})
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json) {
-      throw new Error(parsed.json?.error || 'Failed to import Alibaba products');
     }
     return parsed.json;
   },

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
-import { initialSettings } from './data/initialData.ts';
+import { initialProducts, initialCategories, initialSettings, initialShops } from './data/initialData.ts';
 import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
 import { Language, translations, getCategoryTitle } from './translations.ts';
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
@@ -123,48 +123,11 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
-  // Core Data - Authoritatively loaded from database & synced storage
-  const [products, setProducts] = useState<Product[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_products');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
-
-  const [categories, setCategories] = useState<Category[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_categories');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
-
-  const [shops, setShops] = useState<VendorShop[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_shops');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
-
+  // Core Data
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [shops, setShops] = useState<VendorShop[]>(initialShops);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   // Cart & Wishlist with localStorage Persistence
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -204,17 +167,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>(initialRoute.search);
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
-  // Modals & Direct deep links from database
+  // Modals
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(() => {
-    if (initialRoute.productId && typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_db_products');
-        if (cached) {
-          const list: Product[] = JSON.parse(cached);
-          const found = list.find(p => p.id === initialRoute.productId);
-          if (found) return found;
-        }
-      } catch {}
+    if (initialRoute.productId) {
+      return initialProducts.find(p => p.id === initialRoute.productId) || null;
     }
     return null;
   });
@@ -351,7 +307,6 @@ export default function App() {
       setSettings(fetchedSettings);
       setShops(fetchedShops);
       setIsAdminLoggedIn(isAuth);
-      setIsDataLoaded(true);
 
       if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
         setIsAdminLoginOpen(true);
@@ -359,13 +314,7 @@ export default function App() {
 
       if (initialRoute.productId) {
         const found = fetchedProducts.find(p => p.id === initialRoute.productId);
-        if (found) {
-          setSelectedProduct(found);
-        } else {
-          api.getProductById(initialRoute.productId).then(singleProd => {
-            if (singleProd) setSelectedProduct(singleProd);
-          }).catch(() => {});
-        }
+        if (found) setSelectedProduct(found);
       }
 
       // Check for logged-in buyer user
@@ -952,21 +901,8 @@ export default function App() {
             </div>
           </section>
 
-          {/* 3. PRODUCTS DISPLAY / PROFESSIONAL LOADING & EMPTY STATE */}
-          {!isDataLoaded && products.length === 0 ? (
-            <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-8">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                  <div key={n} className="bg-white rounded-2xl border border-slate-200/80 p-3 space-y-3 animate-pulse">
-                    <div className="w-full h-40 bg-slate-100 rounded-xl" />
-                    <div className="h-4 bg-slate-100 rounded w-3/4" />
-                    <div className="h-3 bg-slate-100 rounded w-1/2" />
-                    <div className="h-5 bg-orange-100/60 rounded w-2/3" />
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : products.length === 0 ? (
+          {/* 3. PRODUCTS DISPLAY / PROFESSIONAL EMPTY STATE */}
+          {products.length === 0 ? (
             <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-10">
               <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center max-w-2xl mx-auto shadow-2xs space-y-4">
                 <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-[#FF6000] flex items-center justify-center mx-auto">

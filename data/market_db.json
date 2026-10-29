@@ -97520,16 +97520,6 @@
   ],
   "messages": [
     {
-      "id": "msg-1793263863136-afa2",
-      "name": "Thierry Maniriho",
-      "email": "contactreachmedialimited@gmail.com",
-      "phone": "0780022600",
-      "subject": "Database Storage Verification",
-      "message": "Verifying persistent database storage for messages, products, and shops.",
-      "createdAt": "2026-10-29T08:51:03.136Z",
-      "status": "unread"
-    },
-    {
       "id": "msg-1793258554135-6217",
       "name": "Jean Paul Tester",
       "email": "jeanpaul.tester@example.com",
@@ -108635,16 +108625,6 @@
   ],
   "auditLogs": [
     {
-      "id": "aud-1793263385078-f890",
-      "timestamp": "2026-10-29T08:43:05.078Z",
-      "adminName": "CJ Startup Auto-Sync",
-      "adminRole": "administrator",
-      "action": "CJ_REALTIME_PULL",
-      "details": "Real-time CJ product pull: 0 new products uploaded, 0 updated (0 items processed from CJ catalog).",
-      "entityType": "cjdropshipping",
-      "entityId": "catalog"
-    },
-    {
       "id": "aud-1793258584201-7233",
       "timestamp": "2026-10-29T07:23:04.203Z",
       "adminName": "Ruth (System Owner)",
@@ -113427,6 +113407,16 @@
       "details": "Created product \"Tombstone Test Product\" (SKU: CRM-ELE-2646) with stock 5",
       "entityType": "product",
       "entityId": "prod-1793093787681-923a0e"
+    },
+    {
+      "id": "aud-1793093787529-0e13",
+      "timestamp": "2026-10-27T09:36:27.530Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "ADMIN_USER_DELETED",
+      "details": "Deleted administrator account for Audited Staff Test (staff.test.1793093787020@contactreachmedia.rw)",
+      "entityType": "admin_user",
+      "entityId": "adm-1793093787025-3e31"
     }
   ],
   "customers": [
@@ -118798,13 +118788,13 @@
       ],
       "lastSyncStats": {
         "uploadedCount": 0,
-        "updatedCount": 0,
-        "totalCjProducts": 0,
-        "timestamp": "2026-10-29T08:43:04.965Z",
+        "updatedCount": 13,
+        "totalCjProducts": 13,
+        "timestamp": "2026-10-29T07:22:56.139Z",
         "status": "success",
-        "message": "Real-time CJ sync pulled 0 items (0 newly added, 0 updated). Live CJ catalog: 1.68M items."
+        "message": "Successfully synchronized 13 CJ dropshipping products (0 newly uploaded, 13 updated)."
       },
-      "lastSyncAt": "2026-10-29T08:43:04.965Z",
+      "lastSyncAt": "2026-10-29T07:22:56.139Z",
       "requireAdminApproval": false,
       "isConnected": true,
       "connectionStatus": "connected",
