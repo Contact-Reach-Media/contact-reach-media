@@ -205,7 +205,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   };
 
   const handleShareWhatsApp = () => {
-    const text = `Reba iki gicuruzwa kuri Nihemart / ContactReach Market: ${product.name} - ${formatCurrencyPrice(unitPrice, currentCurrency, exchangeRates).primary}\n${productShareUrl}`;
+    const text = `Reba iki gicuruzwa kuri ContactReach Market: ${product.name} - ${formatCurrencyPrice(unitPrice, currentCurrency, exchangeRates).primary}\n${productShareUrl}`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
@@ -267,7 +267,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     { label: 'Shade / Finish', value: selectedVariations['Color'] || 'Standard Finish' },
     { label: 'place of origin', value: product.alibabaSupplierLocation || 'China (Zhejiang / Guangdong)' },
     { label: 'model number', value: product.sku || `NHM-${product.id.slice(-6).toUpperCase()}` },
-    { label: 'brand name', value: product.brand || 'Nihemart Verified' }
+    { label: 'brand name', value: product.brand || 'ContactReach Market Verified' }
   ];
 
   const packageDimensions = product.alibabaDimensionsCm || { length: 22, width: 8, height: 2 };
@@ -280,7 +280,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         {/* Sticky Header with Breadcrumb & Share */}
         <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md px-6 py-3.5 border-b border-slate-100 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-xs text-slate-500 overflow-x-auto whitespace-nowrap">
-            <span className="text-slate-400">Nihemart</span>
+            <span className="text-slate-400">ContactReach Market</span>
             <span>&gt;</span>
             <span className="font-semibold text-slate-700 capitalize">{product.category}</span>
             <span>&gt;</span>
@@ -634,7 +634,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 <div className="flex items-center justify-between text-emerald-900 font-bold">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    Alibaba & Nihemart Order Protection
+                    Alibaba & ContactReach Market Order Protection
                   </span>
                   <span className="text-[10px] text-emerald-700 font-mono">100% Guaranteed</span>
                 </div>

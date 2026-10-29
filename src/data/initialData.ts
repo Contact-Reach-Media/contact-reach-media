@@ -144,6 +144,13 @@ export const initialSettings: AppSettings = {
       "message": "Ready to import and synchronize Alibaba catalog"
     }
   },
+  "dsersConfig": {
+    "hasCredentials": false,
+    "isConnected": false,
+    "connectionStatus": "unconfigured",
+    "autoFulfillApprovedOrders": false,
+    "defaultShippingCarrier": "AliExpress Standard Shipping"
+  },
   "maintenanceUpdatedAt": "2026-10-27T10:06:55.907Z"
 };
 

@@ -162,7 +162,7 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-slate-900 tracking-tight flex items-center gap-1">
-                  Nihe Mart
+                  ContactReach Market
                   <span className="text-[9px] font-bold text-[#f95700] bg-orange-50 px-1 py-0.2 rounded border border-orange-200">
                     MARKET
                   </span>
@@ -366,14 +366,14 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                 }}
                 className="text-[#f95700] hover:text-orange-700 font-black text-xs inline-flex items-center gap-1 cursor-pointer"
               >
-                <span>Gurisha kuri Nihemart</span>
+                <span>Gurisha kuri ContactReach Market</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Authentic Nihemart Banner Matching Image 5 */}
+        {/* RIGHT COLUMN: Authentic ContactReach Market Banner Matching Image 5 */}
         <div className="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-[#ff6000] via-[#f95700] to-[#ea4e00] text-white relative overflow-hidden select-none">
           {/* Circular SVG Rings */}
           <div className="absolute inset-0 pointer-events-none opacity-20">
@@ -387,8 +387,8 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
 
           {/* Heading */}
           <div className="relative z-10 text-center">
-            <h3 className="text-3xl font-black text-white tracking-tight">
-              Nihemart
+            <h3 className="text-2xl font-black text-white tracking-tight">
+              ContactReach Market
             </h3>
             <p className="text-orange-100 text-[11px] font-semibold">
               ContactReach Market · Guhaha Byoroshye
@@ -399,7 +399,7 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
           <div className="relative z-10 flex-1 flex items-center justify-center my-3">
             <img
               src="/assets/aistudio/image_027b1349.png"
-              alt="Nihemart Customer"
+              alt="ContactReach Market Customer"
               className="w-56 h-64 object-cover object-right rounded-2xl shadow-lg"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80';

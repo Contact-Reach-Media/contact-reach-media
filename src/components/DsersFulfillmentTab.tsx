@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Globe, Check, CheckCircle2, XCircle, AlertCircle, Truck, ExternalLink,
   Download, Edit, Search, Filter, Copy, Plus, Clock, ArrowUpRight,
   ShoppingBag, Package, RefreshCw, FileSpreadsheet, ChevronRight, X,
-  AlertTriangle, ShieldCheck, Send, Info, Eye
+  AlertTriangle, ShieldCheck, Send, Info, Eye, KeyRound, Lock, Zap
 } from 'lucide-react';
-import { Product, Order, Category } from '../types.ts';
+import { Product, Order, Category, DsersConfig } from '../types.ts';
 import { api } from '../services/api.ts';
 import {
   exportProductsToDsersProductTemplate,
@@ -17,7 +17,7 @@ interface DsersFulfillmentTabProps {
   orders: Order[];
   categories: Category[];
   onRefreshData: () => Promise<void>;
-  showToast: (msg: string) => void;
+  showToast: (msg: string, type?: 'success' | 'error') => void;
   onOpenProductEdit?: (product: Product) => void;
 }
 
@@ -69,6 +69,40 @@ export const DsersFulfillmentTab: React.FC<DsersFulfillmentTabProps> = ({
 
   // Quick order detail view
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+
+  // DSers API Gateway Connection State
+  const [dsersConfig, setDsersConfig] = useState<DsersConfig | null>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [dsersApiKeyInput, setDsersApiKeyInput] = useState('');
+  const [testingConnection, setTestingConnection] = useState(false);
+
+  useEffect(() => {
+    api.adminGetDsersConfig().then(cfg => {
+      if (cfg) {
+        setDsersConfig(cfg);
+        setDsersApiKeyInput(cfg.apiKey || '');
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleTestAndSaveDsers = async () => {
+    setTestingConnection(true);
+    try {
+      const res = await api.adminTestDsersConnection(dsersApiKeyInput.trim());
+      if (res.success && res.status === 'connected') {
+        showToast(res.message, 'success');
+        if (res.config) setDsersConfig(res.config);
+        setShowConfigModal(false);
+      } else {
+        showToast(res.message || 'Connection test failed. Enter a valid DSers API token.', 'error');
+        if (res.config) setDsersConfig(res.config);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error connecting to DSers API', 'error');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
 
   // -------------------------------------------------------------
   // COMPUTED STATS
@@ -403,6 +437,43 @@ export const DsersFulfillmentTab: React.FC<DsersFulfillmentTabProps> = ({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Live DSers Official API Connection Status Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            dsersConfig?.isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+          }`}>
+            <Globe className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-slate-900 text-sm">DSers & AliExpress API Gateway</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                dsersConfig?.isConnected
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {dsersConfig?.isConnected ? '● Connected & Verified' : '○ Disconnected / Token Required'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {dsersConfig?.isConnected
+                ? `Official DSers API connected (${dsersConfig.apiKey || 'Verified'}). Orders approved by administrators can be automatically routed for supplier fulfillment.`
+                : 'No active API token connected. Orders must be exported via CSV or connect your DSers API credentials below.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowConfigModal(true)}
+          className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs whitespace-nowrap"
+        >
+          <KeyRound className="w-3.5 h-3.5 text-orange-400" />
+          <span>{dsersConfig?.isConnected ? 'Manage API Key' : 'Connect DSers API'}</span>
+        </button>
       </div>
 
       {/* Workflow Navigation Sub-tabs */}
@@ -1525,6 +1596,93 @@ export const DsersFulfillmentTab: React.FC<DsersFulfillmentTabProps> = ({
                 className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold cursor-pointer"
               >
                 Enter Tracking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DSers API Connection & Token Configuration Modal */}
+      {showConfigModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-[#FF6000]">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">DSers API Configuration</h3>
+                  <p className="text-xs text-slate-500">Official AliExpress dropshipping credentials</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 py-4 text-xs">
+              <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200/80">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-bold text-slate-700">Live Gateway Status:</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                    dsersConfig?.isConnected ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {dsersConfig?.isConnected ? '● Connected' : '○ Disconnected'}
+                  </span>
+                </div>
+                <p className="text-slate-500 text-[11px]">
+                  DSers API tokens are obtained from your DSers account portal: <code className="font-mono text-slate-700">Settings &gt; Account &gt; API Access</code>.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  DSers API Token / Key
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={dsersApiKeyInput}
+                    onChange={(e) => setDsersApiKeyInput(e.target.value)}
+                    placeholder="Enter DSers API Token (e.g. ds_live_...)"
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-[#FF6000] focus:border-transparent outline-hidden pr-10"
+                  />
+                  <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Credentials are encrypted and stored safely on the backend server.
+                </p>
+              </div>
+
+              <div className="bg-amber-50 rounded-2xl p-3 border border-amber-200 flex items-start gap-2.5 text-amber-900">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-[11px] leading-relaxed">
+                  <strong>Verification Requirement:</strong> The system will never show a supplier as connected unless credentials have been verified successfully. If you do not have an API token, you can still export approved orders into the official DSers CSV template.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 font-bold rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleTestAndSaveDsers}
+                disabled={testingConnection}
+                className="px-4 py-2 bg-[#FF6000] hover:bg-orange-600 text-white font-bold rounded-xl flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-colors shadow-2xs"
+              >
+                <Zap className={`w-4 h-4 ${testingConnection ? 'animate-spin' : ''}`} />
+                <span>{testingConnection ? 'Verifying...' : 'Test & Verify Connection'}</span>
               </button>
             </div>
           </div>

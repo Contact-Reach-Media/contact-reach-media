@@ -71,6 +71,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(getStoredAdminUser());
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
 
   // Toast feedback
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -884,17 +885,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Real-time synchronization: Firestore snapshot listeners + silent interval polling
+  // Real-time synchronization: Server-Sent Events (SSE) database stream + Firestore listeners + silent fallback polling
   useEffect(() => {
     // Initial fetch
     fetchAllData(false);
 
-    // Background interval sync every 4 seconds to guarantee freshness across all 14 panels
+    // 1. High-Performance Server-Sent Events (SSE) Live Database Stream
+    let eventSource: EventSource | null = null;
+    try {
+      const token = api.getAdminToken() || '';
+      eventSource = new EventSource(`/api/admin/realtime?token=${encodeURIComponent(token)}`);
+
+      eventSource.addEventListener('open', () => {
+        setIsRealtimeConnected(true);
+      });
+
+      eventSource.addEventListener('db_update', (event) => {
+        setIsRealtimeConnected(true);
+        setLastSyncTime(new Date());
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed?.stats) {
+            setStats(parsed.stats);
+          }
+        } catch {}
+        // Refresh live panels silently on real-time event
+        fetchAllData(true);
+      });
+
+      eventSource.onerror = () => {
+        setIsRealtimeConnected(false);
+      };
+    } catch (err) {
+      console.warn('[SSE] EventSource listener init notice:', err);
+    }
+
+    // 2. Background interval sync every 4 seconds to guarantee freshness
     const syncInterval = setInterval(() => {
       fetchAllData(true);
     }, 4000);
 
-    // Live Firestore onSnapshot listeners for instant push updates (only if Firestore is active and provisioned)
+    // 3. Live Firestore onSnapshot listeners for instant push updates (if Firestore is active)
     const unsubs: (() => void)[] = [];
     if (isFirestoreConnected()) {
       try {
@@ -993,6 +1024,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     return () => {
+      if (eventSource) {
+        try { eventSource.close(); } catch {}
+      }
       clearInterval(syncInterval);
       unsubs.forEach(unsub => {
         try { unsub(); } catch {}
@@ -2210,10 +2244,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="hidden sm:inline">Firebase Sync</span>
           </button>
 
-          {/* Live Sync Status Indicator */}
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px] font-bold text-emerald-400 shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Live Sync Active</span>
+          {/* Live Real-Time Database Sync Status Indicator */}
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px] font-bold shadow-2xs">
+            <span className={`w-2 h-2 rounded-full ${isRealtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span className={isRealtimeConnected ? 'text-emerald-400' : 'text-amber-300'}>
+              {isRealtimeConnected ? 'Live Real-Time Stream' : 'Live Sync Active'}
+            </span>
             <span className="text-[10px] text-slate-400 font-mono hidden xl:inline">
               · {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
@@ -3308,14 +3344,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   {p.stock} {p.unit || 'units'}
                                 </button>
                               </td>
-                              <td className="py-3 px-3">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                  p.status === 'Available' ? 'bg-emerald-100 text-emerald-800' : p.status === 'Out of Stock' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-600'
-                                }`}>
-                                  {p.status}
-                                </span>
+                              <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                                <select
+                                  value={p.status}
+                                  onChange={async (e) => {
+                                    const newStatus = e.target.value as ProductStatus;
+                                    try {
+                                      await api.adminUpdateProductStatus(p.id, newStatus);
+                                      showToast(`Product "${p.name}" updated to "${newStatus}"!`);
+                                      fetchAllData(true);
+                                      onRefreshPublicData();
+                                    } catch (err: any) {
+                                      showToast(err.message || 'Failed to update status', 'error');
+                                    }
+                                  }}
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold cursor-pointer border transition-colors outline-hidden ${
+                                    p.status === 'Available'
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                      : p.status === 'Out of Stock'
+                                      ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                                  }`}
+                                  title="Click to change live status directly"
+                                >
+                                  <option value="Available">Available (Live)</option>
+                                  <option value="Hidden">Hidden (Draft)</option>
+                                  <option value="Out of Stock">Out of Stock</option>
+                                </select>
                               </td>
                               <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                {/* Quick Publish / Unpublish Toggle */}
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      const res = await api.adminToggleProductPublish(p.id);
+                                      showToast(res.message);
+                                      fetchAllData(true);
+                                      onRefreshPublicData();
+                                    } catch (err: any) {
+                                      showToast(err.message || 'Failed to toggle publish status', 'error');
+                                    }
+                                  }}
+                                  title={p.status === 'Available' ? "Unpublish product (hide from buyers)" : "Publish product (show on storefront)"}
+                                  className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                                    p.status === 'Available'
+                                      ? 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
+                                      : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {p.status === 'Available' ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenManageImages(p)}

@@ -167,7 +167,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center p-1.5">
                   <img
                     src="/logo.png"
-                    alt="Nihemart"
+                    alt="ContactReach Market"
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       (e.target as HTMLElement).style.display = 'none';
@@ -178,7 +178,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-1">
-                  Nihe Mart
+                  ContactReach Market
                   <span className="text-[10px] font-bold text-[#f95700] bg-orange-50 px-1.5 py-0.2 rounded border border-orange-200">
                     MARKET
                   </span>
@@ -383,14 +383,14 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 }}
                 className="text-[#f95700] hover:text-orange-700 font-black text-xs inline-flex items-center gap-1 cursor-pointer"
               >
-                <span>Gurisha kuri Nihemart</span>
+                <span>Gurisha kuri ContactReach Market</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Authentic Nihemart Vibrant Banner with Shopper & Sales Card */}
+        {/* RIGHT COLUMN: Authentic ContactReach Market Vibrant Banner with Shopper & Sales Card */}
         <div className="hidden lg:relative lg:flex flex-col justify-between p-10 bg-gradient-to-br from-[#ff6000] via-[#f95700] to-[#ea4e00] text-white relative overflow-hidden select-none">
           {/* Subtle concentric circular background wave rings matching Image 5 */}
           <div className="absolute inset-0 pointer-events-none opacity-20">
@@ -404,10 +404,10 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             </svg>
           </div>
 
-          {/* Large Bold Brand Header: Nihemart */}
+          {/* Large Bold Brand Header: ContactReach Market */}
           <div className="relative z-10 text-center pt-2">
-            <h2 className="text-4xl xl:text-5xl font-black text-white tracking-tight drop-shadow-md">
-              Nihemart
+            <h2 className="text-3xl xl:text-4xl font-black text-white tracking-tight drop-shadow-md">
+              ContactReach Market
             </h2>
             <p className="text-orange-100 text-xs font-semibold mt-1">
               ContactReach Market · Guhaha Byoroshye
@@ -420,7 +420,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               {/* Fallback image + real uploaded art */}
               <img
                 src="/assets/aistudio/image_027b1349.png"
-                alt="Nihemart Customer"
+                alt="ContactReach Market Customer"
                 className="w-full h-full object-cover object-right rounded-3xl shadow-xl shadow-black/15"
                 onError={(e) => {
                   // Fallback to high-resolution photo of smiling African customer with shopping bag

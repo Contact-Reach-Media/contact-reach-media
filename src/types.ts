@@ -194,6 +194,9 @@ export interface OrderItem {
   imageUrl: string;
   variation?: string;
   sku?: string;
+  shopName?: string;
+  size?: string;
+  color?: string;
   aliExpressUrl?: string;
   supplierVariant?: string;
   supplierSku?: string;
@@ -354,6 +357,24 @@ export interface AppSettings {
   googleSheetConfig?: GoogleSheetSyncConfig;
   // Alibaba Dropshipping & Wholesale Integration
   alibabaConfig?: AlibabaConfig;
+  // DSers & AliExpress Supplier Fulfillment Integration
+  dsersConfig?: DsersConfig;
+}
+
+export interface DsersConfig {
+  apiKey?: string;
+  hasCredentials?: boolean;
+  apiSecret?: string;
+  accessToken?: string;
+  autoFulfillApprovedOrders?: boolean;
+  defaultShippingCarrier?: string;
+  isConnected?: boolean;
+  connectionStatus?: 'connected' | 'disconnected' | 'error' | 'unconfigured';
+  connectedAt?: string;
+  lastSyncAt?: string;
+  lastError?: string;
+  totalMappedProducts?: number;
+  totalFulfillments?: number;
 }
 
 export interface AlibabaConfig {

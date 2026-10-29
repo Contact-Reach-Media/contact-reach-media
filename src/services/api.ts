@@ -4,7 +4,7 @@ import {
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority,
   CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig,
-  AlibabaConfig, AlibabaShippingQuote
+  AlibabaConfig, AlibabaShippingQuote, DsersConfig
 } from '../types.ts';
 import { initialProducts, initialCategories, initialSettings, initialShops } from '../data/initialData.ts';
 import {
@@ -1464,6 +1464,31 @@ export const api = {
     };
   },
 
+  async adminUpdateProductStatus(id: string, status: ProductStatus): Promise<{ success: boolean; message: string; product: Product }> {
+    const res = await fetch(`/api/admin/products/${id}/status`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.product) {
+      throw new Error(parsed.json?.error || 'Failed to update product status');
+    }
+    return parsed.json;
+  },
+
+  async adminToggleProductPublish(id: string): Promise<{ success: boolean; message: string; product: Product }> {
+    const res = await fetch(`/api/admin/products/${id}/toggle-publish`, {
+      method: 'PATCH',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.product) {
+      throw new Error(parsed.json?.error || 'Failed to toggle product publish status');
+    }
+    return parsed.json;
+  },
+
   // Categories
   async adminAddCategory(category: Partial<Category>): Promise<Category> {
     const cat: Category = {
@@ -2195,7 +2220,7 @@ export const api = {
     const isEmail = rawId.includes('@');
     const fallbackUser: CustomerUser = {
       id: `cust-loc-${Date.now()}`,
-      name: payload.name.trim() || (isEmail ? rawId.split('@')[0] : 'Umuguzi wa Nihemart'),
+      name: payload.name.trim() || (isEmail ? rawId.split('@')[0] : 'Umuguzi wa ContactReach Market'),
       email: isEmail ? rawId : undefined,
       phone: !isEmail ? rawId : '',
       createdAt: new Date().toISOString(),
@@ -2346,6 +2371,19 @@ export const api = {
   },
 
   // Admin Team & Roles Management
+  async adminGetMe(): Promise<AdminUser | null> {
+    try {
+      const res = await fetch('/api/admin/me', {
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<{ user: AdminUser | null }>(res);
+      if (res.ok && parsed.isJson && parsed.json?.user) {
+        return parsed.json.user;
+      }
+    } catch {}
+    return getStoredAdminUser();
+  },
+
   async adminGetUsers(): Promise<AdminUser[]> {
     const res = await fetch('/api/admin/users', {
       headers: getAuthHeaders()
@@ -3476,6 +3514,66 @@ export const api = {
     return parsed.json;
   },
 
+  // DSers & AliExpress Supplier Fulfillment Integration
+  async adminGetDsersConfig(): Promise<DsersConfig> {
+    try {
+      const res = await fetch('/api/admin/dsers/config', {
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<DsersConfig>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+
+    try {
+      const settings = await api.getSettings();
+      if (settings?.dsersConfig) return settings.dsersConfig;
+    } catch {}
+
+    return {
+      hasCredentials: false,
+      isConnected: false,
+      connectionStatus: 'unconfigured',
+      autoFulfillApprovedOrders: false,
+      defaultShippingCarrier: 'AliExpress Standard Shipping'
+    };
+  },
+
+  async adminUpdateDsersConfig(payload: Partial<DsersConfig>): Promise<{ success: boolean; message: string; config: DsersConfig }> {
+    const res = await fetch('/api/admin/dsers/config', {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.config) {
+      throw new Error(parsed.json?.error || 'Failed to update DSers configuration');
+    }
+    return parsed.json;
+  },
+
+  async adminTestDsersConnection(apiKey?: string): Promise<{ success: boolean; status: string; message: string; config?: DsersConfig }> {
+    try {
+      const res = await fetch('/api/admin/dsers/test-connection', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ apiKey })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+      throw new Error(`Connection test failed (HTTP ${res.status})`);
+    } catch (err: any) {
+      return {
+        success: false,
+        status: 'disconnected',
+        message: err.message || 'Network error connecting to DSers API.'
+      };
+    }
+  },
+
   // Alibaba B2B & Wholesale Integration (Official Kigali Rwanda Logistics & 10% Markup)
   async adminGetAlibabaConfig(): Promise<AlibabaConfig> {
     try {
@@ -3783,6 +3881,28 @@ export const api = {
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson || !parsed.json) {
       throw new Error(parsed.json?.error || 'Failed to import 300 Alibaba products');
+    }
+    return parsed.json;
+  },
+
+  async adminImport1000AlibabaProducts(payload?: { autoPublish?: boolean; category?: string }): Promise<{
+    success: boolean;
+    message: string;
+    uploadedCount: number;
+    updatedCount: number;
+    totalAlibaba: number;
+    pendingReview: number;
+    approvedLive: number;
+    stagedForReview: boolean;
+  }> {
+    const res = await fetch('/api/admin/alibaba/import-1000', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload || {})
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to import 1,000 Alibaba products');
     }
     return parsed.json;
   },
