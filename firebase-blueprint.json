@@ -468,6 +468,14 @@
       "schema": "AdminProfile",
       "description": "Administrator access control and role assignments"
     },
+    "/customers/{customerId}": {
+      "schema": "User",
+      "description": "Customer registered user profile and address details"
+    },
+    "/chats/{chatId}": {
+      "schema": "CustomerMessage",
+      "description": "Live chat and customer service conversations"
+    },
     "/messages/{messageId}": {
       "schema": "CustomerMessage",
       "description": "Contact form submissions and customer inquiries"

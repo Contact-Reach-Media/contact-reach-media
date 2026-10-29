@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
@@ -24,7 +24,7 @@ import {
   setLogLevel
 } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
-import firebaseConfig from '../../firebase-applet-config.json';
+import rawFirebaseConfig from '../../firebase-applet-config.json';
 import {
   Product,
   Category,
@@ -40,46 +40,41 @@ import {
   CustomerUser
 } from '../types.ts';
 
-// Primary Firebase App (ceremonial-arbor-62w8r)
-export const primaryConfig = {
-  apiKey: firebaseConfig.apiKey || "AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M",
-  authDomain: firebaseConfig.authDomain || "ceremonial-arbor-62w8r.firebaseapp.com",
-  projectId: firebaseConfig.projectId || "ceremonial-arbor-62w8r",
-  storageBucket: firebaseConfig.storageBucket || "ceremonial-arbor-62w8r.firebasestorage.app",
-  messagingSenderId: firebaseConfig.messagingSenderId || "214287806863",
-  appId: firebaseConfig.appId || "1:214287806863:web:264915cb1a1106e86b9bfa"
+// Your web app's Firebase configuration (marketdatabase-1090b)
+export const firebaseConfig = {
+  apiKey: "AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM",
+  authDomain: "marketdatabase-1090b.firebaseapp.com",
+  projectId: "marketdatabase-1090b",
+  storageBucket: "marketdatabase-1090b.firebasestorage.app",
+  messagingSenderId: "213406612645",
+  appId: "1:213406612645:web:d3de2687e1d492c6ee214c",
+  measurementId: "G-3TP55B57FG"
 };
 
-// Secondary Firebase App (contactreachmarket)
-export const secondaryConfig = (firebaseConfig as any).secondaryConfig || {
-  apiKey: "AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU",
-  authDomain: "contactreachmarket.firebaseapp.com",
-  projectId: "contactreachmarket",
-  storageBucket: "contactreachmarket.firebasestorage.app",
-  messagingSenderId: "462974891704",
-  appId: "1:462974891704:web:525256b60c2e4262b7264d",
-  measurementId: "G-B4XV4ZWX1D"
-};
+// Aliases for compatibility
+export const primaryConfig = firebaseConfig;
+export const secondaryConfig = firebaseConfig;
 
-// Initialize both Firebase Apps simultaneously
-export const app1 = initializeApp(primaryConfig, 'app-ceremonial-arbor');
-export const app2 = initializeApp(secondaryConfig, 'app-contactreachmarket');
-export const app = app1; // Primary default alias
+// Initialize Firebase App
+export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+export const app1 = app;
+export const app2 = app;
 
-// Initialize both Firestore Databases simultaneously
-export const db1 = getFirestore(app1);
-export const db2 = getFirestore(app2);
-export const db = db1; // Primary default alias
+// Initialize Firestore
+export const db = getFirestore(app);
+export const db1 = db;
+export const db2 = db;
 
-export const auth = getAuth(app1);
-export const auth2 = getAuth(app2);
+// Initialize Auth
+export const auth = getAuth(app);
+export const auth2 = auth;
 
-// Initialize Firebase Analytics if supported in the current environment
+// Initialize Firebase Analytics safely if supported
 export let analytics: any = null;
 if (typeof window !== 'undefined') {
   isSupported().then((supported) => {
     if (supported) {
-      analytics = getAnalytics(app2);
+      analytics = getAnalytics(app);
     }
   }).catch(() => null);
 }
@@ -214,6 +209,19 @@ export async function loginWithGoogle(requestWorkspaceAccess = false): Promise<U
     const userWithToken = Object.assign(result.user, { accessToken: cachedAccessToken || undefined });
     return userWithToken;
   } catch (error: any) {
+    if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
+      const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
+      const detailedErr: any = new Error(
+        `Firebase Error (auth/unauthorized-domain): This domain (${currentDomain}) is not authorized in Firebase Authentication for project 'marketdatabase-1090b'. Please add '${currentDomain}' to Firebase Console > Authentication > Settings > Authorized domains.`
+      );
+      detailedErr.code = 'auth/unauthorized-domain';
+      detailedErr.domain = currentDomain;
+      detailedErr.projectId = 'marketdatabase-1090b';
+      detailedErr.settingsUrl = 'https://console.firebase.google.com/project/marketdatabase-1090b/authentication/settings';
+      console.warn(`[Firebase Auth] ${detailedErr.message}\nConfigure at: ${detailedErr.settingsUrl}`);
+      throw detailedErr;
+    }
+
     if (requestWorkspaceAccess) {
       console.warn('[Firebase Auth] Full workspace sign-in notice, retrying with core drive.file and spreadsheets scopes:', error?.message);
       try {
@@ -228,6 +236,17 @@ export async function loginWithGoogle(requestWorkspaceAccess = false): Promise<U
         }
         return Object.assign(coreResult.user, { accessToken: cachedAccessToken || undefined });
       } catch (coreErr: any) {
+        if (coreErr?.code === 'auth/unauthorized-domain' || coreErr?.message?.includes('unauthorized-domain')) {
+          const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
+          const detailedErr: any = new Error(
+            `Firebase Error (auth/unauthorized-domain): This domain (${currentDomain}) is not authorized in Firebase Authentication for project 'marketdatabase-1090b'. Please add '${currentDomain}' to Firebase Console > Authentication > Settings > Authorized domains.`
+          );
+          detailedErr.code = 'auth/unauthorized-domain';
+          detailedErr.domain = currentDomain;
+          detailedErr.projectId = 'marketdatabase-1090b';
+          detailedErr.settingsUrl = 'https://console.firebase.google.com/project/marketdatabase-1090b/authentication/settings';
+          throw detailedErr;
+        }
         console.error('[Firebase Auth] Core workspace authorization failed:', coreErr);
         throw coreErr;
       }
@@ -854,5 +873,120 @@ export async function updateSupplierApplicationInFirestore(appData: any): Promis
     handleFirestoreError(error, OperationType.UPDATE, docPath);
   }
 }
+
+// -------------------------------------------------------------
+// MESSAGES & CHATS: STORE, EDIT, AND DELETE
+// -------------------------------------------------------------
+
+export async function getMessagesFromFirestore(): Promise<AdminMessage[]> {
+  try {
+    const snap = await getDocs(collection(db, 'messages'));
+    const items: AdminMessage[] = [];
+    snap.forEach(d => {
+      items.push({ ...(d.data() as AdminMessage), id: d.id });
+    });
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+export async function updateMessageInFirestore(msg: Partial<AdminMessage> & { id: string }): Promise<void> {
+  const docPath = `messages/${msg.id}`;
+  try {
+    await setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg), { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, docPath);
+  }
+}
+
+export async function deleteMessageFromFirestore(messageId: string): Promise<void> {
+  const docPath = `messages/${messageId}`;
+  try {
+    await deleteDoc(doc(db, 'messages', messageId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, docPath);
+  }
+}
+
+// -------------------------------------------------------------
+// USERS & CUSTOMERS: STORE, EDIT, AND DELETE
+// -------------------------------------------------------------
+
+export async function getUsersFromFirestore(): Promise<any[]> {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    const items: any[] = [];
+    snap.forEach(d => {
+      items.push({ ...d.data(), id: d.id });
+    });
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+export async function getCustomersFromFirestore(): Promise<CustomerUser[]> {
+  try {
+    const snap = await getDocs(collection(db, 'customers'));
+    const items: CustomerUser[] = [];
+    snap.forEach(d => {
+      items.push({ ...(d.data() as CustomerUser), id: d.id });
+    });
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+export async function saveUserToFirestore(user: any): Promise<void> {
+  if (!user?.id) return;
+  const docPath = `users/${user.id}`;
+  try {
+    await setDoc(doc(db, 'users', user.id), cleanForFirestore(user), { merge: true });
+    // Also mirror to customers collection
+    await setDoc(doc(db, 'customers', user.id), cleanForFirestore(user), { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, docPath);
+  }
+}
+
+export async function deleteUserFromFirestore(userId: string): Promise<void> {
+  try {
+    await Promise.allSettled([
+      deleteDoc(doc(db, 'users', userId)),
+      deleteDoc(doc(db, 'customers', userId))
+    ]);
+  } catch {}
+}
+
+export async function deleteCustomerFromFirestore(customerId: string): Promise<void> {
+  await deleteUserFromFirestore(customerId);
+}
+
+export async function deleteOrderFromFirestore(orderId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'orders', orderId));
+  } catch {}
+}
+
+export async function deleteCategoryFromFirestore(categoryId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'categories', categoryId));
+  } catch {}
+}
+
+export async function deleteShopFromFirestore(shopId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'shops', shopId));
+  } catch {}
+}
+
+export async function deleteReviewFromFirestore(reviewId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'reviews', reviewId));
+  } catch {}
+}
+
 
 

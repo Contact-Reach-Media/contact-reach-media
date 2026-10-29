@@ -20,11 +20,16 @@ import {
   submitPaymentToFirestore,
   submitSupplierApplicationToFirestore,
   submitMessageToFirestore,
+  updateMessageInFirestore,
+  deleteMessageFromFirestore,
+  getMessagesFromFirestore,
   submitProblemReportToFirestore,
   submitReviewToFirestore,
   getSettingsFromFirestore,
   saveSettingsToFirestore,
   saveCustomerToFirestore,
+  deleteCustomerFromFirestore,
+  deleteOrderFromFirestore,
   updateOrderInFirestore,
   updatePaymentInFirestore,
   saveSupplierPayoutToFirestore,
@@ -1626,10 +1631,17 @@ export const api = {
       });
       const parsed = await safeParseResponse<AdminMessage>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await updateMessageInFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
     } catch {}
-    return { id, ...data } as AdminMessage;
+    const fallbackMsg = { id, ...data } as AdminMessage;
+    try {
+      await updateMessageInFirestore(fallbackMsg);
+    } catch {}
+    return fallbackMsg;
   },
 
   async adminDeleteMessage(id: string): Promise<void> {
@@ -1638,6 +1650,9 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
+    } catch {}
+    try {
+      await deleteMessageFromFirestore(id);
     } catch {}
   },
 
@@ -1746,6 +1761,73 @@ export const api = {
       }
     } catch {}
     return null;
+  },
+
+  async adminUpdateCustomer(id: string, data: Partial<CustomerUser>): Promise<CustomerUser> {
+    try {
+      const res = await fetch(`/api/admin/buyers/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data)
+      });
+      const parsed = await safeParseResponse<{ message: string; customer: CustomerUser }>(res);
+      if (res.ok && parsed.isJson && parsed.json?.customer) {
+        try {
+          await saveCustomerToFirestore(parsed.json.customer);
+        } catch {}
+        return parsed.json.customer;
+      }
+    } catch {}
+    const updated = { id, ...data } as CustomerUser;
+    try {
+      await saveCustomerToFirestore(updated);
+    } catch {}
+    return updated;
+  },
+
+  async adminDeleteCustomer(id: string): Promise<void> {
+    try {
+      await fetch(`/api/admin/buyers/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {}
+    try {
+      await deleteCustomerFromFirestore(id);
+    } catch {}
+  },
+
+  async adminCreateCustomer(data: { name: string; phone: string; email?: string; deliveryAddress?: string }): Promise<CustomerUser> {
+    try {
+      const res = await fetch('/api/admin/buyers', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data)
+      });
+      const parsed = await safeParseResponse<{ message: string; customer: CustomerUser }>(res);
+      if (res.ok && parsed.isJson && parsed.json?.customer) {
+        try {
+          await saveCustomerToFirestore(parsed.json.customer);
+        } catch {}
+        return parsed.json.customer;
+      }
+    } catch {}
+    const created: CustomerUser = {
+      id: `cust-${Date.now()}`,
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      deliveryAddress: data.deliveryAddress,
+      createdAt: new Date().toISOString(),
+      totalOrders: 0,
+      totalSpent: 0,
+      status: 'Active',
+      accountType: 'buyer'
+    };
+    try {
+      await saveCustomerToFirestore(created);
+    } catch {}
+    return created;
   },
 
   // Audit Logs
@@ -2003,6 +2085,52 @@ export const api = {
       await saveCustomerToFirestore(buyerUser);
     } catch {}
 
+    return { user: buyerUser, token: fallbackToken };
+  },
+
+  // Buyer Phone Number / MoMo Authentication
+  async buyerPhoneLogin(phone: string, name?: string, email?: string): Promise<{ user: CustomerUser; token: string }> {
+    const cleanPhone = phone.trim();
+    try {
+      const res = await fetch('/api/buyers/phone-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, name, email })
+      });
+      const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
+      if (res.ok && parsed.isJson && parsed.json && !parsed.json.error) {
+        setBuyerToken(parsed.json.token, parsed.json.user);
+        return parsed.json;
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (fetchErr: any) {
+      if (fetchErr.message && !fetchErr.message.includes('Service temporarily') && !fetchErr.message.includes('HTML') && !fetchErr.message.includes('fetch')) {
+        throw fetchErr;
+      }
+    }
+
+    // Client-side fallback persistence
+    const buyerUser: CustomerUser = {
+      id: `cust-p-${Date.now()}`,
+      name: name?.trim() || `Buyer (${cleanPhone.slice(-4)})`,
+      phone: cleanPhone,
+      email: email?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      totalOrders: 0,
+      totalSpent: 0,
+      status: 'Active',
+      accountType: 'buyer',
+      isRegisteredBuyer: true,
+      lastLogin: new Date().toISOString(),
+      authProvider: 'phone'
+    };
+    const fallbackToken = `buyer_p_local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    setBuyerToken(fallbackToken, buyerUser);
+    try {
+      await saveCustomerToFirestore(buyerUser);
+    } catch {}
     return { user: buyerUser, token: fallbackToken };
   },
 

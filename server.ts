@@ -467,25 +467,26 @@ async function initFirestoreIfProvisioned() {
     if (!fs.existsSync(fbConfigPath)) return;
     const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
 
-    // Database 1: ceremonial-arbor-62w8r
+    // Database 1 (Primary): marketdatabase-1090b
     const config1 = {
-      projectId: config.projectId || 'ceremonial-arbor-62w8r',
-      apiKey: config.apiKey || 'AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M',
-      authDomain: config.authDomain || 'ceremonial-arbor-62w8r.firebaseapp.com',
-      storageBucket: config.storageBucket || 'ceremonial-arbor-62w8r.firebasestorage.app',
-      messagingSenderId: config.messagingSenderId || '214287806863',
-      appId: config.appId || '1:214287806863:web:264915cb1a1106e86b9bfa'
+      projectId: config.projectId || 'marketdatabase-1090b',
+      apiKey: config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
+      authDomain: config.authDomain || 'marketdatabase-1090b.firebaseapp.com',
+      storageBucket: config.storageBucket || 'marketdatabase-1090b.firebasestorage.app',
+      messagingSenderId: config.messagingSenderId || '213406612645',
+      appId: config.appId || '1:213406612645:web:d3de2687e1d492c6ee214c',
+      measurementId: config.measurementId || 'G-3TP55B57FG'
     };
 
-    // Database 2: contactreachmarket
+    // Database 2: secondary config or primary fallback
     const config2 = config.secondaryConfig || {
-      projectId: 'contactreachmarket',
-      apiKey: 'AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU',
-      authDomain: 'contactreachmarket.firebaseapp.com',
-      storageBucket: 'contactreachmarket.firebasestorage.app',
-      messagingSenderId: '462974891704',
-      appId: '1:462974891704:web:525256b60c2e4262b7264d',
-      measurementId: 'G-B4XV4ZWX1D'
+      projectId: config.projectId || 'marketdatabase-1090b',
+      apiKey: config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
+      authDomain: config.authDomain || 'marketdatabase-1090b.firebaseapp.com',
+      storageBucket: config.storageBucket || 'marketdatabase-1090b.firebasestorage.app',
+      messagingSenderId: config.messagingSenderId || '213406612645',
+      appId: config.appId || '1:213406612645:web:d3de2687e1d492c6ee214c',
+      measurementId: config.measurementId || 'G-3TP55B57FG'
     };
 
     // Probe DB1
@@ -494,9 +495,9 @@ async function initFirestoreIfProvisioned() {
       const res1 = await fetch(probeUrl1, { signal: AbortSignal.timeout(3000) });
       if (res1.status !== 404 && (res1.ok || res1.status < 500)) {
         const apps = getFirebaseApps();
-        let app1 = apps.find(a => a.name === 'server-app-ceremonial-arbor' || a.options?.projectId === config1.projectId);
+        let app1 = apps.find(a => a.name === 'server-app-marketdatabase' || a.options?.projectId === config1.projectId);
         if (!app1) {
-          app1 = initFirebaseApp(config1, 'server-app-ceremonial-arbor');
+          app1 = initFirebaseApp(config1, 'server-app-marketdatabase');
         }
         firestoreDb1 = initFirestore(app1);
         firestore1Available = true;
@@ -512,20 +513,25 @@ async function initFirestoreIfProvisioned() {
 
     // Probe DB2
     try {
-      const probeUrl2 = `https://firestore.googleapis.com/v1/projects/${config2.projectId}/databases/(default)/documents?key=${config2.apiKey}&pageSize=1`;
-      const res2 = await fetch(probeUrl2, { signal: AbortSignal.timeout(3000) });
-      if (res2.status !== 404 && (res2.ok || res2.status < 500)) {
-        const apps = getFirebaseApps();
-        let app2 = apps.find(a => a.name === 'server-app-contactreachmarket' || a.options?.projectId === config2.projectId);
-        if (!app2) {
-          app2 = initFirebaseApp(config2, 'server-app-contactreachmarket');
+      if (config2.projectId !== config1.projectId) {
+        const probeUrl2 = `https://firestore.googleapis.com/v1/projects/${config2.projectId}/databases/(default)/documents?key=${config2.apiKey}&pageSize=1`;
+        const res2 = await fetch(probeUrl2, { signal: AbortSignal.timeout(3000) });
+        if (res2.status !== 404 && (res2.ok || res2.status < 500)) {
+          const apps = getFirebaseApps();
+          let app2 = apps.find(a => a.name === 'server-app-secondary' || a.options?.projectId === config2.projectId);
+          if (!app2) {
+            app2 = initFirebaseApp(config2, 'server-app-secondary');
+          }
+          firestoreDb2 = initFirestore(app2);
+          firestore2Available = true;
+          console.log(`[Firebase DB2] Connected to Firestore on ${config2.projectId}`);
+        } else {
+          firestore2Available = false;
+          firestoreDb2 = null;
         }
-        firestoreDb2 = initFirestore(app2);
-        firestore2Available = true;
-        console.log(`[Firebase DB2] Connected to Firestore on ${config2.projectId}`);
       } else {
-        firestore2Available = false;
-        firestoreDb2 = null;
+        firestoreDb2 = firestoreDb1;
+        firestore2Available = firestore1Available;
       }
     } catch {
       firestore2Available = false;
@@ -535,7 +541,7 @@ async function initFirestoreIfProvisioned() {
     firestoreDb = firestoreDb1 || firestoreDb2;
     firestoreAvailable = firestore1Available || firestore2Available;
     if (!firestoreAvailable) {
-      console.info(`[Firebase] Dual databases (ceremonial-arbor-62w8r & contactreachmarket) are configured and running in local resilient persistence mode.`);
+      console.info(`[Firebase] Database (marketdatabase-1090b) is configured and running in local resilient persistence mode.`);
     }
   } catch (fbErr: any) {
     console.info('[Firebase] Notice on server Firestore dual probe:', fbErr.message || fbErr);
@@ -2579,17 +2585,84 @@ app.post('/api/buyers/google-login', async (req: Request, res: Response) => {
   });
 });
 
-// Legacy password endpoints disabled in favor of exclusive Google authentication
+// 1b. Buyer Phone Number / Mobile Money Sign-In Endpoint
+app.post('/api/buyers/phone-login', async (req: Request, res: Response) => {
+  const { phone, name, email } = req.body;
+  if (!phone || typeof phone !== 'string' || !phone.trim()) {
+    return res.status(400).json({ error: 'Phone number is required for buyer login.' });
+  }
+
+  const cleanPhone = phone.trim().replace(/\s+/g, '');
+  const cleanEmail = email && typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+  const buyerName = name && typeof name === 'string' && name.trim() ? name.trim() : `Buyer (${cleanPhone.slice(-4)})`;
+
+  // Find existing buyer by phone or email
+  const existingBuyer = db.customers.find(c =>
+    (c.phone && c.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '')) ||
+    (cleanEmail && c.email && c.email.toLowerCase() === cleanEmail)
+  );
+
+  let buyer: CustomerUser;
+  if (existingBuyer) {
+    if (existingBuyer.status === 'Suspended') {
+      return res.status(403).json({ error: 'Your account is currently suspended. Please contact customer support.' });
+    }
+    existingBuyer.lastLogin = new Date().toISOString();
+    existingBuyer.accountType = 'buyer';
+    existingBuyer.isRegisteredBuyer = true;
+    if (name && (!existingBuyer.name || existingBuyer.name.startsWith('Buyer ('))) {
+      existingBuyer.name = name.trim();
+    }
+    if (cleanEmail && !existingBuyer.email) {
+      existingBuyer.email = cleanEmail;
+    }
+    buyer = existingBuyer;
+  } else {
+    buyer = {
+      id: `cust-p-${Date.now()}`,
+      name: buyerName,
+      phone: cleanPhone,
+      email: cleanEmail,
+      deliveryAddress: undefined,
+      createdAt: new Date().toISOString(),
+      totalOrders: 0,
+      totalSpent: 0,
+      status: 'Active',
+      accountType: 'buyer',
+      lastLogin: new Date().toISOString(),
+      authProvider: 'phone',
+      isRegisteredBuyer: true
+    };
+    db.customers.push(buyer);
+  }
+
+  const token = `buyer_p_${crypto.randomBytes(24).toString('hex')}`;
+  db.customerTokens.set(token, {
+    customerId: buyer.id,
+    expiresAt: Date.now() + 30 * 24 * 3600 * 1000 // 30 days
+  });
+
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', buyer.id, sanitizeBuyer(buyer));
+
+  res.json({
+    message: 'Welcome! Signed in successfully.',
+    token,
+    user: sanitizeBuyer(buyer)
+  });
+});
+
+// Legacy password endpoints disabled in favor of Google and MoMo phone authentication
 app.post('/api/buyers/register', (req: Request, res: Response) => {
   return res.status(400).json({
-    error: 'ContactReach Market now exclusively uses Google Sign-In for all buyer accounts. Please sign in with Google.',
+    error: 'ContactReach Market now uses Google and Phone Sign-In for all buyer accounts. Please sign in with Google or Phone.',
     useGoogleSignIn: true
   });
 });
 
 app.post('/api/buyers/login', (req: Request, res: Response) => {
   return res.status(400).json({
-    error: 'ContactReach Market now exclusively uses Google Sign-In for all buyer accounts. Please sign in with Google.',
+    error: 'ContactReach Market now uses Google and Phone Sign-In for all buyer accounts. Please sign in with Google or Phone.',
     useGoogleSignIn: true
   });
 });
@@ -4752,6 +4825,81 @@ app.put('/api/admin/buyers/:id/status', requireAdminAuth, requireRole(['owner', 
 
 app.put('/api/admin/buyers/:id/reset-password', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
   return res.json({ message: 'Buyer accounts now sign in exclusively via Google Authentication. Password management is handled securely by Google.' });
+});
+
+// Edit Buyer / User Details
+app.put('/api/admin/buyers/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const customer = db.customers.find(c => c.id === req.params.id);
+  if (!customer) return res.status(404).json({ error: 'Buyer record not found' });
+
+  const { name, email, phone, deliveryAddress, status } = req.body;
+  if (name && typeof name === 'string') customer.name = name.trim();
+  if (email !== undefined) customer.email = typeof email === 'string' ? email.trim() : undefined;
+  if (phone !== undefined) customer.phone = String(phone).trim();
+  if (deliveryAddress !== undefined) customer.deliveryAddress = typeof deliveryAddress === 'string' ? deliveryAddress.trim() : undefined;
+  if (status === 'Active' || status === 'Suspended') customer.status = status;
+
+  logAudit(admin, 'BUYER_UPDATED', `Updated details for buyer "${customer.name}" (${customer.id})`, 'buyer', customer.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', customer.id, sanitizeBuyer(customer));
+  saveToFirestoreAsync('users', customer.id, sanitizeBuyer(customer));
+
+  res.json({ message: 'Buyer profile updated successfully', customer: sanitizeBuyer(customer) });
+});
+
+// Delete Buyer / User Account
+app.delete('/api/admin/buyers/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.customers.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Buyer record not found' });
+
+  const removed = db.customers.splice(idx, 1)[0];
+
+  // Invalidate any active session tokens for this buyer
+  for (const [token, session] of db.customerTokens.entries()) {
+    if (session.customerId === removed.id) {
+      db.customerTokens.delete(token);
+    }
+  }
+
+  logAudit(admin, 'BUYER_DELETED', `Deleted customer/buyer account "${removed.name}" (${removed.phone || removed.email || removed.id})`, 'buyer', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('customers', removed.id);
+  deleteFromFirestoreAsync('users', removed.id);
+
+  res.json({ message: 'Buyer account removed successfully', removed: sanitizeBuyer(removed) });
+});
+
+// Create Customer / User Account manually
+app.post('/api/admin/buyers', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { name, phone, email, deliveryAddress, status } = req.body;
+  if (!name || !phone) {
+    return res.status(400).json({ error: 'Customer name and phone number are required.' });
+  }
+
+  const newCustomer: CustomerUser = {
+    id: `cust-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    name: name.trim(),
+    phone: phone.trim(),
+    email: email ? email.trim() : undefined,
+    deliveryAddress: deliveryAddress ? deliveryAddress.trim() : undefined,
+    createdAt: new Date().toISOString(),
+    totalOrders: 0,
+    totalSpent: 0,
+    status: status === 'Suspended' ? 'Suspended' : 'Active',
+    accountType: 'buyer',
+    isRegisteredBuyer: true
+  };
+
+  db.customers.unshift(newCustomer);
+  logAudit(admin, 'BUYER_CREATED', `Manually registered buyer "${newCustomer.name}" (${newCustomer.phone})`, 'buyer', newCustomer.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', newCustomer.id, sanitizeBuyer(newCustomer));
+  saveToFirestoreAsync('users', newCustomer.id, sanitizeBuyer(newCustomer));
+
+  res.status(201).json({ message: 'Buyer account created successfully', customer: sanitizeBuyer(newCustomer) });
 });
 
 // -------------------------------------------------------------
@@ -9584,17 +9732,17 @@ async function syncProductsFromFirebase(
 
     const config1 = {
       id: 'db1',
-      projectId: config.projectId || 'ceremonial-arbor-62w8r',
-      apiKey: config.apiKey || 'AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M',
-      consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
+      projectId: config.projectId || 'marketdatabase-1090b',
+      apiKey: config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
+      consoleUrl: `https://console.firebase.google.com/project/${config.projectId || 'marketdatabase-1090b'}/firestore`
     };
 
     const sec = config.secondaryConfig || {};
     const config2 = {
       id: 'db2',
-      projectId: sec.projectId || 'contactreachmarket',
-      apiKey: sec.apiKey || 'AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU',
-      consoleUrl: 'https://console.firebase.google.com/project/contactreachmarket/firestore'
+      projectId: sec.projectId || config.projectId || 'marketdatabase-1090b',
+      apiKey: sec.apiKey || config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
+      consoleUrl: `https://console.firebase.google.com/project/${sec.projectId || config.projectId || 'marketdatabase-1090b'}/firestore`
     };
 
     let targetConfigs: typeof config1[] = [];
@@ -9603,7 +9751,6 @@ async function syncProductsFromFirebase(
     } else if (targetDb === 'db2' || targetDb === config2.projectId) {
       targetConfigs = [config2];
     } else {
-      // Default: Check primary ceremonial-arbor-62w8r first, then contactreachmarket
       targetConfigs = [config1, config2];
     }
 
@@ -9852,17 +9999,17 @@ app.post('/api/admin/firebase/push-products', requireAdminAuth, requireRole(['ow
 
     const config1 = {
       id: 'db1',
-      projectId: config.projectId || 'ceremonial-arbor-62w8r',
-      apiKey: config.apiKey || 'AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M',
-      consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
+      projectId: config.projectId || 'marketdatabase-1090b',
+      apiKey: config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
+      consoleUrl: `https://console.firebase.google.com/project/${config.projectId || 'marketdatabase-1090b'}/firestore`
     };
 
     const sec = config.secondaryConfig || {};
     const config2 = {
       id: 'db2',
-      projectId: sec.projectId || 'contactreachmarket',
-      apiKey: sec.apiKey || 'AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU',
-      consoleUrl: 'https://console.firebase.google.com/project/contactreachmarket/firestore'
+      projectId: sec.projectId || config.projectId || 'marketdatabase-1090b',
+      apiKey: sec.apiKey || config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
+      consoleUrl: `https://console.firebase.google.com/project/${sec.projectId || config.projectId || 'marketdatabase-1090b'}/firestore`
     };
 
     let targetConfigs: typeof config1[] = [];
@@ -10025,7 +10172,7 @@ app.get('/api/admin/database/diagnostics', requireAdminAuth, async (req: Request
     // 5. Audit Firebase Status
     const fbConfigPath = path.resolve('firebase-applet-config.json');
     const fbConfig = fs.existsSync(fbConfigPath) ? JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8')) : {};
-    const projectId = fbConfig.projectId || 'ceremonial-arbor-62w8r';
+    const projectId = fbConfig.projectId || 'marketdatabase-1090b';
     const apiKey = fbConfig.apiKey || '';
     let firestoreStatus = 'unreachable';
     let firestoreCreated = false;

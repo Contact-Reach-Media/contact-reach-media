@@ -1,4 +1,4 @@
-import { PaymentMethod } from '../types.ts';
+import type { PaymentMethod } from '../types.ts';
 
 /**
  * ContactReach Market Official Mobile Money USSD Configuration (Rwanda)

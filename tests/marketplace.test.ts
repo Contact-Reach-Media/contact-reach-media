@@ -2079,6 +2079,145 @@ async function runTests() {
     assert.strictEqual(typeof status.firestore.syncQueueLength, 'number');
   });
 
+  // TEST: Firebase Configuration verifies marketdatabase-1090b
+  await test('Firebase configuration is correctly set to marketdatabase-1090b', async () => {
+    const diagRes = await fetch(`${BASE_URL}/api/admin/database/diagnostics`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(diagRes.status, 200);
+    const diag = await diagRes.json();
+    assert.strictEqual(diag.firestore.projectId, 'marketdatabase-1090b', 'Project ID must match marketdatabase-1090b');
+  });
+
+  // TEST: Messages can be stored, edited, and deleted
+  await test('Messages can be stored, edited (replied), and deleted', async () => {
+    // 1. Submit message
+    const msgRes = await fetch(`${BASE_URL}/api/contact/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Jean Paul Tester',
+        email: 'jeanpaul.tester@example.com',
+        phone: '0788112233',
+        subject: 'Wholesale inquiry for electronics',
+        message: 'Hello, do you support bulk delivery to Musanze?'
+      })
+    });
+    assert.strictEqual(msgRes.status, 201);
+    const msgData = await msgRes.json();
+    assert(msgData.id, 'Message ID should be returned');
+    const messageId = msgData.id;
+
+    // 2. Admin retrieves messages and finds it
+    const listRes = await fetch(`${BASE_URL}/api/admin/messages`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(listRes.status, 200);
+    const list = await listRes.json();
+    const found = list.find((m: any) => m.id === messageId);
+    assert(found, 'Created message must be present in messages list');
+
+    // 3. Admin edits message (reply/note)
+    const editRes = await fetch(`${BASE_URL}/api/admin/messages/${messageId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'replied',
+        replyNote: 'Yes, we provide wholesale air cargo and express courier to Musanze.'
+      })
+    });
+    assert.strictEqual(editRes.status, 200);
+    const editedMsg = await editRes.json();
+    assert.strictEqual(editedMsg.status, 'replied');
+    assert.strictEqual(editedMsg.replyNote, 'Yes, we provide wholesale air cargo and express courier to Musanze.');
+
+    // 4. Admin deletes message
+    const delRes = await fetch(`${BASE_URL}/api/admin/messages/${messageId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+
+    // Verify deletion
+    const verifyListRes = await fetch(`${BASE_URL}/api/admin/messages`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const verifyList = await verifyListRes.json();
+    assert(!verifyList.some((m: any) => m.id === messageId), 'Deleted message must no longer exist');
+  });
+
+  // TEST: Users / Buyers can be stored, edited, and deleted
+  await test('Users can be stored, edited, and deleted', async () => {
+    // 1. Create buyer / user
+    const createRes = await fetch(`${BASE_URL}/api/admin/buyers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Gisele Uwase Test',
+        phone: '0789998877',
+        email: 'gisele.test@example.rw',
+        deliveryAddress: 'Nyarutarama, Kigali'
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const createData = await createRes.json();
+    assert(createData.customer?.id, 'Customer ID must be created');
+    const customerId = createData.customer.id;
+
+    // 2. Edit user
+    const editRes = await fetch(`${BASE_URL}/api/admin/buyers/${customerId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Gisele Uwase Updated',
+        deliveryAddress: 'Gishushu, Kigali'
+      })
+    });
+    assert.strictEqual(editRes.status, 200);
+    const editData = await editRes.json();
+    assert.strictEqual(editData.customer.name, 'Gisele Uwase Updated');
+    assert.strictEqual(editData.customer.deliveryAddress, 'Gishushu, Kigali');
+
+    // 3. Delete user
+    const delRes = await fetch(`${BASE_URL}/api/admin/buyers/${customerId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+
+    // Verify deletion
+    const verifyRes = await fetch(`${BASE_URL}/api/admin/customers/${customerId}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(verifyRes.status, 404, 'Deleted user must return 404');
+  });
+
+  // TEST: Buyer Phone Login succeeds and returns token & user
+  await test('Buyer can sign in with phone number (MoMo fallback)', async () => {
+    const phoneRes = await fetch(`${BASE_URL}/api/buyers/phone-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: '0780022600',
+        name: 'MoMo Test Buyer'
+      })
+    });
+    assert.strictEqual(phoneRes.status, 200, 'Phone login should succeed with 200');
+    const phoneData = await phoneRes.json();
+    assert(phoneData.token, 'Token must be issued');
+    assert.strictEqual(phoneData.user.phone, '0780022600');
+    assert.strictEqual(phoneData.user.name, 'MoMo Test Buyer');
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

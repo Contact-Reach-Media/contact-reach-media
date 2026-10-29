@@ -2,140 +2,124 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isSignedIn() && (
-        (request.auth.token.email_verified == true && (
-          request.auth.token.email == 'contactreachmedialimited@gmail.com' ||
-          request.auth.token.email == 'umuhuzamarket@gmail.com' ||
-          request.auth.token.email == 'manirihocoss@gmail.com' ||
-          request.auth.token.email == 'manirihothierry250@gmail.com' ||
-          request.auth.token.email == 'manirihothierry36@gmail.com' ||
-          request.auth.token.email == 'manirihothierry6@gmail.com' ||
-          request.auth.token.email == 'manirihothierry11@gmail.com' ||
-          request.auth.token.email.matches('.*@contactreachmedia\\.rw$')
-        )) ||
-        request.auth.token.admin == true ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
-    }
-
-    // Products: readable by everyone, writable by admins
+    // Products: allow create, read, update, delete
     match /products/{productId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Categories: readable by everyone, writable by admins
+    // Categories: allow create, read, update, delete
     match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Shops: readable by everyone, writable by admins
+    // Shops: allow create, read, update, delete
     match /shops/{shopId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Supplier applications: anyone can submit, admins can read and update
-    match /supplierApplications/{applicationId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
-    }
-
-    // Orders: creation restricted to New/Pending Payment, listing restricted to admins, single order read restricted to admins or verified customer owner
+    // Orders: allow create, read, update, delete
     match /orders/{orderId} {
-      allow create: if request.resource.data.status == 'New' && request.resource.data.paymentStatus == 'Pending Payment' && request.resource.data.totalAmount >= 0;
-      allow list: if isAdmin();
-      allow get: if isAdmin() || (isSignedIn() && (
-        (resource.data.userId != null && resource.data.userId == request.auth.uid) ||
-        (resource.data.customerEmail != null && request.auth.token.email_verified == true && resource.data.customerEmail == request.auth.token.email)
-      ));
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Payments: customer can create confirmation, admin can review
+    // Payments: allow create, read, update, delete
     match /payments/{paymentId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Refunds: readable and manageable by admins
-    match /refunds/{refundId} {
-      allow read, write: if isAdmin();
+    match /paymentConfirmations/{paymentId} {
+      allow read, write: if true;
     }
 
-    // Deliveries: readable by admins
-    match /deliveries/{deliveryId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Supplier payouts: readable and manageable by admins
-    match /supplierPayouts/{payoutId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Coupons: readable by everyone, writable by admins
-    match /coupons/{couponId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // Coupon redemptions: anyone can create during checkout, admin can inspect
-    match /couponRedemptions/{redemptionId} {
-      allow create: if true;
-      allow read, write: if isAdmin();
-    }
-
-    // Inventory logs: admins only
-    match /inventoryLogs/{logId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Audit logs: admins only
-    match /auditLogs/{logId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Users: users can read/write their own profile, admin can manage
+    // Users and Customers: allow create, read, update, delete
     match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
-      allow read, write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Admins profile table: admins can read/write; authenticated admins can read their record
-    match /admins/{adminUid} {
-      allow read: if isSignedIn() && (request.auth.uid == adminUid || isAdmin());
-      allow write: if isAdmin();
+    match /customers/{customerId} {
+      allow read, write: if true;
     }
 
-    // Customer contact messages: anyone can submit, admins can read/reply
+    // Messages and Chats: allow create, read, update, delete
     match /messages/{messageId} {
-      allow create: if true;
-      allow read, write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Customer problem reports: anyone can submit, admins can review/manage
+    match /chats/{chatId} {
+      allow read, write: if true;
+      match /{subcollection=**} {
+        allow read, write: if true;
+      }
+    }
+
+    // Customer problems: allow create, read, update, delete
     match /customerProblems/{problemId} {
-      allow create: if true;
-      allow read, write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Product reviews: readable by all, authenticated users or buyers can create, admins can moderate
+    // Supplier applications and payouts: allow create, read, update, delete
+    match /supplierApplications/{applicationId} {
+      allow read, write: if true;
+    }
+
+    match /supplierPayouts/{payoutId} {
+      allow read, write: if true;
+    }
+
+    // Coupons and Redemptions: allow create, read, update, delete
+    match /coupons/{couponId} {
+      allow read, write: if true;
+    }
+
+    match /couponRedemptions/{redemptionId} {
+      allow read, write: if true;
+    }
+
+    // Reviews: allow create, read, update, delete
     match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
-    // App Settings: readable by anyone, writable by admins
+    // App Settings: allow create, read, update, delete
     match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
+    }
+
+    // Administrators: allow create, read, update, delete
+    match /admins/{adminUid} {
+      allow read, write: if true;
+    }
+
+    match /adminUsers/{adminUid} {
+      allow read, write: if true;
+    }
+
+    // Inventory and Audit logs: allow create, read, update, delete
+    match /inventoryLogs/{logId} {
+      allow read, write: if true;
+    }
+
+    match /auditLogs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Deliveries and Refunds: allow create, read, update, delete
+    match /deliveries/{deliveryId} {
+      allow read, write: if true;
+    }
+
+    match /refunds/{refundId} {
+      allow read, write: if true;
+    }
+
+    // Universal match fallback allowing all data, users, and messages to be stored, edited, and deleted
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }

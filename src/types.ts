@@ -520,7 +520,7 @@ export interface CustomerUser {
   hasPassword?: boolean;
   photoURL?: string;
   googleUid?: string;
-  authProvider?: 'google';
+  authProvider?: 'google' | 'phone' | 'email';
 }
 
 export interface AdminMessage {

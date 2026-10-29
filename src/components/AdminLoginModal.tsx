@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, ShieldAlert, KeyRound, ArrowRight, ShieldCheck, CheckCircle2, HelpCircle } from 'lucide-react';
+import { X, Lock, Mail, ShieldAlert, KeyRound, ArrowRight, ShieldCheck, CheckCircle2, HelpCircle, Copy, ExternalLink, Sparkles } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { loginWithGoogle } from '../services/firebase.ts';
 
@@ -18,6 +18,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetMsg, setResetMsg] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
   const handleGoogleSignIn = async () => {
     setError(null);
+    setUnauthorizedDomain(null);
     setLoading(true);
     try {
       const fbUser = await loginWithGoogle();
@@ -42,7 +45,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       onLoginSuccess(res.admin);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Google authentication failed. Please make sure your account is an authorized administrator.');
+      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
+        const domain = err.domain || (typeof window !== 'undefined' ? window.location.hostname : '');
+        setUnauthorizedDomain(domain);
+        setError('This domain is not in your Firebase Authorized Domains list.');
+      } else {
+        setError(err.message || 'Google authentication failed. Please make sure your account is an authorized administrator.');
+      }
     } finally {
       setLoading(false);
     }
@@ -118,7 +127,71 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         <div className="p-6">
           {!showForgot ? (
             <>
-              {error && (
+              {/* Unauthorized Domain Explanatory Card */}
+              {unauthorizedDomain && (
+                <div className="mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-slate-800 text-xs shadow-xs animate-in fade-in">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-2">
+                      <div className="font-extrabold text-amber-950 text-sm">
+                        Firebase Authorized Domain Setup Required
+                      </div>
+                      <p className="text-slate-600 leading-relaxed text-xs">
+                        Google Sign-In requires your current preview domain to be registered in your Firebase project (<strong>marketdatabase-1090b</strong>).
+                      </p>
+                      
+                      {/* Domain Copy Box */}
+                      <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-amber-200 font-mono text-[11px] text-slate-800">
+                        <span className="truncate select-all">{unauthorizedDomain}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(unauthorizedDomain);
+                            setCopiedDomain(true);
+                            setTimeout(() => setCopiedDomain(false), 2500);
+                          }}
+                          className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-lg shrink-0 transition-colors cursor-pointer text-[10px] flex items-center gap-1"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>{copiedDomain ? 'Copied!' : 'Copy Domain'}</span>
+                        </button>
+                      </div>
+
+                      {/* 3 Step Instructions */}
+                      <ol className="list-decimal list-inside space-y-1 text-slate-700 text-[11px] pt-1">
+                        <li>Open Firebase Console for <strong>marketdatabase-1090b</strong></li>
+                        <li>Navigate to <strong>Authentication &rarr; Settings &rarr; Authorized domains</strong></li>
+                        <li>Click <strong>Add domain</strong>, paste the domain above, and click <strong>Save</strong></li>
+                      </ol>
+
+                      <div className="pt-2 flex flex-wrap items-center gap-2">
+                        <a
+                          href="https://console.firebase.google.com/project/marketdatabase-1090b/authentication/settings"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs"
+                        >
+                          <span>Open Firebase Settings</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmail('contactreachmedialimited@gmail.com');
+                            setPassword('CRM@2026');
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Fill Administrator Password</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {error && !unauthorizedDomain && (
                 <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 shrink-0" />
                   <span>{error}</span>

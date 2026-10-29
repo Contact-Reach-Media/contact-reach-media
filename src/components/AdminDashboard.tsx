@@ -4036,6 +4036,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       >
                         Add Reply Note
                       </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Delete message from ${msg.name}?`)) {
+                            await api.adminDeleteMessage(msg.id);
+                            showToast('Message deleted');
+                            fetchAllData();
+                          }
+                        }}
+                        className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg cursor-pointer border border-rose-200"
+                        title="Delete Message"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -4423,6 +4436,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       ) : (
                                         <XCircle className="w-3.5 h-3.5" />
                                       )}
+                                    </button>
+
+                                    <button
+                                      onClick={async () => {
+                                        if (confirm(`Are you sure you want to delete customer account "${c.name}"? This will delete all user data and synchronize with Firebase.`)) {
+                                          try {
+                                            await api.adminDeleteCustomer(c.id);
+                                            showToast(`Customer account "${c.name}" deleted.`);
+                                            fetchAllData();
+                                          } catch (err: any) {
+                                            alert(err.message || 'Failed to delete customer');
+                                          }
+                                        }
+                                      }}
+                                      className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                      title="Delete Customer Account"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </td>

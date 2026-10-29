@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   X, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight,
-  ShoppingBag, Truck, MapPin, Sparkles, RefreshCw
+  ShoppingBag, Truck, MapPin, Sparkles, RefreshCw, Copy, ExternalLink, Phone, User
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { loginWithGoogle } from '../services/firebase.ts';
@@ -23,11 +23,17 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
+  const [authMode, setAuthMode] = useState<'google' | 'phone'>('google');
+  const [buyerPhone, setBuyerPhone] = useState('');
+  const [buyerName, setBuyerName] = useState('');
 
   if (!isOpen) return null;
 
   const handleGoogleSignIn = async () => {
     setError(null);
+    setUnauthorizedDomain(null);
     setLoading(true);
     try {
       const fbUser = await loginWithGoogle();
@@ -53,7 +59,15 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
-      if (err.code === 'auth/popup-closed-by-user' || err.message?.includes('closed-by-user')) {
+      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
+        const domain = err.domain || (typeof window !== 'undefined' ? window.location.hostname : '');
+        setUnauthorizedDomain(domain);
+        setError(
+          currentLang === 'en'
+            ? 'This domain requires authorization in Firebase Console for Google Sign-In.'
+            : 'Uru rubuga rukeneye kwemezwa muri Firebase kugira ngo ukoreshe Google.'
+        );
+      } else if (err.code === 'auth/popup-closed-by-user' || err.message?.includes('closed-by-user')) {
         setError(
           currentLang === 'en'
             ? 'Sign in popup was closed. Click the button below to try again.'
@@ -73,6 +87,30 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
               : 'Kwinjira na Google ntibikunze. Ongera ugerageze.')
         );
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhoneSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!buyerPhone.trim()) {
+      setError(
+        currentLang === 'en'
+          ? 'Please enter your phone number (e.g., 0780022600).'
+          : 'Nyabuneka andika nimero yawe ya terefone.'
+      );
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await api.buyerPhoneLogin(buyerPhone.trim(), buyerName.trim() || undefined);
+      onSuccess(res.user);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Phone sign-in failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -111,15 +149,71 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
           </p>
         </div>
 
-        {/* Error Alert */}
-        {error && (
+        {/* Unauthorized Domain Guide Card */}
+        {unauthorizedDomain && (
+          <div className="mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-slate-800 text-xs shadow-xs animate-in fade-in">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <div className="font-extrabold text-amber-950 text-sm">
+                  {currentLang === 'en' ? 'Firebase Authorized Domain Required' : 'Uru rubuga rukeneye kwemezwa'}
+                </div>
+                <p className="text-slate-600 leading-relaxed text-xs">
+                  {currentLang === 'en'
+                    ? 'To enable Google Sign-In, this preview domain must be added to your Firebase project (marketdatabase-1090b).'
+                    : 'Kugira ngo ukoreshe Google, uru rubuga rugomba kongerwa muri poroje yawe ya Firebase.'}
+                </p>
+
+                {/* Domain Copy Box */}
+                <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-amber-200 font-mono text-[11px] text-slate-800">
+                  <span className="truncate select-all">{unauthorizedDomain}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(unauthorizedDomain);
+                      setCopiedDomain(true);
+                      setTimeout(() => setCopiedDomain(false), 2500);
+                    }}
+                    className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-lg shrink-0 transition-colors cursor-pointer text-[10px] flex items-center gap-1"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{copiedDomain ? 'Copied!' : 'Copy Domain'}</span>
+                  </button>
+                </div>
+
+                <div className="pt-1 flex flex-wrap items-center gap-2">
+                  <a
+                    href="https://console.firebase.google.com/project/marketdatabase-1090b/authentication/settings"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs"
+                  >
+                    <span>Firebase Settings</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('phone')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-[#FF6000]" />
+                    <span>{currentLang === 'en' ? 'Use Phone / MoMo Instead' : 'Koresha Terefone / MoMo'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Standard Error Alert (Non-domain) */}
+        {error && !unauthorizedDomain && (
           <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5 animate-in fade-in">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
             <div className="flex-1">
               <p className="font-semibold leading-snug">{error}</p>
               <button
                 type="button"
-                onClick={handleGoogleSignIn}
+                onClick={authMode === 'google' ? handleGoogleSignIn : () => setError(null)}
                 className="mt-1.5 text-rose-800 font-extrabold underline flex items-center gap-1 hover:text-rose-950 cursor-pointer text-[11px]"
               >
                 <RefreshCw className="w-3 h-3" />
@@ -129,50 +223,113 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
           </div>
         )}
 
-        {/* Exclusive Google Sign-In Action Button */}
-        <div className="space-y-3">
+        {/* Tab Selection */}
+        <div className="flex items-center p-1 bg-slate-100 rounded-xl mb-4 text-xs font-bold text-slate-600">
           <button
             type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 hover:border-slate-300 rounded-2xl font-bold text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60 active:scale-[0.99]"
+            onClick={() => setAuthMode('google')}
+            className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              authMode === 'google' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+            }`}
           >
-            {loading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-[#FF6000] border-t-transparent rounded-full animate-spin" />
-                <span className="font-extrabold text-slate-700">
-                  {currentLang === 'en' ? 'Connecting with Google...' : 'Guhuza na Google...'}
-                </span>
-              </>
-            ) : (
-              <>
-                {/* Official Multi-Color Google G Icon SVG */}
-                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span className="text-slate-900 font-extrabold">
-                  {currentLang === 'en' ? 'Continue with Google' : 'Komeza ukoresheje Google'}
-                </span>
-                <ArrowRight className="w-4 h-4 text-slate-400 ml-auto" />
-              </>
-            )}
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+            </svg>
+            <span>Google</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAuthMode('phone')}
+            className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              authMode === 'phone' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+            }`}
+          >
+            <Phone className="w-3.5 h-3.5 text-[#FF6000]" />
+            <span>{currentLang === 'en' ? 'Phone / MoMo' : 'Terefone'}</span>
           </button>
         </div>
+
+        {authMode === 'google' ? (
+          /* Google Sign-In Action */
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 hover:border-slate-300 rounded-2xl font-bold text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60 active:scale-[0.99]"
+            >
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-[#FF6000] border-t-transparent rounded-full animate-spin" />
+                  <span className="font-extrabold text-slate-700">
+                    {currentLang === 'en' ? 'Connecting with Google...' : 'Guhuza na Google...'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  <span className="text-slate-900 font-extrabold">
+                    {currentLang === 'en' ? 'Continue with Google' : 'Komeza ukoresheje Google'}
+                  </span>
+                  <ArrowRight className="w-4 h-4 text-slate-400 ml-auto" />
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          /* Phone / MoMo Sign-In Form */
+          <form onSubmit={handlePhoneSignIn} className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {currentLang === 'en' ? 'MTN / Airtel Phone Number *' : 'Nimero ya Terefone (MTN / Airtel) *'}
+              </label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  required
+                  value={buyerPhone}
+                  onChange={(e) => setBuyerPhone(e.target.value)}
+                  placeholder="0780 022 600"
+                  className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#FF6000] bg-slate-50/50"
+                />
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {currentLang === 'en' ? 'Your Name (Optional)' : 'Amazina yawe (Bihitamo)'}
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={buyerName}
+                  onChange={(e) => setBuyerName(e.target.value)}
+                  placeholder="e.g. Jean Damascene"
+                  className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-[#FF6000] bg-slate-50/50"
+                />
+                <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 px-4 bg-[#FF6000] hover:bg-[#E05300] text-white rounded-xl font-bold text-xs shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <span>{loading ? (currentLang === 'en' ? 'Signing in...' : 'Kwinjira...') : (currentLang === 'en' ? 'Sign In with Phone' : 'Injira na Terefone')}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+        )}
 
         {/* Value Proposition Highlights */}
         <div className="mt-6 pt-5 border-t border-slate-100 space-y-2.5 text-xs text-slate-600">
