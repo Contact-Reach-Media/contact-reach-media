@@ -110,8 +110,8 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
   const handlePasteSampleSms = () => {
     const mockTxn = `TXN${Math.floor(100000000 + Math.random() * 900000000)}`;
     const sample = paymentMethod === 'Airtel Money'
-      ? `Airtel Money: You have sent ${amountPaid.toLocaleString()} RWF to Ruth (078002260). TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
-      : `Y'ello! You have transferred ${amountPaid.toLocaleString()} RWF to ContactReach Market / Ruth (078002260) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF. Your new balance: 52,400 RWF.`;
+      ? `Airtel Money: You have sent ${amountPaid.toLocaleString()} RWF to Ruth (0780022600). TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
+      : `Y'ello! You have transferred ${amountPaid.toLocaleString()} RWF to ContactReach Market / Ruth (0780022600) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF. Your new balance: 52,400 RWF.`;
     handleMessageChange(sample);
   };
 
@@ -347,9 +347,9 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
                     onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-orange-500 bg-slate-50"
                   >
-                    <option value="MTN Merchant Code">MTN MoMoPay (Merchant Code: 078002)</option>
-                    <option value="MTN Mobile Money">MTN Mobile Money (Direct to 078002260 - Ruth)</option>
-                    <option value="Airtel Money">Airtel Money (078002260 - Ruth)</option>
+                    <option value="MTN Merchant Code">MTN MoMoPay (Merchant Code: 2328354)</option>
+                    <option value="MTN Mobile Money">MTN Mobile Money (Direct to 0780022600 - Ruth)</option>
+                    <option value="Airtel Money">Airtel Money (0780022600 - Ruth)</option>
                     <option value="Bank Transfer">Bank Transfer (I&M Bank)</option>
                   </select>
                 </div>
@@ -518,7 +518,7 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
                           onChange={(e) => handleMessageChange(e.target.value)}
                           placeholder={
                             currentLang === 'en'
-                              ? "Paste your MTN MoMo or Airtel Money SMS here (e.g., 'Y'ello! You have transferred 35,000 RWF to Ruth (078002260)... TxId: 981273921' or '*165*...')"
+                              ? "Paste your MTN MoMo or Airtel Money SMS here (e.g., 'Y'ello! You have transferred 35,000 RWF to Ruth (0780022600)... TxId: 981273921' or '*165*...')"
                               : "Koporora hano ubutumwa bwa SMS wakiriye kuri telefone yawe (Urugero: 'Mwungutse amafaranga... TxId: 981273921')..."
                           }
                           className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500 bg-white font-mono leading-relaxed"
@@ -560,7 +560,7 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
 
               {/* Support & Receiver Desk Reference */}
               <div className="p-3 bg-slate-50 rounded-xl text-[11px] text-slate-600 flex flex-wrap items-center justify-between gap-2 border border-slate-200">
-                <span>Official Receiver: <strong>Ruth (078002260 / 078002)</strong></span>
+                <span>Official Receiver: <strong>Ruth (0780022600 / 2328354)</strong></span>
                 <a
                   href={`https://wa.me/250780022600?text=${whatsappMessage}`}
                   target="_blank"

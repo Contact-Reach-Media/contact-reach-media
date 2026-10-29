@@ -639,7 +639,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   <span className="text-[10px] text-emerald-700 font-mono">100% Guaranteed</span>
                 </div>
                 <p className="text-[11px] text-emerald-800">
-                  Secure payments via MTN Mobile Money (*182*8*1*078002#), Airtel Money, Visa & Mastercard.
+                  Secure payments via MTN Mobile Money (*182*8*1*2328354#), Airtel Money, Visa & Mastercard.
                   Money-back protection if your order doesn't ship or arrive as described.
                 </p>
               </div>

@@ -2673,7 +2673,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="pt-4 border-t border-slate-100 mt-4 text-[11px] text-slate-400 space-y-1">
             <p className="font-semibold text-slate-600">ContactReach Media Ltd</p>
             <p>Support: 0780022600</p>
-            <p>Receiver: Ruth (078002260)</p>
+            <p>Receiver: Ruth (0780022600)</p>
           </div>
         </aside>
 
@@ -5543,7 +5543,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">Receiver Phone (MoMo)</label>
                     <input
                       type="text"
-                      value={settings?.paymentNumber || '078002260'}
+                      value={settings?.paymentNumber || '0780022600'}
                       onChange={(e) => setSettings(prev => prev ? { ...prev, paymentNumber: e.target.value } : null)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
                     />
@@ -5552,7 +5552,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">MTN Merchant Code</label>
                     <input
                       type="text"
-                      value={settings?.merchantCode || '078002'}
+                      value={settings?.merchantCode || '2328354'}
                       onChange={(e) => setSettings(prev => prev ? { ...prev, merchantCode: e.target.value } : null)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
                     />
@@ -9319,7 +9319,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   type="text"
                   value={verifyNotes}
                   onChange={(e) => setVerifyNotes(e.target.value)}
-                  placeholder="e.g. Statement checked, confirmed transfer received on 078002260 by Admin"
+                  placeholder="e.g. Statement checked, confirmed transfer received on 0780022600 by Admin"
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-[#FF6000] bg-white font-medium"
                 />
               </div>

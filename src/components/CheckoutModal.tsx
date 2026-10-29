@@ -295,10 +295,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const handlePasteSampleSms = () => {
     const mockTxn = `TXN${Math.floor(100000000 + Math.random() * 900000000)}`;
     const sample = paymentMethod === 'Airtel Money'
-      ? `Airtel Money: You have sent ${amountToPay.toLocaleString()} RWF to Ruth (078002260). TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
+      ? `Airtel Money: You have sent ${amountToPay.toLocaleString()} RWF to Ruth (0780022600). TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
       : paymentMethod === 'MTN Merchant Code'
-      ? `Y'ello! You have paid ${amountToPay.toLocaleString()} RWF to ContactReach Market (078002) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 0 RWF.`
-      : `Y'ello! You have transferred ${amountToPay.toLocaleString()} RWF to Ruth (078002260) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF.`;
+      ? `Y'ello! You have paid ${amountToPay.toLocaleString()} RWF to ContactReach Market (2328354) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 0 RWF.`
+      : `Y'ello! You have transferred ${amountToPay.toLocaleString()} RWF to Ruth (0780022600) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF.`;
     handleMessageChange(sample);
   };
 

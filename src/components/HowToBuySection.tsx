@@ -171,9 +171,9 @@ export const HowToBuySection: React.FC<HowToBuySectionProps> = ({ currentLang, o
         hi: 'मोबाइल मनी USSD से भुगतान करें'
       },
       desc: {
-        en: 'USSD prompt opens automatically in your phone dialer! Supports MTN MoMo (*182*1*1*078002260*AMOUNT#), MoMoPay (*182*8*1*078002*AMOUNT#), and Airtel Money (*182*1*2*078002260*AMOUNT#).',
-        fr: 'Le code USSD s\'ouvre automatiquement! Compatible MTN MoMo (*182*1*1*078002260*MONTANT#), MoMoPay (*182*8*1*078002*MONTANT#) et Airtel Money.',
-        rw: 'Kode ya USSD ifunguka mu buryo bwikora kuri telefoni yawe! MTN MoMo (*182*1*1*078002260*AMOUNT#), MTN MoMoPay (*182*8*1*078002*AMOUNT#) na Airtel Money.',
+        en: 'USSD prompt opens automatically in your phone dialer! Supports MTN MoMo (*182*1*1*0780022600*AMOUNT#), MoMoPay (*182*8*1*2328354*AMOUNT#), and Airtel Money (*182*1*2*0780022600*AMOUNT#).',
+        fr: 'Le code USSD s\'ouvre automatiquement! Compatible MTN MoMo (*182*1*1*0780022600*MONTANT#), MoMoPay (*182*8*1*2328354*MONTANT#) et Airtel Money.',
+        rw: 'Kode ya USSD ifunguka mu buryo bwikora kuri telefoni yawe! MTN MoMo (*182*1*1*0780022600*AMOUNT#), MTN MoMoPay (*182*8*1*2328354*AMOUNT#) na Airtel Money.',
         sw: 'Msimbo wa USSD hufunguka moja kwa moja! Inasaidia MTN MoMo, MoMoPay na Airtel Money nchini Rwanda.',
         es: '¡El código USSD se abre directamente en tu teléfono! Compatible con MTN MoMo, MoMoPay y Airtel Money.',
         pt: 'O código USSD abre automaticamente no seu telemóvel! Suporta MTN MoMo, MoMoPay e Airtel Money.',

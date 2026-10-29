@@ -39,9 +39,9 @@ const slideTexts: Record<number, Record<Language, { tag?: string; title: string;
     hi: { tag: 'किगाली में बेस्टसेलर', title: 'उपहार, लाइफस्टाइल और गैजेट्स', subtitle: 'सीधे आपके दरवाजे तक घड़ियों, बैग, सौंदर्य प्रसाधनों और एक्सेसरीज़ का संग्रह।', cta: 'कैटलॉग देखें' }
   },
   2: {
-    en: { tag: 'MTN MoMo & Airtel Money', title: 'Pay Easily with Mobile Money', subtitle: 'Convenient automated USSD codes for MTN and Airtel. Receiver: Ruth (078002260). Submit payment proof for swift approval.', cta: 'Start Shopping' },
+    en: { tag: 'MTN MoMo & Airtel Money', title: 'Pay Easily with Mobile Money', subtitle: 'Convenient automated USSD codes for MTN and Airtel. Receiver: Ruth (0780022600). Submit payment proof for swift approval.', cta: 'Start Shopping' },
     fr: { tag: 'MTN MoMo & Airtel Money', title: 'Payez par Mobile Money', subtitle: 'Codes USSD automatisés pratiques pour MTN et Airtel avec vérification rapide.', cta: 'Commencer' },
-    rw: { tag: 'MTN MoMo na Airtel Money', title: 'Ishyura Byoroshye kuri MoMo', subtitle: 'Koresha kode ya USSD ya MTN cyangwa Airtel Money. Nyirubwishyu: Ruth (078002260). Emeza ubwishyu bwawe ako kanya.', cta: 'Gura ubu' },
+    rw: { tag: 'MTN MoMo na Airtel Money', title: 'Ishyura Byoroshye kuri MoMo', subtitle: 'Koresha kode ya USSD ya MTN cyangwa Airtel Money. Nyirubwishyu: Ruth (0780022600). Emeza ubwishyu bwawe ako kanya.', cta: 'Gura ubu' },
     sw: { tag: 'MTN MoMo na Airtel Money', title: 'Lipa kwa Urahisi kwa Simu', subtitle: 'Nambari za USSD za haraka za MTN na Airtel kwa ukaguzi na uthibitisho wa haraka.', cta: 'Anza Kununua' },
     es: { tag: 'MTN MoMo y Airtel Money', title: 'Paga Fácil con Dinero Móvil', subtitle: 'Códigos USSD automáticos para MTN y Airtel con verificación y aprobación rápida.', cta: 'Empezar a Comprar' },
     pt: { tag: 'MTN MoMo e Airtel Money', title: 'Pague com Mobile Money', subtitle: 'Códigos USSD automatizados práticos para MTN e Airtel com confirmação imediata.', cta: 'Iniciar Compras' },

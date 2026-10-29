@@ -112,7 +112,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         <div className="flex-1 mx-4 overflow-hidden whitespace-nowrap text-slate-300 text-[11px] sm:text-xs">
           <span className="inline-block animate-marquee">
             🚚 Free delivery across Kigali for orders over 30,000 FRW &nbsp;•&nbsp; 
-            📱 Easy MTN MoMo (*182*1*1*078002260*AMOUNT#) & Airtel Money dialer &nbsp;•&nbsp; 
+            📱 Easy MTN MoMo (*182*1*1*0780022600*AMOUNT#) & Airtel Money dialer &nbsp;•&nbsp; 
             🛡️ 100% Verified Quality & Same-Day Dispatch
           </span>
         </div>

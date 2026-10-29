@@ -475,7 +475,7 @@ export const api = {
       supplierFulfillmentStatus: 'Pending',
       paymentMethod: orderPayload.paymentMethod,
       receiverName: 'Ruth',
-      receiverDetails: '078002260',
+      receiverDetails: orderPayload.paymentMethod === 'MTN Merchant Code' ? '2328354' : '0780022600',
       shopName: 'ContactReach Market',
       paymentStatus: 'Pending Payment',
       status: 'New',

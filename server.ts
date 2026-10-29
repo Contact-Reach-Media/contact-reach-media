@@ -127,8 +127,8 @@ const defaultPaymentMethods: PaymentMethodConfig[] = [
     name: 'MTN Mobile Money (Direct Transfer)',
     type: 'MTN Mobile Money',
     receiverName: 'Ruth',
-    receiverAccount: '078002260',
-    instructions: 'Dial *182*1*1*078002260*AMOUNT# to send mobile money directly to Ruth.',
+    receiverAccount: '0780022600',
+    instructions: 'Dial *182*1*1*0780022600*AMOUNT# to send mobile money directly to Ruth.',
     isActive: true
   },
   {
@@ -136,8 +136,8 @@ const defaultPaymentMethods: PaymentMethodConfig[] = [
     name: 'MTN MoMoPay (Merchant Code)',
     type: 'MTN Merchant Code',
     receiverName: 'ContactReach Market',
-    receiverAccount: '078002',
-    instructions: 'Dial *182*8*1*078002*AMOUNT# to pay Ruth / ContactReach Market merchant.',
+    receiverAccount: '2328354',
+    instructions: 'Dial *182*8*1*2328354*AMOUNT# to pay Ruth / ContactReach Market merchant.',
     isActive: true
   },
   {
@@ -145,8 +145,8 @@ const defaultPaymentMethods: PaymentMethodConfig[] = [
     name: 'Airtel Money',
     type: 'Airtel Money',
     receiverName: 'Ruth',
-    receiverAccount: '078002260',
-    instructions: 'Dial *182*1*2*078002260*AMOUNT# to pay via Airtel Money.',
+    receiverAccount: '0780022600',
+    instructions: 'Dial *182*1*2*0780022600*AMOUNT# to pay via Airtel Money.',
     isActive: true
   },
   {
@@ -458,7 +458,13 @@ function loadDbFromDisk() {
 
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
-      if (parsed.products && Array.isArray(parsed.products)) db.products = parsed.products;
+      if (parsed.products && Array.isArray(parsed.products)) {
+        db.products = parsed.products.map((p: any) => ({
+          ...p,
+          merchantCode: (!p.merchantCode || p.merchantCode === '078002') ? '2328354' : p.merchantCode,
+          receiverPhone: (!p.receiverPhone || p.receiverPhone === '078002260') ? '0780022600' : p.receiverPhone
+        }));
+      }
       if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
       if (parsed.categories && Array.isArray(parsed.categories)) {
         const existingIds = new Set(parsed.categories.map((c: any) => c.id));
@@ -466,9 +472,29 @@ function loadDbFromDisk() {
         db.categories = [...parsed.categories, ...missingInitial];
       }
       if (parsed.shops && Array.isArray(parsed.shops)) db.shops = parsed.shops;
-      if (parsed.orders && Array.isArray(parsed.orders)) db.orders = parsed.orders;
+      if (parsed.orders && Array.isArray(parsed.orders)) {
+        db.orders = parsed.orders.map((o: any) => ({
+          ...o,
+          receiverDetails: o.receiverDetails === '078002' ? '2328354' : (o.receiverDetails === '078002260' ? '0780022600' : o.receiverDetails)
+        }));
+      }
       if (parsed.paymentConfirmations && Array.isArray(parsed.paymentConfirmations)) db.paymentConfirmations = parsed.paymentConfirmations;
-      if (parsed.paymentMethodsConfig && Array.isArray(parsed.paymentMethodsConfig)) db.paymentMethodsConfig = parsed.paymentMethodsConfig;
+      if (parsed.paymentMethodsConfig && Array.isArray(parsed.paymentMethodsConfig)) {
+        db.paymentMethodsConfig = parsed.paymentMethodsConfig.map((pm: any) => {
+          const item = { ...pm };
+          if (item.type === 'MTN Merchant Code' || item.name?.includes('Merchant Code')) {
+            item.receiverAccount = '2328354';
+            item.instructions = 'Dial *182*8*1*2328354*AMOUNT# to pay Ruth / ContactReach Market merchant.';
+          } else if (item.type === 'MTN Mobile Money' || item.name?.includes('MTN Mobile Money')) {
+            item.receiverAccount = '0780022600';
+            item.instructions = 'Dial *182*1*1*0780022600*AMOUNT# to send mobile money directly to Ruth.';
+          } else if (item.type === 'Airtel Money' || item.name?.includes('Airtel Money')) {
+            item.receiverAccount = '0780022600';
+            item.instructions = 'Dial *182*1*2*0780022600*AMOUNT# to pay via Airtel Money.';
+          }
+          return item;
+        });
+      }
       if (parsed.messages && Array.isArray(parsed.messages)) db.messages = parsed.messages;
       if (parsed.customerProblems && Array.isArray(parsed.customerProblems)) db.customerProblems = parsed.customerProblems;
       if (parsed.coupons && Array.isArray(parsed.coupons)) db.coupons = parsed.coupons;
@@ -493,6 +519,14 @@ function loadDbFromDisk() {
           ...parsed.settings,
           email: 'contactreachmedialimited@gmail.com',
           phone: '0780022600',
+          paymentNumber: (!parsed.settings.paymentNumber || parsed.settings.paymentNumber === '078002260') ? '0780022600' : parsed.settings.paymentNumber,
+          merchantCode: (!parsed.settings.merchantCode || parsed.settings.merchantCode === '078002') ? '2328354' : parsed.settings.merchantCode,
+          mtnUssdPattern: (parsed.settings.mtnUssdPattern && !parsed.settings.mtnUssdPattern.includes('078002260*') && !parsed.settings.mtnUssdPattern.includes('232835426000'))
+            ? parsed.settings.mtnUssdPattern
+            : '*182*1*1*0780022600*{AMOUNT}#',
+          airtelUssdPattern: (parsed.settings.airtelUssdPattern && !parsed.settings.airtelUssdPattern.includes('078002260*') && !parsed.settings.airtelUssdPattern.includes('07800226000'))
+            ? parsed.settings.airtelUssdPattern
+            : '*182*1*2*0780022600*{AMOUNT}#',
           alibabaConfig: {
             ...initialSettings.alibabaConfig,
             ...(parsed.settings.alibabaConfig || {})
@@ -1535,8 +1569,8 @@ app.post('/api/orders', (req: Request, res: Response) => {
   const verifiedItems = [];
   let primaryShopName = 'ContactReach Market';
   let primaryReceiverName = db.settings.receiverName || 'Ruth';
-  let primaryReceiverPhone = db.settings.paymentNumber || '078002260';
-  let primaryMerchantCode = db.settings.merchantCode || '078002';
+  let primaryReceiverPhone = db.settings.paymentNumber || '0780022600';
+  let primaryMerchantCode = db.settings.merchantCode || '2328354';
 
   for (const item of items) {
     const product = db.products.find(p => p.id === item.productId);
@@ -1823,13 +1857,13 @@ app.patch('/api/orders/:orderNumber/payment-method', (req: Request, res: Respons
 
   if (paymentMethod === 'MTN Merchant Code') {
     order.receiverName = 'ContactReach Market';
-    order.receiverDetails = db.settings.merchantCode || '078002';
+    order.receiverDetails = db.settings.merchantCode || '2328354';
   } else if (paymentMethod === 'Airtel Money') {
     order.receiverName = db.settings.receiverName || 'Ruth';
-    order.receiverDetails = db.settings.paymentNumber || '078002260';
+    order.receiverDetails = db.settings.paymentNumber || '0780022600';
   } else {
     order.receiverName = db.settings.receiverName || 'Ruth';
-    order.receiverDetails = db.settings.paymentNumber || '078002260';
+    order.receiverDetails = db.settings.paymentNumber || '0780022600';
   }
 
   order.statusHistory.push({
@@ -3488,8 +3522,8 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     paymentMethods: Array.isArray(paymentMethods) && paymentMethods.length > 0
       ? paymentMethods
       : ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-    merchantCode: merchantCode ? merchantCode.trim() : (db.settings.merchantCode || '078002'),
-    receiverPhone: receiverPhone ? receiverPhone.trim() : (db.settings.paymentNumber || '078002260'),
+    merchantCode: merchantCode ? merchantCode.trim() : (db.settings.merchantCode || '2328354'),
+    receiverPhone: receiverPhone ? receiverPhone.trim() : (db.settings.paymentNumber || '0780022600'),
     location: location ? location.trim() : 'Kigali, Rwanda',
     deliveryInfo: deliveryInfo ? deliveryInfo.trim() : 'Same-day Kigali express (2-4 hrs)',
     status: prodStatus,
@@ -4193,8 +4227,8 @@ app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUC
         shopId,
         receiverName: item.receiverName || 'Ruth',
         paymentMethods: item.paymentMethods || ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: item.merchantCode || '078002',
-        receiverPhone: item.receiverPhone || '078002260',
+        merchantCode: item.merchantCode || '2328354',
+        receiverPhone: item.receiverPhone || '0780022600',
         location: item.location || 'Kigali, Rwanda',
         deliveryInfo: item.deliveryInfo || 'Same-day Kigali delivery',
         status: (item.status as any) || 'Available',
@@ -6583,8 +6617,8 @@ async function pullLiveCjProducts(options?: {
             shopId,
             receiverName: db.settings.receiverName || 'Ruth',
             paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-            merchantCode: db.settings.merchantCode || '078002',
-            receiverPhone: db.settings.paymentNumber || '078002260',
+            merchantCode: db.settings.merchantCode || '2328354',
+            receiverPhone: db.settings.paymentNumber || '0780022600',
             location: 'Kigali Express / Global Dispatch',
             deliveryInfo: 'Kigali delivery within 24-48 hrs',
             status: verifiedStock > 0 ? (shouldRequireApproval ? 'Hidden' : 'Available') : 'Out of Stock',
@@ -6815,8 +6849,8 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
         shopId,
         receiverName: db.settings.receiverName || 'Ruth',
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: db.settings.merchantCode || '078002',
-        receiverPhone: db.settings.paymentNumber || '078002260',
+        merchantCode: db.settings.merchantCode || '2328354',
+        receiverPhone: db.settings.paymentNumber || '0780022600',
         location: 'Kigali Express / Global Dispatch',
         deliveryInfo: 'Kigali delivery within 24-48 hrs',
         status: (config.requireAdminApproval || config.autoPublish === false) ? 'Hidden' : 'Available',
@@ -7575,8 +7609,8 @@ app.post('/api/admin/cjdropshipping/import', requireAdminAuth, requireRole(['own
         shopId,
         receiverName: db.settings.receiverName || 'Ruth',
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: db.settings.merchantCode || '078002',
-        receiverPhone: db.settings.paymentNumber || '078002260',
+        merchantCode: db.settings.merchantCode || '2328354',
+        receiverPhone: db.settings.paymentNumber || '0780022600',
         location: 'Kigali Express / Global Dispatch',
         deliveryInfo: 'Kigali delivery within 24-48 hrs',
         status: verifiedStock > 0 ? (shouldRequireApproval ? 'Hidden' : 'Available') : 'Out of Stock',
@@ -8067,8 +8101,8 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
             shopId: 'shop-cj-dropshipping-fulfillment-3288',
             receiverName: 'Ruth',
             paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-            merchantCode: '078002',
-            receiverPhone: '078002260',
+            merchantCode: '2328354',
+            receiverPhone: '0780022600',
             location: 'Kigali Express / Global Dispatch',
             deliveryInfo: 'Kigali delivery within 24-48 hrs',
             status: 'Available',
@@ -8252,8 +8286,8 @@ async function syncAlibabaProducts(categoryFilter?: string, adminName: string = 
         shopId,
         receiverName: db.settings.receiverName || 'Ruth',
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: db.settings.merchantCode || '078002',
-        receiverPhone: db.settings.paymentNumber || '078002260',
+        merchantCode: db.settings.merchantCode || '2328354',
+        receiverPhone: db.settings.paymentNumber || '0780022600',
         location: 'Kigali International Airport (KGL) Hub',
         deliveryInfo: 'Air Cargo to Kigali: 7-12 business days (MAGERWA Customs clearance included)',
         status: autoPublish ? 'Available' : 'Hidden',
@@ -8573,8 +8607,8 @@ Origin: Direct Factory Dispatch (China)`,
         shopId,
         receiverName: db.settings.receiverName || 'Ruth',
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: db.settings.merchantCode || '078002',
-        receiverPhone: db.settings.paymentNumber || '078002260',
+        merchantCode: db.settings.merchantCode || '2328354',
+        receiverPhone: db.settings.paymentNumber || '0780022600',
         location: 'Kigali International Airport (KGL) Hub',
         deliveryInfo: 'Air Cargo to Kigali: 7-12 business days (MAGERWA Customs clearance included)',
         status: autoPublish ? 'Available' : 'Hidden',
@@ -8802,8 +8836,8 @@ app.post('/api/admin/alibaba/import', requireAdminAuth, requireRole(['owner', 'a
         shopId,
         receiverName: db.settings.receiverName || 'Ruth',
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: db.settings.merchantCode || '078002',
-        receiverPhone: db.settings.paymentNumber || '078002260',
+        merchantCode: db.settings.merchantCode || '2328354',
+        receiverPhone: db.settings.paymentNumber || '0780022600',
         location: 'Kigali International Airport (KGL) Hub',
         deliveryInfo: 'Air Cargo to Kigali: 7-12 business days (MAGERWA Customs clearance included)',
         status: autoPublish ? 'Available' : 'Hidden',
@@ -9682,8 +9716,8 @@ app.post('/api/admin/drive/import-products', requireAdminAuth, requireRole(['own
           shopId,
           receiverName: item.receiverName || db.settings.receiverName || 'Ruth',
           paymentMethods: item.paymentMethods || ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-          merchantCode: item.merchantCode || db.settings.merchantCode || '078002',
-          receiverPhone: item.receiverPhone || db.settings.paymentNumber || '078002260',
+          merchantCode: item.merchantCode || db.settings.merchantCode || '2328354',
+          receiverPhone: item.receiverPhone || db.settings.paymentNumber || '0780022600',
           location: item.location || 'Kigali, Rwanda',
           deliveryInfo: item.deliveryInfo || 'Same-day Kigali delivery',
           status: item.status || 'Available',
@@ -10099,8 +10133,8 @@ async function applyGoogleSheetEdits(
         shopId,
         receiverName: db.settings.receiverName || 'Ruth',
         paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-        merchantCode: db.settings.merchantCode || '078002',
-        receiverPhone: db.settings.paymentNumber || '078002260',
+        merchantCode: db.settings.merchantCode || '2328354',
+        receiverPhone: db.settings.paymentNumber || '0780022600',
         location: 'Kigali, Rwanda',
         deliveryInfo: 'Same-day Kigali delivery',
         status: effectiveStatus,
@@ -10763,8 +10797,8 @@ async function syncProductsFromFirebase(
         shopName: raw.shopName || raw.shop || raw.supplier || 'ContactReach Market',
         shopId: raw.shopId || raw.supplierId,
         receiverName: raw.receiverName || 'Ruth',
-        receiverPhone: raw.receiverPhone || '078002260',
-        merchantCode: raw.merchantCode || '078002',
+        receiverPhone: raw.receiverPhone || '0780022600',
+        merchantCode: raw.merchantCode || '2328354',
         location: raw.location || 'Kigali, Rwanda',
         deliveryInfo: raw.deliveryInfo || 'Same-day Kigali delivery',
         // Automatically published with Available status and Approved review status so shoppers can see and purchase immediately
@@ -11464,8 +11498,8 @@ app.post('/api/admin/products/make-all-ready', requireAdminAuth, requireRole(['o
           shopId: 'shop-cj-dropshipping-fulfillment-3288',
           receiverName: 'Ruth',
           paymentMethods: ['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'],
-          merchantCode: '078002',
-          receiverPhone: '078002260',
+          merchantCode: '2328354',
+          receiverPhone: '0780022600',
           location: 'Kigali Express / Global Dispatch',
           deliveryInfo: 'Kigali delivery within 24-48 hrs',
           status: 'Available',

@@ -603,7 +603,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
                     0780022600 / +250 780 022 600
                   </a>
                   <span className="text-[11px] text-slate-500 block font-medium">
-                    MoMo & Airtel Receiver: <strong>Ruth (078002260 / 078002)</strong>
+                    MoMo & Airtel Receiver: <strong>Ruth (0780022600 / 2328354)</strong>
                   </span>
                 </div>
               </div>

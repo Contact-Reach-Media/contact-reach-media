@@ -16,9 +16,9 @@ ContactReach Market is a specialized e-commerce web platform engineered for Rwan
 ### Core Capabilities:
 - **Zero Mock / Zero Fake Policy**: 100% production-ready catalog without fake products, invented sales counts, or dummy reviews.
 - **Rwandan Mobile Money & Banking**:
-  - MTN MoMo direct transfer (*182*1*1*078002260*AMOUNT#)
-  - MTN MoMoPay merchant code (*182*8*1*078002*AMOUNT#)
-  - Airtel Money (*182*1*2*078002260*AMOUNT#)
+  - MTN MoMo direct transfer (*182*1*1*0780022600*AMOUNT#)
+  - MTN MoMoPay merchant code (*182*8*1*2328354*AMOUNT#)
+  - Airtel Money (*182*1*2*0780022600*AMOUNT#)
   - I&M Bank Rwanda wire transfer
   - Cash on pickup at Fair View Plaza, Kigali
 - **Order Lifecycle & Real-Time Tracking**:

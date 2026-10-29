@@ -387,7 +387,7 @@ async function runTests() {
     assert.strictEqual(orderRes.status, 201);
     const order = await orderRes.json();
 
-    const sampleSms = `Y'ello! You have transferred 36,500 RWF to ContactReach Market (078002) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.`;
+    const sampleSms = `Y'ello! You have transferred 36,500 RWF to ContactReach Market (2328354) on 2026-10-21. TxId: 991827461. Fee: 100 RWF. New balance: 140,200 RWF.`;
     const sampleScreenshot = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
     const confirmRes = await fetch(`${BASE_URL}/api/payments/confirm`, {
@@ -822,23 +822,23 @@ async function runTests() {
   await test('USSD builder generates precise Rwandan codes and phone dialer tel: URI', async () => {
     const { buildUssdCode, formatUssdTelUri } = await import('../src/utils/ussd.ts');
 
-    // MTN MoMo Direct: *182*1*1*078002260*AMOUNT#
-    const momoCode = buildUssdCode('MTN Mobile Money', 35000, '078002260');
-    assert.strictEqual(momoCode, '*182*1*1*078002260*35000#');
+    // MTN MoMo Direct: *182*1*1*0780022600*AMOUNT#
+    const momoCode = buildUssdCode('MTN Mobile Money', 35000, '0780022600');
+    assert.strictEqual(momoCode, '*182*1*1*0780022600*35000#');
     const momoUri = formatUssdTelUri(momoCode);
-    assert.strictEqual(momoUri, 'tel:*182*1*1*078002260*35000%23', '# must be encoded as %23');
+    assert.strictEqual(momoUri, 'tel:*182*1*1*0780022600*35000%23', '# must be encoded as %23');
 
-    // MTN MoMoPay Merchant: *182*8*1*078002*AMOUNT#
-    const merchantCode = buildUssdCode('MTN Merchant Code', 50000, undefined, '078002');
-    assert.strictEqual(merchantCode, '*182*8*1*078002*50000#');
+    // MTN MoMoPay Merchant: *182*8*1*2328354*AMOUNT#
+    const merchantCode = buildUssdCode('MTN Merchant Code', 50000, undefined, '2328354');
+    assert.strictEqual(merchantCode, '*182*8*1*2328354*50000#');
     const merchantUri = formatUssdTelUri(merchantCode);
-    assert.strictEqual(merchantUri, 'tel:*182*8*1*078002*50000%23');
+    assert.strictEqual(merchantUri, 'tel:*182*8*1*2328354*50000%23');
 
-    // Airtel Money: *182*1*2*078002260*AMOUNT#
-    const airtelCode = buildUssdCode('Airtel Money', 20000, '078002260');
-    assert.strictEqual(airtelCode, '*182*1*2*078002260*20000#');
+    // Airtel Money: *182*1*2*0780022600*AMOUNT#
+    const airtelCode = buildUssdCode('Airtel Money', 20000, '0780022600');
+    assert.strictEqual(airtelCode, '*182*1*2*0780022600*20000#');
     const airtelUri = formatUssdTelUri(airtelCode);
-    assert.strictEqual(airtelUri, 'tel:*182*1*2*078002260*20000%23');
+    assert.strictEqual(airtelUri, 'tel:*182*1*2*0780022600*20000%23');
   });
 
   // TEST 22: Payment Evidence Isolation (Never Treated as Paid without independent admin verification)

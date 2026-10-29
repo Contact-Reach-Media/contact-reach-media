@@ -3,15 +3,15 @@ import type { PaymentMethod } from '../types.ts';
 /**
  * ContactReach Market Official Mobile Money USSD Configuration (Rwanda)
  * 
- * 1. MTN MoMo Direct Transfer:   *182*1*1*078002260*AMOUNT#  (Receiver: Ruth / 078002260)
- * 2. MTN MoMoPay Merchant Code:  *182*8*1*078002*AMOUNT#     (Merchant: 078002 / ContactReach Market)
- * 3. Airtel Money Transfer:       *182*1*2*078002260*AMOUNT#  (Receiver: Ruth / 078002260)
+ * 1. MTN MoMo Direct Transfer:   *182*1*1*0780022600*AMOUNT#  (Receiver: Ruth / 0780022600)
+ * 2. MTN MoMoPay Merchant Code:  *182*8*1*2328354*AMOUNT#     (Merchant: 2328354 / ContactReach Market)
+ * 3. Airtel Money Transfer:       *182*1*2*0780022600*AMOUNT#  (Receiver: Ruth / 0780022600)
  */
 
 export const USSD_CONFIG = {
-  mtnMomoNumber: '078002260',
-  mtnMerchantCode: '078002',
-  airtelNumber: '078002260',
+  mtnMomoNumber: '0780022600',
+  mtnMerchantCode: '2328354',
+  airtelNumber: '0780022600',
   receiverName: 'Ruth',
   merchantName: 'ContactReach Market'
 };
@@ -32,16 +32,16 @@ export function buildUssdCode(
 
   switch (method) {
     case 'MTN Merchant Code':
-      // MTN MoMoPay Merchant: *182*8*1*078002*AMOUNT#
+      // MTN MoMoPay Merchant: *182*8*1*2328354*AMOUNT#
       return `*182*8*1*${merchantCode}*${roundedAmount}#`;
 
     case 'Airtel Money':
-      // Airtel Money: *182*1*2*078002260*AMOUNT#
+      // Airtel Money: *182*1*2*0780022600*AMOUNT#
       return `*182*1*2*${airtelPhone}*${roundedAmount}#`;
 
     case 'MTN Mobile Money':
     default:
-      // MTN MoMo Direct Transfer: *182*1*1*078002260*AMOUNT#
+      // MTN MoMo Direct Transfer: *182*1*1*0780022600*AMOUNT#
       return `*182*1*1*${momoPhone}*${roundedAmount}#`;
   }
 }

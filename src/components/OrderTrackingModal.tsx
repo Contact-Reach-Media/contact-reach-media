@@ -323,8 +323,8 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                 const ussdCode = buildUssdCode(
                   trackedOrder.paymentMethod,
                   trackedOrder.totalAmount,
-                  trackedOrder.receiverDetails || '078002260',
-                  '078002'
+                  trackedOrder.receiverDetails || '0780022600',
+                  '2328354'
                 );
                 const telUri = formatUssdTelUri(ussdCode);
 
@@ -340,8 +340,8 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                         </h5>
                         <p className="text-xs text-amber-900 mt-0.5">
                           {currentLang === 'en'
-                            ? `Amount due: ${trackedOrder.totalAmount.toLocaleString()} RWF to ${trackedOrder.receiverName || 'Ruth'} (${trackedOrder.receiverDetails || '078002260'})`
-                            : `Amafaranga yishyurwa: ${trackedOrder.totalAmount.toLocaleString()} RWF kuri ${trackedOrder.receiverName || 'Ruth'} (${trackedOrder.receiverDetails || '078002260'})`}
+                            ? `Amount due: ${trackedOrder.totalAmount.toLocaleString()} RWF to ${trackedOrder.receiverName || 'Ruth'} (${trackedOrder.receiverDetails || '0780022600'})`
+                            : `Amafaranga yishyurwa: ${trackedOrder.totalAmount.toLocaleString()} RWF kuri ${trackedOrder.receiverName || 'Ruth'} (${trackedOrder.receiverDetails || '0780022600'})`}
                         </p>
                       </div>
                       <button
