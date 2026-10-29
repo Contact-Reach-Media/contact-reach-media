@@ -16,6 +16,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   collection,
   query,
   where,
@@ -577,57 +578,70 @@ export function cleanForFirestore<T>(data: T): any {
   return JSON.parse(JSON.stringify(data));
 }
 
-// Products: queries both databases and merges
+// Products: queries Firestore and returns products
 export async function getProductsFromFirestore(): Promise<Product[]> {
   const itemsMap = new Map<string, Product>();
 
-  if (firestore1Connected) {
-    try {
-      const snap1 = await getDocs(collection(db1, 'products'));
-      snap1.forEach(d => {
-        itemsMap.set(d.id, { ...(d.data() as Product), id: d.id });
-      });
-    } catch {}
-  }
-
-  if (firestore2Connected) {
-    try {
-      const snap2 = await getDocs(collection(db2, 'products'));
-      snap2.forEach(d => {
-        if (!itemsMap.has(d.id)) {
-          itemsMap.set(d.id, { ...(d.data() as Product), id: d.id });
-        }
-      });
-    } catch {}
+  try {
+    const snap = await getDocs(collection(db, 'products'));
+    snap.forEach(d => {
+      itemsMap.set(d.id, { ...(d.data() as Product), id: d.id });
+    });
+  } catch (err) {
+    console.warn('[Firebase] Firestore getProducts notice:', err);
   }
 
   return Array.from(itemsMap.values());
 }
 
-export async function saveProductToFirestore(product: Product): Promise<void> {
+export async function saveProductToFirestore(product: Product): Promise<boolean> {
   const clean = cleanForFirestore(product);
-  const tasks: Promise<any>[] = [];
-  if (firestore1Connected) {
-    tasks.push(setDoc(doc(db1, 'products', product.id), clean).catch(() => {}));
-  }
-  if (firestore2Connected) {
-    tasks.push(setDoc(doc(db2, 'products', product.id), clean).catch(() => {}));
-  }
-  if (tasks.length > 0) {
-    await Promise.allSettled(tasks);
+  try {
+    await setDoc(doc(db, 'products', product.id), clean, { merge: true });
+    return true;
+  } catch (error) {
+    console.warn('[Firebase] Firestore saveProduct notice:', error);
+    return false;
   }
 }
 
-export async function deleteProductFromFirestore(productId: string): Promise<void> {
-  const tasks: Promise<any>[] = [];
-  if (firestore1Connected) {
-    tasks.push(deleteDoc(doc(db1, 'products', productId)).catch(() => {}));
+export async function batchSaveProductsToFirestore(productsList: Product[]): Promise<{ count: number; failed: number }> {
+  let count = 0;
+  let failed = 0;
+  const chunkSize = 250;
+
+  for (let i = 0; i < productsList.length; i += chunkSize) {
+    const chunk = productsList.slice(i, i + chunkSize);
+    try {
+      const batch = writeBatch(db);
+      for (const p of chunk) {
+        batch.set(doc(db, 'products', p.id), cleanForFirestore(p), { merge: true });
+      }
+      await batch.commit();
+      count += chunk.length;
+    } catch (err) {
+      console.warn('[Firebase] Batch commit notice, attempting individual writes:', err);
+      for (const p of chunk) {
+        try {
+          await setDoc(doc(db, 'products', p.id), cleanForFirestore(p), { merge: true });
+          count++;
+        } catch {
+          failed++;
+        }
+      }
+    }
   }
-  if (firestore2Connected) {
-    tasks.push(deleteDoc(doc(db2, 'products', productId)).catch(() => {}));
-  }
-  if (tasks.length > 0) {
-    await Promise.allSettled(tasks);
+
+  return { count, failed };
+}
+
+export async function deleteProductFromFirestore(productId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, 'products', productId));
+    return true;
+  } catch (error) {
+    console.warn('[Firebase] Firestore deleteProduct notice:', error);
+    return false;
   }
 }
 
@@ -745,13 +759,14 @@ export async function submitSupplierApplicationToFirestore(appData: SupplierAppl
 }
 
 // Customer Messages
-export async function submitMessageToFirestore(msg: AdminMessage): Promise<void> {
-  if (!firestoreConnected) return;
+export async function submitMessageToFirestore(msg: AdminMessage): Promise<boolean> {
   const docPath = `messages/${msg.id}`;
   try {
-    await setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg));
+    await setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg), { merge: true });
+    return true;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, docPath);
+    console.warn('[Firebase] Firestore submitMessage notice:', error);
+    return false;
   }
 }
 
@@ -891,22 +906,56 @@ export async function getMessagesFromFirestore(): Promise<AdminMessage[]> {
   }
 }
 
-export async function updateMessageInFirestore(msg: Partial<AdminMessage> & { id: string }): Promise<void> {
+export async function updateMessageInFirestore(msg: Partial<AdminMessage> & { id: string }): Promise<boolean> {
   const docPath = `messages/${msg.id}`;
   try {
     await setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg), { merge: true });
+    return true;
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, docPath);
+    console.warn('[Firebase] Firestore updateMessage notice:', error);
+    return false;
   }
 }
 
-export async function deleteMessageFromFirestore(messageId: string): Promise<void> {
+export async function deleteMessageFromFirestore(messageId: string): Promise<boolean> {
   const docPath = `messages/${messageId}`;
   try {
     await deleteDoc(doc(db, 'messages', messageId));
+    return true;
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, docPath);
+    console.warn('[Firebase] Firestore deleteMessage notice:', error);
+    return false;
   }
+}
+
+export async function batchSaveMessagesToFirestore(messagesList: AdminMessage[]): Promise<{ count: number; failed: number }> {
+  let count = 0;
+  let failed = 0;
+  const chunkSize = 250;
+
+  for (let i = 0; i < messagesList.length; i += chunkSize) {
+    const chunk = messagesList.slice(i, i + chunkSize);
+    try {
+      const batch = writeBatch(db);
+      for (const m of chunk) {
+        batch.set(doc(db, 'messages', m.id), cleanForFirestore(m), { merge: true });
+      }
+      await batch.commit();
+      count += chunk.length;
+    } catch (err) {
+      console.warn('[Firebase] Batch commit messages notice, attempting individual writes:', err);
+      for (const m of chunk) {
+        try {
+          await setDoc(doc(db, 'messages', m.id), cleanForFirestore(m), { merge: true });
+          count++;
+        } catch {
+          failed++;
+        }
+      }
+    }
+  }
+
+  return { count, failed };
 }
 
 // -------------------------------------------------------------

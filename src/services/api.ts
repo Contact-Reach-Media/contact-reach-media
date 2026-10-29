@@ -10,6 +10,7 @@ import { initialProducts, initialCategories, initialSettings, initialShops } fro
 import {
   getProductsFromFirestore,
   saveProductToFirestore,
+  batchSaveProductsToFirestore,
   deleteProductFromFirestore,
   getCategoriesFromFirestore,
   saveCategoryToFirestore,
@@ -20,6 +21,9 @@ import {
   submitPaymentToFirestore,
   submitSupplierApplicationToFirestore,
   submitMessageToFirestore,
+  updateMessageInFirestore,
+  deleteMessageFromFirestore,
+  batchSaveMessagesToFirestore,
   submitProblemReportToFirestore,
   submitReviewToFirestore,
   getSettingsFromFirestore,
@@ -426,6 +430,11 @@ export const api = {
       });
       const parsed = await safeParseResponse<Order>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await createOrderInFirestore(parsed.json);
+        } catch (fsErr) {
+          console.warn('[Firebase] Order sync notice:', fsErr);
+        }
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
@@ -565,6 +574,11 @@ export const api = {
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        if (parsed.json.confirmation) {
+          try {
+            await submitPaymentToFirestore(parsed.json.confirmation);
+          } catch {}
+        }
         return parsed.json;
       }
       if (parsed.isJson && parsed.json?.error) {
@@ -660,6 +674,23 @@ export const api = {
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        const msgId = parsed.json.id || `msg-${Date.now()}`;
+        const newMsg: AdminMessage = {
+          id: msgId,
+          name: payload.name,
+          email: payload.email,
+          phone: payload.phone,
+          subject: payload.subject || 'General Inquiry',
+          message: payload.message,
+          orderNumber: payload.orderNumber,
+          createdAt: new Date().toISOString(),
+          status: 'unread'
+        };
+        try {
+          await submitMessageToFirestore(newMsg);
+        } catch (fsErr) {
+          console.warn('[Firebase] Message store notice:', fsErr);
+        }
         return parsed.json;
       }
       if (parsed.isJson && parsed.json?.error) {
@@ -711,6 +742,11 @@ export const api = {
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        if (parsed.json.report) {
+          try {
+            await submitProblemReportToFirestore(parsed.json.report);
+          } catch {}
+        }
         return parsed.json;
       }
       if (parsed.isJson && parsed.json?.error) {
@@ -1272,6 +1308,11 @@ export const api = {
       });
       const parsed = await safeParseResponse<Product>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await saveProductToFirestore(parsed.json);
+        } catch (fsErr) {
+          console.warn('[Firebase] Firestore save product notice:', fsErr);
+        }
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
@@ -1302,6 +1343,11 @@ export const api = {
       });
       const parsed = await safeParseResponse<Product>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await saveProductToFirestore(parsed.json);
+        } catch (fsErr) {
+          console.warn('[Firebase] Firestore update product notice:', fsErr);
+        }
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
@@ -1355,6 +1401,9 @@ export const api = {
       });
       const parsed = await safeParseResponse<Product>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await saveProductToFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
     } catch {}
@@ -1383,7 +1432,12 @@ export const api = {
         headers: getAuthHeaders()
       });
       const parsed = await safeParseResponse<any>(res);
-      if (res.ok) return;
+      if (res.ok) {
+        try {
+          await deleteProductFromFirestore(id);
+        } catch {}
+        return;
+      }
       if (parsed.isJson && parsed.json?.error) {
         throw new Error(parsed.json.error);
       }
@@ -1719,10 +1773,18 @@ export const api = {
       });
       const parsed = await safeParseResponse<AdminMessage>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await updateMessageInFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
     } catch {}
-    return { id, ...data } as AdminMessage;
+
+    const updated = { id, ...data } as AdminMessage;
+    try {
+      await updateMessageInFirestore(updated);
+    } catch {}
+    return updated;
   },
 
   async adminDeleteMessage(id: string): Promise<void> {
@@ -1731,6 +1793,10 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
+    } catch {}
+
+    try {
+      await deleteMessageFromFirestore(id);
     } catch {}
   },
 
@@ -3025,6 +3091,13 @@ export const api = {
     if (!res.ok || !parsed.isJson) {
       throw new Error(parsed.json?.error || 'Failed to import spreadsheet products');
     }
+    if (parsed.json?.products && Array.isArray(parsed.json.products)) {
+      try {
+        await batchSaveProductsToFirestore(parsed.json.products);
+      } catch (fsErr) {
+        console.warn('[Firebase] Bulk import sync notice:', fsErr);
+      }
+    }
     return parsed.json;
   },
 
@@ -3970,6 +4043,16 @@ export const api = {
       throw new Error(parsed.json?.error || 'Failed to bulk approve products');
     }
     return parsed.json;
+  },
+
+  async syncAllProductsToFirestore(): Promise<{ count: number; failed: number }> {
+    const products = await this.getProducts();
+    return batchSaveProductsToFirestore(products);
+  },
+
+  async syncAllMessagesToFirestore(): Promise<{ count: number; failed: number }> {
+    const messages = await this.adminGetMessages();
+    return batchSaveMessagesToFirestore(messages);
   }
 };
 
