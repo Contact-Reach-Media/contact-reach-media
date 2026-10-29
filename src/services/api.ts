@@ -20,16 +20,11 @@ import {
   submitPaymentToFirestore,
   submitSupplierApplicationToFirestore,
   submitMessageToFirestore,
-  updateMessageInFirestore,
-  deleteMessageFromFirestore,
-  getMessagesFromFirestore,
   submitProblemReportToFirestore,
   submitReviewToFirestore,
   getSettingsFromFirestore,
   saveSettingsToFirestore,
   saveCustomerToFirestore,
-  deleteCustomerFromFirestore,
-  deleteOrderFromFirestore,
   updateOrderInFirestore,
   updatePaymentInFirestore,
   saveSupplierPayoutToFirestore,
@@ -287,6 +282,9 @@ export const api = {
       const res = await fetch('/api/categories');
       const parsed = await safeParseResponse<Category[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        if (typeof window !== 'undefined') {
+          try { localStorage.setItem('crm_db_categories', JSON.stringify(parsed.json)); } catch {}
+        }
         return parsed.json;
       }
     } catch {}
@@ -294,10 +292,23 @@ export const api = {
     // Fallback to live Cloud Firestore
     try {
       const fsCategories = await getCategoriesFromFirestore();
-      if (fsCategories && fsCategories.length > 0) return fsCategories;
+      if (fsCategories && fsCategories.length > 0) {
+        if (typeof window !== 'undefined') {
+          try { localStorage.setItem('crm_db_categories', JSON.stringify(fsCategories)); } catch {}
+        }
+        return fsCategories;
+      }
     } catch {}
 
-    return initialCategories;
+    // Fallback to client cache
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_categories');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+
+    return [];
   },
 
   // Public Shops
@@ -306,6 +317,9 @@ export const api = {
       const res = await fetch('/api/shops');
       const parsed = await safeParseResponse<VendorShop[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        if (typeof window !== 'undefined') {
+          try { localStorage.setItem('crm_db_shops', JSON.stringify(parsed.json)); } catch {}
+        }
         return parsed.json;
       }
     } catch {}
@@ -313,10 +327,23 @@ export const api = {
     // Fallback to live Cloud Firestore
     try {
       const fsShops = await getShopsFromFirestore();
-      if (fsShops && fsShops.length > 0) return fsShops;
+      if (fsShops && fsShops.length > 0) {
+        if (typeof window !== 'undefined') {
+          try { localStorage.setItem('crm_db_shops', JSON.stringify(fsShops)); } catch {}
+        }
+        return fsShops;
+      }
     } catch {}
 
-    return initialShops;
+    // Fallback to client cache
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_shops');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+
+    return [];
   },
 
   async getShopById(id: string): Promise<{ shop: VendorShop; products: Product[] } | null> {
@@ -370,6 +397,11 @@ export const api = {
       const res = await fetch(`/api/products?${query.toString()}`);
       const parsed = await safeParseResponse<Product[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        if (!params || Object.keys(params).length === 0) {
+          if (typeof window !== 'undefined') {
+            try { localStorage.setItem('crm_db_products', JSON.stringify(parsed.json)); } catch {}
+          }
+        }
         return parsed.json;
       }
     } catch {}
@@ -389,7 +421,25 @@ export const api = {
       }
     } catch {}
 
-    return initialProducts;
+    // Fallback to client cache
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_products');
+        if (cached) {
+          let cachedList: Product[] = JSON.parse(cached);
+          if (params?.category && params.category !== 'all') {
+            cachedList = cachedList.filter(p => p.category === params.category);
+          }
+          if (params?.search) {
+            const q = params.search.toLowerCase();
+            cachedList = cachedList.filter(p => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+          }
+          return cachedList.filter(p => p.status !== 'Hidden');
+        }
+      } catch {}
+    }
+
+    return [];
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -407,7 +457,18 @@ export const api = {
       if (found) return found;
     } catch {}
 
-    return initialProducts.find(p => p.id === id) || null;
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_products');
+        if (cached) {
+          const list: Product[] = JSON.parse(cached);
+          const found = list.find(p => p.id === id);
+          if (found) return found;
+        }
+      } catch {}
+    }
+
+    return null;
   },
 
   // Customer Place Order
@@ -1631,17 +1692,10 @@ export const api = {
       });
       const parsed = await safeParseResponse<AdminMessage>(res);
       if (res.ok && parsed.isJson && parsed.json) {
-        try {
-          await updateMessageInFirestore(parsed.json);
-        } catch {}
         return parsed.json;
       }
     } catch {}
-    const fallbackMsg = { id, ...data } as AdminMessage;
-    try {
-      await updateMessageInFirestore(fallbackMsg);
-    } catch {}
-    return fallbackMsg;
+    return { id, ...data } as AdminMessage;
   },
 
   async adminDeleteMessage(id: string): Promise<void> {
@@ -1650,9 +1704,6 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
-    } catch {}
-    try {
-      await deleteMessageFromFirestore(id);
     } catch {}
   },
 
@@ -1761,73 +1812,6 @@ export const api = {
       }
     } catch {}
     return null;
-  },
-
-  async adminUpdateCustomer(id: string, data: Partial<CustomerUser>): Promise<CustomerUser> {
-    try {
-      const res = await fetch(`/api/admin/buyers/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(data)
-      });
-      const parsed = await safeParseResponse<{ message: string; customer: CustomerUser }>(res);
-      if (res.ok && parsed.isJson && parsed.json?.customer) {
-        try {
-          await saveCustomerToFirestore(parsed.json.customer);
-        } catch {}
-        return parsed.json.customer;
-      }
-    } catch {}
-    const updated = { id, ...data } as CustomerUser;
-    try {
-      await saveCustomerToFirestore(updated);
-    } catch {}
-    return updated;
-  },
-
-  async adminDeleteCustomer(id: string): Promise<void> {
-    try {
-      await fetch(`/api/admin/buyers/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-    } catch {}
-    try {
-      await deleteCustomerFromFirestore(id);
-    } catch {}
-  },
-
-  async adminCreateCustomer(data: { name: string; phone: string; email?: string; deliveryAddress?: string }): Promise<CustomerUser> {
-    try {
-      const res = await fetch('/api/admin/buyers', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(data)
-      });
-      const parsed = await safeParseResponse<{ message: string; customer: CustomerUser }>(res);
-      if (res.ok && parsed.isJson && parsed.json?.customer) {
-        try {
-          await saveCustomerToFirestore(parsed.json.customer);
-        } catch {}
-        return parsed.json.customer;
-      }
-    } catch {}
-    const created: CustomerUser = {
-      id: `cust-${Date.now()}`,
-      name: data.name,
-      phone: data.phone,
-      email: data.email,
-      deliveryAddress: data.deliveryAddress,
-      createdAt: new Date().toISOString(),
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'Active',
-      accountType: 'buyer'
-    };
-    try {
-      await saveCustomerToFirestore(created);
-    } catch {}
-    return created;
   },
 
   // Audit Logs
@@ -2088,50 +2072,106 @@ export const api = {
     return { user: buyerUser, token: fallbackToken };
   },
 
-  // Buyer Phone Number / MoMo Authentication
-  async buyerPhoneLogin(phone: string, name?: string, email?: string): Promise<{ user: CustomerUser; token: string }> {
-    const cleanPhone = phone.trim();
+  async buyerLogin(payload: {
+    identifier?: string;
+    emailOrPhone?: string;
+    email?: string;
+    phone?: string;
+    password?: string;
+  }): Promise<{ user: CustomerUser; token: string }> {
+    const rawId = (payload.identifier || payload.emailOrPhone || payload.email || payload.phone || '').trim();
     try {
-      const res = await fetch('/api/buyers/phone-login', {
+      const res = await fetch('/api/buyers/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone, name, email })
+        body: JSON.stringify({ identifier: rawId, password: payload.password })
       });
       const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
-      if (res.ok && parsed.isJson && parsed.json && !parsed.json.error) {
+      if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
         setBuyerToken(parsed.json.token, parsed.json.user);
-        return parsed.json;
+        return { user: parsed.json.user, token: parsed.json.token };
       }
       if (parsed.isJson && parsed.json?.error) {
         throw new Error(parsed.json.error);
       }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('Service temporarily') && !fetchErr.message.includes('HTML') && !fetchErr.message.includes('fetch')) {
-        throw fetchErr;
+    } catch (err: any) {
+      if (err.message && !err.message.includes('fetch') && !err.message.includes('Service temporarily')) {
+        throw err;
       }
     }
 
     // Client-side fallback persistence
-    const buyerUser: CustomerUser = {
-      id: `cust-p-${Date.now()}`,
-      name: name?.trim() || `Buyer (${cleanPhone.slice(-4)})`,
-      phone: cleanPhone,
-      email: email?.trim() || undefined,
+    const isEmail = rawId.includes('@');
+    const fallbackUser: CustomerUser = {
+      id: `cust-loc-${Date.now()}`,
+      name: isEmail ? rawId.split('@')[0] : `Customer (${rawId.slice(-4) || 'Buyer'})`,
+      email: isEmail ? rawId : undefined,
+      phone: !isEmail ? rawId : '',
       createdAt: new Date().toISOString(),
       totalOrders: 0,
       totalSpent: 0,
       status: 'Active',
       accountType: 'buyer',
       isRegisteredBuyer: true,
-      lastLogin: new Date().toISOString(),
-      authProvider: 'phone'
+      lastLogin: new Date().toISOString()
     };
-    const fallbackToken = `buyer_p_local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    setBuyerToken(fallbackToken, buyerUser);
+    const token = `buyer_loc_${Date.now()}`;
+    setBuyerToken(token, fallbackUser);
     try {
-      await saveCustomerToFirestore(buyerUser);
+      await saveCustomerToFirestore(fallbackUser);
     } catch {}
-    return { user: buyerUser, token: fallbackToken };
+    return { user: fallbackUser, token };
+  },
+
+  async buyerRegister(payload: {
+    name: string;
+    identifier?: string;
+    emailOrPhone?: string;
+    email?: string;
+    phone?: string;
+    password?: string;
+  }): Promise<{ user: CustomerUser; token: string }> {
+    const rawId = (payload.identifier || payload.emailOrPhone || payload.email || payload.phone || '').trim();
+    try {
+      const res = await fetch('/api/buyers/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: payload.name, identifier: rawId, password: payload.password })
+      });
+      const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
+      if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
+        setBuyerToken(parsed.json.token, parsed.json.user);
+        return { user: parsed.json.user, token: parsed.json.token };
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('fetch') && !err.message.includes('Service temporarily')) {
+        throw err;
+      }
+    }
+
+    const isEmail = rawId.includes('@');
+    const fallbackUser: CustomerUser = {
+      id: `cust-loc-${Date.now()}`,
+      name: payload.name.trim() || (isEmail ? rawId.split('@')[0] : 'Umuguzi wa Nihemart'),
+      email: isEmail ? rawId : undefined,
+      phone: !isEmail ? rawId : '',
+      createdAt: new Date().toISOString(),
+      totalOrders: 0,
+      totalSpent: 0,
+      status: 'Active',
+      accountType: 'buyer',
+      isRegisteredBuyer: true,
+      lastLogin: new Date().toISOString()
+    };
+    const token = `buyer_loc_${Date.now()}`;
+    setBuyerToken(token, fallbackUser);
+    try {
+      await saveCustomerToFirestore(fallbackUser);
+    } catch {}
+    return { user: fallbackUser, token };
   },
 
   async buyerGetMe(): Promise<CustomerUser | null> {
@@ -2266,18 +2306,6 @@ export const api = {
   },
 
   // Admin Team & Roles Management
-  async adminGetMe(): Promise<AdminUser | null> {
-    try {
-      const res = await fetch('/api/auth/me', { headers: getAuthHeaders() });
-      const parsed = await safeParseResponse<AdminUser>(res);
-      if (res.ok && parsed.isJson && parsed.json) {
-        setAdminToken(getAdminToken() || '', parsed.json);
-        return parsed.json;
-      }
-    } catch {}
-    return getStoredAdminUser();
-  },
-
   async adminGetUsers(): Promise<AdminUser[]> {
     const res = await fetch('/api/admin/users', {
       headers: getAuthHeaders()
@@ -2325,6 +2353,31 @@ export const api = {
       throw new Error(parsed.json?.error || 'Failed to remove admin user');
     }
     return parsed.json;
+  },
+
+  async adminDeleteCustomer(id: string): Promise<any> {
+    const res = await fetch(`/api/admin/buyers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to remove buyer customer');
+    }
+    return parsed.json;
+  },
+
+  async adminGetMe(): Promise<AdminUser | null> {
+    try {
+      const res = await fetch('/api/admin/auth/me', {
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return getStoredAdminUser();
   },
 
   async getHealthCheck(): Promise<any> {
@@ -3701,11 +3754,11 @@ export const api = {
     const res = await fetch('/api/admin/alibaba/import-1000', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(payload || { autoPublish: true })
+      body: JSON.stringify(payload || {})
     });
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson || !parsed.json) {
-      throw new Error(parsed.json?.error || 'Failed to import 1,000 Alibaba products');
+      throw new Error(parsed.json?.error || 'Failed to import Alibaba products');
     }
     return parsed.json;
   },

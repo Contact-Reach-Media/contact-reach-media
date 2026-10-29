@@ -369,10 +369,10 @@ function loadDbFromDisk() {
       const parsed = JSON.parse(content);
       if (parsed.products && Array.isArray(parsed.products)) db.products = parsed.products;
       if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
-      if (parsed.categories && Array.isArray(parsed.categories)) {
-        const existingIds = new Set(parsed.categories.map((c: any) => c.id));
-        const missingInitial = initialCategories.filter(c => !existingIds.has(c.id));
-        db.categories = [...parsed.categories, ...missingInitial];
+      if (parsed.categories && Array.isArray(parsed.categories) && parsed.categories.length > 0) {
+        db.categories = parsed.categories;
+      } else if (!db.categories || db.categories.length === 0) {
+        db.categories = [...initialCategories];
       }
       if (parsed.shops && Array.isArray(parsed.shops)) db.shops = parsed.shops;
       if (parsed.orders && Array.isArray(parsed.orders)) db.orders = parsed.orders;
@@ -931,8 +931,83 @@ async function syncWithFirestore() {
       console.warn('[Firebase] Admins sync notice:', admErr.message || admErr);
     }
 
+    // 12. Authoritatively sync messages from/to Firestore
+    try {
+      const msgCol = firestoreCollection(firestoreDb, 'messages');
+      const msgSnap = await firestoreGetDocs(msgCol);
+      if (msgSnap.size > 0) {
+        const fsMsgs: AdminMessage[] = [];
+        msgSnap.forEach(d => {
+          if (!db.deletedRecordIds?.includes(d.id)) {
+            fsMsgs.push({ ...(d.data() as AdminMessage), id: d.id });
+          } else {
+            deleteFromFirestoreAsync('messages', d.id);
+          }
+        });
+        const existingIds = new Set(db.messages.map(m => m.id));
+        const newMsgs = fsMsgs.filter(m => !existingIds.has(m.id));
+        db.messages = [...newMsgs, ...db.messages];
+      } else {
+        db.messages.forEach(msg => {
+          saveToFirestoreAsync('messages', msg.id, msg);
+        });
+      }
+    } catch (msgErr: any) {
+      console.warn('[Firebase] Messages sync notice:', msgErr.message || msgErr);
+    }
+
+    // 13. Authoritatively sync customer problems from/to Firestore
+    try {
+      const probCol = firestoreCollection(firestoreDb, 'customerProblems');
+      const probSnap = await firestoreGetDocs(probCol);
+      if (probSnap.size > 0) {
+        const fsProbs: CustomerProblemReport[] = [];
+        probSnap.forEach(d => {
+          if (!db.deletedRecordIds?.includes(d.id)) {
+            fsProbs.push({ ...(d.data() as CustomerProblemReport), id: d.id });
+          } else {
+            deleteFromFirestoreAsync('customerProblems', d.id);
+          }
+        });
+        const existingIds = new Set((db.customerProblems || []).map(p => p.id));
+        const newProbs = fsProbs.filter(p => !existingIds.has(p.id));
+        db.customerProblems = [...newProbs, ...(db.customerProblems || [])];
+      } else {
+        (db.customerProblems || []).forEach(prob => {
+          saveToFirestoreAsync('customerProblems', prob.id, prob);
+        });
+      }
+    } catch (probErr: any) {
+      console.warn('[Firebase] Customer problems sync notice:', probErr.message || probErr);
+    }
+
+    // 14. Authoritatively sync reviews from/to Firestore
+    try {
+      const revCol = firestoreCollection(firestoreDb, 'reviews');
+      const revSnap = await firestoreGetDocs(revCol);
+      if (revSnap.size > 0) {
+        const fsRevs: ProductReview[] = [];
+        revSnap.forEach(d => {
+          if (!db.deletedRecordIds?.includes(d.id)) {
+            fsRevs.push({ ...(d.data() as ProductReview), id: d.id });
+          } else {
+            deleteFromFirestoreAsync('reviews', d.id);
+          }
+        });
+        const existingIds = new Set((db.reviews || []).map(r => r.id));
+        const newRevs = fsRevs.filter(r => !existingIds.has(r.id));
+        db.reviews = [...newRevs, ...(db.reviews || [])];
+      } else {
+        (db.reviews || []).forEach(rev => {
+          saveToFirestoreAsync('reviews', rev.id, rev);
+        });
+      }
+    } catch (revErr: any) {
+      console.warn('[Firebase] Reviews sync notice:', revErr.message || revErr);
+    }
+
     saveDbToDisk();
-    console.log('[Firebase] Cloud Firestore authoritative catalog, orders & settings synchronization completed.');
+    console.log('[Firebase] Cloud Firestore authoritative catalog, orders, messages & settings synchronization completed.');
   } catch (err: any) {
     console.log('[Firebase] Startup synchronization notice:', err.message || err);
   }

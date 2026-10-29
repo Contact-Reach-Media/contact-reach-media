@@ -613,6 +613,32 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {!buyerUser ? (
+              <button
+                onClick={() => {
+                  onNavigate('login');
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-start px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#FF6000] text-white hover:bg-orange-600 flex items-center gap-2 cursor-pointer shadow-xs transition-colors"
+              >
+                <User className="w-4 h-4" />
+                <span>{t.signIn} / Injira kuri Konti</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  onOpenBuyerAccount && onOpenBuyerAccount();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-start px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <div className="w-5 h-5 rounded-full bg-orange-200 text-[#FF6000] flex items-center justify-center font-black text-[10px]">
+                  {buyerUser.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="truncate">{buyerUser.name} (Konti Yanjye)</span>
+              </button>
+            )}
+
             {/* Mobile Language and Currency Selectors in Drawer */}
             <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
               <div className="flex items-center justify-between text-xs font-bold text-slate-700">

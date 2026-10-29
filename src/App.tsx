@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
-import { initialProducts, initialCategories, initialSettings, initialShops } from './data/initialData.ts';
+import { initialSettings } from './data/initialData.ts';
 import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
 import { Language, translations, getCategoryTitle } from './translations.ts';
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
@@ -30,11 +30,12 @@ import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
 import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
 import { MaintenancePage } from './components/MaintenancePage.tsx';
 import { NotFoundPage } from './components/NotFoundPage.tsx';
+import { SignInPage } from './components/SignInPage.tsx';
 
 const SUPPORTED_LANG_CODES: Language[] = ['en', 'fr', 'rw', 'sw', 'es', 'pt', 'ar', 'zh', 'de', 'hi'];
 const SUPPORTED_CURR_CODES: CurrencyCode[] = ['RWF', 'USD', 'EUR', 'GBP', 'KES', 'TZS', 'UGX', 'NGN', 'ZAR', 'CNY'];
 
-// Client-side URL route parser for Vercel, Netlify & direct browser reloads
+// Client-side URL route parser for direct browser reloads & shareable links
 function parseRouteFromLocation() {
   if (typeof window === 'undefined') {
     return {
@@ -58,6 +59,7 @@ function parseRouteFromLocation() {
 
   let view = 'home';
   let productId = '';
+  let category = catParam || 'all';
 
   if (rawPath === '/shop' || rawPath === '/products' || rawPath === '/catalog') {
     view = 'shop';
@@ -71,10 +73,21 @@ function parseRouteFromLocation() {
     view = 'admin';
   } else if (rawPath === '/orders' || rawPath === '/track' || rawPath === '/track-order') {
     view = 'track-order';
+  } else if (rawPath === '/login' || rawPath === '/signin' || rawPath === '/auth') {
+    view = 'login';
+  } else if (rawPath === '/register' || rawPath === '/signup') {
+    view = 'register';
+  } else if (rawPath === '/cart') {
+    view = 'cart';
+  } else if (rawPath === '/vendor' || rawPath === '/sell') {
+    view = 'vendor';
   } else if (rawPath === '/404' || rawPath === '/not-found') {
     view = '404';
-  } else if (rawPath.startsWith('/product/')) {
-    productId = window.location.pathname.replace(/^\/product\//i, '').trim();
+  } else if (rawPath.startsWith('/product/') || rawPath.startsWith('/p/')) {
+    productId = window.location.pathname.replace(/^\/(?:product|p)\//i, '').trim();
+    view = 'shop';
+  } else if (rawPath.startsWith('/category/')) {
+    category = window.location.pathname.replace(/^\/category\//i, '').trim() || 'all';
     view = 'shop';
   } else if (rawPath !== '/' && rawPath !== '') {
     view = '404';
@@ -94,7 +107,7 @@ function parseRouteFromLocation() {
 
   return {
     view,
-    category: catParam || 'all',
+    category,
     search: searchParam || '',
     orderRef: orderParam || '',
     productId,
@@ -110,11 +123,48 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
-  // Core Data
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [shops, setShops] = useState<VendorShop[]>(initialShops);
+  // Core Data - Authoritatively loaded from database & synced storage
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_products');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const [categories, setCategories] = useState<Category[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_categories');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const [shops, setShops] = useState<VendorShop[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_shops');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   // Cart & Wishlist with localStorage Persistence
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -154,9 +204,21 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>(initialRoute.search);
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
-  // Modals
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  // Modals & Direct deep links from database
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(() => {
+    if (initialRoute.productId && typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_db_products');
+        if (cached) {
+          const list: Product[] = JSON.parse(cached);
+          const found = list.find(p => p.id === initialRoute.productId);
+          if (found) return found;
+        }
+      } catch {}
+    }
+    return null;
+  });
+  const [isCartOpen, setIsCartOpen] = useState(initialRoute.view === 'cart');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [confirmationOrder, setConfirmationOrder] = useState<Order | null>(null);
@@ -173,7 +235,7 @@ export default function App() {
   });
   const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
   const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
-  const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
+  const [isSellerModalOpen, setIsSellerModalOpen] = useState(initialRoute.view === 'vendor');
 
   // Buyer Account & Authentication
   const [buyerUser, setBuyerUser] = useState<CustomerUser | null>(null);
@@ -202,7 +264,27 @@ export default function App() {
     else if (view === 'contact') targetPath = '/contact';
     else if (view === 'track-order' || view === 'orders') targetPath = '/orders';
     else if (view === 'admin') targetPath = '/admin';
+    else if (view === 'login') targetPath = '/login';
+    else if (view === 'register') targetPath = '/register';
+    else if (view === 'cart') targetPath = '/cart';
+    else if (view === 'vendor') targetPath = '/vendor';
     else if (view === '404') targetPath = '/404';
+
+    if (view === 'cart') {
+      setIsCartOpen(true);
+      if (push && window.location.pathname !== targetPath) {
+        window.history.pushState({ view: 'cart' }, '', targetPath);
+      }
+      return;
+    }
+
+    if (view === 'vendor') {
+      setIsSellerModalOpen(true);
+      if (push && window.location.pathname !== targetPath) {
+        window.history.pushState({ view: 'vendor' }, '', targetPath);
+      }
+      return;
+    }
 
     if (view === 'admin') {
       setActiveView('admin');
@@ -236,6 +318,24 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Direct product selector with deep-link URL push & replace
+  const handleSelectProduct = (product: Product | null, push = true) => {
+    setSelectedProduct(product);
+    if (product) {
+      if (push && typeof window !== 'undefined') {
+        const targetPath = `/product/${product.id}`;
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState({ productId: product.id }, '', targetPath);
+        }
+      }
+    } else {
+      if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/product/') || window.location.pathname.startsWith('/p/'))) {
+        const fallbackPath = activeView === 'home' ? '/' : `/${activeView}`;
+        window.history.replaceState({ view: activeView }, '', fallbackPath);
+      }
+    }
+  };
+
   // Initial Data Fetch
   const refreshAllData = async () => {
     try {
@@ -251,6 +351,7 @@ export default function App() {
       setSettings(fetchedSettings);
       setShops(fetchedShops);
       setIsAdminLoggedIn(isAuth);
+      setIsDataLoaded(true);
 
       if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
         setIsAdminLoginOpen(true);
@@ -258,7 +359,13 @@ export default function App() {
 
       if (initialRoute.productId) {
         const found = fetchedProducts.find(p => p.id === initialRoute.productId);
-        if (found) setSelectedProduct(found);
+        if (found) {
+          setSelectedProduct(found);
+        } else {
+          api.getProductById(initialRoute.productId).then(singleProd => {
+            if (singleProd) setSelectedProduct(singleProd);
+          }).catch(() => {});
+        }
       }
 
       // Check for logged-in buyer user
@@ -335,6 +442,10 @@ export default function App() {
       } else if (route.view === 'track-order') {
         setIsTrackingOpen(true);
         if (route.orderRef) setTrackingOrderNumber(route.orderRef);
+      } else if (route.view === 'cart') {
+        setIsCartOpen(true);
+      } else if (route.view === 'vendor') {
+        setIsSellerModalOpen(true);
       } else {
         setActiveView(route.view);
       }
@@ -344,6 +455,8 @@ export default function App() {
       if (route.productId) {
         const found = products.find(p => p.id === route.productId);
         if (found) setSelectedProduct(found);
+      } else {
+        setSelectedProduct(null);
       }
     };
 
@@ -557,9 +670,9 @@ export default function App() {
           handleNavigate('shop');
         }}
         products={products}
-        onSelectProduct={(p) => setSelectedProduct(p)}
+        onSelectProduct={(p) => handleSelectProduct(p)}
         buyerUser={buyerUser}
-        onOpenBuyerAuth={() => setIsBuyerAuthOpen(true)}
+        onOpenBuyerAuth={() => handleNavigate('login')}
         onOpenBuyerAccount={() => setIsBuyerAccountOpen(true)}
         isAdminLoggedIn={isAdminLoggedIn}
       />
@@ -605,6 +718,21 @@ export default function App() {
             </div>
           </div>
         )
+      ) : activeView === 'login' || activeView === 'register' ? (
+        /* VIEW: BUYER SIGN IN / REGISTER FULL SCREEN (Exact match to image_027b1349.png) */
+        <div className="py-6 sm:py-10 px-4 max-w-6xl mx-auto flex-1 w-full flex items-center justify-center">
+          <SignInPage
+            initialMode={activeView === 'register' ? 'register' : 'signin'}
+            onSuccess={(user) => {
+              setBuyerUser(user);
+              handleNavigate('home');
+              showToast(currentLang === 'en' ? `Welcome, ${user.name}!` : `Murakaza neza, ${user.name}!`);
+            }}
+            onNavigateHome={() => handleNavigate('home')}
+            onOpenVendorApplication={() => setIsSellerModalOpen(true)}
+            currentLang={currentLang}
+          />
+        </div>
       ) : activeView === '404' ? (
         <NotFoundPage
           currentLang={currentLang}
@@ -612,7 +740,7 @@ export default function App() {
           exchangeRates={exchangeRates}
           products={products}
           onNavigate={handleNavigate}
-          onSelectProduct={(p) => setSelectedProduct(p)}
+          onSelectProduct={(p) => handleSelectProduct(p)}
           onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
           onOpenTracking={() => setIsTrackingOpen(true)}
           onSearch={(q) => {
@@ -752,7 +880,7 @@ export default function App() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  onViewProduct={(p) => setSelectedProduct(p)}
+                  onViewProduct={(p) => handleSelectProduct(p)}
                   onAddToCart={(p) => handleAddToCart(p, 1)}
                   onQuickBuy={(p) => handleQuickBuy(p, 1)}
                   isWishlisted={wishlist.includes(product.id)}
@@ -824,8 +952,21 @@ export default function App() {
             </div>
           </section>
 
-          {/* 3. PRODUCTS DISPLAY / PROFESSIONAL EMPTY STATE */}
-          {products.length === 0 ? (
+          {/* 3. PRODUCTS DISPLAY / PROFESSIONAL LOADING & EMPTY STATE */}
+          {!isDataLoaded && products.length === 0 ? (
+            <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-8">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <div key={n} className="bg-white rounded-2xl border border-slate-200/80 p-3 space-y-3 animate-pulse">
+                    <div className="w-full h-40 bg-slate-100 rounded-xl" />
+                    <div className="h-4 bg-slate-100 rounded w-3/4" />
+                    <div className="h-3 bg-slate-100 rounded w-1/2" />
+                    <div className="h-5 bg-orange-100/60 rounded w-2/3" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : products.length === 0 ? (
             <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-10">
               <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center max-w-2xl mx-auto shadow-2xs space-y-4">
                 <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-[#FF6000] flex items-center justify-center mx-auto">
@@ -870,7 +1011,7 @@ export default function App() {
                       <ProductCard
                         key={product.id}
                         product={product}
-                        onViewProduct={(p) => setSelectedProduct(p)}
+                        onViewProduct={(p) => handleSelectProduct(p)}
                         onAddToCart={(p) => handleAddToCart(p, 1)}
                         onQuickBuy={(p) => handleQuickBuy(p, 1)}
                         isWishlisted={wishlist.includes(product.id)}
@@ -895,7 +1036,7 @@ export default function App() {
                       <ProductCard
                         key={product.id}
                         product={product}
-                        onViewProduct={(p) => setSelectedProduct(p)}
+                        onViewProduct={(p) => handleSelectProduct(p)}
                         onAddToCart={(p) => handleAddToCart(p, 1)}
                         onQuickBuy={(p) => handleQuickBuy(p, 1)}
                         isWishlisted={wishlist.includes(product.id)}
@@ -1043,26 +1184,16 @@ export default function App() {
       {selectedProduct && (
         <ProductModal
           product={selectedProduct}
-          onClose={() => {
-            setSelectedProduct(null);
-            if (window.location.pathname.startsWith('/product/')) {
-              window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
-            }
-          }}
+          onClose={() => handleSelectProduct(null)}
           onAddToCart={(p, qty, variation) => {
             handleAddToCart(p, qty, variation);
-            setSelectedProduct(null);
+            handleSelectProduct(null);
           }}
           onBuyNow={(p, qty, variation) => {
             handleQuickBuy(p, qty, variation);
           }}
           allProducts={products}
-          onSelectSimilar={(p) => {
-            setSelectedProduct(p);
-            if (p) {
-              window.history.pushState({ view: 'shop', productId: p.id }, '', `/product/${p.id}`);
-            }
-          }}
+          onSelectSimilar={(p) => handleSelectProduct(p)}
           currentLang={currentLang}
           currentCurrency={currentCurrency}
           exchangeRates={exchangeRates}
@@ -1073,7 +1204,12 @@ export default function App() {
       {isCartOpen && (
         <CartDrawer
           isOpen={isCartOpen}
-          onClose={() => setIsCartOpen(false)}
+          onClose={() => {
+            setIsCartOpen(false);
+            if (window.location.pathname === '/cart') {
+              window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
+            }
+          }}
           cart={cart}
           onUpdateQuantity={handleUpdateCartQuantity}
           onRemoveItem={handleRemoveFromCart}
@@ -1289,7 +1425,12 @@ export default function App() {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 relative">
             <button
-              onClick={() => setIsSellerModalOpen(false)}
+              onClick={() => {
+                setIsSellerModalOpen(false);
+                if (window.location.pathname === '/vendor' || window.location.pathname === '/sell') {
+                  window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
+                }
+              }}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-full"
             >
               <X className="w-5 h-5" />
