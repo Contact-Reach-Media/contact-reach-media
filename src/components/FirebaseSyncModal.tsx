@@ -24,6 +24,7 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [pushingAll, setPushingAll] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<'both' | 'db1' | 'db2'>('both');
   const [status, setStatus] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -50,6 +51,25 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handlePushAll = async () => {
+    setPushingAll(true);
+    setErrorMsg(null);
+    setLastActionResult(null);
+    try {
+      const res = await api.adminPushAllDataToFirebase();
+      setLastActionResult(res);
+      showToast(res.message);
+      onProductsUpdated();
+      fetchStatus();
+    } catch (err: any) {
+      const msg = err.message || 'Failed to push all data to Firebase';
+      setErrorMsg(msg);
+      showToast(msg, 'error');
+    } finally {
+      setPushingAll(false);
+    }
+  };
 
   const handlePull = async () => {
     setPulling(true);
@@ -344,6 +364,46 @@ export const FirebaseSyncModal: React.FC<FirebaseSyncModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Featured: Push ALL Marketplace Data to Firebase Firestore */}
+          <div className="p-5 rounded-2xl border-2 border-orange-500 bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 shadow-sm space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-black shadow-sm">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm flex items-center gap-1.5">
+                    Import & Sync ALL Data to Firebase Firestore
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-600 text-white uppercase">
+                      11 Collections
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Syncs <strong>all 1,363 Products</strong>, <strong>all 616 Orders</strong>, <strong>11 Categories</strong>, <strong>8 Shops</strong>, <strong>Customers</strong>, <strong>Messages</strong>, and <strong>Settings</strong> to Firebase Firestore. Fully editable and deleteable with real-time rules!
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handlePushAll}
+              disabled={pushingAll || pulling || pushing}
+              className="w-full py-3 px-4 bg-gradient-to-r from-orange-600 via-amber-600 to-[#FF6000] hover:from-orange-700 hover:to-amber-700 text-white text-xs font-black rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+            >
+              {pushingAll ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Importing ALL Data to Firebase Firestore...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  <span>🔥 Import & Sync ALL 11 Collections to Firebase Now</span>
+                </>
+              )}
+            </button>
+          </div>
 
           {/* Action cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

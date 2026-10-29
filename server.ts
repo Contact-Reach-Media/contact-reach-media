@@ -4364,6 +4364,152 @@ app.patch('/api/admin/orders/:id/status', requireAdminAuth, requireRole(['owner'
   res.json(order);
 });
 
+// Update Entire Order Details (Edit Customer info, items, notes, courier, totals)
+app.put('/api/admin/orders/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const order = db.orders.find(o => o.id === req.params.id || o.orderNumber === req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const {
+    customerName,
+    customerPhone,
+    customerEmail,
+    deliveryAddress,
+    deliveryLocation,
+    deliveryNotes,
+    deliveryFee,
+    subtotal,
+    totalAmount,
+    status,
+    paymentStatus,
+    paymentMethod,
+    assignedCourier,
+    courierPhone,
+    internalNotes,
+    trackingNumber,
+    trackingCarrier,
+    supplierApprovalStatus,
+    items
+  } = req.body;
+
+  if (customerName) order.customerName = customerName.trim();
+  if (customerPhone) order.customerPhone = customerPhone.trim();
+  if (customerEmail !== undefined) order.customerEmail = customerEmail ? customerEmail.trim() : undefined;
+  if (deliveryAddress) order.deliveryAddress = deliveryAddress.trim();
+  if (deliveryLocation) order.deliveryLocation = deliveryLocation.trim();
+  if (deliveryNotes !== undefined) order.deliveryNotes = deliveryNotes;
+  if (typeof deliveryFee === 'number') order.deliveryFee = deliveryFee;
+  if (typeof subtotal === 'number') order.subtotal = subtotal;
+  if (typeof totalAmount === 'number') order.totalAmount = totalAmount;
+  if (status) order.status = status as OrderStatus;
+  if (paymentStatus) order.paymentStatus = paymentStatus as PaymentStatus;
+  if (paymentMethod) order.paymentMethod = paymentMethod;
+  if (assignedCourier !== undefined) order.assignedCourier = assignedCourier;
+  if (courierPhone !== undefined) order.courierPhone = courierPhone;
+  if (internalNotes !== undefined) order.internalNotes = internalNotes;
+  if (trackingNumber !== undefined) order.trackingNumber = trackingNumber;
+  if (trackingCarrier !== undefined) order.trackingCarrier = trackingCarrier;
+  if (supplierApprovalStatus) order.supplierApprovalStatus = supplierApprovalStatus;
+  if (Array.isArray(items) && items.length > 0) order.items = items;
+
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    timestamp: new Date().toISOString(),
+    note: `Order details updated by ${admin.name}.`,
+    updatedBy: admin.name
+  });
+
+  logAudit(admin, 'ORDER_UPDATED', `Order #${order.orderNumber} updated by ${admin.name}`, 'order', order.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('orders', order.id, order);
+  res.json(order);
+});
+
+// Delete Single Order
+app.delete('/api/admin/orders/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.orders.findIndex(o => o.id === req.params.id || o.orderNumber === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Order not found' });
+
+  const removed = db.orders.splice(idx, 1)[0];
+
+  // Restore inventory stock if stock was previously deducted
+  if (removed.stockDeducted && Array.isArray(removed.items)) {
+    for (const item of removed.items) {
+      const prod = db.products.find(p => p.id === item.productId);
+      if (prod) {
+        prod.stock += item.quantity;
+        if (prod.stock > 0 && prod.status === 'Out of Stock') prod.status = 'Available';
+        db.inventoryLogs.unshift({
+          id: `inv-${Date.now()}`,
+          productId: prod.id,
+          productName: prod.name,
+          previousStock: prod.stock - item.quantity,
+          newStock: prod.stock,
+          changeAmount: item.quantity,
+          reason: `Stock restored from deleted order ${removed.orderNumber}`,
+          adminName: admin.name,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  // Remove linked payment confirmation if existing
+  const pmIdx = db.paymentConfirmations.findIndex(p => p.orderId === removed.id || p.orderNumber === removed.orderNumber);
+  if (pmIdx !== -1) {
+    const removedPm = db.paymentConfirmations.splice(pmIdx, 1)[0];
+    deleteFromFirestoreAsync('paymentConfirmations', removedPm.id);
+    deleteFromFirestoreAsync('payments', removedPm.id);
+  }
+
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(removed.id)) {
+    db.deletedRecordIds.push(removed.id);
+  }
+
+  logAudit(admin, 'ORDER_DELETED', `Deleted order #${removed.orderNumber} (${removed.customerName})`, 'order', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('orders', removed.id);
+  res.json({ message: 'Order deleted successfully', removed });
+});
+
+// Bulk Delete Multiple Orders
+app.post('/api/admin/orders/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { orderIds } = req.body;
+  if (!Array.isArray(orderIds) || orderIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of order IDs to delete.' });
+  }
+
+  const idsSet = new Set(orderIds.map(String));
+  const deleted: Order[] = [];
+
+  db.orders = db.orders.filter(ord => {
+    if (idsSet.has(ord.id) || idsSet.has(ord.orderNumber)) {
+      deleted.push(ord);
+      if (ord.stockDeducted && Array.isArray(ord.items)) {
+        for (const item of ord.items) {
+          const prod = db.products.find(p => p.id === item.productId);
+          if (prod) {
+            prod.stock += item.quantity;
+            if (prod.stock > 0 && prod.status === 'Out of Stock') prod.status = 'Available';
+          }
+        }
+      }
+      deleteFromFirestoreAsync('orders', ord.id);
+      return false;
+    }
+    return true;
+  });
+
+  logAudit(admin, 'ORDERS_BULK_DELETED', `Bulk deleted ${deleted.length} orders`, 'order', 'bulk');
+  saveDbToDisk();
+  res.json({ message: `Deleted ${deleted.length} orders successfully`, count: deleted.length });
+});
+
 // -------------------------------------------------------------
 // ADMIN PAYMENT VERIFICATION & METHODS CONFIG
 // -------------------------------------------------------------
@@ -4503,6 +4649,19 @@ app.post('/api/admin/payments/:id/verify', requireAdminAuth, requireRole(['owner
   saveDbToDisk();
   saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
   res.json({ message: `Payment status updated to ${confirmation.verificationStatus} successfully.`, confirmation, order });
+});
+
+app.delete('/api/admin/payments/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.paymentConfirmations.findIndex(p => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Payment record not found' });
+
+  const removed = db.paymentConfirmations.splice(idx, 1)[0];
+  logAudit(admin, 'PAYMENT_DELETED', `Deleted payment record #${removed.id} for Order #${removed.orderNumber}`, 'payment', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('paymentConfirmations', removed.id);
+  deleteFromFirestoreAsync('payments', removed.id);
+  res.json({ message: 'Payment record deleted', removed });
 });
 
 app.post('/api/admin/payment-methods', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
@@ -4660,6 +4819,19 @@ app.patch('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['own
   logAudit(admin, 'PROBLEM_REPORT_UPDATED', `Case #${report.caseNumber} updated to ${report.status}`, 'problem_report', report.id);
   saveDbToDisk();
   res.json(report);
+});
+
+app.delete('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.customerProblems.findIndex(r => r.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Report not found' });
+
+  const removed = db.customerProblems.splice(idx, 1)[0];
+  logAudit(admin, 'PROBLEM_REPORT_DELETED', `Deleted report case #${removed.caseNumber}`, 'problem_report', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('customerProblems', removed.id);
+  deleteFromFirestoreAsync('reports', removed.id);
+  res.json({ message: 'Report deleted', removed });
 });
 
 // -------------------------------------------------------------
@@ -4900,6 +5072,78 @@ app.post('/api/admin/buyers', requireAdminAuth, requireRole(['owner', 'administr
   saveToFirestoreAsync('users', newCustomer.id, sanitizeBuyer(newCustomer));
 
   res.status(201).json({ message: 'Buyer account created successfully', customer: sanitizeBuyer(newCustomer) });
+});
+
+// Aliases for /api/admin/customers
+app.put('/api/admin/customers/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const customer = db.customers.find(c => c.id === req.params.id);
+  if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+  const { name, email, phone, deliveryAddress, status } = req.body;
+  if (name && typeof name === 'string') customer.name = name.trim();
+  if (email !== undefined) customer.email = typeof email === 'string' ? email.trim() : undefined;
+  if (phone !== undefined) customer.phone = String(phone).trim();
+  if (deliveryAddress !== undefined) customer.deliveryAddress = typeof deliveryAddress === 'string' ? deliveryAddress.trim() : undefined;
+  if (status === 'Active' || status === 'Suspended') customer.status = status;
+
+  logAudit(admin, 'CUSTOMER_UPDATED', `Updated details for customer "${customer.name}" (${customer.id})`, 'customer', customer.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', customer.id, sanitizeBuyer(customer));
+  saveToFirestoreAsync('users', customer.id, sanitizeBuyer(customer));
+
+  res.json({ message: 'Customer profile updated successfully', customer: sanitizeBuyer(customer) });
+});
+
+app.delete('/api/admin/customers/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.customers.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Customer not found' });
+
+  const removed = db.customers.splice(idx, 1)[0];
+
+  for (const [token, session] of db.customerTokens.entries()) {
+    if (session.customerId === removed.id) {
+      db.customerTokens.delete(token);
+    }
+  }
+
+  logAudit(admin, 'CUSTOMER_DELETED', `Deleted customer "${removed.name}" (${removed.phone || removed.id})`, 'customer', removed.id);
+  saveDbToDisk();
+  deleteFromFirestoreAsync('customers', removed.id);
+  deleteFromFirestoreAsync('users', removed.id);
+
+  res.json({ message: 'Customer removed successfully', removed: sanitizeBuyer(removed) });
+});
+
+app.post('/api/admin/customers', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { name, phone, email, deliveryAddress, status } = req.body;
+  if (!name || !phone) {
+    return res.status(400).json({ error: 'Customer name and phone number are required.' });
+  }
+
+  const newCustomer: CustomerUser = {
+    id: `cust-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    name: name.trim(),
+    phone: phone.trim(),
+    email: email ? email.trim() : undefined,
+    deliveryAddress: deliveryAddress ? deliveryAddress.trim() : undefined,
+    createdAt: new Date().toISOString(),
+    totalOrders: 0,
+    totalSpent: 0,
+    status: status === 'Suspended' ? 'Suspended' : 'Active',
+    accountType: 'buyer',
+    isRegisteredBuyer: true
+  };
+
+  db.customers.unshift(newCustomer);
+  logAudit(admin, 'CUSTOMER_CREATED', `Manually registered customer "${newCustomer.name}" (${newCustomer.phone})`, 'customer', newCustomer.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', newCustomer.id, sanitizeBuyer(newCustomer));
+  saveToFirestoreAsync('users', newCustomer.id, sanitizeBuyer(newCustomer));
+
+  res.status(201).json({ message: 'Customer created successfully', customer: sanitizeBuyer(newCustomer) });
 });
 
 // -------------------------------------------------------------
@@ -10454,6 +10698,131 @@ app.post('/api/admin/firebase/push-products', requireAdminAuth, requireRole(['ow
   } catch (err: any) {
     console.error('[Firebase Push Error]:', err);
     res.status(500).json({ error: err.message || 'Failed to push products to Firebase' });
+  }
+});
+
+// 4. Push ALL Marketplace Data to Firebase Firestore (Products, Orders, Categories, Shops, Customers, Messages, etc.)
+app.post('/api/admin/firebase/push-all-data', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
+  try {
+    const fbConfigPath = path.resolve('firebase-applet-config.json');
+    if (!fs.existsSync(fbConfigPath)) {
+      return res.status(400).json({ error: 'firebase-applet-config.json not found' });
+    }
+
+    if (!firestoreDb1 && !firestoreDb2) {
+      await initFirestoreIfProvisioned();
+    }
+
+    const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
+    const activeOrders = db.orders.filter(o => !db.deletedRecordIds?.includes(o.id));
+    const activeMessages = db.messages.filter(m => !db.deletedRecordIds?.includes(m.id));
+    const activeCustomers = db.customers.map(c => sanitizeBuyer(c));
+    const activeCategories = db.categories;
+    const activeShops = db.shops;
+    const activePayments = db.paymentConfirmations;
+    const activeProblems = db.customerProblems;
+    const activeCoupons = db.coupons;
+    const activeSettings = db.settings;
+    const activePaymentMethods = db.paymentMethodsConfig;
+
+    // Queue and push all collections through Firestore SDK / async pipelines
+    // 1. Products
+    for (const p of activeProducts) {
+      saveToFirestoreAsync('products', p.id, p);
+    }
+
+    // 2. Orders
+    for (const o of activeOrders) {
+      saveToFirestoreAsync('orders', o.id, o);
+    }
+
+    // 3. Categories
+    for (const c of activeCategories) {
+      saveToFirestoreAsync('categories', c.id, c);
+    }
+
+    // 4. Shops
+    for (const s of activeShops) {
+      saveToFirestoreAsync('shops', s.id, s);
+    }
+
+    // 5. Customers & Users
+    for (const c of activeCustomers) {
+      saveToFirestoreAsync('customers', c.id, c);
+      saveToFirestoreAsync('users', c.id, c);
+    }
+
+    // 6. Payments
+    for (const pm of activePayments) {
+      saveToFirestoreAsync('paymentConfirmations', pm.id, pm);
+      saveToFirestoreAsync('payments', pm.id, pm);
+    }
+
+    // 7. Messages
+    for (const m of activeMessages) {
+      saveToFirestoreAsync('messages', m.id, m);
+    }
+
+    // 8. Problems
+    for (const pr of activeProblems) {
+      saveToFirestoreAsync('customerProblems', pr.id, pr);
+    }
+
+    // 9. Coupons
+    for (const cp of activeCoupons) {
+      saveToFirestoreAsync('coupons', cp.id, cp);
+    }
+
+    // 10. Global Settings
+    saveToFirestoreAsync('settings', 'global', activeSettings);
+
+    // 11. Payment Methods Config
+    for (const pmc of activePaymentMethods) {
+      saveToFirestoreAsync('paymentMethodsConfig', pmc.id, pmc);
+    }
+
+    const totalRecords =
+      activeProducts.length +
+      activeOrders.length +
+      activeCategories.length +
+      activeShops.length +
+      activeCustomers.length +
+      activePayments.length +
+      activeMessages.length +
+      activeProblems.length +
+      activeCoupons.length +
+      1; // settings
+
+    saveDbToDisk();
+
+    logAudit(
+      admin,
+      'FIREBASE_ALL_DATA_PUSHED',
+      `Imported all marketplace data into Firebase Firestore (${totalRecords} total documents across 11 collections).`,
+      'firebase',
+      'all'
+    );
+
+    res.json({
+      success: true,
+      message: `All marketplace data successfully imported and synced to Firebase Firestore! (${totalRecords} total records across 11 collections).`,
+      stats: {
+        products: activeProducts.length,
+        orders: activeOrders.length,
+        categories: activeCategories.length,
+        shops: activeShops.length,
+        customers: activeCustomers.length,
+        payments: activePayments.length,
+        messages: activeMessages.length,
+        problems: activeProblems.length,
+        coupons: activeCoupons.length,
+        totalRecords
+      }
+    });
+  } catch (err: any) {
+    console.error('[Firebase Push All Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to push all data to Firebase' });
   }
 });
 

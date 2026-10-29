@@ -1071,6 +1071,74 @@ export const api = {
     return { id: orderId } as Order;
   },
 
+  async adminUpdateOrder(orderId: string, data: Partial<Order>): Promise<Order> {
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data)
+      });
+      const parsed = await safeParseResponse<Order>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await updateOrderInFirestore(parsed.json);
+        } catch {}
+        return parsed.json;
+      }
+      if (parsed.isJson && (parsed.json as any)?.error) {
+        throw new Error((parsed.json as any).error);
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+        throw err;
+      }
+    }
+    return { id: orderId, ...data } as Order;
+  },
+
+  async adminDeleteOrder(orderId: string): Promise<{ message: string; removed?: Order }> {
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { message: 'Order deleted' };
+  },
+
+  async adminBulkDeleteOrders(orderIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      const res = await fetch('/api/admin/orders/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ orderIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { message: `Deleted ${orderIds.length} orders`, count: orderIds.length };
+  },
+
+  async adminDeletePayment(paymentId: string): Promise<{ message: string }> {
+    try {
+      const res = await fetch(`/api/admin/payments/${paymentId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { message: 'Payment record deleted' };
+  },
+
   // Payments
   async adminGetPayments(): Promise<PaymentConfirmation[]> {
     try {
@@ -1674,6 +1742,15 @@ export const api = {
     return { id, ...data } as CustomerProblemReport;
   },
 
+  async adminDeleteCustomerReport(id: string): Promise<void> {
+    try {
+      await fetch(`/api/admin/customer-reports/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {}
+  },
+
   // Coupons
   async adminGetCoupons(): Promise<Coupon[]> {
     try {
@@ -1746,6 +1823,35 @@ export const api = {
       }
     } catch {}
     return null;
+  },
+
+  async adminUpdateCustomer(id: string, data: Partial<CustomerUser>): Promise<CustomerUser> {
+    try {
+      const res = await fetch(`/api/admin/customers/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data)
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json?.customer) {
+        return parsed.json.customer;
+      }
+    } catch {}
+    return { id, ...data } as CustomerUser;
+  },
+
+  async adminDeleteCustomer(id: string): Promise<{ message: string }> {
+    try {
+      const res = await fetch(`/api/admin/customers/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { message: 'Customer removed' };
   },
 
   // Audit Logs
@@ -3262,6 +3368,37 @@ export const api = {
         message: err.message || 'Failed to push products to Firebase',
         consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
       };
+    }
+  },
+
+  async adminPushAllDataToFirebase(): Promise<{
+    success: boolean;
+    message: string;
+    stats?: {
+      products: number;
+      orders: number;
+      categories: number;
+      shops: number;
+      customers: number;
+      payments: number;
+      messages: number;
+      problems: number;
+      coupons: number;
+      totalRecords: number;
+    };
+  }> {
+    try {
+      const res = await fetch('/api/admin/firebase/push-all-data', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+      return { success: false, message: 'Failed to parse response' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Failed to push all data to Firebase' };
     }
   },
 

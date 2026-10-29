@@ -550,6 +550,192 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [probStatus, setProbStatus] = useState<ProblemStatus>('In Progress');
   const [probStaffNote, setProbStaffNote] = useState('');
 
+  // Comprehensive Order View / Edit Modal & Bulk Actions
+  const [selectedOrderModal, setSelectedOrderModal] = useState<Order | null>(null);
+  const [orderEditForm, setOrderEditForm] = useState<Partial<Order>>({});
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [bulkDeletingOrders, setBulkDeletingOrders] = useState(false);
+
+  // Messages Filter & Search
+  const [messageSearch, setMessageSearch] = useState('');
+  const [messageFilter, setMessageFilter] = useState<'all' | 'unread' | 'read' | 'replied'>('all');
+
+  // Customer Edit Modal
+  const [editingCustomerModal, setEditingCustomerModal] = useState<CustomerUser | null>(null);
+  const [customerEditForm, setCustomerEditForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    deliveryAddress: '',
+    status: 'Active' as 'Active' | 'Suspended'
+  });
+  const [savingCustomer, setSavingCustomer] = useState(false);
+
+  // Problem Search & Filter
+  const [problemSearch, setProblemSearch] = useState('');
+  const [problemFilter, setProblemFilter] = useState<string>('all');
+  const [syncingAllFirebase, setSyncingAllFirebase] = useState(false);
+
+  const handlePushAllToFirebaseDirect = async () => {
+    setSyncingAllFirebase(true);
+    try {
+      const res = await api.adminPushAllDataToFirebase();
+      showToast(res.message);
+      fetchAllData(true);
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to sync with Firebase', 'error');
+    } finally {
+      setSyncingAllFirebase(false);
+    }
+  };
+
+  const handleOpenOrderDetail = (order: Order) => {
+    setSelectedOrderModal(order);
+    setOrderEditForm({
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerEmail: order.customerEmail || '',
+      deliveryAddress: order.deliveryAddress,
+      deliveryLocation: order.deliveryLocation,
+      deliveryNotes: order.deliveryNotes || '',
+      deliveryFee: order.deliveryFee,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      assignedCourier: order.assignedCourier || '',
+      courierPhone: order.courierPhone || '',
+      internalNotes: order.internalNotes || '',
+      trackingNumber: order.trackingNumber || '',
+      trackingCarrier: order.trackingCarrier || ''
+    });
+  };
+
+  const handleSaveOrderDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrderModal) return;
+    setSavingOrder(true);
+    try {
+      const updated = await api.adminUpdateOrder(selectedOrderModal.id, orderEditForm);
+      showToast(`Order #${selectedOrderModal.orderNumber} updated successfully!`);
+      setSelectedOrderModal(null);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update order', 'error');
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  const handleDeleteSingleOrder = async (order: Order) => {
+    if (!confirm(`Are you sure you want to delete Order #${order.orderNumber} (${order.customerName})? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      await api.adminDeleteOrder(order.id);
+      showToast(`Order #${order.orderNumber} deleted successfully.`);
+      if (selectedOrderModal?.id === order.id) {
+        setSelectedOrderModal(null);
+      }
+      setSelectedOrderIds(prev => prev.filter(id => id !== order.id));
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete order', 'error');
+    }
+  };
+
+  const handleBulkDeleteOrders = async () => {
+    if (selectedOrderIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedOrderIds.length} selected orders? Inventory stock will be safely reconciled.`)) {
+      return;
+    }
+    setBulkDeletingOrders(true);
+    try {
+      const res = await api.adminBulkDeleteOrders(selectedOrderIds);
+      showToast(res.message);
+      setSelectedOrderIds([]);
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete selected orders', 'error');
+    } finally {
+      setBulkDeletingOrders(false);
+    }
+  };
+
+  const handleDeletePaymentConfirmation = async (pm: PaymentConfirmation) => {
+    if (!confirm(`Delete payment confirmation #${pm.id} for Order #${pm.orderNumber}?`)) {
+      return;
+    }
+    try {
+      await api.adminDeletePayment(pm.id);
+      showToast('Payment record deleted.');
+      fetchAllData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete payment', 'error');
+    }
+  };
+
+  const handleDeleteCustomerProblem = async (prob: CustomerProblemReport) => {
+    if (!confirm(`Delete customer problem case #${prob.caseNumber}?`)) {
+      return;
+    }
+    try {
+      await api.adminDeleteCustomerReport(prob.id);
+      showToast('Problem case deleted.');
+      if (selectedProblem?.id === prob.id) {
+        setSelectedProblem(null);
+      }
+      fetchAllData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete problem report', 'error');
+    }
+  };
+
+  const handleOpenEditCustomer = (customer: CustomerUser) => {
+    setEditingCustomerModal(customer);
+    setCustomerEditForm({
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || '',
+      deliveryAddress: customer.deliveryAddress || '',
+      status: customer.status || 'Active'
+    });
+  };
+
+  const handleSaveCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCustomerModal) return;
+    setSavingCustomer(true);
+    try {
+      await api.adminUpdateCustomer(editingCustomerModal.id, customerEditForm);
+      showToast(`Customer "${customerEditForm.name}" updated successfully!`);
+      setEditingCustomerModal(null);
+      fetchAllData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update customer', 'error');
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (customer: CustomerUser) => {
+    if (!confirm(`Delete customer "${customer.name}" (${customer.phone})? This will remove their profile.`)) {
+      return;
+    }
+    try {
+      await api.adminDeleteCustomer(customer.id);
+      showToast(`Customer "${customer.name}" deleted.`);
+      fetchAllData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete customer', 'error');
+    }
+  };
+
   // Load All Admin Data (supports silent background real-time updates)
   const fetchAllData = async (silent: boolean = false) => {
     if (!silent) setLoading(true);
@@ -2014,6 +2200,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Quick Dual Firebase Sync Button */}
+          <button
+            onClick={() => setIsFirebaseModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600/25 text-orange-300 hover:bg-orange-600/35 text-xs font-bold transition-colors cursor-pointer border border-orange-500/40 shadow-xs"
+            title="Import all data to Firebase Firestore or pull updates"
+          >
+            <Database className="w-3.5 h-3.5 text-orange-400" />
+            <span className="hidden sm:inline">Firebase Sync</span>
+          </button>
+
           {/* Live Sync Status Indicator */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px] font-bold text-emerald-400 shadow-2xs">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -3649,15 +3845,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+              {/* Bulk Actions Bar if items selected */}
+              {selectedOrderIds.length > 0 && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-rose-900">{selectedOrderIds.length} order(s) selected</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderIds([])}
+                      className="text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleBulkDeleteOrders}
+                    disabled={bulkDeletingOrders}
+                    className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{bulkDeletingOrders ? 'Deleting...' : `Delete Selected (${selectedOrderIds.length})`}</span>
+                  </button>
+                </div>
+              )}
+
               {/* Orders Table */}
               <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
-                        <th className="py-3 px-4">Order #</th>
+                        <th className="py-3 px-3 w-8">
+                          <input
+                            type="checkbox"
+                            checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedOrderIds(filteredOrders.map(o => o.id));
+                              } else {
+                                setSelectedOrderIds([]);
+                              }
+                            }}
+                            className="rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
+                          />
+                        </th>
+                        <th className="py-3 px-3">Order #</th>
                         <th className="py-3 px-3">Date</th>
-                        <th className="py-3 px-3">Customer</th>
+                        <th className="py-3 px-3">Customer & Contact</th>
                         <th className="py-3 px-3">Delivery Destination</th>
                         <th className="py-3 px-3">Total Amount</th>
                         <th className="py-3 px-3">Payment</th>
@@ -3666,90 +3901,151 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredOrders.map(ord => (
-                        <tr key={ord.id} className="hover:bg-slate-50/60">
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                            {ord.orderNumber}
-                          </td>
-                          <td className="py-3 px-3 text-slate-500 font-mono text-[11px]">
-                            {new Date(ord.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="font-bold text-slate-800 block">{ord.customerName}</span>
-                            <span className="text-[11px] text-slate-500">{ord.customerPhone}</span>
-                          </td>
-                          <td className="py-3 px-3 text-slate-600 max-w-xs truncate">
-                            {ord.deliveryAddress}
-                          </td>
-                          <td className="py-3 px-3 font-mono font-bold text-[#FF6000]">
-                            {ord.totalAmount.toLocaleString()} FRW
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                              ord.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : ord.paymentStatus === 'Pending Verification' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              {ord.paymentStatus}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="font-semibold text-slate-800 block">{ord.status}</span>
-                            <span className={`inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                              ord.supplierApprovalStatus === 'Approved'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                : ord.supplierApprovalStatus === 'Submitted to Supplier'
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                : ord.supplierApprovalStatus === 'Rejected'
-                                ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                : 'bg-amber-100 text-amber-800 border border-amber-200'
-                            }`}>
-                              DSers: {ord.supplierApprovalStatus || 'Pending Review'}
-                            </span>
-                            {ord.trackingNumber ? (
-                              <div className="flex items-center gap-1 text-[10px] text-blue-700 font-mono font-bold mt-0.5" title={`${ord.trackingCarrier || 'Tracking'}: ${ord.trackingNumber}`}>
-                                <Truck className="w-3 h-3 text-blue-600 shrink-0" />
-                                <span className="truncate max-w-[100px]">{ord.trackingNumber}</span>
+                      {filteredOrders.map(ord => {
+                        const rawPhone = (ord.customerPhone || '').replace(/\D/g, '');
+                        const waLink = rawPhone.startsWith('250') ? `https://wa.me/${rawPhone}` : `https://wa.me/250${rawPhone}`;
+
+                        return (
+                          <tr key={ord.id} className="hover:bg-slate-50/60">
+                            <td className="py-3 px-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedOrderIds.includes(ord.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedOrderIds(prev => [...prev, ord.id]);
+                                  } else {
+                                    setSelectedOrderIds(prev => prev.filter(id => id !== ord.id));
+                                  }
+                                }}
+                                className="rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-3 px-3 font-mono font-bold text-slate-900">
+                              <button
+                                onClick={() => handleOpenOrderDetail(ord)}
+                                className="hover:text-orange-600 hover:underline cursor-pointer text-left"
+                                title="Click to view full order details"
+                              >
+                                {ord.orderNumber}
+                              </button>
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 font-mono text-[11px]">
+                              {new Date(ord.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="font-bold text-slate-800 block">{ord.customerName}</span>
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                                <span>{ord.customerPhone}</span>
+                                {rawPhone.length >= 7 && (
+                                  <>
+                                    <a
+                                      href={waLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title="Chat with customer on WhatsApp"
+                                      className="p-1 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                    >
+                                      <MessageCircle className="w-3 h-3 text-emerald-600" />
+                                    </a>
+                                    <a
+                                      href={`tel:${ord.customerPhone}`}
+                                      title="Call customer"
+                                      className="p-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                                    >
+                                      <Phone className="w-3 h-3 text-blue-600" />
+                                    </a>
+                                  </>
+                                )}
                               </div>
-                            ) : null}
-                            {ord.assignedCourier && (
-                              <span className="block text-[10px] text-slate-400">Courier: {ord.assignedCourier}</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                            {(() => {
-                              const pm = ord.paymentConfirmation || payments.find(p => p.orderNumber === ord.orderNumber);
-                              if (pm) {
-                                return (
-                                  <button
-                                    onClick={() => {
-                                      setVerifyModalPayment(pm);
-                                      setVerifyNotes('Verified with telecom statement');
-                                    }}
-                                    className="px-2 py-1 bg-orange-50 border border-orange-200 text-[#FF6000] font-bold rounded-lg cursor-pointer text-[11px] hover:bg-orange-100 inline-flex items-center gap-1"
-                                    title="View submitted payment proof"
-                                  >
-                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                    <span>Proof</span>
-                                  </button>
-                                );
-                              }
-                              return null;
-                            })()}
-                            <button
-                              onClick={() => setOrderStatusModal(ord)}
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg cursor-pointer text-[11px]"
-                            >
-                              Update Status
-                            </button>
-                            <button
-                              onClick={() => setPrintableInvoiceOrder(ord)}
-                              title="Invoice"
-                              className="p-1 text-slate-500 hover:text-slate-800"
-                            >
-                              <FileText className="w-4 h-4 inline" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="py-3 px-3 text-slate-600 max-w-xs truncate">
+                              {ord.deliveryAddress}
+                            </td>
+                            <td className="py-3 px-3 font-mono font-bold text-[#FF6000]">
+                              {ord.totalAmount.toLocaleString()} FRW
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                ord.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : ord.paymentStatus === 'Pending Verification' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {ord.paymentStatus}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="font-semibold text-slate-800 block">{ord.status}</span>
+                              <span className={`inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                ord.supplierApprovalStatus === 'Approved'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : ord.supplierApprovalStatus === 'Submitted to Supplier'
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  : ord.supplierApprovalStatus === 'Rejected'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  : 'bg-amber-100 text-amber-800 border border-amber-200'
+                              }`}>
+                                DSers: {ord.supplierApprovalStatus || 'Pending Review'}
+                              </span>
+                              {ord.trackingNumber ? (
+                                <div className="flex items-center gap-1 text-[10px] text-blue-700 font-mono font-bold mt-0.5" title={`${ord.trackingCarrier || 'Tracking'}: ${ord.trackingNumber}`}>
+                                  <Truck className="w-3 h-3 text-blue-600 shrink-0" />
+                                  <span className="truncate max-w-[100px]">{ord.trackingNumber}</span>
+                                </div>
+                              ) : null}
+                              {ord.assignedCourier && (
+                                <span className="block text-[10px] text-slate-400">Courier: {ord.assignedCourier}</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                              {(() => {
+                                const pm = ord.paymentConfirmation || payments.find(p => p.orderNumber === ord.orderNumber);
+                                if (pm) {
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        setVerifyModalPayment(pm);
+                                        setVerifyNotes('Verified with telecom statement');
+                                      }}
+                                      className="px-2 py-1 bg-orange-50 border border-orange-200 text-[#FF6000] font-bold rounded-lg cursor-pointer text-[11px] hover:bg-orange-100 inline-flex items-center gap-1"
+                                      title="View submitted payment proof"
+                                    >
+                                      <ShieldCheck className="w-3.5 h-3.5" />
+                                      <span>Proof</span>
+                                    </button>
+                                  );
+                                }
+                                return null;
+                              })()}
+                              <button
+                                onClick={() => handleOpenOrderDetail(ord)}
+                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg cursor-pointer text-[11px] border border-blue-200"
+                                title="View full line-items & edit order"
+                              >
+                                View / Edit
+                              </button>
+                              <button
+                                onClick={() => setOrderStatusModal(ord)}
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg cursor-pointer text-[11px]"
+                              >
+                                Status
+                              </button>
+                              <button
+                                onClick={() => setPrintableInvoiceOrder(ord)}
+                                title="Print Invoice"
+                                className="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
+                              >
+                                <FileText className="w-4 h-4 inline" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSingleOrder(ord)}
+                                title="Delete Order"
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4 inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -3851,51 +4147,60 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            {pm.verificationStatus !== 'Verified/Paid' && pm.verificationStatus !== 'Approved' ? (
-                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              {pm.verificationStatus !== 'Verified/Paid' && pm.verificationStatus !== 'Approved' ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setVerifyModalPayment(pm);
+                                      setVerifyNotes('Verified with MTN/Airtel statement');
+                                    }}
+                                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer text-[11px]"
+                                    title="Review proof and verify"
+                                  >
+                                    Review
+                                  </button>
+                                  <button
+                                    onClick={() => handleVerifyPayment('approve', 'Verified with MTN/Airtel statement', pm.id)}
+                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
+                                    title="Approve and mark Paid"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleVerifyPayment('under_verification', 'Checking telecom bank records', pm.id)}
+                                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
+                                    title="Mark Under Verification"
+                                  >
+                                    Audit
+                                  </button>
+                                  <button
+                                    onClick={() => handleVerifyPayment('reject', 'Transaction reference not found in telecom records', pm.id)}
+                                    className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
+                                    title="Reject payment"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              ) : (
                                 <button
                                   onClick={() => {
                                     setVerifyModalPayment(pm);
-                                    setVerifyNotes('Verified with MTN/Airtel statement');
+                                    setVerifyNotes(pm.adminNotes || `Verified by ${pm.verifiedBy || 'Ruth'}`);
                                   }}
-                                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                  title="Review proof and verify"
+                                  className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline cursor-pointer"
                                 >
-                                  Review
+                                  View Details
                                 </button>
-                                <button
-                                  onClick={() => handleVerifyPayment('approve', 'Verified with MTN/Airtel statement', pm.id)}
-                                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                  title="Approve and mark Paid"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => handleVerifyPayment('under_verification', 'Checking telecom bank records', pm.id)}
-                                  className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                  title="Mark Under Verification"
-                                >
-                                  Audit
-                                </button>
-                                <button
-                                  onClick={() => handleVerifyPayment('reject', 'Transaction reference not found in telecom records', pm.id)}
-                                  className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                  title="Reject payment"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            ) : (
+                              )}
                               <button
-                                onClick={() => {
-                                  setVerifyModalPayment(pm);
-                                  setVerifyNotes(pm.adminNotes || `Verified by ${pm.verifiedBy || 'Ruth'}`);
-                                }}
-                                className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline cursor-pointer"
+                                onClick={() => handleDeletePaymentConfirmation(pm)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Delete payment record"
                               >
-                                View Details
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
-                            )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -3964,168 +4269,399 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
 
           {/* TAB 8: MESSAGES INBOX */}
-          {activeTab === 'messages' && (
-            <div className="space-y-5">
-              <div>
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">Admin Messages Inbox</h1>
-                <p className="text-xs text-slate-500">Customer contact inquiries, wholesale requests, and general messages</p>
-              </div>
+          {activeTab === 'messages' && (() => {
+            const unreadCount = messages.filter(m => m.status === 'unread').length;
+            const filteredMessages = messages.filter(msg => {
+              if (messageFilter === 'unread' && msg.status !== 'unread') return false;
+              if (messageFilter === 'read' && msg.status !== 'read') return false;
+              if (messageFilter === 'replied' && !msg.replyNote) return false;
 
-              <div className="grid grid-cols-1 gap-3">
-                {messages.map(msg => (
-                  <div key={msg.id} className={`p-5 rounded-2xl border bg-white shadow-2xs space-y-3 ${
-                    msg.status === 'unread' ? 'border-orange-300 ring-1 ring-orange-200' : 'border-slate-200'
-                  }`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-900">{msg.name}</span>
-                          <span className="text-xs text-slate-500">({msg.email})</span>
-                          {msg.status === 'unread' && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#FF6000] text-white uppercase">
-                              Unread
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-slate-400 font-mono">
-                          Phone: {msg.phone || 'N/A'} {msg.orderNumber && `· Ref: ${msg.orderNumber}`}
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400">
-                        {new Date(msg.createdAt).toLocaleString()}
-                      </span>
-                    </div>
+              if (!messageSearch.trim()) return true;
+              const q = messageSearch.toLowerCase();
+              return (
+                msg.name.toLowerCase().includes(q) ||
+                msg.email.toLowerCase().includes(q) ||
+                (msg.phone && msg.phone.includes(q)) ||
+                (msg.orderNumber && msg.orderNumber.toLowerCase().includes(q)) ||
+                msg.subject.toLowerCase().includes(q) ||
+                msg.message.toLowerCase().includes(q)
+              );
+            });
 
-                    <div>
-                      <h4 className="font-bold text-xs text-slate-800 mb-1">{msg.subject}</h4>
-                      <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        {msg.message}
-                      </p>
-                    </div>
-
-                    {msg.replyNote && (
-                      <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-xs text-orange-950">
-                        <span className="font-bold block text-[11px]">Staff Reply Note (by {msg.repliedBy}):</span>
-                        <p>{msg.replyNote}</p>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      {msg.status === 'unread' && (
-                        <button
-                          onClick={async () => {
-                            await api.adminUpdateMessage(msg.id, { status: 'read' });
-                            showToast('Marked as read');
-                            fetchAllData();
-                          }}
-                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg cursor-pointer"
-                        >
-                          Mark Read
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          const note = prompt('Enter staff resolution or reply note:');
-                          if (note) {
-                            await api.adminUpdateMessage(msg.id, { replyNote: note });
-                            showToast('Reply logged!');
-                            fetchAllData();
-                          }
-                        }}
-                        className="px-3 py-1 bg-[#121316] hover:bg-black text-white font-bold text-xs rounded-lg cursor-pointer"
-                      >
-                        Add Reply Note
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (confirm(`Delete message from ${msg.name}?`)) {
-                            await api.adminDeleteMessage(msg.id);
-                            showToast('Message deleted');
-                            fetchAllData();
-                          }
-                        }}
-                        className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg cursor-pointer border border-rose-200"
-                        title="Delete Message"
-                      >
-                        Delete
-                      </button>
-                    </div>
+            return (
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Admin Messages Inbox</h1>
+                    <p className="text-xs text-slate-500">Customer contact inquiries, wholesale requests, and general messages</p>
                   </div>
-                ))}
+                  {unreadCount > 0 && (
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-[#FF6000] text-white flex items-center gap-1.5 self-start sm:self-auto">
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>{unreadCount} Unread Message{unreadCount > 1 ? 's' : ''}</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={messageSearch}
+                      onChange={(e) => setMessageSearch(e.target.value)}
+                      placeholder="Search messages by sender name, phone, order #, subject or text..."
+                      className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#FF6000] focus:border-transparent"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto p-0.5 bg-slate-100 rounded-xl text-xs font-bold shrink-0">
+                    <button
+                      onClick={() => setMessageFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        messageFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All ({messages.length})
+                    </button>
+                    <button
+                      onClick={() => setMessageFilter('unread')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        messageFilter === 'unread' ? 'bg-white text-[#FF6000] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Unread ({unreadCount})
+                    </button>
+                    <button
+                      onClick={() => setMessageFilter('read')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        messageFilter === 'read' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Read
+                    </button>
+                    <button
+                      onClick={() => setMessageFilter('replied')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        messageFilter === 'replied' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Replied
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {filteredMessages.length === 0 ? (
+                    <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+                      <Mail className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-bold text-slate-600">No messages match your search or filter.</p>
+                      <p className="text-xs text-slate-400 mt-1">Customer inquiries submitted through Contact Reach Market appear here in real-time.</p>
+                    </div>
+                  ) : (
+                    filteredMessages.map(msg => (
+                      <div key={msg.id} className={`p-5 rounded-2xl border bg-white shadow-2xs space-y-3 ${
+                        msg.status === 'unread' ? 'border-orange-300 ring-1 ring-orange-200' : 'border-slate-200'
+                      }`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm text-slate-900">{msg.name}</span>
+                              <span className="text-xs text-slate-500">({msg.email})</span>
+                              {msg.status === 'unread' && (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#FF6000] text-white uppercase">
+                                  Unread
+                                </span>
+                              )}
+                              {msg.replyNote && (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 uppercase">
+                                  Replied
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-slate-500 font-mono">
+                                Phone: {msg.phone || 'N/A'} {msg.orderNumber && `· Order #${msg.orderNumber}`}
+                              </span>
+                              {msg.phone && (
+                                <div className="flex items-center gap-1.5 ml-2">
+                                  <a
+                                    href={`https://wa.me/25${msg.phone.replace(/\D/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-emerald-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                  >
+                                    <MessageCircle className="w-3 h-3" />
+                                    <span>WhatsApp</span>
+                                  </a>
+                                  <span className="text-slate-300">·</span>
+                                  <a
+                                    href={`tel:${msg.phone}`}
+                                    className="text-[10px] text-blue-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                  >
+                                    <Phone className="w-3 h-3" />
+                                    <span>Call</span>
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            {new Date(msg.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="font-bold text-xs text-slate-800 mb-1">{msg.subject}</h4>
+                          <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            {msg.message}
+                          </p>
+                        </div>
+
+                        {msg.replyNote && (
+                          <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-xs text-orange-950">
+                            <span className="font-bold block text-[11px]">Staff Reply Note (by {msg.repliedBy || 'Admin'}):</span>
+                            <p>{msg.replyNote}</p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          {msg.status === 'unread' && (
+                            <button
+                              onClick={async () => {
+                                await api.adminUpdateMessage(msg.id, { status: 'read' });
+                                showToast('Marked as read');
+                                fetchAllData();
+                              }}
+                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg cursor-pointer"
+                            >
+                              Mark Read
+                            </button>
+                          )}
+                          <button
+                            onClick={async () => {
+                              const note = prompt('Enter staff resolution or reply note for customer:');
+                              if (note) {
+                                await api.adminUpdateMessage(msg.id, { replyNote: note, status: 'read' });
+                                showToast('Reply logged and saved!');
+                                fetchAllData();
+                              }
+                            }}
+                            className="px-3 py-1 bg-[#121316] hover:bg-black text-white font-bold text-xs rounded-lg cursor-pointer"
+                          >
+                            Add Reply Note
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Delete message from ${msg.name}? This will remove it from the database and Cloud Firestore.`)) {
+                                await api.adminDeleteMessage(msg.id);
+                                showToast('Message deleted');
+                                fetchAllData();
+                              }
+                            }}
+                            className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg cursor-pointer border border-rose-200"
+                            title="Delete Message"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 9: PROBLEMS & COMPLAINTS */}
-          {activeTab === 'problems' && (
-            <div className="space-y-5">
-              <div>
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">Customer Problems, Complaints & Reports</h1>
-                <p className="text-xs text-slate-500">Track cases, assign investigators, and document official resolutions</p>
-              </div>
+          {activeTab === 'problems' && (() => {
+            const filteredProblems = problems.filter(prob => {
+              if (problemFilter !== 'all' && prob.status !== problemFilter) return false;
 
-              <div className="grid grid-cols-1 gap-3.5">
-                {problems.map(prob => (
-                  <div key={prob.id} className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-black text-sm text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">
-                            {prob.caseNumber}
-                          </span>
-                          <span className="font-extrabold text-sm text-slate-900">{prob.customerName}</span>
-                          <span className="text-xs text-slate-500">({prob.customerPhone})</span>
-                        </div>
-                        <span className="text-[11px] text-slate-400 capitalize">
-                          Category: {prob.category.replace('_', ' ')} {prob.orderNumber && `· Order #${prob.orderNumber}`}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                          prob.priority === 'urgent' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {prob.priority}
-                        </span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                          prob.status === 'Resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {prob.status}
-                        </span>
-                      </div>
-                    </div>
+              if (!problemSearch.trim()) return true;
+              const q = problemSearch.toLowerCase();
+              return (
+                prob.customerName.toLowerCase().includes(q) ||
+                prob.customerPhone.includes(q) ||
+                (prob.orderNumber && prob.orderNumber.toLowerCase().includes(q)) ||
+                prob.caseNumber.toLowerCase().includes(q) ||
+                prob.category.toLowerCase().includes(q) ||
+                prob.description.toLowerCase().includes(q)
+              );
+            });
 
-                    <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      {prob.description}
-                    </p>
-
-                    {prob.resolution && (
-                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
-                        <span className="font-bold block text-[11px]">Official Resolution:</span>
-                        <p>{prob.resolution}</p>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        Logged: {new Date(prob.createdAt).toLocaleString()} · Assigned: {prob.assignedTo || 'Unassigned'}
-                      </span>
-                      <button
-                        onClick={() => {
-                          setSelectedProblem(prob);
-                          setProbStatus(prob.status);
-                          setProbResolution(prob.resolution || '');
-                          setProbStaffNote('');
-                        }}
-                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl cursor-pointer"
-                      >
-                        Manage & Resolve Case
-                      </button>
-                    </div>
+            return (
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Customer Problems, Complaints & Reports</h1>
+                    <p className="text-xs text-slate-500">Track cases, assign investigators, and document official resolutions</p>
                   </div>
-                ))}
+                  <button
+                    onClick={() => {
+                      fetchAllData();
+                      showToast('Problem cases refreshed');
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+
+                {/* Search & Filter Bar */}
+                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={problemSearch}
+                      onChange={(e) => setProblemSearch(e.target.value)}
+                      placeholder="Search cases by customer name, phone, case #, order #, or issue details..."
+                      className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#FF6000] focus:border-transparent"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto p-0.5 bg-slate-100 rounded-xl text-xs font-bold shrink-0">
+                    <button
+                      onClick={() => setProblemFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        problemFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All ({problems.length})
+                    </button>
+                    <button
+                      onClick={() => setProblemFilter('Open')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        problemFilter === 'Open' ? 'bg-white text-rose-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Open
+                    </button>
+                    <button
+                      onClick={() => setProblemFilter('In Progress')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        problemFilter === 'In Progress' ? 'bg-white text-amber-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      In Progress
+                    </button>
+                    <button
+                      onClick={() => setProblemFilter('Resolved')}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        problemFilter === 'Resolved' ? 'bg-white text-emerald-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Resolved
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3.5">
+                  {filteredProblems.length === 0 ? (
+                    <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+                      <AlertTriangle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-bold text-slate-600">No problem reports found.</p>
+                      <p className="text-xs text-slate-400 mt-1">Customer reported problems or disputes will appear here for staff investigation.</p>
+                    </div>
+                  ) : (
+                    filteredProblems.map(prob => (
+                      <div key={prob.id} className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-sm text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">
+                                {prob.caseNumber}
+                              </span>
+                              <span className="font-extrabold text-sm text-slate-900">{prob.customerName}</span>
+                              <span className="text-xs text-slate-500">({prob.customerPhone})</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[11px] text-slate-400 capitalize">
+                                Category: {prob.category.replace('_', ' ')} {prob.orderNumber && `· Order #${prob.orderNumber}`}
+                              </span>
+                              {prob.customerPhone && (
+                                <div className="flex items-center gap-1.5 ml-2">
+                                  <a
+                                    href={`https://wa.me/25${prob.customerPhone.replace(/\D/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-emerald-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                  >
+                                    <MessageCircle className="w-3 h-3" />
+                                    <span>WhatsApp</span>
+                                  </a>
+                                  <span className="text-slate-300">·</span>
+                                  <a
+                                    href={`tel:${prob.customerPhone}`}
+                                    className="text-[10px] text-blue-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                  >
+                                    <Phone className="w-3 h-3" />
+                                    <span>Call</span>
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              prob.priority === 'urgent' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {prob.priority}
+                            </span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                              prob.status === 'Resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {prob.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          {prob.description}
+                        </p>
+
+                        {prob.resolution && (
+                          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
+                            <span className="font-bold block text-[11px]">Official Resolution:</span>
+                            <p>{prob.resolution}</p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            Logged: {new Date(prob.createdAt).toLocaleString()} · Assigned: {prob.assignedTo || 'Unassigned'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedProblem(prob);
+                                setProbStatus(prob.status);
+                                setProbResolution(prob.resolution || '');
+                                setProbStaffNote('');
+                              }}
+                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl cursor-pointer"
+                            >
+                              Manage & Resolve Case
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCustomerProblem(prob)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                              title="Delete problem report"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 10: CUSTOMERS & REGISTERED BUYERS */}
           {activeTab === 'customers' && (() => {
@@ -4396,6 +4932,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       title="View Full Profile and Orders"
                                     >
                                       <Eye className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleOpenEditCustomer(c)}
+                                      className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                                      title="Edit Customer Profile"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
                                     </button>
 
                                     {isRegistered && (
@@ -9446,6 +9990,459 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comprehensive Order View & Edit Modal */}
+      {selectedOrderModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 my-8 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-[#FF6000] flex items-center justify-center font-black">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                      Order #{selectedOrderModal.orderNumber}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-100 text-slate-700">
+                      {selectedOrderModal.status}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      selectedOrderModal.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {selectedOrderModal.paymentStatus}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 font-mono">
+                    Placed on {new Date(selectedOrderModal.createdAt).toLocaleString()} · ID: {selectedOrderModal.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderModal(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 pr-1 py-4 space-y-6">
+              {/* Ordered Items List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                    Ordered Line-Items ({selectedOrderModal.items?.length || 0})
+                  </h4>
+                  <span className="text-xs font-bold text-slate-700">
+                    Subtotal: {(selectedOrderModal.subtotal || selectedOrderModal.totalAmount).toLocaleString()} FRW
+                  </span>
+                </div>
+                <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 bg-slate-50/50 overflow-hidden">
+                  {(selectedOrderModal.items || []).map((item, idx) => (
+                    <div key={idx} className="p-3 flex items-center justify-between gap-3 text-xs bg-white">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.productName} className="w-11 h-11 object-cover rounded-xl border border-slate-200 shrink-0" />
+                        ) : (
+                          <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                            <ShoppingBag className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">{item.productName}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            {item.shopName ? `Shop: ${item.shopName} · ` : ''}
+                            Unit: {item.price.toLocaleString()} FRW
+                            {item.size ? ` · Size: ${item.size}` : ''}
+                            {item.color ? ` · Color: ${item.color}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-mono font-bold text-slate-900 block">
+                          Qty: {item.quantity}
+                        </span>
+                        <span className="font-mono font-bold text-[#FF6000] text-[11px]">
+                          {(item.price * item.quantity).toLocaleString()} FRW
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Editable Form */}
+              <form id="order-edit-form" onSubmit={handleSaveOrderDetails} className="space-y-4">
+                {/* Customer Information */}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                    Customer & Delivery Contact
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={orderEditForm.customerName || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, customerName: e.target.value })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Phone</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          required
+                          value={orderEditForm.customerPhone || ''}
+                          onChange={e => setOrderEditForm({ ...orderEditForm, customerPhone: e.target.value })}
+                          className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                        />
+                        {orderEditForm.customerPhone && (
+                          <>
+                            <a
+                              href={`https://wa.me/25${orderEditForm.customerPhone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center shrink-0"
+                              title="Chat on WhatsApp"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </a>
+                            <a
+                              href={`tel:${orderEditForm.customerPhone}`}
+                              className="px-2.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center shrink-0"
+                              title="Direct Phone Call"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Email</label>
+                      <input
+                        type="email"
+                        value={orderEditForm.customerEmail || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, customerEmail: e.target.value })}
+                        placeholder="buyer@example.com"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">District / Delivery Zone</label>
+                      <select
+                        value={orderEditForm.deliveryLocation || 'Gasabo, Kigali'}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, deliveryLocation: e.target.value })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      >
+                        <option value="Gasabo, Kigali">Gasabo, Kigali (2,000 FRW)</option>
+                        <option value="Kicukiro, Kigali">Kicukiro, Kigali (2,000 FRW)</option>
+                        <option value="Nyarugenge, Kigali">Nyarugenge, Kigali (2,000 FRW)</option>
+                        <option value="Outside Kigali / Upcountry">Outside Kigali / Upcountry (5,000 FRW)</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Street / House Address</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.deliveryAddress || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, deliveryAddress: e.target.value })}
+                        placeholder="e.g. KK 15 Ave, Kimironko near market"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivery Notes / Landmark Instructions</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.deliveryNotes || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, deliveryNotes: e.target.value })}
+                        placeholder="e.g. Gate with black fence, call before arriving"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Statuses and Courier Assignment */}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                    Order Status & Logistics Dispatch
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Order Status</label>
+                      <select
+                        value={orderEditForm.status || 'Pending'}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, status: e.target.value as OrderStatus })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Confirmed">Confirmed</option>
+                        <option value="Processing">Processing</option>
+                        <option value="Ready for Pickup">Ready for Pickup</option>
+                        <option value="Dispatched">Dispatched</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Payment Status</label>
+                      <select
+                        value={orderEditForm.paymentStatus || 'Pending'}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, paymentStatus: e.target.value as PaymentStatus })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Under Verification">Under Verification</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Refunded">Refunded</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Payment Method</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.paymentMethod || 'MTN Mobile Money'}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, paymentMethod: e.target.value as PaymentMethod })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Assigned Courier</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.assignedCourier || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, assignedCourier: e.target.value })}
+                        placeholder="e.g. Jean Pierre (Moto Express)"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Courier Phone</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.courierPhone || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, courierPhone: e.target.value })}
+                        placeholder="078..."
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Tracking Number / Carrier</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={orderEditForm.trackingNumber || ''}
+                          onChange={e => setOrderEditForm({ ...orderEditForm, trackingNumber: e.target.value })}
+                          placeholder="e.g. RW-EXP-928"
+                          className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={orderEditForm.trackingCarrier || ''}
+                          onChange={e => setOrderEditForm({ ...orderEditForm, trackingCarrier: e.target.value })}
+                          placeholder="Carrier"
+                          className="w-24 px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-2 md:col-span-3">
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Internal Admin Notes</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.internalNotes || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, internalNotes: e.target.value })}
+                        placeholder="Private staff notes, customer call notes, etc."
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-200/80 flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-orange-900 block">Total Order Value</span>
+                    <span className="text-xl font-black text-[#FF6000]">
+                      {(orderEditForm.totalAmount || selectedOrderModal.totalAmount).toLocaleString()} FRW
+                    </span>
+                    <span className="text-xs text-orange-700 ml-2">
+                      (Includes {(orderEditForm.deliveryFee ?? selectedOrderModal.deliveryFee ?? 2000).toLocaleString()} FRW Delivery)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPrintableInvoiceOrder(selectedOrderModal)}
+                      className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Invoice</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSingleOrder(selectedOrderModal)}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Order</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100 shrink-0">
+              <span className="text-[11px] text-slate-400 font-semibold">
+                Changes will sync to disk and Cloud Firestore automatically.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderModal(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="order-edit-form"
+                  disabled={savingOrder}
+                  className="px-5 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{savingOrder ? 'Saving Order...' : 'Save Order Changes'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Edit Modal */}
+      {editingCustomerModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#FF6000] flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Edit Customer Profile</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">ID: {editingCustomerModal.id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCustomerModal(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomer} className="space-y-3.5">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={customerEditForm.name}
+                  onChange={e => setCustomerEditForm({ ...customerEditForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Phone Number</label>
+                <input
+                  type="text"
+                  required
+                  value={customerEditForm.phone}
+                  onChange={e => setCustomerEditForm({ ...customerEditForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={customerEditForm.email}
+                  onChange={e => setCustomerEditForm({ ...customerEditForm, email: e.target.value })}
+                  placeholder="customer@example.com"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">Default Delivery Address</label>
+                <input
+                  type="text"
+                  value={customerEditForm.deliveryAddress}
+                  onChange={e => setCustomerEditForm({ ...customerEditForm, deliveryAddress: e.target.value })}
+                  placeholder="Kigali, Gasabo / Kicukiro..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">Account Status</label>
+                <select
+                  value={customerEditForm.status}
+                  onChange={e => setCustomerEditForm({ ...customerEditForm, status: e.target.value as 'Active' | 'Suspended' })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold"
+                >
+                  <option value="Active">Active (Allowed to Order)</option>
+                  <option value="Suspended">Suspended (Blocked)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCustomer(editingCustomerModal)}
+                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Customer</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCustomerModal(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingCustomer}
+                    className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{savingCustomer ? 'Saving...' : 'Save Profile'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}
