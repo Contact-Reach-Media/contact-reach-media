@@ -81,6 +81,8 @@ function parseRouteFromLocation() {
     view = 'cart';
   } else if (rawPath === '/vendor' || rawPath === '/sell') {
     view = 'vendor';
+  } else if (rawPath === '/upload' || rawPath === '/upload-product' || rawPath === '/add-product') {
+    view = 'admin-upload';
   } else if (rawPath === '/404' || rawPath === '/not-found') {
     view = '404';
   } else if (rawPath.startsWith('/product/') || rawPath.startsWith('/p/')) {
@@ -189,6 +191,9 @@ export default function App() {
     const user = api.getStoredAdminUser();
     return Boolean(token && user && user.active !== false);
   });
+  const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'products' | 'orders' | 'inventory' | 'settings'>('overview');
+  const [autoOpenAddProduct, setAutoOpenAddProduct] = useState(initialRoute.view === 'admin-upload');
+  const [pendingAdminAction, setPendingAdminAction] = useState<string | null>(initialRoute.view === 'admin-upload' ? 'upload-product' : null);
   const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
   const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(initialRoute.view === 'vendor');
@@ -238,6 +243,23 @@ export default function App() {
       setIsSellerModalOpen(true);
       if (push && window.location.pathname !== targetPath) {
         window.history.pushState({ view: 'vendor' }, '', targetPath);
+      }
+      return;
+    }
+
+    if (view === 'admin-upload' || view === 'upload-product') {
+      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+      if (isAuth) {
+        setIsAdminLoggedIn(true);
+        setAdminInitialTab('products');
+        setAutoOpenAddProduct(true);
+        setActiveView('admin');
+        if (push && window.location.pathname !== '/admin') {
+          window.history.pushState({ view: 'admin' }, '', '/admin');
+        }
+      } else {
+        setPendingAdminAction('upload-product');
+        setIsAdminLoginOpen(true);
       }
       return;
     }
@@ -624,6 +646,7 @@ export default function App() {
         onOpenBuyerAuth={() => handleNavigate('login')}
         onOpenBuyerAccount={() => setIsBuyerAccountOpen(true)}
         isAdminLoggedIn={isAdminLoggedIn}
+        onOpenUploadProduct={() => handleNavigate('admin-upload')}
       />
 
       {/* VIEW: ADMIN DASHBOARD */}
@@ -633,11 +656,14 @@ export default function App() {
             onLogout={async () => {
               await api.adminLogout();
               setIsAdminLoggedIn(false);
+              setAutoOpenAddProduct(false);
               handleNavigate('home');
               showToast('Logged out of admin portal');
             }}
             categories={categories}
             onRefreshPublicData={refreshAllData}
+            initialTab={adminInitialTab as any}
+            autoOpenAddProduct={autoOpenAddProduct}
           />
         ) : (
           <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 py-16 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white text-center">
@@ -1232,6 +1258,11 @@ export default function App() {
           onLoginSuccess={(user) => {
             setIsAdminLoggedIn(true);
             setActiveView('admin');
+            if (pendingAdminAction === 'upload-product') {
+              setAdminInitialTab('products');
+              setAutoOpenAddProduct(true);
+              setPendingAdminAction(null);
+            }
             if (window.location.pathname !== '/admin') {
               window.history.pushState({ view: 'admin' }, '', '/admin');
             }

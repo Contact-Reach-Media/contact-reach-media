@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ShoppingBag, Search, Phone, ShieldCheck, Heart, Menu, X,
   Globe, Camera, Smartphone, MoreVertical, Instagram, Facebook, Youtube,
-  ExternalLink, Tag, User, ChevronDown, Check, Coins
+  ExternalLink, Tag, User, ChevronDown, Check, Coins, Plus
 } from 'lucide-react';
 import { Language, translations, SUPPORTED_LANGUAGES, LanguageOption } from '../translations.ts';
 import { CurrencyCode, SUPPORTED_CURRENCIES, CurrencyOption } from '../utils/currency.ts';
@@ -29,6 +29,7 @@ interface HeaderProps {
   onOpenBuyerAuth?: () => void;
   onOpenBuyerAccount?: () => void;
   isAdminLoggedIn?: boolean;
+  onOpenUploadProduct?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -51,7 +52,8 @@ export const Header: React.FC<HeaderProps> = ({
   buyerUser,
   onOpenBuyerAuth,
   onOpenBuyerAccount,
-  isAdminLoggedIn = false
+  isAdminLoggedIn = false,
+  onOpenUploadProduct
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -456,6 +458,23 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Icons & Profile Zone */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Direct "+ Upload Product" Quick Action */}
+            <button
+              onClick={() => {
+                if (onOpenUploadProduct) {
+                  onOpenUploadProduct();
+                } else {
+                  onNavigate('admin-upload');
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#FF6000] to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer"
+              title="Upload a new product to ContactReach Market"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Upload Product</span>
+              <span className="sm:hidden">Upload</span>
+            </button>
+
             {/* Wishlist Button with Badge */}
             <button
               onClick={() => {
@@ -540,6 +559,20 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      if (onOpenUploadProduct) {
+                        onOpenUploadProduct();
+                      } else {
+                        onNavigate('admin-upload');
+                      }
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-orange-50 hover:text-[#FF6000] transition-colors font-bold flex items-center gap-2 border-b border-slate-100 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#FF6000]" />
+                    <span>Upload Product (Injiza Igicuruzwa)</span>
+                  </button>
                   {buyerUser ? (
                     <button
                       onClick={() => {
@@ -599,6 +632,22 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
           <div className="lg:hidden pt-3 pb-2 border-t border-slate-100 mt-2 animate-in fade-in space-y-3">
+            {/* Quick Upload Product in Mobile Menu */}
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (onOpenUploadProduct) {
+                  onOpenUploadProduct();
+                } else {
+                  onNavigate('admin-upload');
+                }
+              }}
+              className="w-full text-start px-3.5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 flex items-center gap-2 cursor-pointer shadow-xs transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Upload New Product (Injiza Igicuruzwa)</span>
+            </button>
+
             {isAdminLoggedIn && (
               <button
                 onClick={() => {

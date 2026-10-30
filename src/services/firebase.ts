@@ -576,7 +576,16 @@ export async function importProductsFromGoogleDrive(
 // Helper to strip undefined values so Firestore setDoc never throws Unsupported field value: undefined
 export function cleanForFirestore<T>(data: T): any {
   if (data === null || data === undefined) return null;
-  return JSON.parse(JSON.stringify(data));
+  const clone = JSON.parse(JSON.stringify(data));
+  try {
+    // Firestore 1MB document limit guard: if document with base64 images is larger than 850KB, keep primary image
+    const str = JSON.stringify(clone);
+    if (str.length > 850000 && clone && typeof clone === 'object' && Array.isArray(clone.images)) {
+      const primary = clone.imageUrl || clone.images[0];
+      clone.images = [primary];
+    }
+  } catch {}
+  return clone;
 }
 
 // Products: queries Firestore and returns products

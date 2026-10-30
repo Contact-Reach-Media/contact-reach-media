@@ -39,6 +39,8 @@ interface AdminDashboardProps {
   onLogout: () => void;
   categories: Category[];
   onRefreshPublicData: () => void;
+  initialTab?: TabType;
+  autoOpenAddProduct?: boolean;
 }
 
 type TabType =
@@ -65,9 +67,11 @@ type TabType =
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
   categories: initialPropCategories,
-  onRefreshPublicData
+  onRefreshPublicData,
+  initialTab,
+  autoOpenAddProduct
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(getStoredAdminUser());
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
@@ -1200,6 +1204,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setProductModalOpen(true);
   };
 
+  // Auto-open Add Product modal when requested from storefront or deep-link route
+  useEffect(() => {
+    if (autoOpenAddProduct) {
+      setActiveTab('products');
+      handleOpenAddProduct();
+    }
+  }, [autoOpenAddProduct]);
+
   const handleOpenEditProduct = (p: Product) => {
     setEditingProduct(p);
     const existingPercent = p.discountPercent || (p.discountPrice && p.price > 0 && p.discountPrice < p.price
@@ -1243,10 +1255,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prodForm.name.trim() || !prodForm.category || !prodForm.description.trim()) {
-      showToast('Please fill all required product fields.', 'error');
+    if (!prodForm.name.trim() || !prodForm.category) {
+      showToast('Please enter a product title and select a category.', 'error');
       return;
     }
+    const cleanDescription = prodForm.description.trim() || `${prodForm.name.trim()} - High quality product available on ContactReach Market with express delivery across Rwanda.`;
 
     const variations: ProductVariation[] = [];
     if (prodForm.sizes.trim()) {
@@ -1319,7 +1332,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const payload: any = {
       name: prodForm.name.trim(),
       sku: prodForm.sku.trim(),
-      description: prodForm.description.trim(),
+      description: cleanDescription,
       price: finalPrice,
       costPrice: prodForm.costPrice !== '' && !isNaN(Number(prodForm.costPrice)) ? Math.max(0, Number(prodForm.costPrice)) : undefined,
       costOverriddenByAdmin: prodForm.costPrice !== '' ? true : (editingProduct?.costOverriddenByAdmin ?? false),
@@ -1338,6 +1351,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       brand: prodForm.brand.trim() || undefined,
       unit: prodForm.unit.trim() || 'Piece',
       status: prodForm.status,
+      reviewStatus: 'Approved',
       isFeatured: prodForm.isFeatured,
       isNewArrival: prodForm.isNewArrival,
       isBestSeller: prodForm.isBestSeller,
@@ -1347,14 +1361,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     try {
       if (editingProduct) {
-        await api.adminUpdateProduct(editingProduct.id, payload);
-        showToast('Product updated & saved to Firebase successfully!', 'success');
+        const updated = await api.adminUpdateProduct(editingProduct.id, payload);
+        setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...updated } : p));
+        showToast('Product updated & saved permanently to Firebase & Store!', 'success');
       } else {
-        await api.adminAddProduct(payload);
-        showToast('Product uploaded & saved to Firebase successfully!', 'success');
+        const created = await api.adminAddProduct(payload);
+        setProducts(prev => [created, ...prev.filter(p => p.id !== created.id)]);
+        showToast('Product uploaded & saved permanently to Firebase & Store!', 'success');
       }
       setProductModalOpen(false);
-      fetchAllData();
+      fetchAllData(true);
       onRefreshPublicData();
     } catch (err: any) {
       showToast(err.message || 'Error saving product', 'error');
@@ -2355,6 +2371,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-orange-500' : ''}`} />
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('products');
+              handleOpenAddProduct();
+            }}
+            className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 px-3 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer"
+            title="Upload a new product to store"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Upload Product</span>
+            <span className="sm:hidden">Upload</span>
           </button>
           <a
             href="/"

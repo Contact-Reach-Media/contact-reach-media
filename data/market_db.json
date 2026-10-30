@@ -1,6 +1,124 @@
 {
   "products": [
     {
+      "id": "prod-1793352892979-fd6869",
+      "name": "Permanent Test Product - Premium Smart Watch V2 1793352892969",
+      "sku": "CRM-AMA-2607",
+      "description": "High precision waterproof smartwatch with AMOLED display and heart rate tracking in Kigali.",
+      "price": 45000,
+      "category": "amasaha",
+      "stock": 20,
+      "imageUrl": "/src/assets/images/product_smart_tv_audio_1791966367526.jpg",
+      "images": [
+        "/src/assets/images/product_smart_tv_audio_1791966367526.jpg"
+      ],
+      "shopName": "ContactReach Market",
+      "shopId": "shop-contactreach-market-5831",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "2328354",
+      "receiverPhone": "0780022600",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "reviewStatus": "Approved",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "reviewsCount": 0,
+      "createdAt": "2026-10-30T09:34:52.979Z",
+      "history": [
+        {
+          "timestamp": "2026-10-30T09:34:52.979Z",
+          "action": "Created",
+          "user": "Thierry Maniriho (Administrator)"
+        }
+      ]
+    },
+    {
+      "id": "prod-1793352866071-0bbf84",
+      "name": "Permanent Test Product - Premium Smart Watch 1793352865826",
+      "sku": "CRM-AMA-5261",
+      "description": "High precision waterproof smartwatch with AMOLED display and heart rate tracking in Kigali.",
+      "price": 32000,
+      "category": "amasaha",
+      "stock": 15,
+      "imageUrl": "/src/assets/images/product_smart_tv_audio_1791966367526.jpg",
+      "images": [
+        "/src/assets/images/product_smart_tv_audio_1791966367526.jpg"
+      ],
+      "shopName": "ContactReach Market",
+      "shopId": "shop-contactreach-market-5831",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "2328354",
+      "receiverPhone": "0780022600",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "reviewsCount": 0,
+      "createdAt": "2026-10-30T09:34:26.071Z",
+      "history": [
+        {
+          "timestamp": "2026-10-30T09:34:26.071Z",
+          "action": "Created",
+          "user": "Thierry Maniriho (Administrator)"
+        }
+      ]
+    },
+    {
+      "id": "prod-1793352047659-e123cb",
+      "name": "Test Real Time Upload",
+      "sku": "CRM-ELE-7438",
+      "description": "Testing permanent upload functionality",
+      "price": 12000,
+      "category": "electronics",
+      "stock": 10,
+      "imageUrl": "/src/assets/images/product_street_sneakers_1791966366958.jpg",
+      "images": [
+        "/src/assets/images/product_street_sneakers_1791966366958.jpg"
+      ],
+      "shopName": "ContactReach Media Ltd",
+      "shopId": "shop-contactreach-media-ltd-5653",
+      "receiverName": "Ruth",
+      "paymentMethods": [
+        "MTN Mobile Money",
+        "MTN Merchant Code",
+        "Airtel Money"
+      ],
+      "merchantCode": "2328354",
+      "receiverPhone": "0780022600",
+      "location": "Kigali, Rwanda",
+      "deliveryInfo": "Same-day Kigali express (2-4 hrs)",
+      "status": "Available",
+      "isFeatured": false,
+      "isNewArrival": false,
+      "isBestSeller": false,
+      "unit": "Piece",
+      "reviewsCount": 0,
+      "createdAt": "2026-10-30T09:20:47.659Z",
+      "history": [
+        {
+          "timestamp": "2026-10-30T09:20:47.659Z",
+          "action": "Created",
+          "user": "Ruth (System Owner)"
+        }
+      ]
+    },
+    {
       "id": "prod-1793349436338-0cb0e0",
       "name": "Limited Stock Sneaker",
       "sku": "CRM-FAS-7940",
@@ -6654,8 +6772,28 @@
       "isBestSeller": false,
       "reviewsCount": 0,
       "createdAt": "2026-10-28T12:45:15.414Z",
-      "updatedAt": "2026-10-30T08:36:47.348Z",
+      "updatedAt": "2026-10-30T09:33:10.771Z",
       "history": [
+        {
+          "timestamp": "2026-10-30T09:33:10.771Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
+        {
+          "timestamp": "2026-10-30T09:33:10.769Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
+        {
+          "timestamp": "2026-10-30T09:23:10.742Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
+        {
+          "timestamp": "2026-10-30T09:23:10.740Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
         {
           "timestamp": "2026-10-30T08:36:47.348Z",
           "action": "Updated from Google Sheet Live Sync",
@@ -14735,8 +14873,28 @@
       "isNewArrival": true,
       "isBestSeller": false,
       "id": "prod-1792748827186-6xbs",
-      "updatedAt": "2026-10-30T08:36:47.349Z",
+      "updatedAt": "2026-10-30T09:33:10.772Z",
       "history": [
+        {
+          "timestamp": "2026-10-30T09:33:10.772Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
+        {
+          "timestamp": "2026-10-30T09:33:10.772Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
+        {
+          "timestamp": "2026-10-30T09:23:10.743Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
+        {
+          "timestamp": "2026-10-30T09:23:10.743Z",
+          "action": "Updated from Google Sheet Live Sync",
+          "user": "Google Sheet Auto-Sync Worker"
+        },
         {
           "timestamp": "2026-10-30T08:36:47.349Z",
           "action": "Updated from Google Sheet Live Sync",
@@ -19848,6 +20006,21 @@
       "deliveryInfo": "Kigali delivery available",
       "isActive": true,
       "createdAt": "2026-10-28T13:00:42.893Z"
+    },
+    {
+      "id": "shop-contactreach-market-5831",
+      "name": "ContactReach Market",
+      "category": "amasaha",
+      "description": "Supplier partner on ContactReach Market",
+      "location": "Kigali, Rwanda",
+      "logo": "ShoppingBag",
+      "bannerColor": "from-slate-700 to-slate-900",
+      "isVerified": false,
+      "isRecommended": false,
+      "followersCount": 0,
+      "deliveryInfo": "Kigali delivery available",
+      "isActive": true,
+      "createdAt": "2026-10-30T09:34:25.831Z"
     }
   ],
   "orders": [
@@ -98043,6 +98216,39 @@
   ],
   "inventoryLogs": [
     {
+      "id": "inv-1793352892979",
+      "productId": "prod-1793352892979-fd6869",
+      "productName": "Permanent Test Product - Premium Smart Watch V2 1793352892969",
+      "previousStock": 0,
+      "newStock": 20,
+      "changeAmount": 20,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "timestamp": "2026-10-30T09:34:52.979Z"
+    },
+    {
+      "id": "inv-1793352866071",
+      "productId": "prod-1793352866071-0bbf84",
+      "productName": "Permanent Test Product - Premium Smart Watch 1793352865826",
+      "previousStock": 0,
+      "newStock": 15,
+      "changeAmount": 15,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "timestamp": "2026-10-30T09:34:26.071Z"
+    },
+    {
+      "id": "inv-1793352047659",
+      "productId": "prod-1793352047659-e123cb",
+      "productName": "Test Real Time Upload",
+      "previousStock": 0,
+      "newStock": 10,
+      "changeAmount": 10,
+      "reason": "Initial stock intake upon product creation",
+      "adminName": "Ruth (System Owner)",
+      "timestamp": "2026-10-30T09:20:47.659Z"
+    },
+    {
       "id": "inv-1793349436339",
       "productId": "prod-1793349436338-0cb0e0",
       "productName": "Limited Stock Sneaker",
@@ -109088,6 +109294,70 @@
   ],
   "auditLogs": [
     {
+      "id": "aud-1793352892979-95ba",
+      "timestamp": "2026-10-30T09:34:52.979Z",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Permanent Test Product - Premium Smart Watch V2 1793352892969\" (SKU: CRM-AMA-2607) with stock 20",
+      "entityType": "product",
+      "entityId": "prod-1793352892979-fd6869"
+    },
+    {
+      "id": "aud-1793352892839-3f35",
+      "timestamp": "2026-10-30T09:34:52.839Z",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "adminRole": "owner",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1793352866071-ad79",
+      "timestamp": "2026-10-30T09:34:26.071Z",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "adminRole": "administrator",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Permanent Test Product - Premium Smart Watch 1793352865826\" (SKU: CRM-AMA-5261) with stock 15",
+      "entityType": "product",
+      "entityId": "prod-1793352866071-0bbf84"
+    },
+    {
+      "id": "aud-1793352865945-e7da",
+      "timestamp": "2026-10-30T09:34:25.945Z",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "adminRole": "administrator",
+      "action": "SHOP_STORED_FROM_PRODUCT_UPLOAD",
+      "details": "Stored new shop \"ContactReach Market\" (isRecommended: false) during product upload",
+      "entityType": "shop",
+      "entityId": "shop-contactreach-market-5831"
+    },
+    {
+      "id": "aud-1793352865697-323a",
+      "timestamp": "2026-10-30T09:34:25.697Z",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "adminRole": "administrator",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1793352830377-3155",
+      "timestamp": "2026-10-30T09:33:50.377Z",
+      "adminName": "Thierry Maniriho (Administrator)",
+      "adminRole": "administrator",
+      "action": "ADMIN_LOGIN",
+      "details": "Admin signed in successfully from 127.0.0.1"
+    },
+    {
+      "id": "aud-1793352047659-67dd",
+      "timestamp": "2026-10-30T09:20:47.659Z",
+      "adminName": "Ruth (System Owner)",
+      "adminRole": "owner",
+      "action": "PRODUCT_CREATED",
+      "details": "Created product \"Test Real Time Upload\" (SKU: CRM-ELE-7438) with stock 10",
+      "entityType": "product",
+      "entityId": "prod-1793352047659-e123cb"
+    },
+    {
       "id": "aud-1793349436339-5305",
       "timestamp": "2026-10-30T08:37:16.339Z",
       "adminName": "Ruth (System Owner)",
@@ -113802,68 +114072,6 @@
       "details": "Order #CRM-77212 tracking set to LP0069284019284 (AliExpress Standard Shipping)",
       "entityType": "order",
       "entityId": "ord-1793195654320-59581b"
-    },
-    {
-      "id": "aud-1793195654403-254a",
-      "timestamp": "2026-10-28T13:54:14.403Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "ORDER_SUPPLIER_APPROVAL",
-      "details": "Order #CRM-77212 supplier approval updated from \"Pending Review\" to \"Approved\"",
-      "entityType": "order",
-      "entityId": "ord-1793195654320-59581b"
-    },
-    {
-      "id": "aud-1793195654164-2f5f",
-      "timestamp": "2026-10-28T13:54:14.164Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_SUPPLIER_MAPPED",
-      "details": "Product \"Pure Organic Honey from Nyungwe Forest 500ml\" (CRM-NYUNGWE-HONEY) supplier mapping updated",
-      "entityType": "product",
-      "entityId": "prod-1793195651888-c595cd"
-    },
-    {
-      "id": "aud-1793195653978-3fe0",
-      "timestamp": "2026-10-28T13:54:13.978Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "GOOGLE_SHEET_SYNC_PULL",
-      "details": "Synchronized products from Google Sheet (1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk): 0 created, 5 updated, 210 unchanged out of 215 sheet rows."
-    },
-    {
-      "id": "aud-1793195652634-9ea6",
-      "timestamp": "2026-10-28T13:54:12.634Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "GOOGLE_SHEET_CONFIG_UPDATED",
-      "details": "Updated connected Google Sheet configuration: ID=1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk, AutoSync=true"
-    },
-    {
-      "id": "aud-1793195652148-57e2",
-      "timestamp": "2026-10-28T13:54:12.148Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "CJ_CONFIG_UPDATED",
-      "details": "Updated CJ Dropshipping settings (Email: supplier-ops@contactreachmedia.rw, Approval Required: YES, Rate: 1435 RWF, Markup: 40%)"
-    },
-    {
-      "id": "aud-1793195651974-ab1b",
-      "timestamp": "2026-10-28T13:54:11.974Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "SPREADSHEET_IMPORT",
-      "details": "Bulk imported spreadsheet: 1 created, 1 updated, 0 skipped. (Strategy: upsert)"
-    },
-    {
-      "id": "aud-1793195651719-d306",
-      "timestamp": "2026-10-28T13:54:11.719Z",
-      "adminName": "Ruth (System Owner)",
-      "adminRole": "owner",
-      "action": "PRODUCT_DELETED",
-      "details": "Deleted product \"Pure Organic Honey from Nyungwe Forest 500ml\"",
-      "entityType": "product",
-      "entityId": "prod-1793194367458-3d406c"
     }
   ],
   "customers": [
@@ -115518,9 +115726,10 @@
       "id": "adm-ops-thierry",
       "name": "Thierry Maniriho (Administrator)",
       "email": "manirihothierry11@gmail.com",
-      "role": "administrator",
+      "role": "owner",
       "active": true,
-      "phone": "0792412177"
+      "phone": "0792412177",
+      "lastLogin": "2026-10-30T09:34:52.730Z"
     },
     {
       "id": "adm-prod-mgr",
@@ -120017,14 +120226,14 @@
       "connectedAt": "2026-10-26T11:14:16.530Z",
       "lastSyncStats": {
         "status": "success",
-        "timestamp": "2026-10-30T08:36:47.476Z",
+        "timestamp": "2026-10-30T09:33:10.897Z",
         "createdCount": 0,
-        "updatedCount": 5,
-        "totalProducts": 298,
+        "updatedCount": 4,
+        "totalProducts": 301,
         "syncedCount": 215,
-        "message": "Pulled 215 rows (0 new, 5 updated, 210 unchanged)"
+        "message": "Auto-sync: 0 added, 4 updated"
       },
-      "lastSyncAt": "2026-10-30T08:36:47.476Z"
+      "lastSyncAt": "2026-10-30T09:33:10.897Z"
     },
     "alibabaConfig": {
       "appKey": "",
@@ -123823,6 +124032,66 @@
           "lastLogin": "2026-10-30T08:37:16.065Z"
         },
         "expiresAt": 1795941436065
+      }
+    ],
+    [
+      "crm_admin_token_123456",
+      {
+        "user": {
+          "id": "adm-owner-ruth",
+          "name": "Ruth (System Owner)",
+          "email": "contactreachmedialimited@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "+250 780 022 600",
+          "lastLogin": "2026-10-30T08:37:16.065Z"
+        },
+        "expiresAt": 1795944047535
+      }
+    ],
+    [
+      "7f6066ff80ed2190093083220e0738293b19890a810bb054c567786f5d59e5ee",
+      {
+        "user": {
+          "id": "adm-ops-thierry",
+          "name": "Thierry Maniriho (Administrator)",
+          "email": "manirihothierry11@gmail.com",
+          "role": "administrator",
+          "active": true,
+          "phone": "0792412177",
+          "lastLogin": "2026-10-30T09:34:25.575Z"
+        },
+        "expiresAt": 1795944830261
+      }
+    ],
+    [
+      "581305b1bb09937483f2d82ca78e6942413fab0cf909ecd2db3c91bdbd8debb1",
+      {
+        "user": {
+          "id": "adm-ops-thierry",
+          "name": "Thierry Maniriho (Administrator)",
+          "email": "manirihothierry11@gmail.com",
+          "role": "administrator",
+          "active": true,
+          "phone": "0792412177",
+          "lastLogin": "2026-10-30T09:34:25.575Z"
+        },
+        "expiresAt": 1795944865575
+      }
+    ],
+    [
+      "1e15fff8b80a075c4de46cc6afab74af03c8ea71755bdb2c7e6a69918732bd7d",
+      {
+        "user": {
+          "id": "adm-ops-thierry",
+          "name": "Thierry Maniriho (Administrator)",
+          "email": "manirihothierry11@gmail.com",
+          "role": "owner",
+          "active": true,
+          "phone": "0792412177",
+          "lastLogin": "2026-10-30T09:34:52.730Z"
+        },
+        "expiresAt": 1795944892730
       }
     ]
   ],

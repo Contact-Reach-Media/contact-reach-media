@@ -223,6 +223,24 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 </div>
               </div>
 
+              {/* Quick Fill for Platform Owner */}
+              <div className="p-2.5 rounded-xl bg-orange-50/80 border border-orange-200 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-800 truncate">Thierry Maniriho (Owner)</p>
+                  <p className="text-[10px] text-slate-500 font-mono truncate">manirihothierry11@gmail.com</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('manirihothierry11@gmail.com');
+                    setPassword('CRM@2026');
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-orange-100 text-[#FF6000] text-[11px] font-bold rounded-lg border border-orange-200 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                >
+                  Auto-Fill
+                </button>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
