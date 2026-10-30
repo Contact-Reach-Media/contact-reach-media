@@ -2102,6 +2102,9 @@ export const api = {
       });
       const parsed = await safeParseResponse<AppSettings>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await saveSettingsToFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
@@ -2135,6 +2138,11 @@ export const api = {
       });
       const parsed = await safeParseResponse<{ success: boolean; message: string; settings: AppSettings }>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          if (parsed.json.settings) {
+            await saveSettingsToFirestore(parsed.json.settings);
+          }
+        } catch {}
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {

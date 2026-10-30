@@ -2977,9 +2977,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <button
                     onClick={handleOpenAddProduct}
                     className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Manually upload a new product and save directly to Firebase and store catalog"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add New Product</span>
+                    <span>+ Upload Product (Manual / Firebase)</span>
                   </button>
                 </div>
               </div>
@@ -7487,9 +7488,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-slate-200 flex flex-col">
             <div className="p-5 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h3 className="font-black text-base text-slate-900">
-                {editingProduct ? 'Edit Product' : 'Add New Product'}
-              </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#FF6000] flex items-center justify-center font-bold">
+                  <Package className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900">
+                    {editingProduct ? 'Edit Product & Update Firebase' : 'Upload Product (Manual / Firebase)'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {editingProduct ? 'Modifications sync immediately with Cloud Firestore and local storage' : 'All attributes, pictures, and pricing will be saved to Firebase and the store'}
+                  </p>
+                </div>
+              </div>
               <button onClick={() => setProductModalOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full">
                 <X className="w-5 h-5" />
               </button>
@@ -8168,20 +8179,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </label>
               </div>
 
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setProductModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shadow-sm cursor-pointer"
-                >
-                  {editingProduct ? 'Save Changes' : 'Publish Product'}
-                </button>
+              <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                  <Database className="w-3.5 h-3.5 text-[#FF6000]" />
+                  <span>Saves directly to Cloud Firestore & store database</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProductModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shadow-sm cursor-pointer flex items-center gap-2"
+                  >
+                    <CloudUpload className="w-4 h-4" />
+                    <span>{editingProduct ? 'Save Changes to Firebase' : 'Upload & Save to Firebase'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
