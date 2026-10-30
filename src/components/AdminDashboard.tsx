@@ -804,11 +804,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ]);
 
       if (fetchedStats) setStats(fetchedStats);
-      if (fetchedOrders) setOrders(fetchedOrders);
+      if (fetchedOrders && Array.isArray(fetchedOrders)) {
+        setOrders(prev => {
+          const map = new Map<string, Order>();
+          prev.forEach(o => map.set(o.id || o.orderNumber, o));
+          fetchedOrders.forEach(o => map.set(o.id || o.orderNumber, o));
+          const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          if (prevOrdersCountRef.current !== -1 && merged.length > prevOrdersCountRef.current) {
+            const diff = merged.length - prevOrdersCountRef.current;
+            showToast(`🔔 Real-time: ${diff} new order(s) received!`, 'success');
+            playNotificationChime();
+          }
+          prevOrdersCountRef.current = merged.length;
+          return merged;
+        });
+      }
       if (fetchedProducts) setProducts(fetchedProducts);
       if (fetchedCategories) setCategories(fetchedCategories);
       if (fetchedShops) setShops(fetchedShops);
-      if (fetchedPayments) setPayments(fetchedPayments);
+      if (fetchedPayments && Array.isArray(fetchedPayments)) {
+        setPayments(prev => {
+          const map = new Map<string, PaymentConfirmation>();
+          prev.forEach(p => map.set(p.id, p));
+          fetchedPayments.forEach(p => map.set(p.id, p));
+          return Array.from(map.values()).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        });
+      }
       if (fetchedMessages) setMessages(fetchedMessages);
       if (fetchedProblems) setProblems(fetchedProblems);
       if (fetchedCoupons) setCoupons(fetchedCoupons);
@@ -964,7 +985,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime();
             }
             prevOrdersCountRef.current = liveOrders.length;
-            setOrders(liveOrders);
+            setOrders(prev => {
+              const map = new Map<string, Order>();
+              prev.forEach(o => map.set(o.id || o.orderNumber, o));
+              liveOrders.forEach(o => map.set(o.id || o.orderNumber, o));
+              return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            });
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
           }
@@ -980,7 +1006,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             snapshot.forEach(docSnap => {
               livePayments.push({ ...(docSnap.data() as PaymentConfirmation), id: docSnap.id });
             });
-            setPayments(livePayments);
+            setPayments(prev => {
+              const map = new Map<string, PaymentConfirmation>();
+              prev.forEach(p => map.set(p.id, p));
+              livePayments.forEach(p => map.set(p.id, p));
+              return Array.from(map.values()).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+            });
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
           }

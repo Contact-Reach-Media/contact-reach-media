@@ -84,12 +84,7 @@ export function autoTriggerUssd(ussdCode: string): boolean {
       } catch {}
     }, 1500);
     return true;
-  } catch (err) {
-    try {
-      window.location.href = telUri;
-      return true;
-    } catch {
-      return false;
-    }
+  } catch {
+    return false;
   }
 }

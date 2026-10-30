@@ -447,25 +447,29 @@ export const api = {
     couponCode?: string;
   }): Promise<Order> {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload)
+        body: JSON.stringify(orderPayload),
+        signal: controller.signal
       });
+      clearTimeout(timer);
+
       const parsed = await safeParseResponse<Order>(res);
       if (res.ok && parsed.isJson && parsed.json) {
-        try {
-          await createOrderInFirestore(parsed.json);
-        } catch (fsErr) {
+        // Fire-and-forget sync to Firestore in background: never blocks client UI
+        createOrderInFirestore(parsed.json).catch(fsErr => {
           console.warn('[Firebase] Order sync notice:', fsErr);
-        }
+        });
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
         throw new Error((parsed.json as any).error);
       }
     } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.name?.includes('AbortError')) {
         throw err;
       }
     }
@@ -523,11 +527,10 @@ export const api = {
       ]
     };
 
-    try {
-      await createOrderInFirestore(fallbackOrder);
-    } catch (fsErr) {
+    // Fire-and-forget fallback order persistence
+    createOrderInFirestore(fallbackOrder).catch(fsErr => {
       console.warn('[Firebase] Fallback order persistence warning:', fsErr);
-    }
+    });
 
     return fallbackOrder;
   },
@@ -591,17 +594,20 @@ export const api = {
     confirmationMessage?: string;
   }): Promise<{ message: string; confirmation: PaymentConfirmation; order: Order }> {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
       const res = await fetch('/api/payments/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: controller.signal
       });
+      clearTimeout(timer);
+
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         if (parsed.json.confirmation) {
-          try {
-            await submitPaymentToFirestore(parsed.json.confirmation);
-          } catch {}
+          submitPaymentToFirestore(parsed.json.confirmation).catch(() => {});
         }
         return parsed.json;
       }
@@ -609,7 +615,7 @@ export const api = {
         throw new Error(parsed.json.error);
       }
     } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.name?.includes('AbortError')) {
         throw err;
       }
     }
@@ -631,11 +637,9 @@ export const api = {
       verificationStatus: 'Pending Review'
     };
 
-    try {
-      await submitPaymentToFirestore(confirmation);
-    } catch (fsErr) {
+    submitPaymentToFirestore(confirmation).catch(fsErr => {
       console.warn('[Firebase] Fallback payment confirmation error:', fsErr);
-    }
+    });
 
     return {
       message: 'Payment confirmation submitted successfully. Our team will verify and approve promptly.',

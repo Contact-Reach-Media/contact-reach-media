@@ -1095,7 +1095,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerName: 'Customer A',
-        customerPhone: '0789111222',
+        customerPhone: `07891${Date.now().toString().slice(-5)}`,
         deliveryType: 'pickup',
         items: [{ productId: limitedProd.id, quantity: 2 }],
         paymentMethod: 'MTN Mobile Money'
@@ -1109,7 +1109,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerName: 'Customer B',
-        customerPhone: '0789333444',
+        customerPhone: `07893${Date.now().toString().slice(-5)}`,
         deliveryType: 'pickup',
         items: [{ productId: limitedProd.id, quantity: 1 }],
         paymentMethod: 'MTN Mobile Money'

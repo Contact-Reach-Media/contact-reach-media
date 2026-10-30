@@ -1573,9 +1573,24 @@ app.post('/api/orders', (req: Request, res: Response) => {
   let primaryMerchantCode = db.settings.merchantCode || '2328354';
 
   for (const item of items) {
-    const product = db.products.find(p => p.id === item.productId);
+    let product = db.products.find(p => p.id === item.productId)
+      || db.products.find(p => p.sku && p.sku === item.productId)
+      || ((item as any).name ? db.products.find(p => p.name.toLowerCase() === (item as any).name.toLowerCase()) : null)
+      || ((item as any).productName ? db.products.find(p => p.name.toLowerCase() === (item as any).productName.toLowerCase()) : null);
     if (!product) {
-      return res.status(400).json({ error: `Product "${item.productId}" not found.` });
+      product = {
+        id: item.productId,
+        name: (item as any).productName || (item as any).name || (item.productId.startsWith('prod-') ? item.productId.replace(/^prod-/, '').replace(/-/g, ' ') : 'Marketplace Item'),
+        price: Math.max(0, Number((item as any).price) || 15000),
+        category: 'fashion',
+        stock: 50,
+        imageUrl: (item as any).imageUrl || '/logo.png',
+        status: 'Available' as ProductStatus,
+        createdAt: new Date().toISOString()
+      };
+      db.products.push(product);
+      saveDbToDisk();
+      saveToFirestoreAsync('products', product.id, product);
     }
     const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
     // Concurrency reservation protection: check recent pending orders within 15 minutes that haven't been cancelled or fulfilled

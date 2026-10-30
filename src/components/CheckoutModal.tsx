@@ -194,23 +194,35 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       };
 
       const orderData = await api.createOrder(orderPayload);
+      if (!orderData || !orderData.orderNumber) {
+        throw new Error(currentLang === 'en' ? 'Could not generate order reference. Please try again.' : 'Ntibyashobotse gukora komande. Ongera ugerageze.');
+      }
       setCreatedOrder(orderData);
-      onOrderCreated(orderData);
+      try {
+        onOrderCreated(orderData);
+      } catch (cbErr) {
+        console.warn('onOrderCreated callback notice:', cbErr);
+      }
       setStep('payment');
       setDialerPrompted(true);
 
-      // Trigger native phone dialer with USSD code
-      const codeToDial = buildUssdCode(
-        paymentMethod,
-        orderData.totalAmount,
-        receiverPhone,
-        merchantCode
-      );
-      setTimeout(() => {
-        autoTriggerUssd(codeToDial);
-      }, 300);
+      // Trigger native phone dialer with USSD code safely
+      try {
+        const codeToDial = buildUssdCode(
+          paymentMethod,
+          orderData.totalAmount,
+          receiverPhone,
+          merchantCode
+        );
+        setTimeout(() => {
+          try {
+            autoTriggerUssd(codeToDial);
+          } catch {}
+        }, 300);
+      } catch {}
     } catch (err: any) {
-      setError(err.message || 'An error occurred while creating order.');
+      console.error('Checkout error:', err);
+      setError(err.message || (currentLang === 'en' ? 'An error occurred while creating order.' : 'Habaye ikibazo mu gukora komande.'));
     } finally {
       setLoading(false);
     }
@@ -711,12 +723,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
               </div>
 
+              {/* Direct Error Banner above submit button */}
+              {error && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span className="font-semibold">{error}</span>
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base bg-[#FF5500] hover:bg-[#E54D00] text-white shadow-xl shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer transform active:scale-98 disabled:opacity-50"
+                className="w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base bg-[#FF5500] hover:bg-[#E54D00] text-white shadow-xl shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer transform active:scale-98 disabled:opacity-60"
               >
+                {loading && (
+                  <RefreshCw className="w-5 h-5 animate-spin text-white" />
+                )}
                 <span>
                   {loading
                     ? (currentLang === 'en' ? 'Placing Order...' : 'Gukora Komande...')
@@ -724,7 +747,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         ? `Confirm & Pay ${grandTotal.toLocaleString()} RWF`
                         : `Emeza & Wishyure ${grandTotal.toLocaleString()} RWF`)}
                 </span>
-                <ChevronRight className="w-5 h-5" />
+                {!loading && <ChevronRight className="w-5 h-5" />}
               </button>
             </form>
           )}

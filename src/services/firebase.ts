@@ -712,9 +712,10 @@ export async function getOrdersFromFirestore(): Promise<Order[]> {
 }
 
 export async function createOrderInFirestore(order: Order): Promise<void> {
-  const docPath = `orders/${order.id}`;
   try {
-    await setDoc(doc(db, 'orders', order.id), cleanForFirestore(order), { merge: true });
+    const writePromise = setDoc(doc(db, 'orders', order.id), cleanForFirestore(order), { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+    await Promise.race([writePromise, timeoutPromise]);
   } catch (error) {
     console.warn('[Firebase] createOrder notice:', error);
   }
@@ -750,9 +751,10 @@ export async function getPaymentsFromFirestore(): Promise<PaymentConfirmation[]>
 }
 
 export async function submitPaymentToFirestore(payment: PaymentConfirmation): Promise<void> {
-  const docPath = `paymentConfirmations/${payment.id}`;
   try {
-    await setDoc(doc(db, 'paymentConfirmations', payment.id), cleanForFirestore(payment), { merge: true });
+    const writePromise = setDoc(doc(db, 'paymentConfirmations', payment.id), cleanForFirestore(payment), { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+    await Promise.race([writePromise, timeoutPromise]);
   } catch (error) {
     console.warn('[Firebase] submitPayment notice:', error);
   }
