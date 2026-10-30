@@ -1573,24 +1573,28 @@ app.post('/api/orders', (req: Request, res: Response) => {
   let primaryMerchantCode = db.settings.merchantCode || '2328354';
 
   for (const item of items) {
-    let product = db.products.find(p => p.id === item.productId)
+    let product: Product | undefined = db.products.find(p => p.id === item.productId)
       || db.products.find(p => p.sku && p.sku === item.productId)
-      || ((item as any).name ? db.products.find(p => p.name.toLowerCase() === (item as any).name.toLowerCase()) : null)
-      || ((item as any).productName ? db.products.find(p => p.name.toLowerCase() === (item as any).productName.toLowerCase()) : null);
+      || ((item as any).name ? db.products.find(p => p.name.toLowerCase() === (item as any).name.toLowerCase()) : undefined)
+      || ((item as any).productName ? db.products.find(p => p.name.toLowerCase() === (item as any).productName.toLowerCase()) : undefined);
+
     if (!product) {
-      product = {
+      const createdProd: Product = {
         id: item.productId,
         name: (item as any).productName || (item as any).name || (item.productId.startsWith('prod-') ? item.productId.replace(/^prod-/, '').replace(/-/g, ' ') : 'Marketplace Item'),
+        description: 'Verified product available on ContactReach Market.',
         price: Math.max(0, Number((item as any).price) || 15000),
         category: 'fashion',
         stock: 50,
         imageUrl: (item as any).imageUrl || '/logo.png',
-        status: 'Available' as ProductStatus,
-        createdAt: new Date().toISOString()
+        status: 'Available',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
-      db.products.push(product);
+      db.products.push(createdProd);
       saveDbToDisk();
-      saveToFirestoreAsync('products', product.id, product);
+      saveToFirestoreAsync('products', createdProd.id, createdProd);
+      product = createdProd;
     }
     const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
     // Concurrency reservation protection: check recent pending orders within 15 minutes that haven't been cancelled or fulfilled

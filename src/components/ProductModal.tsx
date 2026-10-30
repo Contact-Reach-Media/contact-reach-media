@@ -394,19 +394,19 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-orange-100 text-[#f95700] flex items-center justify-center font-black text-xs">
-                      BY
+                    <div className="w-6 h-6 rounded-lg bg-orange-100 text-[#f95700] flex items-center justify-center font-black text-[10px]">
+                      CRM
                     </div>
                     <div>
                       <p className="font-extrabold text-slate-900 leading-tight">
-                        {product.alibabaSupplierName || 'Yangjiang Boyuan Trading Co., Ltd.'}
+                        {product.shopName && product.shopName !== 'Yangjiang Boyuan Trading Co., Ltd.' && product.shopName !== 'Alibaba Dropshipping' ? product.shopName : 'ContactReach Market'}
                       </p>
                       <p className="text-[10px] text-slate-400">
-                        {product.alibabaSupplierLocation || 'China'} · Verified Multispecialty Supplier
+                        Built by ContactReach Market
                       </p>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[10px] font-bold border border-sky-200">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200">
                     Verified
                   </span>
                 </div>
@@ -866,12 +866,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                     <h4 className="font-black text-slate-900 flex items-center gap-1.5">
                       <Store className="w-4 h-4 text-[#f95700]" />
-                      Verified Manufacturer
+                      Verified Store & Sourcing
                     </h4>
-                    <p className="font-bold text-slate-800">{product.alibabaSupplierName || 'Yangjiang Boyuan Trading Co., Ltd.'}</p>
-                    <p className="text-slate-500">{product.alibabaSupplierLocation || 'China'}</p>
+                    <p className="font-bold text-slate-800">{product.shopName && product.shopName !== 'Yangjiang Boyuan Trading Co., Ltd.' && product.shopName !== 'Alibaba Dropshipping' ? product.shopName : 'ContactReach Market'}</p>
+                    <p className="text-slate-500">Built by ContactReach Market</p>
                     <p className="text-[11px] text-emerald-700 font-semibold pt-1">
-                      ✓ ISO9001, CE, FCC, RoHS factory certification compliance
+                      ✓ Direct verified supplier quality inspection &amp; warranty
                     </p>
                   </div>
 
