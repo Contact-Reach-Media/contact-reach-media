@@ -2218,6 +2218,81 @@ async function runTests() {
     assert.strictEqual(phoneData.user.name, 'MoMo Test Buyer');
   });
 
+  // TEST: Manual Product Upload, Hide, Edit, and Delete with Persistence
+  await test('Admin can manually upload, edit, hide, and delete product with persistence', async () => {
+    // 1. Upload manual product
+    const createRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: 'Manual Firebase Test Sneaker',
+        sku: `CRM-TST-${Date.now().toString().slice(-4)}`,
+        description: 'High performance running sneakers uploaded manually',
+        price: 35000,
+        costPrice: 20000,
+        category: 'fashion',
+        stock: 12,
+        imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff',
+        status: 'Available'
+      })
+    });
+    assert.strictEqual(createRes.status, 201, 'Product creation should return 201');
+    const created = await createRes.json();
+    assert.strictEqual(created.name, 'Manual Firebase Test Sneaker');
+    assert.strictEqual(created.price, 35000);
+    assert.strictEqual(created.status, 'Available');
+
+    // 2. Hide product (status: 'Hidden')
+    const hideRes = await fetch(`${BASE_URL}/api/admin/products/${created.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ status: 'Hidden' })
+    });
+    assert.strictEqual(hideRes.status, 200);
+    const hidden = await hideRes.json();
+    assert.strictEqual(hidden.product.status, 'Hidden');
+
+    // Verify hidden from public storefront
+    const pubRes = await fetch(`${BASE_URL}/api/products`);
+    const pubProducts = await pubRes.json();
+    assert(!pubProducts.some((p: any) => p.id === created.id), 'Hidden product must not appear on public storefront');
+
+    // Verify visible in admin dashboard
+    const adminProdRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const adminProducts = await adminProdRes.json();
+    const foundAdmin = adminProducts.find((p: any) => p.id === created.id);
+    assert(foundAdmin, 'Hidden product must be visible and manageable by admin');
+    assert.strictEqual(foundAdmin.status, 'Hidden');
+
+    // 3. Delete manual product
+    const delRes = await fetch(`${BASE_URL}/api/admin/products/${created.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delRes.status, 200);
+  });
+
+  // TEST: Category Details Verification: No Shop or Source field
+  await test('Category details do not contain Shop or Source field', async () => {
+    const catRes = await fetch(`${BASE_URL}/api/categories`);
+    assert.strictEqual(catRes.status, 200);
+    const categories = await catRes.json();
+    for (const cat of categories) {
+      assert.strictEqual((cat as any).shop, undefined, 'Category must not have shop property');
+      assert.strictEqual((cat as any).shopName, undefined, 'Category must not have shopName property');
+      assert.strictEqual((cat as any).source, undefined, 'Category must not have source property');
+      assert.strictEqual((cat as any)['Shop / Source'], undefined, 'Category must not have Shop / Source property');
+    }
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

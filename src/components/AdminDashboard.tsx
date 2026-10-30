@@ -80,6 +80,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTimeout(() => setToast(null), 3500);
   };
 
+  const prevOrdersCountRef = useRef<number>(-1);
+  const prevMessagesCountRef = useRef<number>(-1);
+
+  const playNotificationChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.45);
+    } catch {}
+  };
+
   // State collections
   const [stats, setStats] = useState<any>({
     totalSalesFrw: 0,
@@ -925,99 +947,117 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       fetchAllData(true);
     }, 4000);
 
-    // 3. Live Firestore onSnapshot listeners for instant push updates (if Firestore is active)
+    // 3. Live Firestore onSnapshot listeners for instant push updates (marketdatabase-1090b)
     const unsubs: (() => void)[] = [];
-    if (isFirestoreConnected()) {
+    if (db) {
       try {
-      // 1. Orders
-      const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
-        if (!snapshot.empty) {
-          const liveOrders: Order[] = [];
-          snapshot.forEach(docSnap => {
-            liveOrders.push({ ...(docSnap.data() as Order), id: docSnap.id });
-          });
-          setOrders(liveOrders);
-          setLastSyncTime(new Date());
-        }
-      }, (err) => {
-        console.warn('[Firestore] Live orders subscription notice:', err.message);
-      });
-      unsubs.push(unsubOrders);
+        // 1. Orders
+        const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
+          if (!snapshot.empty) {
+            const liveOrders: Order[] = [];
+            snapshot.forEach(docSnap => {
+              liveOrders.push({ ...(docSnap.data() as Order), id: docSnap.id });
+            });
+            if (prevOrdersCountRef.current !== -1 && liveOrders.length > prevOrdersCountRef.current) {
+              const diff = liveOrders.length - prevOrdersCountRef.current;
+              showToast(`🔔 Real-time: ${diff} new order(s) received!`, 'success');
+              playNotificationChime();
+            }
+            prevOrdersCountRef.current = liveOrders.length;
+            setOrders(liveOrders);
+            setLastSyncTime(new Date());
+            setIsRealtimeConnected(true);
+          }
+        }, (err) => {
+          console.warn('[Firestore] Live orders subscription notice:', err.message);
+        });
+        unsubs.push(unsubOrders);
 
-      // 2. Payments
-      const unsubPayments = onSnapshot(collection(db, 'paymentConfirmations'), (snapshot) => {
-        if (!snapshot.empty) {
-          const livePayments: PaymentConfirmation[] = [];
-          snapshot.forEach(docSnap => {
-            livePayments.push({ ...(docSnap.data() as PaymentConfirmation), id: docSnap.id });
-          });
-          setPayments(livePayments);
-          setLastSyncTime(new Date());
-        }
-      }, (err) => {
-        console.warn('[Firestore] Live payments subscription notice:', err.message);
-      });
-      unsubs.push(unsubPayments);
+        // 2. Payments
+        const unsubPayments = onSnapshot(collection(db, 'paymentConfirmations'), (snapshot) => {
+          if (!snapshot.empty) {
+            const livePayments: PaymentConfirmation[] = [];
+            snapshot.forEach(docSnap => {
+              livePayments.push({ ...(docSnap.data() as PaymentConfirmation), id: docSnap.id });
+            });
+            setPayments(livePayments);
+            setLastSyncTime(new Date());
+            setIsRealtimeConnected(true);
+          }
+        }, (err) => {
+          console.warn('[Firestore] Live payments subscription notice:', err.message);
+        });
+        unsubs.push(unsubPayments);
 
-      // 3. Supplier Applications
-      const unsubSuppliers = onSnapshot(collection(db, 'supplierApplications'), (snapshot) => {
-        if (!snapshot.empty) {
-          const liveApps: any[] = [];
-          snapshot.forEach(docSnap => {
-            liveApps.push({ ...(docSnap.data() as any), id: docSnap.id });
-          });
-          setSupplierApplications(liveApps);
-          setLastSyncTime(new Date());
-        }
-      }, (err) => {
-        console.warn('[Firestore] Live suppliers subscription notice:', err.message);
-      });
-      unsubs.push(unsubSuppliers);
+        // 3. Supplier Applications
+        const unsubSuppliers = onSnapshot(collection(db, 'supplierApplications'), (snapshot) => {
+          if (!snapshot.empty) {
+            const liveApps: any[] = [];
+            snapshot.forEach(docSnap => {
+              liveApps.push({ ...(docSnap.data() as any), id: docSnap.id });
+            });
+            setSupplierApplications(liveApps);
+            setLastSyncTime(new Date());
+            setIsRealtimeConnected(true);
+          }
+        }, (err) => {
+          console.warn('[Firestore] Live suppliers subscription notice:', err.message);
+        });
+        unsubs.push(unsubSuppliers);
 
-      // 4. Messages
-      const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
-        if (!snapshot.empty) {
-          const liveMsgs: AdminMessage[] = [];
-          snapshot.forEach(docSnap => {
-            liveMsgs.push({ ...(docSnap.data() as AdminMessage), id: docSnap.id });
-          });
-          setMessages(liveMsgs);
-          setLastSyncTime(new Date());
-        }
-      }, (err) => {
-        console.warn('[Firestore] Live messages subscription notice:', err.message);
-      });
-      unsubs.push(unsubMessages);
+        // 4. Messages & SMS
+        const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
+          if (!snapshot.empty) {
+            const liveMsgs: AdminMessage[] = [];
+            snapshot.forEach(docSnap => {
+              liveMsgs.push({ ...(docSnap.data() as AdminMessage), id: docSnap.id });
+            });
+            if (prevMessagesCountRef.current !== -1 && liveMsgs.length > prevMessagesCountRef.current) {
+              const diff = liveMsgs.length - prevMessagesCountRef.current;
+              showToast(`💬 Real-time: ${diff} new inquiry / SMS received!`, 'success');
+              playNotificationChime();
+            }
+            prevMessagesCountRef.current = liveMsgs.length;
+            setMessages(liveMsgs);
+            setLastSyncTime(new Date());
+            setIsRealtimeConnected(true);
+          }
+        }, (err) => {
+          console.warn('[Firestore] Live messages subscription notice:', err.message);
+        });
+        unsubs.push(unsubMessages);
 
-      // 5. Problems & Reports
-      const unsubProblems = onSnapshot(collection(db, 'customerProblems'), (snapshot) => {
-        if (!snapshot.empty) {
-          const liveProblems: CustomerProblemReport[] = [];
-          snapshot.forEach(docSnap => {
-            liveProblems.push({ ...(docSnap.data() as CustomerProblemReport), id: docSnap.id });
-          });
-          setProblems(liveProblems);
-          setLastSyncTime(new Date());
-        }
-      }, (err) => {
-        console.warn('[Firestore] Live problems subscription notice:', err.message);
-      });
-      unsubs.push(unsubProblems);
+        // 5. Problems & Reports
+        const unsubProblems = onSnapshot(collection(db, 'customerProblems'), (snapshot) => {
+          if (!snapshot.empty) {
+            const liveProblems: CustomerProblemReport[] = [];
+            snapshot.forEach(docSnap => {
+              liveProblems.push({ ...(docSnap.data() as CustomerProblemReport), id: docSnap.id });
+            });
+            setProblems(liveProblems);
+            setLastSyncTime(new Date());
+            setIsRealtimeConnected(true);
+          }
+        }, (err) => {
+          console.warn('[Firestore] Live problems subscription notice:', err.message);
+        });
+        unsubs.push(unsubProblems);
 
-      // 6. Audit Logs
-      const unsubAudit = onSnapshot(collection(db, 'auditLogs'), (snapshot) => {
-        if (!snapshot.empty) {
-          const liveAudit: AuditLog[] = [];
-          snapshot.forEach(docSnap => {
-            liveAudit.push({ ...(docSnap.data() as AuditLog), id: docSnap.id });
-          });
-          setAuditLogs(liveAudit);
-          setLastSyncTime(new Date());
-        }
-      }, (err) => {
-        console.warn('[Firestore] Live audit logs subscription notice:', err.message);
-      });
-      unsubs.push(unsubAudit);
+        // 6. Audit Logs
+        const unsubAudit = onSnapshot(collection(db, 'auditLogs'), (snapshot) => {
+          if (!snapshot.empty) {
+            const liveAudit: AuditLog[] = [];
+            snapshot.forEach(docSnap => {
+              liveAudit.push({ ...(docSnap.data() as AuditLog), id: docSnap.id });
+            });
+            setAuditLogs(liveAudit);
+            setLastSyncTime(new Date());
+            setIsRealtimeConnected(true);
+          }
+        }, (err) => {
+          console.warn('[Firestore] Live audit logs subscription notice:', err.message);
+        });
+        unsubs.push(unsubAudit);
       } catch (e) {
         console.warn('[Firestore] Realtime subscription init error:', e);
       }
@@ -1277,10 +1317,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       if (editingProduct) {
         await api.adminUpdateProduct(editingProduct.id, payload);
-        showToast('Product updated successfully!');
+        showToast('Product updated & saved to Firebase successfully!', 'success');
       } else {
         await api.adminAddProduct(payload);
-        showToast('Product created and published!');
+        showToast('Product uploaded & saved to Firebase successfully!', 'success');
       }
       setProductModalOpen(false);
       fetchAllData();
@@ -8496,10 +8536,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           />
                           <div className="min-w-0 flex-1">
                             <span className="text-[11px] font-bold text-slate-800 block">
-                              Auto-Selected from Products
+                              Auto-Selected Category Cover
                             </span>
-                            <p className="text-[10px] text-slate-500 truncate">
-                              {autoInfo.sourceLabel}
+                            <p className="text-[10px] text-slate-500">
+                              Preview automatically selected from listed category items
                             </p>
                           </div>
                         </>

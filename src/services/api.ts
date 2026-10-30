@@ -14,25 +14,49 @@ import {
   deleteProductFromFirestore,
   getCategoriesFromFirestore,
   saveCategoryToFirestore,
+  deleteCategoryFromFirestore,
   getShopsFromFirestore,
   saveShopToFirestore,
+  deleteShopFromFirestore,
   getOrderFromFirestore,
+  getOrdersFromFirestore,
   createOrderInFirestore,
+  updateOrderInFirestore,
+  deleteOrderFromFirestore,
+  getPaymentsFromFirestore,
   submitPaymentToFirestore,
+  updatePaymentInFirestore,
+  deletePaymentFromFirestore,
+  getSupplierApplicationsFromFirestore,
   submitSupplierApplicationToFirestore,
+  updateSupplierApplicationInFirestore,
+  getSupplierPayoutsFromFirestore,
+  saveSupplierPayoutToFirestore,
+  getMessagesFromFirestore,
   submitMessageToFirestore,
   updateMessageInFirestore,
   deleteMessageFromFirestore,
   batchSaveMessagesToFirestore,
+  getCustomerProblemsFromFirestore,
   submitProblemReportToFirestore,
+  saveCustomerProblemToFirestore,
+  deleteCustomerProblemFromFirestore,
+  getCouponsFromFirestore,
+  saveCouponToFirestore,
+  deleteCouponFromFirestore,
+  getInventoryLogsFromFirestore,
+  saveInventoryLogToFirestore,
+  getAuditLogsFromFirestore,
+  saveAuditLogToFirestore,
+  getCustomersFromFirestore,
+  saveCustomerToFirestore,
+  deleteCustomerFromFirestore,
+  getUsersFromFirestore,
+  saveUserToFirestore,
+  deleteUserFromFirestore,
   submitReviewToFirestore,
   getSettingsFromFirestore,
   saveSettingsToFirestore,
-  saveCustomerToFirestore,
-  updateOrderInFirestore,
-  updatePaymentInFirestore,
-  saveSupplierPayoutToFirestore,
-  updateSupplierApplicationInFirestore,
   logoutUser
 } from './firebase.ts';
 
@@ -1071,6 +1095,11 @@ export const api = {
       }
     } catch {}
 
+    try {
+      const fsOrders = await getOrdersFromFirestore();
+      if (fsOrders && fsOrders.length > 0) return fsOrders;
+    } catch {}
+
     return [];
   },
 
@@ -1104,7 +1133,11 @@ export const api = {
       }
     }
 
-    return { id: orderId } as Order;
+    const updated = { id: orderId, ...data } as Order;
+    try {
+      await updateOrderInFirestore(updated);
+    } catch {}
+    return updated;
   },
 
   async adminUpdateOrder(orderId: string, data: Partial<Order>): Promise<Order> {
@@ -1129,7 +1162,11 @@ export const api = {
         throw err;
       }
     }
-    return { id: orderId, ...data } as Order;
+    const updated = { id: orderId, ...data } as Order;
+    try {
+      await updateOrderInFirestore(updated);
+    } catch {}
+    return updated;
   },
 
   async adminDeleteOrder(orderId: string): Promise<{ message: string; removed?: Order }> {
@@ -1138,15 +1175,26 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
+      try {
+        await deleteOrderFromFirestore(orderId);
+      } catch {}
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
     } catch {}
+    try {
+      await deleteOrderFromFirestore(orderId);
+    } catch {}
     return { message: 'Order deleted' };
   },
 
   async adminBulkDeleteOrders(orderIds: string[]): Promise<{ message: string; count: number }> {
+    for (const oid of orderIds) {
+      try {
+        await deleteOrderFromFirestore(oid);
+      } catch {}
+    }
     try {
       const res = await fetch('/api/admin/orders/bulk-delete', {
         method: 'POST',
@@ -1167,10 +1215,16 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
+      try {
+        await deletePaymentFromFirestore(paymentId);
+      } catch {}
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
+    } catch {}
+    try {
+      await deletePaymentFromFirestore(paymentId);
     } catch {}
     return { message: 'Payment record deleted' };
   },
@@ -1184,6 +1238,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsPayments = await getPaymentsFromFirestore();
+      if (fsPayments && fsPayments.length > 0) return fsPayments;
+    } catch {}
+
     return [];
   },
 
@@ -1243,6 +1303,11 @@ export const api = {
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
         return parsed.json;
       }
+    } catch {}
+
+    try {
+      const fsProds = await getProductsFromFirestore();
+      if (fsProds && fsProds.length > 0) return fsProds;
     } catch {}
 
     return this.getProducts();
@@ -1734,6 +1799,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsInv = await getInventoryLogsFromFirestore();
+      if (fsInv && fsInv.length > 0) return fsInv;
+    } catch {}
+
     return [];
   },
 
@@ -1809,6 +1880,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsReports = await getCustomerProblemsFromFirestore();
+      if (fsReports && fsReports.length > 0) return fsReports;
+    } catch {}
+
     return [];
   },
 
@@ -1827,10 +1904,17 @@ export const api = {
       });
       const parsed = await safeParseResponse<CustomerProblemReport>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await saveCustomerProblemToFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
     } catch {}
-    return { id, ...data } as CustomerProblemReport;
+    const updated = { id, ...data } as CustomerProblemReport;
+    try {
+      await saveCustomerProblemToFirestore(updated);
+    } catch {}
+    return updated;
   },
 
   async adminDeleteCustomerReport(id: string): Promise<void> {
@@ -1839,6 +1923,9 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
+    } catch {}
+    try {
+      await deleteCustomerProblemFromFirestore(id);
     } catch {}
   },
 
@@ -1851,22 +1938,35 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsCoupons = await getCouponsFromFirestore();
+      if (fsCoupons && fsCoupons.length > 0) return fsCoupons;
+    } catch {}
+
     return [];
   },
 
   async adminAddCoupon(coupon: Partial<Coupon>): Promise<Coupon> {
+    const newCoupon = { id: coupon.id || `coup-${Date.now()}`, isActive: true, ...coupon } as Coupon;
     try {
       const res = await fetch('/api/admin/coupons', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(coupon)
+        body: JSON.stringify(newCoupon)
       });
       const parsed = await safeParseResponse<Coupon>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await saveCouponToFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
     } catch {}
-    return { id: `coup-${Date.now()}`, ...coupon } as Coupon;
+    try {
+      await saveCouponToFirestore(newCoupon);
+    } catch {}
+    return newCoupon;
   },
 
   async adminUpdateCoupon(id: string, coupon: Partial<Coupon>): Promise<Coupon> {
@@ -1878,10 +1978,17 @@ export const api = {
       });
       const parsed = await safeParseResponse<Coupon>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await saveCouponToFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
     } catch {}
-    return { id, ...coupon } as Coupon;
+    const updated = { id, ...coupon } as Coupon;
+    try {
+      await saveCouponToFirestore(updated);
+    } catch {}
+    return updated;
   },
 
   async adminDeleteCoupon(id: string): Promise<void> {
@@ -1890,6 +1997,9 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
+    } catch {}
+    try {
+      await deleteCouponFromFirestore(id);
     } catch {}
   },
 
@@ -1902,6 +2012,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsCustomers = await getCustomersFromFirestore();
+      if (fsCustomers && fsCustomers.length > 0) return fsCustomers;
+    } catch {}
+
     return [];
   },
 
@@ -1925,10 +2041,17 @@ export const api = {
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json?.customer) {
+        try {
+          await saveCustomerToFirestore(parsed.json.customer);
+        } catch {}
         return parsed.json.customer;
       }
     } catch {}
-    return { id, ...data } as CustomerUser;
+    const updated = { id, ...data } as CustomerUser;
+    try {
+      await saveCustomerToFirestore(updated);
+    } catch {}
+    return updated;
   },
 
   async adminDeleteCustomer(id: string): Promise<{ message: string }> {
@@ -1937,10 +2060,16 @@ export const api = {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
+      try {
+        await deleteCustomerFromFirestore(id);
+      } catch {}
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
+    } catch {}
+    try {
+      await deleteCustomerFromFirestore(id);
     } catch {}
     return { message: 'Customer removed' };
   },
@@ -1954,6 +2083,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsLogs = await getAuditLogsFromFirestore();
+      if (fsLogs && fsLogs.length > 0) return fsLogs;
+    } catch {}
+
     return [];
   },
 
@@ -2079,6 +2214,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsApps = await getSupplierApplicationsFromFirestore();
+      if (fsApps && fsApps.length > 0) return fsApps;
+    } catch {}
+
     return [];
   },
 
@@ -2091,10 +2232,17 @@ export const api = {
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        try {
+          await updateSupplierApplicationInFirestore(parsed.json);
+        } catch {}
         return parsed.json;
       }
     } catch {}
-    return { id, status, adminNotes };
+    const updated = { id, status, adminNotes };
+    try {
+      await updateSupplierApplicationInFirestore(updated);
+    } catch {}
+    return updated;
   },
 
   // Supplier Payouts (Phase 9)
@@ -2106,6 +2254,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const fsPayouts = await getSupplierPayoutsFromFirestore();
+      if (fsPayouts && fsPayouts.length > 0) return fsPayouts;
+    } catch {}
+
     return [];
   },
 
@@ -2451,14 +2605,22 @@ export const api = {
   },
 
   async adminGetUsers(): Promise<AdminUser[]> {
-    const res = await fetch('/api/admin/users', {
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<AdminUser[]>(res);
-    if (!res.ok || !parsed.isJson || !Array.isArray(parsed.json)) {
-      throw new Error(parsed.json && (parsed.json as any).error ? (parsed.json as any).error : 'Failed to fetch admin users');
-    }
-    return parsed.json;
+    try {
+      const res = await fetch('/api/admin/users', {
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<AdminUser[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+
+    try {
+      const fsUsers = await getUsersFromFirestore();
+      if (fsUsers && fsUsers.length > 0) return fsUsers as AdminUser[];
+    } catch {}
+
+    return fallbackAdminUsers;
   },
 
   async adminCreateUser(payload: { name: string; email: string; role: AdminRole; phone?: string }): Promise<AdminUser> {
@@ -2471,6 +2633,9 @@ export const api = {
     if (!res.ok || !parsed.isJson || !parsed.json) {
       throw new Error(parsed.json && (parsed.json as any).error ? (parsed.json as any).error : 'Failed to create admin user');
     }
+    try {
+      await saveUserToFirestore(parsed.json);
+    } catch {}
     return parsed.json;
   },
 
@@ -2484,10 +2649,16 @@ export const api = {
     if (!res.ok || !parsed.isJson || !parsed.json) {
       throw new Error(parsed.json && (parsed.json as any).error ? (parsed.json as any).error : 'Failed to update admin user');
     }
+    try {
+      await saveUserToFirestore(parsed.json);
+    } catch {}
     return parsed.json;
   },
 
   async adminDeleteUser(id: string): Promise<any> {
+    try {
+      await deleteUserFromFirestore(id);
+    } catch {}
     const res = await fetch(`/api/admin/users/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
