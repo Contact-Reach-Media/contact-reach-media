@@ -29,6 +29,7 @@ import {
 import { ALIBABA_CURATED_FEED, AlibabaCuratedItem } from './src/data/alibabaFeed.ts';
 import { ALIBABA_300_CATALOG, Alibaba300Item } from './src/data/alibaba300Feed.ts';
 import { ALIBABA_1000_CATALOG, Alibaba1000Item } from './src/data/alibaba1000Feed.ts';
+import { PRODUCTS_200_CATALOG } from './src/data/products200Feed.ts';
 import { calculateAlibabaShipping, calculateAlibabaLandedPricing } from './src/utils/alibabaShipping.ts';
 import { calculateLandedCostAndSellingPrice } from './src/utils/pricing.ts';
 
@@ -557,6 +558,14 @@ function loadDbFromDisk() {
       console.error('Error reading DB file, using initial data:', err);
       saveDbToDisk();
     }
+  }
+
+  // Ensure all 200 catalog products are present in db.products
+  const existingProductIds = new Set(db.products.map(p => p.id));
+  const missing200 = PRODUCTS_200_CATALOG.filter(p => !existingProductIds.has(p.id));
+  if (missing200.length > 0) {
+    console.log(`Injecting ${missing200.length} catalog products into database...`);
+    db.products = [...missing200, ...db.products];
   }
 
   // Ensure SKU for each product if missing

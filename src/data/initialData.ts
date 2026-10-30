@@ -1,4 +1,5 @@
 import { Product, Category, AppSettings, VendorShop } from '../types.ts';
+import { PRODUCTS_200_CATALOG } from './products200Feed.ts';
 
 export const initialSettings: AppSettings = {
   "companyName": "ContactReach Media Ltd",
@@ -7799,5 +7800,6 @@ export const initialProducts: Product[] = [
         "user": "Ruth (System Owner)"
       }
     ]
-  }
+  },
+  ...PRODUCTS_200_CATALOG
 ];
