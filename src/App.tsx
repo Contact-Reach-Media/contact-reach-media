@@ -31,6 +31,9 @@ import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
 import { MaintenancePage } from './components/MaintenancePage.tsx';
 import { NotFoundPage } from './components/NotFoundPage.tsx';
 import { SignInPage } from './components/SignInPage.tsx';
+import { PWAInstallModal } from './components/PWAInstallModal.tsx';
+import { PWAInstallBanner } from './components/PWAInstallBanner.tsx';
+
 
 const SUPPORTED_LANG_CODES: Language[] = ['en', 'fr', 'rw', 'sw', 'es', 'pt', 'ar', 'zh', 'de', 'hi'];
 const SUPPORTED_CURR_CODES: CurrencyCode[] = ['RWF', 'USD', 'EUR', 'GBP', 'KES', 'TZS', 'UGX', 'NGN', 'ZAR', 'CNY'];
@@ -125,11 +128,38 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
-  // Core Data
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  // Core Data with permanent local hydration
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_home_catalog_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch {}
+    }
+    return initialProducts;
+  });
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [shops, setShops] = useState<VendorShop[]>(initialShops);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
+
+  // Request permanent storage from browser and persist catalog to local storage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (products && products.length > 0) {
+        localStorage.setItem('crm_home_catalog_cache', JSON.stringify(products.slice(0, 1000)));
+      }
+    } catch {}
+  }, [products]);
+
 
   // Cart & Wishlist with localStorage Persistence
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -618,6 +648,12 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* In-App PWA Install Banner */}
+          <PWAInstallBanner
+            onOpenModal={() => setIsAppDownloadOpen(true)}
+            currentLang={currentLang}
+          />
 
           {/* Main Header */}
           <Header
@@ -1271,58 +1307,13 @@ export default function App() {
         />
       )}
 
-      {/* 7. Mobile App Download Modal */}
-      {isAppDownloadOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center space-y-4 relative">
-            <button
-              onClick={() => setIsAppDownloadOpen(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-full"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      {/* 7. Save to Home Screen / PWA Install Modal */}
+      <PWAInstallModal
+        isOpen={isAppDownloadOpen}
+        onClose={() => setIsAppDownloadOpen(false)}
+        currentLang={currentLang}
+      />
 
-            <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-slate-200 shadow-md p-1 mx-auto flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="ContactReach Market Logo"
-                  className="w-full h-full object-contain rounded-full"
-                />
-              </div>
-            </div>
-
-            <h3 className="font-black text-lg text-slate-900">
-              Download ContactReach Market App
-            </h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Experience seamless shopping on iOS & Android. Receive instant order notifications and exclusive discounts.
-            </p>
-
-            <div className="pt-2 space-y-2.5">
-              <a
-                href="https://apps.apple.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 hover:bg-black transition-colors"
-              >
-                <Apple className="w-4 h-4" />
-                <span>Download on Apple App Store</span>
-              </a>
-
-              <a
-                href="https://play.google.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 hover:bg-black transition-colors"
-              >
-                <Play className="w-4 h-4 text-emerald-400 fill-emerald-400" />
-                <span>Download on Google Play Store</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 8. Request a Product (SABA) Modal */}
       {isRequestProductOpen && (

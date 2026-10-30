@@ -252,13 +252,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right: Mobile App + Social Media Links */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={onOpenMobileAppModal}
-              className="hidden md:flex items-center gap-1 text-white hover:text-white/80 font-bold transition-colors cursor-pointer whitespace-nowrap text-xs"
+              className="flex items-center gap-1.5 bg-black/20 hover:bg-black/30 text-white px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer whitespace-nowrap text-xs border border-white/20 shadow-2xs"
+              title="Add ContactReach to your home screen"
             >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>{t.getMobileApp}</span>
+              <Smartphone className="w-3.5 h-3.5 text-orange-200" />
+              <span className="hidden xs:inline">{t.getMobileApp || 'Install App'}</span>
+              <span className="xs:hidden">App</span>
             </button>
 
             <div className="hidden lg:flex items-center gap-2 text-white/90">
@@ -745,6 +747,18 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               ))}
             </div>
+
+            {/* Install App Button in Mobile Drawer */}
+            <button
+              onClick={() => {
+                onOpenMobileAppModal();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#FF6000] to-orange-500 hover:from-orange-600 hover:to-[#FF6000] text-white font-black text-xs shadow-sm transition-all active:scale-98 cursor-pointer"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>{t.getMobileApp || 'Save App to Home Screen'}</span>
+            </button>
 
             <div className="relative">
               <input
