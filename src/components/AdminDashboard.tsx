@@ -174,6 +174,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch {}
   };
 
+  // One-time mobile audio unlock: enables crystal chime playback on iOS Safari & Android Chrome after first user gesture
+  useEffect(() => {
+    const unlockAudio = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+        }
+      } catch {}
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, []);
+
   // State collections
   const [stats, setStats] = useState<any>({
     totalSalesFrw: 0,
@@ -1002,18 +1025,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedStats) setStats(fetchedStats);
       if (fetchedOrders && Array.isArray(fetchedOrders)) {
         setOrders(prev => {
-          const map = new Map<string, Order>();
-          prev.forEach(o => map.set(o.id || o.orderNumber, o));
-          fetchedOrders.forEach(o => map.set(o.id || o.orderNumber, o));
-          const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          if (prevOrdersCountRef.current !== -1 && merged.length > prevOrdersCountRef.current) {
-            const diff = merged.length - prevOrdersCountRef.current;
+          if (prevOrdersCountRef.current !== -1 && fetchedOrders.length > prevOrdersCountRef.current) {
+            const diff = fetchedOrders.length - prevOrdersCountRef.current;
             showToast(`🔔 Real-time: ${diff} new order(s) received!`, 'success');
             playNotificationChime('order');
             sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
           }
-          prevOrdersCountRef.current = merged.length;
-          return merged;
+          prevOrdersCountRef.current = fetchedOrders.length;
+          return fetchedOrders;
         });
       }
       if (fetchedProducts) setProducts(fetchedProducts);
@@ -1263,6 +1282,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             } else if (eventType === 'order_status_updated' && payload?.order) {
               const updatedOrd: Order = payload.order;
               setOrders(prev => prev.map(o => (o.id === updatedOrd.id || o.orderNumber === updatedOrd.orderNumber) ? updatedOrd : o));
+            } else if (eventType === 'order_deleted' && (payload?.orderId || payload?.orderNumber)) {
+              const { orderId, orderNumber } = payload;
+              setOrders(prev => prev.filter(o => o.id !== orderId && o.orderNumber !== orderNumber));
+              showToast(`🗑️ Order #${orderNumber || orderId} deleted by admin`, 'info');
+            } else if (eventType === 'orders_bulk_deleted' && Array.isArray(payload?.orderIds)) {
+              const idSet = new Set(payload.orderIds);
+              const numSet = new Set(payload.orderNumbers || []);
+              setOrders(prev => prev.filter(o => !idSet.has(o.id) && !numSet.has(o.orderNumber)));
+              showToast(`🗑️ ${payload.orderIds.length} orders deleted by admin`, 'info');
             } else if (eventType === 'payment_verified' && payload?.payment) {
               const updatedPay: PaymentConfirmation = payload.payment;
               setPayments(prev => prev.map(p => p.id === updatedPay.id ? updatedPay : p));
@@ -1307,10 +1335,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     connectSSE();
 
     // 2. Background fallback sync every 12 seconds (skips when browser tab is inactive)
+    // 2. Background fallback sync every 10 seconds (reliable multi-device heartbeat)
     const syncInterval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.hidden) return;
       fetchAllData(true);
-    }, 12000);
+    }, 10000);
+
+    // Multi-Device Resilience: Immediately reconnect and sync on tab focus, device wake, or network restore
+    const handleReSyncOnVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+          connectSSE();
+        }
+        fetchAllData(true);
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleReSyncOnVisible);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleReSyncOnVisible);
+      window.addEventListener('online', handleReSyncOnVisible);
+    }
 
     // 3. Live Firestore onSnapshot listeners for instant push updates (marketdatabase-1090b)
     const unsubs: (() => void)[] = [];
@@ -1330,12 +1376,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
             }
             prevOrdersCountRef.current = liveOrders.length;
-            setOrders(prev => {
-              const map = new Map<string, Order>();
-              prev.forEach(o => map.set(o.id || o.orderNumber, o));
-              liveOrders.forEach(o => map.set(o.id || o.orderNumber, o));
-              return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            });
+            setOrders(liveOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
           }
@@ -1468,6 +1509,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         try { eventSource.close(); } catch {}
       }
       clearInterval(syncInterval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleReSyncOnVisible);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleReSyncOnVisible);
+        window.removeEventListener('online', handleReSyncOnVisible);
+      }
       unsubs.forEach(unsub => {
         try { unsub(); } catch {}
       });
@@ -2747,13 +2795,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="hidden sm:inline">Firebase Sync</span>
           </button>
 
-          {/* Live Real-Time Database Sync Status Indicator */}
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px] font-bold shadow-2xs">
+          {/* Live Real-Time Database Sync Status Indicator (Visible on all devices) */}
+          <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[10px] sm:text-[11px] font-bold shadow-2xs">
             <span className={`w-2 h-2 rounded-full ${isRealtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
             <span className={isRealtimeConnected ? 'text-emerald-400 font-extrabold' : 'text-amber-300 font-semibold'}>
-              {isRealtimeConnected ? 'Live Real-Time Stream' : 'Live Sync Active'}
+              {isRealtimeConnected ? 'Live' : 'Syncing'}
             </span>
-            <span className="text-[10px] text-slate-400 font-mono hidden xl:inline">
+            <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
               · {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           </div>
@@ -2762,7 +2810,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             onClick={handleToggleDesktopAlerts}
             title="Click to test real-time sound alert and enable instant desktop push notifications"
-            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
               desktopAlertsActive
                 ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
                 : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700/80'
