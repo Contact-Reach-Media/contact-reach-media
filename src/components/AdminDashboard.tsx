@@ -220,8 +220,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>(initialPropCategories);
   const [shops, setShops] = useState<VendorShop[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [payments, setPayments] = useState<PaymentConfirmation[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_admin_orders_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [problems, setProblems] = useState<CustomerProblemReport[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -1025,6 +1036,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedStats) setStats(fetchedStats);
       if (fetchedOrders && Array.isArray(fetchedOrders)) {
         setOrders(prev => {
+          // Safety guard: If server returned empty array due to transient network glitch but we already have orders in state, preserve existing orders
+          if (fetchedOrders.length === 0 && prev.length > 0) {
+            return prev;
+          }
           if (prevOrdersCountRef.current !== -1 && fetchedOrders.length > prevOrdersCountRef.current) {
             const diff = fetchedOrders.length - prevOrdersCountRef.current;
             showToast(`🔔 Real-time: ${diff} new order(s) received!`, 'success');
@@ -1032,6 +1047,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
           }
           prevOrdersCountRef.current = fetchedOrders.length;
+          try {
+            if (fetchedOrders.length > 0) {
+              localStorage.setItem('crm_admin_orders_cache', JSON.stringify(fetchedOrders));
+            }
+          } catch {}
           return fetchedOrders;
         });
       }
@@ -1375,8 +1395,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime('order');
               sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
             }
-            prevOrdersCountRef.current = liveOrders.length;
-            setOrders(liveOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            setOrders(prev => {
+              const map = new Map<string, Order>();
+              // Maintain all existing orders from the authoritative permanent database
+              prev.forEach(o => map.set(o.id, o));
+              // Merge live incoming updates or new orders
+              liveOrders.forEach(o => {
+                const existing = map.get(o.id) || Array.from(map.values()).find(x => x.orderNumber === o.orderNumber);
+                if (!existing) {
+                  map.set(o.id, o);
+                } else {
+                  map.set(existing.id, { ...existing, ...o });
+                }
+              });
+              const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              prevOrdersCountRef.current = merged.length;
+              try {
+                localStorage.setItem('crm_admin_orders_cache', JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
           }
@@ -1426,8 +1464,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime('alert');
               sendDesktopNotification('New Supplier Application', `${diff} business supplier application(s) pending review.`);
             }
-            prevSuppliersCountRef.current = liveApps.length;
-            setSupplierApplications(liveApps);
+            setSupplierApplications(prev => {
+              const map = new Map<string, any>();
+              prev.forEach(a => map.set(a.id, a));
+              liveApps.forEach(a => map.set(a.id, a));
+              const merged = Array.from(map.values());
+              prevSuppliersCountRef.current = merged.length;
+              return merged;
+            });
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
           }
@@ -1449,8 +1493,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime('sms');
               sendDesktopNotification('New SMS / Inquiry', `${diff} new customer message(s) received.`);
             }
-            prevMessagesCountRef.current = liveMsgs.length;
-            setMessages(liveMsgs);
+            setMessages(prev => {
+              const map = new Map<string, AdminMessage>();
+              prev.forEach(m => map.set(m.id, m));
+              liveMsgs.forEach(m => map.set(m.id, m));
+              const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              prevMessagesCountRef.current = merged.length;
+              return merged;
+            });
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
           }
@@ -1472,8 +1522,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime('alert');
               sendDesktopNotification('Customer Problem Reported', `${diff} new customer case(s) filed.`);
             }
-            prevProblemsCountRef.current = liveProblems.length;
-            setProblems(liveProblems);
+            setProblems(prev => {
+              const map = new Map<string, CustomerProblemReport>();
+              prev.forEach(p => map.set(p.id, p));
+              liveProblems.forEach(p => map.set(p.id, p));
+              const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              prevProblemsCountRef.current = merged.length;
+              return merged;
+            });
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
           }

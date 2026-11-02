@@ -1232,13 +1232,34 @@ export const api = {
       const res = await fetch(`/api/admin/orders?${q.toString()}`, { headers: getAuthHeaders() });
       const parsed = await safeParseResponse<Order[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        try {
+          if (!status && !search && !paymentStatus && !shop) {
+            localStorage.setItem('crm_admin_orders_cache', JSON.stringify(parsed.json));
+          }
+        } catch {}
         return parsed.json;
       }
     } catch {}
 
     try {
       const fsOrders = await getOrdersFromFirestore();
-      if (fsOrders && fsOrders.length > 0) return fsOrders;
+      if (fsOrders && fsOrders.length > 0) {
+        try {
+          localStorage.setItem('crm_admin_orders_cache', JSON.stringify(fsOrders));
+        } catch {}
+        return fsOrders;
+      }
+    } catch {}
+
+    // Fallback: Read permanent local storage cache to guarantee orders remain visible after reload
+    try {
+      const cached = localStorage.getItem('crm_admin_orders_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
     } catch {}
 
     return [];
@@ -1261,6 +1282,16 @@ export const api = {
       const parsed = await safeParseResponse<Order>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         updateOrderInFirestore(parsed.json).catch(() => {});
+        try {
+          const cached = localStorage.getItem('crm_admin_orders_cache');
+          if (cached) {
+            const list = JSON.parse(cached);
+            if (Array.isArray(list)) {
+              const updatedList = list.map((o: Order) => (o.id === parsed.json!.id || o.orderNumber === parsed.json!.orderNumber) ? parsed.json! : o);
+              localStorage.setItem('crm_admin_orders_cache', JSON.stringify(updatedList));
+            }
+          }
+        } catch {}
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
@@ -1287,6 +1318,16 @@ export const api = {
       const parsed = await safeParseResponse<Order>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         updateOrderInFirestore(parsed.json).catch(() => {});
+        try {
+          const cached = localStorage.getItem('crm_admin_orders_cache');
+          if (cached) {
+            const list = JSON.parse(cached);
+            if (Array.isArray(list)) {
+              const updatedList = list.map((o: Order) => (o.id === parsed.json!.id || o.orderNumber === parsed.json!.orderNumber) ? parsed.json! : o);
+              localStorage.setItem('crm_admin_orders_cache', JSON.stringify(updatedList));
+            }
+          }
+        } catch {}
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
@@ -1313,6 +1354,16 @@ export const api = {
       try {
         await deleteOrderFromFirestore(orderId);
       } catch {}
+      try {
+        const cached = localStorage.getItem('crm_admin_orders_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          if (Array.isArray(list)) {
+            const filtered = list.filter((o: Order) => o.id !== orderId && o.orderNumber !== orderId);
+            localStorage.setItem('crm_admin_orders_cache', JSON.stringify(filtered));
+          }
+        }
+      } catch {}
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
@@ -1330,6 +1381,17 @@ export const api = {
         await deleteOrderFromFirestore(oid);
       } catch {}
     }
+    try {
+      const idSet = new Set(orderIds);
+      const cached = localStorage.getItem('crm_admin_orders_cache');
+      if (cached) {
+        const list = JSON.parse(cached);
+        if (Array.isArray(list)) {
+          const filtered = list.filter((o: Order) => !idSet.has(o.id) && !idSet.has(o.orderNumber));
+          localStorage.setItem('crm_admin_orders_cache', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
     try {
       const res = await fetch('/api/admin/orders/bulk-delete', {
         method: 'POST',
