@@ -580,6 +580,7 @@ export const api = {
     deliveryAddress: string;
     deliveryNotes?: string;
     items: { productId: string; quantity: number; variation?: string }[];
+    shippingCost?: number;
     paymentMethod: PaymentMethod;
     couponCode?: string;
   }): Promise<Order> {
@@ -617,7 +618,8 @@ export const api = {
     const trackingToken = Math.random().toString(36).substring(2, 18);
     const subtotal = orderPayload.items.reduce((sum, item) => sum + (15000 * item.quantity), 0);
     const deliveryFee = orderPayload.deliveryType === 'pickup' ? 0 : 1500;
-    const totalAmount = subtotal + deliveryFee;
+    const shippingCost = orderPayload.shippingCost || 0;
+    const totalAmount = subtotal + deliveryFee + shippingCost;
 
     const fallbackOrder: Order = {
       id: `ord-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -641,6 +643,7 @@ export const api = {
       })),
       subtotal,
       deliveryFee,
+      shippingCost,
       totalAmount,
       commissionRate: 10,
       commissionEarned: Math.round(subtotal * 0.1),

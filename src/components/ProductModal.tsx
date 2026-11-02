@@ -10,6 +10,7 @@ import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
+import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
 
 interface ProductModalProps {
   product: Product | null;
@@ -179,7 +180,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
   const activeUnitPrice = quantity >= 10 ? wholesaleTier2 : wholesaleTier1;
   const totalPrice = activeUnitPrice * quantity;
-  const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0;
+  const isOutOfStock = isProductOutOfStock(product);
+
+  // Automatic Formula: Product Price + Delivery Fee + Shipping Cost (if out of stock)
+  const costBreakdown = useMemo(() => {
+    return getProductSelectionBreakdown(product, quantity, 1500);
+  }, [product, quantity]);
 
   // Store's Hot Items (Matching Image 4)
   const storeHotItems = allProducts
@@ -579,16 +585,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 <span className="text-xs font-bold text-slate-700">Quantity:</span>
                 <div className="inline-flex items-center border border-slate-300 rounded-xl p-1 bg-white shadow-2xs">
                   <button
+                    type="button"
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={quantity <= 1 || isOutOfStock}
+                    disabled={quantity <= 1}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
                   <span className="w-12 text-center font-black text-sm font-mono">{quantity}</span>
                   <button
-                    onClick={() => setQuantity(Math.min(product.stock || 99, quantity + 1))}
-                    disabled={quantity >= (product.stock || 99) || isOutOfStock}
+                    type="button"
+                    onClick={() => setQuantity(quantity + 1)}
+                    disabled={!isOutOfStock && quantity >= (product.stock || 99)}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -596,41 +604,109 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 </div>
 
                 <div className="text-xs font-mono">
-                  <span className="text-slate-400">Total: </span>
-                  <span className="font-black text-slate-900 text-sm">
-                    {formatCurrencyPrice(totalPrice, currentCurrency, exchangeRates).primary}
+                  <span className="text-slate-400">Unit Price: </span>
+                  <span className="font-bold text-slate-800">
+                    {formatCurrencyPrice(costBreakdown.unitPrice, currentCurrency, exchangeRates).primary}
                   </span>
                 </div>
               </div>
 
-              {/* Shipping to Rwanda (Matching Image 1 & 3) */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                    <Truck className="w-4 h-4 text-[#f95700]" />
-                    Shipping & Logistics:
+              {/* DYNAMIC TOTAL PAYMENT BREAKDOWN CARD (Product Price + Delivery Fee + Shipping Cost) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-50/80 via-white to-slate-50 border-2 border-orange-200/90 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-orange-100 pb-2">
+                  <span className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+                    <Sparkles className="w-4 h-4 text-[#f95700]" />
+                    <span>Cost Breakdown / Igiciro cyose hamwe</span>
                   </span>
-                  <span className="text-[11px] font-bold text-[#f95700] hover:underline cursor-pointer">
-                    Change destination &gt;
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    isOutOfStock
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                  }`}>
+                    {isOutOfStock ? '⚡ Supplier Order' : '✓ In Local Stock'}
                   </span>
                 </div>
 
-                <div className="space-y-1 text-slate-600">
-                  <p className="font-bold text-slate-800">
-                    Standard Alibaba Logistics / Air Cargo to Kigali
-                  </p>
-                  <p className="text-[11px]">
-                    Shipping fee: <span className="font-mono font-bold text-purple-700">+{shippingFeeRwf.toLocaleString()} RWF</span>
-                    <span className="text-slate-400 ml-1">({grossWeight} kg chargeable weight)</span>
-                  </p>
-                  <p className="text-[11px] text-emerald-700 font-semibold">
-                    Estimated delivery: 7-12 business days (MAGERWA Customs clearance included, Kigali Airport KGL Hub)
-                  </p>
+                <div className="space-y-1.5 text-xs text-slate-700">
+                  {/* Line 1: Product Price */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600">
+                      1. Product Price ({quantity} {quantity > 1 ? 'units' : 'unit'}):
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {formatCurrencyPrice(costBreakdown.productPriceTotal, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+
+                  {/* Line 2: Delivery Fee */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600 flex items-center gap-1">
+                      <span>2. Local Kigali Delivery:</span>
+                      {costBreakdown.deliveryFee === 0 && (
+                        <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded font-bold uppercase">
+                          Free
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {costBreakdown.deliveryFee === 0 ? '0 RWF (Free)' : `${costBreakdown.deliveryFee.toLocaleString()} RWF`}
+                    </span>
+                  </div>
+
+                  {/* Line 3: Supplier Shipping Cost (Applies if out of stock) */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600 flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-[#f95700]" />
+                      <span>3. Supplier Shipping Cost:</span>
+                    </span>
+                    <span className={`font-mono font-bold ${isOutOfStock ? 'text-purple-700' : 'text-emerald-700'}`}>
+                      {isOutOfStock
+                        ? `+${costBreakdown.totalShippingCost.toLocaleString()} RWF`
+                        : '0 RWF (In Stock)'}
+                    </span>
+                  </div>
+
+                  {/* Out-of-stock / in-stock explanatory notice */}
+                  <div className={`p-2 rounded-xl text-[10px] leading-relaxed border ${
+                    isOutOfStock
+                      ? 'bg-amber-50/80 border-amber-200 text-amber-950 font-medium'
+                      : 'bg-emerald-50/80 border-emerald-200 text-emerald-950 font-medium'
+                  }`}>
+                    {isOutOfStock ? (
+                      <span>
+                        <strong>Out of Local Stock Notice:</strong> This item is imported directly from the verified supplier to Kigali. Supplier international shipping ({costBreakdown.totalShippingCost.toLocaleString()} RWF) has been added to the total.
+                      </span>
+                    ) : (
+                      <span>
+                        <strong>In Kigali Stock:</strong> Sourced locally from Kigali warehouse. You pay only the product price and local delivery fee (0 supplier shipping fee).
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Total Payment to Pay */}
+                  <div className="pt-2 border-t border-orange-200/80 flex items-baseline justify-between text-slate-900">
+                    <div>
+                      <span className="text-xs font-black uppercase text-slate-900 block">Total Payment to Pay:</span>
+                      <span className="text-[10px] text-slate-500 font-normal">
+                        Product Price + Delivery + Shipping Cost
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg sm:text-xl font-black text-[#f95700] font-mono tabular-nums">
+                        {formatCurrencyPrice(costBreakdown.grandTotal, currentCurrency, exchangeRates).primary}
+                      </span>
+                      {currentCurrency !== 'RWF' && (
+                        <span className="block text-[10px] text-slate-400 font-mono">
+                          {costBreakdown.grandTotal.toLocaleString()} RWF
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Order Protection (Matching Image 1) */}
-              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs space-y-1">
+              <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs space-y-1">
                 <div className="flex items-center justify-between text-emerald-900 font-bold">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -645,24 +721,22 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               </div>
 
               {/* Action Buttons: Start Order / Buy Now, Add to Cart, Chat Now (Matching Image 1 & 3) */}
-              <div className="flex flex-col sm:flex-row items-stretch gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-stretch gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => onBuyNow(product, quantity, selectedVariations)}
-                  disabled={isOutOfStock}
-                  className="flex-1 py-3.5 px-6 rounded-2xl font-black text-sm bg-[#f95700] hover:bg-[#ea4e00] text-white shadow-md shadow-orange-500/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="flex-1 py-3.5 px-6 rounded-2xl font-black text-sm bg-[#f95700] hover:bg-[#ea4e00] text-white shadow-md shadow-orange-500/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  <span>Start order / Buy Now</span>
+                  <span>{isOutOfStock ? 'Order from Supplier' : 'Start order / Buy Now'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => onAddToCart(product, quantity, selectedVariations)}
-                  disabled={isOutOfStock}
-                  className="py-3.5 px-6 rounded-2xl font-bold text-sm bg-white hover:bg-slate-50 border-2 border-slate-300 text-slate-800 transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="py-3.5 px-6 rounded-2xl font-bold text-sm bg-white hover:bg-slate-50 border-2 border-slate-300 text-slate-800 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <span>Add to cart</span>
+                  <span>{isOutOfStock ? 'Add to cart (Supplier Order)' : 'Add to cart'}</span>
                 </button>
 
                 <a

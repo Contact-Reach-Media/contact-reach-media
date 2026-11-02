@@ -128,6 +128,7 @@
         "discountAmount": { "type": "number" },
         "couponCode": { "type": "string", "maxLength": 32 },
         "deliveryFee": { "type": "number" },
+        "shippingCost": { "type": "number" },
         "totalAmount": { "type": "number" },
         "commissionRate": { "type": "number" },
         "commissionEarned": { "type": "number" },

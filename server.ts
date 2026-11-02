@@ -1680,6 +1680,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
 
   // Validate items & stock
   let calculatedSubtotal = 0;
+  let calculatedShippingCost = 0;
   const verifiedItems = [];
   let primaryShopName = 'ContactReach Market';
   let primaryReceiverName = db.settings.receiverName || 'Ruth';
@@ -1721,10 +1722,19 @@ app.post('/api/orders', (req: Request, res: Response) => {
       }, 0);
 
     const availableStock = Math.max(0, product.stock - reservedPendingQty);
-    if (product.status === 'Out of Stock' || product.stock < qty || availableStock < qty) {
-      return res.status(400).json({
-        error: `Insufficient stock for "${product.name}". Available: ${Math.min(product.stock, availableStock)} units.`
-      });
+    // Check if item is out of stock in local Kigali hub
+    const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0 || availableStock < qty;
+
+    // Supplier Shipping Cost: If out of stock, supplier shipping to Rwanda applies (0 RWF if in stock)
+    let itemShippingCost = 0;
+    if (isOutOfStock) {
+      const unitShipping = (product.alibabaShippingCostRwf && product.alibabaShippingCostRwf > 0)
+        ? product.alibabaShippingCostRwf
+        : (product.alibabaShippingCostUsd && product.alibabaShippingCostUsd > 0
+            ? Math.round(product.alibabaShippingCostUsd * 1435)
+            : 3500);
+      itemShippingCost = unitShipping * qty;
+      calculatedShippingCost += itemShippingCost;
     }
 
     if (product.shopName) primaryShopName = product.shopName;
@@ -1745,7 +1755,9 @@ app.post('/api/orders', (req: Request, res: Response) => {
       sku: product.sku,
       aliExpressUrl: product.aliExpressUrl || product.supplierProductUrl || undefined,
       supplierVariant: product.supplierVariant || undefined,
-      supplierSku: product.supplierSku || undefined
+      supplierSku: product.supplierSku || undefined,
+      isOutOfStock,
+      shippingCost: itemShippingCost
     });
   }
 
@@ -1785,7 +1797,8 @@ app.post('/api/orders', (req: Request, res: Response) => {
     }
   }
 
-  const totalAmount = Math.max(0, calculatedSubtotal + deliveryFee - discountAmount);
+  // Automatically calculate total payment as: Product Price (Subtotal) + Delivery Fee + Supplier Shipping Cost (if out of stock) - Discount
+  const totalAmount = Math.max(0, calculatedSubtotal + deliveryFee + calculatedShippingCost - discountAmount);
 
   // Receiver details
   const method: PaymentMethod = paymentMethod || 'MTN Mobile Money';
@@ -1824,6 +1837,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
     discountAmount: discountAmount > 0 ? discountAmount : undefined,
     couponCode: appliedCouponCode,
     deliveryFee,
+    shippingCost: calculatedShippingCost,
     totalAmount,
     commissionRate,
     commissionEarned,

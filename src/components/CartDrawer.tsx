@@ -1,8 +1,8 @@
-import React from 'react';
-import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight } from 'lucide-react';
+import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Truck } from 'lucide-react';
 import { CartItem } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
+import { calculateCartBreakdown, isProductOutOfStock } from '../utils/shippingCalculator.ts';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -30,8 +30,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   if (!isOpen) return null;
 
   const t = translations[currentLang] || translations.en;
-  const subtotalRwf = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const subtotalFormat = formatCurrencyPrice(subtotalRwf, currentCurrency, exchangeRates, { showBaseSecondary: true });
+  const breakdown = calculateCartBreakdown(cart);
+  const subtotalFormat = formatCurrencyPrice(breakdown.subtotal, currentCurrency, exchangeRates, { showBaseSecondary: true });
+  const estimatedDelivery = breakdown.subtotal >= 50000 ? 0 : 1500;
+  const estimatedTotal = breakdown.subtotal + breakdown.shippingCost + estimatedDelivery;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
@@ -102,6 +104,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       )}
                     </div>
 
+                    <div className="mt-1">
+                      {isProductOutOfStock(product) ? (
+                        <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
+                          ⚡ Supplier Order
+                        </span>
+                      ) : (
+                        <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          ✓ In Local Stock
+                        </span>
+                      )}
+                    </div>
+
                     {/* Quantity Stepper */}
                     <div className="flex items-center gap-2 mt-2">
                       <button
@@ -113,7 +127,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <span className="text-xs font-bold font-mono px-1">{quantity}</span>
                       <button
                         onClick={() => onUpdateQuantity(product.id, 1)}
-                        disabled={quantity >= product.stock}
+                        disabled={!isProductOutOfStock(product) && quantity >= product.stock}
                         className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
                       >
                         <Plus className="w-3 h-3" />
@@ -134,12 +148,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           )}
         </div>
 
-        {/* Drawer Footer */}
+        {/* Drawer Footer with Full Cost Breakdown */}
         {cart.length > 0 && (
-          <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/50 space-y-4">
-            <div className="space-y-1.5 text-xs text-slate-600">
+          <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50/70 space-y-3.5">
+            <div className="space-y-2 text-xs text-slate-600">
+              {/* Row 1: Product Price (Subtotal) */}
               <div className="flex justify-between items-baseline">
-                <span>{t.subtotal}</span>
+                <span>1. Product Price (Subtotal):</span>
                 <div className="text-end">
                   <span className="font-bold text-slate-900 font-mono tabular-nums text-sm block">
                     {subtotalFormat.primary}
@@ -151,10 +166,39 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   )}
                 </div>
               </div>
-              <div className="flex justify-between text-[11px] text-slate-500">
-                <span>{t.deliveryFee}</span>
-                <span>{t.freeDeliveryNote}</span>
+
+              {/* Row 2: Delivery Fee */}
+              <div className="flex justify-between text-[11px] items-center">
+                <span>2. Local Delivery Fee:</span>
+                <span className="font-mono text-slate-800 font-bold">
+                  {estimatedDelivery === 0 ? '0 RWF (Free)' : `${estimatedDelivery.toLocaleString()} RWF`}
+                </span>
               </div>
+
+              {/* Row 3: Supplier Shipping Cost (if out of stock) */}
+              <div className="flex justify-between text-[11px] items-center">
+                <span className="flex items-center gap-1">
+                  <Truck className="w-3.5 h-3.5 text-[#EA580C]" />
+                  <span>3. Supplier Shipping:</span>
+                </span>
+                <span className={`font-mono font-bold ${breakdown.shippingCost > 0 ? 'text-purple-700' : 'text-emerald-700'}`}>
+                  {breakdown.shippingCost === 0 ? '0 RWF (Local Stock)' : `+${breakdown.shippingCost.toLocaleString()} RWF`}
+                </span>
+              </div>
+
+              {/* Total Payment Row */}
+              <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline font-black text-slate-900">
+                <div>
+                  <span className="text-xs uppercase block">Total Payment:</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    Product + Delivery {breakdown.shippingCost > 0 ? '+ Shipping' : ''}
+                  </span>
+                </div>
+                <span className="text-base text-[#EA580C] font-mono tabular-nums">
+                  {formatCurrencyPrice(estimatedTotal, currentCurrency, exchangeRates).primary}
+                </span>
+              </div>
+
               {currentCurrency !== 'RWF' && (
                 <div className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
                   {t.currencyNotice}

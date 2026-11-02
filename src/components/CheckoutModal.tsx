@@ -11,6 +11,7 @@ import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
+import { calculateCartBreakdown, isProductOutOfStock } from '../utils/shippingCalculator.ts';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -88,17 +89,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Calculations
-  const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  // Automated Total Payment Formula: Product Price + Delivery Fee + Shipping Cost (if out of stock)
+  const cartBreakdown = useMemo(() => {
+    return calculateCartBreakdown(cart, {
+      selectedLocationId,
+      settings,
+      appliedDiscount
+    });
+  }, [cart, selectedLocationId, settings, appliedDiscount]);
+
+  const subtotal = cartBreakdown.subtotal;
   const isOutsideKigali = selectedLocationId === 'outside';
-  const qualifiesForFreeDelivery = subtotal >= (settings.freeDeliveryThreshold || 50000) && !isOutsideKigali;
+  const qualifiesForFreeDelivery = cartBreakdown.isFreeDelivery;
   const currentArea = settings.kigaliAreas?.find(a => a.id === selectedLocationId);
-  const deliveryFee = qualifiesForFreeDelivery
-    ? 0
-    : isOutsideKigali
-    ? (settings.deliveryFeeUpcountry || 3500)
-    : (currentArea ? currentArea.fee : (settings.deliveryFeeKigali || 1500));
-  const grandTotal = Math.max(0, subtotal + deliveryFee - appliedDiscount);
+  const deliveryFee = cartBreakdown.deliveryFee;
+  const shippingCost = cartBreakdown.shippingCost;
+  const grandTotal = cartBreakdown.grandTotal;
 
   // Merchant & Receiver details
   const primaryProduct = cart[0]?.product;
@@ -190,6 +196,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           productId: item.product.id,
           quantity: item.quantity
         })),
+        shippingCost,
         paymentMethod,
         couponCode: appliedDiscount > 0 ? discountCode.trim() : undefined
       };
@@ -445,40 +452,56 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                 {/* Items List with image thumbnail, name, qty, price */}
                 <div className="max-h-40 overflow-y-auto divide-y divide-slate-100 pr-1 space-y-2">
-                  {cart.map(item => (
-                    <div key={item.product.id} className="pt-2 first:pt-0 flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <img
-                          src={item.product.imageUrl}
-                          alt={item.product.name}
-                          className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
-                        />
-                        <div className="truncate">
-                          <p className="font-bold text-slate-900 truncate">{item.product.name}</p>
-                          <p className="text-[11px] text-slate-500 font-mono">
-                            {item.quantity} × {formatCurrencyPrice(item.product.price, currentCurrency, exchangeRates).primary}
-                          </p>
+                  {cart.map(item => {
+                    const outOfStock = isProductOutOfStock(item.product);
+                    return (
+                      <div key={item.product.id} className="pt-2 first:pt-0 flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={item.product.imageUrl}
+                            alt={item.product.name}
+                            className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
+                          />
+                          <div className="truncate">
+                            <p className="font-bold text-slate-900 truncate">{item.product.name}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[11px] text-slate-500 font-mono">
+                                {item.quantity} × {formatCurrencyPrice(item.product.price, currentCurrency, exchangeRates).primary}
+                              </span>
+                              {outOfStock ? (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  ⚡ Out of Stock (Supplier)
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  ✓ In Stock
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
+                        <span className="font-mono font-bold text-slate-900 shrink-0">
+                          {formatCurrencyPrice(item.product.price * item.quantity, currentCurrency, exchangeRates).primary}
+                        </span>
                       </div>
-                      <span className="font-mono font-bold text-slate-900 shrink-0">
-                        {formatCurrencyPrice(item.product.price * item.quantity, currentCurrency, exchangeRates).primary}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* Subtotal & Delivery Line items */}
-                <div className="pt-2 border-t border-slate-200 text-xs space-y-1.5 font-medium text-slate-600">
-                  <div className="flex justify-between">
-                    <span>{t.subtotal}</span>
+                {/* Subtotal, Delivery Fee & Supplier Shipping Cost Breakdown */}
+                <div className="pt-2 border-t border-slate-200 text-xs space-y-2 font-medium text-slate-600">
+                  {/* Row 1: Product Price (Subtotal) */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-700">1. Product Price (Subtotal):</span>
                     <span className="font-mono text-slate-900 font-bold">
                       {formatCurrencyPrice(subtotal, currentCurrency, exchangeRates).primary}
                     </span>
                   </div>
 
+                  {/* Row 2: Delivery Fee */}
                   <div className="flex justify-between items-center">
-                    <span className="flex items-center gap-1">
-                      <span>{t.deliveryFee}</span>
+                    <span className="flex items-center gap-1 text-slate-700">
+                      <span>2. Local Delivery Fee:</span>
                       {qualifiesForFreeDelivery && (
                         <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold uppercase">
                           Free
@@ -486,19 +509,55 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       )}
                     </span>
                     <span className="font-mono text-slate-900">
-                      {deliveryFee === 0 ? '0' : formatCurrencyPrice(deliveryFee, currentCurrency, exchangeRates).primary}
+                      {deliveryFee === 0 ? '0 RWF (Free)' : formatCurrencyPrice(deliveryFee, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+
+                  {/* Row 3: Shipping Cost (if out of stock) */}
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Truck className="w-3.5 h-3.5 text-[#FF5500]" />
+                      <span>3. Supplier Shipping Cost:</span>
+                      {shippingCost === 0 ? (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
+                          Local Stock (0 RWF)
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded font-bold">
+                          Out of Stock Import
+                        </span>
+                      )}
+                    </div>
+                    <span className={`font-mono font-bold ${shippingCost > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                      {shippingCost === 0 ? '0 RWF' : `+${formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates).primary}`}
                     </span>
                   </div>
 
                   {appliedDiscount > 0 && (
                     <div className="flex justify-between text-emerald-600 font-bold">
-                      <span>Promo Discount ({discountCode})</span>
+                      <span>Promo Discount ({discountCode}):</span>
                       <span className="font-mono">-{formatCurrencyPrice(appliedDiscount, currentCurrency, exchangeRates).primary}</span>
                     </div>
                   )}
 
+                  {/* Formula banner */}
+                  <div className="p-2 rounded-xl bg-orange-50/80 border border-orange-200/70 text-[11px] text-orange-950 flex items-center justify-between">
+                    <span className="font-semibold text-[10px] text-orange-900">
+                      Total = Product Price + Delivery Fee + Shipping Cost
+                    </span>
+                    <span className="text-[10px] font-bold text-[#FF5500]">
+                      {shippingCost > 0 ? `${cartBreakdown.outOfStockCount} out of stock` : '0 supplier fees'}
+                    </span>
+                  </div>
+
+                  {/* Total Payment Row */}
                   <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline text-sm sm:text-base font-black text-slate-900">
-                    <span>{t.totalAmount}</span>
+                    <div>
+                      <span>{t.totalAmount}</span>
+                      <span className="block text-[10px] text-slate-500 font-normal">
+                        Total amount to pay before checkout
+                      </span>
+                    </div>
                     <div className="text-end">
                       <span className="font-mono text-[#FF5500]">
                         {formatCurrencyPrice(grandTotal, currentCurrency, exchangeRates).primary}
@@ -773,6 +832,43 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* Exact Cost Breakdown for Payment */}
+              {createdOrder && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-1.5">
+                  <div className="flex justify-between text-slate-600">
+                    <span>1. Product Price:</span>
+                    <span className="font-mono font-bold text-slate-800">{createdOrder.subtotal.toLocaleString()} RWF</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>2. Delivery Fee:</span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {createdOrder.deliveryFee === 0 ? '0 RWF (Free)' : `${createdOrder.deliveryFee.toLocaleString()} RWF`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 items-center">
+                    <span className="flex items-center gap-1 font-bold text-slate-700">
+                      <Truck className="w-3.5 h-3.5 text-[#FF5500]" />
+                      <span>3. Supplier Shipping Cost:</span>
+                    </span>
+                    <span className={`font-mono font-bold ${(createdOrder.shippingCost || 0) > 0 ? 'text-purple-700' : 'text-emerald-700'}`}>
+                      {(createdOrder.shippingCost || 0) > 0
+                        ? `+${(createdOrder.shippingCost || 0).toLocaleString()} RWF`
+                        : '0 RWF (Local Stock)'}
+                    </span>
+                  </div>
+                  {(createdOrder.discountAmount || 0) > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Discount:</span>
+                      <span className="font-mono">-{(createdOrder.discountAmount || 0).toLocaleString()} RWF</span>
+                    </div>
+                  )}
+                  <div className="pt-1.5 border-t border-slate-200 flex justify-between font-black text-slate-900 text-sm">
+                    <span>Total to Pay:</span>
+                    <span className="font-mono text-[#FF5500] text-base">{amountToPay.toLocaleString()} RWF</span>
+                  </div>
+                </div>
+              )}
 
               {/* Feedback toast when USSD dialer triggers */}
               {dialerFeedback && (

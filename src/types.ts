@@ -200,6 +200,8 @@ export interface OrderItem {
   aliExpressUrl?: string;
   supplierVariant?: string;
   supplierSku?: string;
+  isOutOfStock?: boolean;
+  shippingCost?: number;
 }
 
 export interface Order {
@@ -219,6 +221,7 @@ export interface Order {
   discountAmount?: number;
   couponCode?: string;
   deliveryFee: number;
+  shippingCost?: number; // Sourced supplier shipping cost for out-of-stock items
   totalAmount: number;
   // Commission & Supplier Payout calculations
   commissionRate?: number; // e.g. 10%
