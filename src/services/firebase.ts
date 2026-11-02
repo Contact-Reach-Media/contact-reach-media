@@ -607,7 +607,9 @@ export async function getProductsFromFirestore(): Promise<Product[]> {
 export async function saveProductToFirestore(product: Product): Promise<boolean> {
   const clean = cleanForFirestore(product);
   try {
-    await setDoc(doc(db, 'products', product.id), clean, { merge: true });
+    const writePromise = setDoc(doc(db, 'products', product.id), clean, { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+    await Promise.race([writePromise, timeoutPromise]);
     return true;
   } catch (error) {
     console.warn('[Firebase] Firestore saveProduct notice:', error);
@@ -817,9 +819,10 @@ export async function submitSupplierApplicationToFirestore(appData: SupplierAppl
 
 // Customer Messages
 export async function submitMessageToFirestore(msg: AdminMessage): Promise<boolean> {
-  const docPath = `messages/${msg.id}`;
   try {
-    await setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg), { merge: true });
+    const writePromise = setDoc(doc(db, 'messages', msg.id), cleanForFirestore(msg), { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+    await Promise.race([writePromise, timeoutPromise]);
     return true;
   } catch (error) {
     console.warn('[Firebase] Firestore submitMessage notice:', error);
@@ -843,9 +846,10 @@ export async function getCustomerProblemsFromFirestore(): Promise<CustomerProble
 }
 
 export async function submitProblemReportToFirestore(report: CustomerProblemReport): Promise<void> {
-  const docPath = `customerProblems/${report.id}`;
   try {
-    await setDoc(doc(db, 'customerProblems', report.id), cleanForFirestore(report), { merge: true });
+    const writePromise = setDoc(doc(db, 'customerProblems', report.id), cleanForFirestore(report), { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+    await Promise.race([writePromise, timeoutPromise]);
   } catch (error) {
     console.warn('[Firebase] submitProblemReport notice:', error);
   }
@@ -1005,9 +1009,10 @@ export async function getCustomerFromFirestore(customerId: string): Promise<Cust
 
 // Order Updates (Status, Payment, Courier)
 export async function updateOrderInFirestore(order: Order): Promise<void> {
-  const docPath = `orders/${order.id}`;
   try {
-    await setDoc(doc(db, 'orders', order.id), cleanForFirestore(order), { merge: true });
+    const writePromise = setDoc(doc(db, 'orders', order.id), cleanForFirestore(order), { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+    await Promise.race([writePromise, timeoutPromise]);
   } catch (error) {
     console.warn('[Firebase] updateOrder notice:', error);
   }
@@ -1015,9 +1020,10 @@ export async function updateOrderInFirestore(order: Order): Promise<void> {
 
 // Payment Confirmation Verification Updates
 export async function updatePaymentInFirestore(payment: PaymentConfirmation): Promise<void> {
-  const docPath = `paymentConfirmations/${payment.id}`;
   try {
-    await setDoc(doc(db, 'paymentConfirmations', payment.id), cleanForFirestore(payment), { merge: true });
+    const writePromise = setDoc(doc(db, 'paymentConfirmations', payment.id), cleanForFirestore(payment), { merge: true });
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+    await Promise.race([writePromise, timeoutPromise]);
   } catch (error) {
     console.warn('[Firebase] updatePayment notice:', error);
   }

@@ -34,6 +34,7 @@ import {
   exportProductsToDsersProductTemplate,
   exportOrdersToDsersOrderTemplate
 } from '../utils/spreadsheet.ts';
+import { compressImageFile } from '../utils/imageCompress.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -86,6 +87,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const prevOrdersCountRef = useRef<number>(-1);
   const prevMessagesCountRef = useRef<number>(-1);
+  const isFetchingAllRef = useRef<boolean>(false);
 
   const playNotificationChime = () => {
     try {
@@ -471,30 +473,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     showToast(newItems.length === 1 ? 'Picture link added!' : `Added ${newItems.length} picture links!`);
   };
 
-  const handleManageModalUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleManageModalUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const fileList = Array.from(files);
-    const validFiles = fileList.filter(f => f.size <= 5 * 1024 * 1024);
+    const validFiles = fileList.filter(f => f.size <= 10 * 1024 * 1024);
     if (validFiles.length < fileList.length) {
-      showToast('Some files exceeded the 5MB limit and were skipped.', 'error');
+      showToast('Some files exceeded the 10MB limit and were skipped.', 'error');
     }
     if (validFiles.length === 0) return;
 
-    let loadedCount = 0;
-    const uploaded: string[] = [];
-    validFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        uploaded.push(reader.result as string);
-        loadedCount++;
-        if (loadedCount === validFiles.length) {
-          setManageImagesList(prev => [...prev, ...uploaded.filter(u => !prev.includes(u))]);
-          showToast(`Uploaded ${uploaded.length} picture${uploaded.length > 1 ? 's' : ''}!`);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    showToast(`Optimizing & uploading ${validFiles.length} picture${validFiles.length > 1 ? 's' : ''}...`);
+    try {
+      const compressed = await Promise.all(validFiles.map(f => compressImageFile(f, 1200, 1200, 0.82)));
+      const validResults = compressed.filter(Boolean);
+      if (validResults.length > 0) {
+        setManageImagesList(prev => [...prev, ...validResults.filter(u => !prev.includes(u))]);
+        showToast(`Uploaded & optimized ${validResults.length} picture${validResults.length > 1 ? 's' : ''}!`);
+      }
+    } catch {
+      showToast('Failed to process some images', 'error');
+    }
   };
 
   const handleSaveManageImages = async () => {
@@ -765,6 +764,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Load All Admin Data (supports silent background real-time updates)
   const fetchAllData = async (silent: boolean = false) => {
+    if (isFetchingAllRef.current) return;
+    isFetchingAllRef.current = true;
     if (!silent) setLoading(true);
     try {
       const [
@@ -875,6 +876,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch (err) {
       console.error('Error fetching admin data:', err);
     } finally {
+      isFetchingAllRef.current = false;
       if (!silent) setLoading(false);
     }
   };
@@ -967,10 +969,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       console.warn('[SSE] EventSource listener init notice:', err);
     }
 
-    // 2. Background interval sync every 4 seconds to guarantee freshness
+    // 2. Background fallback sync every 12 seconds (skips when browser tab is inactive)
     const syncInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchAllData(true);
-    }, 4000);
+    }, 12000);
 
     // 3. Live Firestore onSnapshot listeners for instant push updates (marketdatabase-1090b)
     const unsubs: (() => void)[] = [];
@@ -2011,55 +2014,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch (err: any) {
       showToast(err.message, 'error');
     }
-  };
-
-  // Helper to compress uploaded image files to crisp web quality (< 200KB) to prevent Firestore 1MB document rejection
-  const compressImageFile = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.82): Promise<string> => {
-    return new Promise((resolve) => {
-      if (file.type === 'image/svg+xml') {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        const img = new Image();
-        img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-
-          if (width > maxWidth || height > maxHeight) {
-            if (width > height) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            } else {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(dataUrl);
-            return;
-          }
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL('image/jpeg', quality);
-          resolve(compressed);
-        };
-        img.onerror = () => resolve(dataUrl);
-        img.src = dataUrl;
-      };
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
-    });
   };
 
   // Image Upload Handlers (Client-Side Resizing & Compression -> base64 Data URL) - supports single or multiple file selection

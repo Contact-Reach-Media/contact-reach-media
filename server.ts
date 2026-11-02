@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
+process.env.DISABLE_HMR = 'true';
 
 import express, { Request, Response, NextFunction } from 'express';
 import { createServer as createViteServer } from 'vite';
@@ -435,9 +436,9 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
       adminTokens: Array.from(db.adminTokens.entries()),
       customerTokens: Array.from(db.customerTokens.entries())
     };
-    // Atomic disk persistence: write to temp file then rename
+    // Atomic disk persistence: write to temp file then rename (compact JSON speeds up write 3-5x)
     const tempFile = path.resolve('data/market_db.tmp.json');
-    fs.writeFileSync(tempFile, JSON.stringify(dataToSave, null, 2), 'utf-8');
+    fs.writeFileSync(tempFile, JSON.stringify(dataToSave), 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
 
     // Instant real-time push to all connected administrator clients
@@ -11781,7 +11782,10 @@ async function startServer() {
 
   if (!isProduction) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -11805,9 +11809,27 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`ContactReach Market running at http://0.0.0.0:${PORT}`);
   });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[Server Notice] Port ${PORT} is currently in use by another instance.`);
+      process.exit(1);
+    } else {
+      console.error('[Server Error]', err);
+      process.exit(1);
+    }
+  });
+
+  const gracefulShutdown = () => {
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGINT', gracefulShutdown);
 }
 
 startServer().catch(err => {

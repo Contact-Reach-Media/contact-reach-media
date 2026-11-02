@@ -10,6 +10,7 @@ import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
+import { compressImageFile } from '../utils/imageCompress.ts';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -269,21 +270,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
-  // Step 3: Payment Proof File Handling
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Step 3: Payment Proof File Handling (Optimized client-side compression)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 8 * 1024 * 1024) {
-        setError(currentLang === 'en' ? 'Image file is too large. Please select an image under 8MB.' : 'Ifoto irarenze urugero rwemewe (munsi ya 8MB).');
+      if (file.size > 15 * 1024 * 1024) {
+        setError(currentLang === 'en' ? 'Image file is too large. Please select an image under 15MB.' : 'Ifoto irarenze urugero rwemewe (munsi ya 15MB).');
         return;
       }
       setFileName(file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setScreenshotData(reader.result as string);
+      try {
+        const compressed = await compressImageFile(file, 1200, 1200, 0.82);
+        setScreenshotData(compressed);
         setError(null);
-      };
-      reader.readAsDataURL(file);
+      } catch {
+        setError(currentLang === 'en' ? 'Failed to process screenshot.' : 'Ntabwo ifoto yashoboye gutunganywa.');
+      }
     }
   };
 
