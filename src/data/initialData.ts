@@ -3534,9 +3534,9 @@ export const initialProducts: Product[] = [
     "category": "impano",
     "subcategory": "",
     "stock": 25,
-    "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_egBcRRNrrul6RflbehHbH3YX3SlUdwyA6RHVY2o68A&s=10",
+    "imageUrl": "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop&q=80",
     "images": [
-      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_egBcRRNrrul6RflbehHbH3YX3SlUdwyA6RHVY2o68A&s=10"
+      "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop&q=80"
     ],
     "shopName": "Sky Beauty & Fashion Store",
     "shopId": "shop-sky-beauty-fashion-store-102",

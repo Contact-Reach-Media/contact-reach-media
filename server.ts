@@ -585,6 +585,41 @@ function loadDbFromDisk() {
     );
   }
 
+  // Deduplicate products by image URL to strictly guarantee no two products share the same image
+  const seenImageUrls = new Set<string>();
+  const cleanUniqueProducts: Product[] = [];
+  const imageDupsRemoved: Product[] = [];
+
+  for (const p of db.products) {
+    const rawImg = (p.imageUrl || '').trim();
+    const normImg = rawImg ? rawImg.split('?')[0].toLowerCase().trim() : '';
+
+    if (!normImg) {
+      cleanUniqueProducts.push(p);
+      continue;
+    }
+
+    if (seenImageUrls.has(normImg)) {
+      imageDupsRemoved.push(p);
+      if (!delSet.has(p.id)) {
+        db.deletedRecordIds.push(p.id);
+        delSet.add(p.id);
+      }
+      if (p.sku && !delSet.has(p.sku)) {
+        db.deletedRecordIds.push(p.sku);
+        delSet.add(p.sku);
+      }
+    } else {
+      seenImageUrls.add(normImg);
+      cleanUniqueProducts.push(p);
+    }
+  }
+
+  if (imageDupsRemoved.length > 0) {
+    console.log(`[Deduplication] Purged ${imageDupsRemoved.length} duplicate products sharing identical image links.`);
+    db.products = cleanUniqueProducts;
+  }
+
   // Ensure SKU for each product if missing
   db.products.forEach((p, idx) => {
     if (!p.sku) {
@@ -964,7 +999,22 @@ async function syncWithFirestore() {
           .filter(p => !db.deletedRecordIds?.includes(p.id) && (!p.sku || !db.deletedRecordIds?.includes(p.sku)))
           .forEach(p => mergedProdsMap.set(p.id, p));
         fsProds.forEach(p => mergedProdsMap.set(p.id, p));
-        db.products = Array.from(mergedProdsMap.values());
+
+        // Deduplicate merged products by normalized image link
+        const seenMergedImgs = new Set<string>();
+        const uniqueMerged: Product[] = [];
+        for (const p of mergedProdsMap.values()) {
+          const rawImg = (p.imageUrl || '').trim();
+          const normImg = rawImg ? rawImg.split('?')[0].toLowerCase().trim() : '';
+          if (!normImg || !seenMergedImgs.has(normImg)) {
+            if (normImg) seenMergedImgs.add(normImg);
+            uniqueMerged.push(p);
+          } else {
+            // Delete duplicate product from Firestore
+            deleteFromFirestoreAsync('products', p.id);
+          }
+        }
+        db.products = uniqueMerged;
       } else {
         db.products
           .filter(p => !db.deletedRecordIds?.includes(p.id) && (!p.sku || !db.deletedRecordIds?.includes(p.sku)))

@@ -610,6 +610,7 @@ export async function getProductsFromFirestore(): Promise<Product[]> {
     }
 
     if (snap) {
+      const seenImgs = new Set<string>();
       snap.forEach(d => {
         const p = { ...(d.data() as Product), id: d.id };
         const idLower = p.id.toLowerCase();
@@ -621,6 +622,14 @@ export async function getProductsFromFirestore(): Promise<Product[]> {
           // Permanently deleted product, skip
           return;
         }
+
+        const rawImg = (p.imageUrl || '').trim();
+        const normImg = rawImg ? rawImg.split('?')[0].toLowerCase().trim() : '';
+        if (normImg && seenImgs.has(normImg)) {
+          // Duplicate image product, skip
+          return;
+        }
+        if (normImg) seenImgs.add(normImg);
 
         itemsMap.set(d.id, p);
       });

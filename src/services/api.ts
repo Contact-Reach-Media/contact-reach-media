@@ -340,6 +340,8 @@ export const api = {
   setAdminToken,
   getStoredAdminUser,
   removeAdminToken,
+  getLocallyDeletedProductIds,
+  markProductDeletedLocally,
 
   // Public Settings
   async getSettings(): Promise<AppSettings> {
@@ -479,17 +481,37 @@ export const api = {
       const parsed = await safeParseResponse<Product[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
         const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
-        return parsed.json.filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())));
+        const seenImgs = new Set<string>();
+        return parsed.json
+          .filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())))
+          .filter(p => {
+            const raw = (p.imageUrl || '').trim();
+            const norm = raw ? raw.split('?')[0].toLowerCase().trim() : '';
+            if (!norm) return true;
+            if (seenImgs.has(norm)) return false;
+            seenImgs.add(norm);
+            return true;
+          });
       }
     } catch {}
 
     const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
+    const seenFallbackImgs = new Set<string>();
 
     // Fallback to Cloud Firestore
     try {
       let fsProds = await getProductsFromFirestore();
       if (fsProds && fsProds.length > 0) {
-        fsProds = fsProds.filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())));
+        fsProds = fsProds
+          .filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())))
+          .filter(p => {
+            const raw = (p.imageUrl || '').trim();
+            const norm = raw ? raw.split('?')[0].toLowerCase().trim() : '';
+            if (!norm) return true;
+            if (seenFallbackImgs.has(norm)) return false;
+            seenFallbackImgs.add(norm);
+            return true;
+          });
         if (params?.category && params.category !== 'all') {
           fsProds = fsProds.filter(p => p.category === params.category);
         }
@@ -501,7 +523,16 @@ export const api = {
       }
     } catch {}
 
-    return initialProducts.filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())));
+    return initialProducts
+      .filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())))
+      .filter(p => {
+        const raw = (p.imageUrl || '').trim();
+        const norm = raw ? raw.split('?')[0].toLowerCase().trim() : '';
+        if (!norm) return true;
+        if (seenFallbackImgs.has(norm)) return false;
+        seenFallbackImgs.add(norm);
+        return true;
+      });
   },
 
   async getProductById(id: string): Promise<Product | null> {

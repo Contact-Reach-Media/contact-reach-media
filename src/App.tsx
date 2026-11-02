@@ -133,7 +133,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       try {
         const deletedIds = api.getLocallyDeletedProductIds();
-        const delSet = new Set(deletedIds.map(d => d.toLowerCase().trim()));
+        const delSet = new Set(deletedIds.map((d: string) => d.toLowerCase().trim()));
         const cached = localStorage.getItem('crm_home_catalog_cache');
         if (cached) {
           const list = JSON.parse(cached);
@@ -170,7 +170,7 @@ export default function App() {
     if (typeof window === 'undefined') return [];
     try {
       const deletedIds = api.getLocallyDeletedProductIds();
-      const delSet = new Set(deletedIds.map(d => d.toLowerCase().trim()));
+      const delSet = new Set(deletedIds.map((d: string) => d.toLowerCase().trim()));
       const saved = localStorage.getItem('crm_cart');
       if (saved) {
         const list = JSON.parse(saved);
@@ -191,7 +191,7 @@ export default function App() {
     if (typeof window === 'undefined') return [];
     try {
       const deletedIds = api.getLocallyDeletedProductIds();
-      const delSet = new Set(deletedIds.map(d => d.toLowerCase().trim()));
+      const delSet = new Set(deletedIds.map((d: string) => d.toLowerCase().trim()));
       const saved = localStorage.getItem('crm_wishlist');
       if (saved) {
         const list = JSON.parse(saved);
