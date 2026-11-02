@@ -221,6 +221,127 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [previewMaintenance, setPreviewMaintenance] = useState(false);
   const [savingMaintenance, setSavingMaintenance] = useState(false);
 
+  // Floating Live Real-Time Push Notification Alert
+  const [liveAlert, setLiveAlert] = useState<{
+    id: string;
+    type: 'order' | 'sms' | 'payment';
+    title: string;
+    subtitle: string;
+    timestamp: Date;
+    actionTab: TabType;
+  } | null>(null);
+
+  // Audio Context Unlocker on First User Interaction
+  useEffect(() => {
+    const unlockAudio = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          ctx.resume().then(() => ctx.close()).catch(() => {});
+        }
+      } catch {}
+    };
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
+  // Live Alert Auto-Dismiss Timer
+  useEffect(() => {
+    if (!liveAlert) return;
+    const timer = setTimeout(() => {
+      setLiveAlert(null);
+    }, 12000);
+    return () => clearTimeout(timer);
+  }, [liveAlert]);
+
+  // Simulation handlers for instant live testing
+  const handleSimulateLiveOrder = () => {
+    const testOrderNumber = `CRM-${Math.floor(10000 + Math.random() * 90000)}`;
+    const simulatedOrder: Order = {
+      id: `ord-sim-${Date.now()}`,
+      orderNumber: testOrderNumber,
+      trackingToken: 'sim_token_' + Date.now(),
+      createdAt: new Date().toISOString(),
+      customerName: 'Jean Claude (Kigali Test)',
+      customerPhone: '0780022600',
+      deliveryType: 'delivery',
+      deliveryLocation: 'Gasabo (Kimironko)',
+      deliveryAddress: 'KG 15 Ave',
+      items: products.slice(0, 1).map(p => ({
+        productId: p.id,
+        productName: p.name,
+        price: p.price,
+        quantity: 1,
+        imageUrl: p.imageUrl
+      })),
+      subtotal: 35000,
+      deliveryFee: 1500,
+      shippingCost: 0,
+      totalAmount: 36500,
+      paymentMethod: 'MTN Mobile Money',
+      receiverName: 'Ruth',
+      receiverDetails: '0780022600',
+      shopName: 'ContactReach Market',
+      paymentStatus: 'Pending Payment',
+      status: 'New',
+      stockDeducted: false,
+      statusHistory: [
+        {
+          status: 'New',
+          paymentStatus: 'Pending Payment',
+          timestamp: new Date().toISOString(),
+          note: 'Live real-time order received via storefront checkout.'
+        }
+      ]
+    };
+
+    setOrders(prev => [simulatedOrder, ...prev]);
+    playNotificationChime('order');
+    showToast(`🔔 Real-time: New Order #${simulatedOrder.orderNumber} (36,500 RWF) received!`, 'success');
+    sendDesktopNotification('New Order Received!', `Order #${simulatedOrder.orderNumber} from Jean Claude (36,500 RWF)`);
+    setLiveAlert({
+      id: `alert-${Date.now()}`,
+      type: 'order',
+      title: `🔔 Real-Time Order #${simulatedOrder.orderNumber} Received!`,
+      subtitle: `Jean Claude placed an order for 36,500 RWF via MTN MoMo to Kimironko. Received live without reloading!`,
+      timestamp: new Date(),
+      actionTab: 'orders'
+    });
+  };
+
+  const handleSimulateLiveSMS = () => {
+    const testPhone = '0788123456';
+    const simulatedMsg: AdminMessage = {
+      id: `msg-sim-${Date.now()}`,
+      name: 'Marie Claire',
+      email: 'marie@example.com',
+      phone: testPhone,
+      subject: 'Payment MoMo SMS Proof',
+      message: `Y'ello! You have received 36,500 RWF from Marie Claire (0788123456) on ${new Date().toLocaleDateString()}. TxId: ${Math.floor(100000000 + Math.random() * 900000000)}. Fee: 0 RWF.`,
+      orderNumber: orders[0]?.orderNumber || 'CRM-99212',
+      createdAt: new Date().toISOString(),
+      status: 'unread'
+    };
+
+    setMessages(prev => [simulatedMsg, ...prev]);
+    playNotificationChime('sms');
+    showToast(`💬 Real-time: New SMS from ${simulatedMsg.phone} received!`, 'success');
+    sendDesktopNotification('New SMS Received!', `${simulatedMsg.name}: ${simulatedMsg.message.slice(0, 80)}`);
+    setLiveAlert({
+      id: `alert-sms-${Date.now()}`,
+      type: 'sms',
+      title: `💬 Real-Time SMS Received from ${simulatedMsg.phone}!`,
+      subtitle: simulatedMsg.message,
+      timestamp: new Date(),
+      actionTab: 'messages'
+    });
+  };
+
   // Filters
   const [productSearch, setProductSearch] = useState('');
   const [productCatFilter, setProductCatFilter] = useState('all');
@@ -888,7 +1009,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           if (prevOrdersCountRef.current !== -1 && merged.length > prevOrdersCountRef.current) {
             const diff = merged.length - prevOrdersCountRef.current;
             showToast(`🔔 Real-time: ${diff} new order(s) received!`, 'success');
-            playNotificationChime();
+            playNotificationChime('order');
+            sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
           }
           prevOrdersCountRef.current = merged.length;
           return merged;
@@ -902,10 +1024,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           const map = new Map<string, PaymentConfirmation>();
           prev.forEach(p => map.set(p.id, p));
           fetchedPayments.forEach(p => map.set(p.id, p));
-          return Array.from(map.values()).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+          const merged = Array.from(map.values()).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+          if (prevPaymentsCountRef.current !== -1 && merged.length > prevPaymentsCountRef.current) {
+            const diff = merged.length - prevPaymentsCountRef.current;
+            showToast(`💳 Real-time: ${diff} new payment proof / SMS received!`, 'success');
+            playNotificationChime('payment');
+            sendDesktopNotification('Payment Received', `${diff} new payment verification(s) received.`);
+          }
+          prevPaymentsCountRef.current = merged.length;
+          return merged;
         });
       }
-      if (fetchedMessages) setMessages(fetchedMessages);
+      if (fetchedMessages && Array.isArray(fetchedMessages)) {
+        setMessages(prev => {
+          const map = new Map<string, AdminMessage>();
+          prev.forEach(m => map.set(m.id, m));
+          fetchedMessages.forEach(m => map.set(m.id, m));
+          const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          if (prevMessagesCountRef.current !== -1 && merged.length > prevMessagesCountRef.current) {
+            const diff = merged.length - prevMessagesCountRef.current;
+            showToast(`💬 Real-time: ${diff} new SMS / inquiry received!`, 'success');
+            playNotificationChime('sms');
+            sendDesktopNotification('New SMS / Inquiry', `${diff} new customer message(s) received.`);
+          }
+          prevMessagesCountRef.current = merged.length;
+          return merged;
+        });
+      }
       if (fetchedProblems) setProblems(fetchedProblems);
       if (fetchedCoupons) setCoupons(fetchedCoupons);
       if (fetchedInvLogs) setInventoryLogs(fetchedInvLogs);
@@ -1052,6 +1197,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime('order');
               showToast(`🔔 Real-time: New Order #${newOrd.orderNumber} (${Number(newOrd.totalAmount).toLocaleString()} RWF) from ${newOrd.customerName}!`, 'success');
               sendDesktopNotification('New Order Received!', `Order #${newOrd.orderNumber} from ${newOrd.customerName} (${Number(newOrd.totalAmount).toLocaleString()} RWF)`);
+              setLiveAlert({
+                id: `ord-${Date.now()}`,
+                type: 'order',
+                title: `🔔 Real-Time Order #${newOrd.orderNumber} Received!`,
+                subtitle: `${newOrd.customerName} ordered for ${Number(newOrd.totalAmount).toLocaleString()} RWF via ${newOrd.paymentMethod}. Arrived live without page reload!`,
+                timestamp: new Date(),
+                actionTab: 'orders'
+              });
             } else if ((eventType === 'sms_received' || eventType === 'message_created') && payload?.message) {
               const newMsg: AdminMessage = payload.message;
               setMessages(prev => {
@@ -1061,6 +1214,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime('sms');
               showToast(`💬 Real-time: New SMS / Inquiry from ${newMsg.name || newMsg.phone}!`, 'success');
               sendDesktopNotification('New SMS / Message Received', `${newMsg.name || newMsg.phone}: ${newMsg.message.slice(0, 80)}`);
+              setLiveAlert({
+                id: `sms-${Date.now()}`,
+                type: 'sms',
+                title: `💬 Real-Time SMS / Message Received!`,
+                subtitle: `From ${newMsg.name || newMsg.phone}: "${newMsg.message.slice(0, 120)}"`,
+                timestamp: new Date(),
+                actionTab: 'messages'
+              });
             } else if (eventType === 'payment_submitted' && payload?.payment) {
               const newPay: PaymentConfirmation = payload.payment;
               setPayments(prev => {
@@ -1073,6 +1234,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               playNotificationChime('payment');
               showToast(`💳 Real-time: Payment confirmation / SMS proof received for Order #${newPay.orderNumber} (${Number(newPay.amountPaid || 0).toLocaleString()} RWF)!`, 'success');
               sendDesktopNotification('Payment Proof Submitted', `Order #${newPay.orderNumber}: ${Number(newPay.amountPaid || 0).toLocaleString()} RWF via ${newPay.paymentMethod}`);
+              setLiveAlert({
+                id: `pay-${Date.now()}`,
+                type: 'payment',
+                title: `💳 Real-Time Payment Proof / SMS Received!`,
+                subtitle: `Order #${newPay.orderNumber}: ${Number(newPay.amountPaid || 0).toLocaleString()} RWF (${newPay.paymentMethod}). Txn: ${newPay.transactionId || 'SMS Proof'}.`,
+                timestamp: new Date(),
+                actionTab: 'payments'
+              });
             } else if (eventType === 'problem_reported' && payload?.report) {
               const newRep: CustomerProblemReport = payload.report;
               setProblems(prev => {
@@ -2494,6 +2663,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
+      {/* Floating Real-Time Push Notification Alert Banner (Orders & SMS) */}
+      {liveAlert && (
+        <div className="fixed top-20 right-4 sm:right-8 z-50 max-w-md w-full p-4 rounded-2xl bg-[#0f172a] text-white border-2 border-[#FF6000] shadow-2xl animate-in slide-in-from-top-4 flex flex-col gap-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-[#FF6000] flex items-center justify-center shrink-0 border border-orange-500/30">
+                {liveAlert.type === 'order' ? <ShoppingBag className="w-4 h-4 animate-bounce" /> : liveAlert.type === 'sms' ? <Mail className="w-4 h-4 animate-bounce" /> : <CreditCard className="w-4 h-4 animate-bounce" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                    Live Push Alert
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {liveAlert.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+                <h4 className="text-sm font-black text-white">{liveAlert.title}</h4>
+              </div>
+            </div>
+            <button
+              onClick={() => setLiveAlert(null)}
+              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-slate-300 font-medium leading-relaxed pl-10">
+            {liveAlert.subtitle}
+          </p>
+          <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
+            <button
+              onClick={() => setLiveAlert(null)}
+              className="px-2.5 py-1 text-xs text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab(liveAlert.actionTab);
+                setLiveAlert(null);
+              }}
+              className="px-3.5 py-1.5 text-xs font-black rounded-xl bg-gradient-to-r from-[#FF6000] to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <span>View {liveAlert.actionTab === 'orders' ? 'Orders' : liveAlert.actionTab === 'messages' ? 'SMS & Messages' : 'Payments'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <header className="bg-[#121316] text-white px-4 sm:px-8 py-3.5 border-b border-slate-800 sticky top-0 z-30 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -2548,8 +2769,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }`}
           >
             <Bell className={`w-3.5 h-3.5 ${desktopAlertsActive ? 'text-emerald-400 fill-emerald-400/20' : 'text-orange-400'}`} />
-            <span className="hidden lg:inline">{desktopAlertsActive ? 'Alerts: Active' : 'Live Alerts: On'}</span>
           </button>
+
+          {/* Real-time Order & SMS Simulation Test Buttons */}
+          <div className="hidden xl:flex items-center gap-1.5 px-2 py-1 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px]">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Test Push:</span>
+            <button
+              onClick={handleSimulateLiveOrder}
+              className="px-2 py-0.5 rounded-lg bg-orange-600/30 hover:bg-orange-600/50 text-orange-300 font-bold text-[10px] transition-colors cursor-pointer"
+              title="Test receiving an order live without reloading"
+            >
+              + Order
+            </button>
+            <button
+              onClick={handleSimulateLiveSMS}
+              className="px-2 py-0.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 font-bold text-[10px] transition-colors cursor-pointer"
+              title="Test receiving an SMS live without reloading"
+            >
+              + SMS
+            </button>
+          </div>
 
           {/* Quick Maintenance Toggle in Header */}
           <button
@@ -2832,11 +3071,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <ShoppingBag className="w-4 h-4" />
                 <span>Orders & Delivery</span>
               </div>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
-                activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-              }`}>
-                {orders.length}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {orders.filter(o => o.status === 'New').length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black bg-rose-500 text-white animate-pulse" title="New live orders">
+                    {orders.filter(o => o.status === 'New').length} New
+                  </span>
+                )}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {orders.length}
+                </span>
+              </div>
             </button>
 
             <button
@@ -2850,8 +3096,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span>Payment Verification</span>
               </div>
               {stats.pendingVerifications > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-rose-500 text-white animate-pulse">
-                  {stats.pendingVerifications}
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-rose-500 text-white animate-pulse" title="Pending mobile money / SMS verifications">
+                  {stats.pendingVerifications} Pending
                 </span>
               )}
             </button>
@@ -2881,13 +3127,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             >
               <div className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4" />
-                <span>Messages Inbox</span>
+                <span>Messages & SMS</span>
               </div>
-              {stats.unreadMessagesCount > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-[#FF6000] text-white">
-                  {stats.unreadMessagesCount}
-                </span>
-              )}
+              <div className="flex items-center gap-1.5">
+                {messages.filter(m => m.status === 'unread').length > 0 ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-[#FF6000] text-white animate-pulse" title="Unread messages & SMS">
+                    {messages.filter(m => m.status === 'unread').length} Unread
+                  </span>
+                ) : (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                    activeTab === 'messages' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {messages.length}
+                  </span>
+                )}
+              </div>
             </button>
 
             <button
@@ -4185,8 +4439,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="space-y-5">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-xl font-black text-slate-900 tracking-tight">Orders & Delivery Management</h1>
-                  <p className="text-xs text-slate-500">Track shipments, manual supplier approvals, assign dispatch couriers, and generate invoices</p>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Orders & Delivery Management</h1>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Stream Active (No Reloading)
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">Real-time incoming orders received live without reloading. Track shipments, manual supplier approvals, and assign couriers</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
@@ -4705,8 +4965,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Admin Messages Inbox</h1>
-                    <p className="text-xs text-slate-500">Customer contact inquiries, wholesale requests, and general messages</p>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h1 className="text-xl font-black text-slate-900 tracking-tight">Admin Messages & SMS Inbox</h1>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Live SMS Stream Active (No Reloading)
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">Incoming customer SMS, MTN MoMo/Airtel payment SMS proofs, and contact inquiries received live without reloading</p>
                   </div>
                   {unreadCount > 0 && (
                     <span className="px-3 py-1 rounded-full text-xs font-black bg-[#FF6000] text-white flex items-center gap-1.5 self-start sm:self-auto">
