@@ -588,15 +588,43 @@ export function cleanForFirestore<T>(data: T): any {
   return clone;
 }
 
-// Products: queries Firestore and returns products
+// Products: queries Firestore and returns products (strictly excluding tombstoned deletedProducts)
 export async function getProductsFromFirestore(): Promise<Product[]> {
   const itemsMap = new Map<string, Product>();
+  const deletedSet = new Set<string>();
 
   try {
-    const snap = await getDocs(collection(db, 'products'));
-    snap.forEach(d => {
-      itemsMap.set(d.id, { ...(d.data() as Product), id: d.id });
-    });
+    const [delSnap, snap] = await Promise.all([
+      getDocs(collection(db, 'deletedProducts')).catch(() => null),
+      getDocs(collection(db, 'products')).catch(() => null)
+    ]);
+
+    if (delSnap) {
+      delSnap.forEach(d => {
+        deletedSet.add(d.id.toLowerCase());
+        const data = d.data();
+        if (data?.sku) deletedSet.add(String(data.sku).toLowerCase());
+        if (data?.alibabaProductId) deletedSet.add(String(data.alibabaProductId).toLowerCase());
+        if (data?.cjProductId) deletedSet.add(String(data.cjProductId).toLowerCase());
+      });
+    }
+
+    if (snap) {
+      snap.forEach(d => {
+        const p = { ...(d.data() as Product), id: d.id };
+        const idLower = p.id.toLowerCase();
+        const skuLower = p.sku ? p.sku.toLowerCase() : '';
+        const aliLower = p.alibabaProductId ? String(p.alibabaProductId).toLowerCase() : '';
+        const cjLower = p.cjProductId ? String(p.cjProductId).toLowerCase() : '';
+
+        if (deletedSet.has(idLower) || (skuLower && deletedSet.has(skuLower)) || (aliLower && deletedSet.has(aliLower)) || (cjLower && deletedSet.has(cjLower))) {
+          // Permanently deleted product, skip
+          return;
+        }
+
+        itemsMap.set(d.id, p);
+      });
+    }
   } catch (err) {
     console.warn('[Firebase] Firestore getProducts notice:', err);
   }
@@ -647,9 +675,18 @@ export async function batchSaveProductsToFirestore(productsList: Product[]): Pro
   return { count, failed };
 }
 
-export async function deleteProductFromFirestore(productId: string): Promise<boolean> {
+export async function deleteProductFromFirestore(productId: string, metadata?: { sku?: string; alibabaProductId?: string; cjProductId?: string }): Promise<boolean> {
   try {
     await deleteDoc(doc(db, 'products', productId));
+    try {
+      await setDoc(doc(db, 'deletedProducts', productId), {
+        id: productId,
+        sku: metadata?.sku || null,
+        alibabaProductId: metadata?.alibabaProductId || null,
+        cjProductId: metadata?.cjProductId || null,
+        deletedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch {}
     return true;
   } catch (error) {
     console.warn('[Firebase] Firestore deleteProduct notice:', error);

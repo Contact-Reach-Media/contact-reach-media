@@ -117,6 +117,91 @@ export function removeBuyerToken() {
   localStorage.removeItem(BUYER_USER_KEY);
 }
 
+// Permanent Deletion Tombstone Storage Key
+const DELETED_PRODUCTS_KEY = 'crm_deleted_products';
+
+export function getLocallyDeletedProductIds(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_PRODUCTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markProductDeletedLocally(productIds: string | string[], metaList?: { id: string; sku?: string }[]): void {
+  try {
+    const ids = Array.isArray(productIds) ? productIds : [productIds];
+    const current = getLocallyDeletedProductIds();
+    const set = new Set(current.map(s => String(s).toLowerCase().trim()));
+
+    ids.forEach(id => {
+      if (id) set.add(String(id).toLowerCase().trim());
+    });
+    if (metaList) {
+      metaList.forEach(m => {
+        if (m.id) set.add(String(m.id).toLowerCase().trim());
+        if (m.sku) set.add(String(m.sku).toLowerCase().trim());
+      });
+    }
+
+    localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify(Array.from(set)));
+
+    // Purge deleted items from crm_home_catalog_cache
+    try {
+      const cachedCatalog = localStorage.getItem('crm_home_catalog_cache');
+      if (cachedCatalog) {
+        const parsed = JSON.parse(cachedCatalog);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((p: any) => !set.has(String(p.id).toLowerCase().trim()) && (!p.sku || !set.has(String(p.sku).toLowerCase().trim())));
+          localStorage.setItem('crm_home_catalog_cache', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
+
+    // Purge deleted items from crm_custom_products
+    try {
+      const customProds = localStorage.getItem('crm_custom_products');
+      if (customProds) {
+        const parsed = JSON.parse(customProds);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((p: any) => !set.has(String(p.id).toLowerCase().trim()) && (!p.sku || !set.has(String(p.sku).toLowerCase().trim())));
+          localStorage.setItem('crm_custom_products', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
+
+    // Purge deleted items from crm_cart
+    try {
+      const cart = localStorage.getItem('crm_cart');
+      if (cart) {
+        const parsed = JSON.parse(cart);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((item: any) => {
+            const pId = item.productId || item.product?.id || item.id;
+            return !set.has(String(pId).toLowerCase().trim());
+          });
+          localStorage.setItem('crm_cart', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
+
+    // Purge deleted items from crm_wishlist
+    try {
+      const wishlist = localStorage.getItem('crm_wishlist');
+      if (wishlist) {
+        const parsed = JSON.parse(wishlist);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((id: string) => !set.has(String(id).toLowerCase().trim()));
+          localStorage.setItem('crm_wishlist', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
+  } catch (e) {
+    console.warn('[Storage] Error marking products deleted locally:', e);
+  }
+}
+
 function getBuyerAuthHeaders() {
   const token = getBuyerToken();
   return {
@@ -393,14 +478,18 @@ export const api = {
       const res = await fetch(`/api/products?${query.toString()}`);
       const parsed = await safeParseResponse<Product[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
-        return parsed.json;
+        const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
+        return parsed.json.filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())));
       }
     } catch {}
+
+    const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
 
     // Fallback to Cloud Firestore
     try {
       let fsProds = await getProductsFromFirestore();
       if (fsProds && fsProds.length > 0) {
+        fsProds = fsProds.filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())));
         if (params?.category && params.category !== 'all') {
           fsProds = fsProds.filter(p => p.category === params.category);
         }
@@ -412,14 +501,22 @@ export const api = {
       }
     } catch {}
 
-    return initialProducts;
+    return initialProducts.filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())));
   },
 
   async getProductById(id: string): Promise<Product | null> {
+    const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
+    if (deletedSet.has(id.toLowerCase())) {
+      return null;
+    }
+
     try {
       const res = await fetch(`/api/products/${encodeURIComponent(id)}`);
       const parsed = await safeParseResponse<Product>(res);
       if (res.ok && parsed.isJson && parsed.json) {
+        if (deletedSet.has(parsed.json.id.toLowerCase()) || (parsed.json.sku && deletedSet.has(parsed.json.sku.toLowerCase()))) {
+          return null;
+        }
         return parsed.json;
       }
     } catch {}
@@ -427,10 +524,19 @@ export const api = {
     try {
       const fsProds = await getProductsFromFirestore();
       const found = fsProds.find(p => p.id === id);
-      if (found) return found;
+      if (found) {
+        if (deletedSet.has(found.id.toLowerCase()) || (found.sku && deletedSet.has(found.sku.toLowerCase()))) {
+          return null;
+        }
+        return found;
+      }
     } catch {}
 
-    return initialProducts.find(p => p.id === id) || null;
+    const initFound = initialProducts.find(p => p.id === id);
+    if (initFound && (deletedSet.has(initFound.id.toLowerCase()) || (initFound.sku && deletedSet.has(initFound.sku.toLowerCase())))) {
+      return null;
+    }
+    return initFound || null;
   },
 
   // Customer Place Order
@@ -1473,16 +1579,19 @@ export const api = {
     return duplicate;
   },
 
-  async adminDeleteProduct(id: string): Promise<void> {
+  async adminDeleteProduct(id: string, metadata?: { sku?: string; alibabaProductId?: string; cjProductId?: string }): Promise<void> {
+    // Immediately register tombstone locally and clean caches
+    markProductDeletedLocally(id, metadata ? [{ id, sku: metadata.sku }] : undefined);
+
     try {
-      const res = await fetch(`/api/admin/products/${id}`, {
+      const res = await fetch(`/api/admin/products/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok) {
         try {
-          await deleteProductFromFirestore(id);
+          await deleteProductFromFirestore(id, metadata);
         } catch {}
         return;
       }
@@ -1496,11 +1605,14 @@ export const api = {
     }
 
     try {
-      await deleteProductFromFirestore(id);
+      await deleteProductFromFirestore(id, metadata);
     } catch {}
   },
 
   async adminBulkDeleteProducts(productIds: string[]): Promise<{ success: boolean; count: number; deletedIds: string[]; message: string }> {
+    // Immediately register tombstones locally and clean caches
+    markProductDeletedLocally(productIds);
+
     try {
       const res = await fetch('/api/admin/products/bulk-delete', {
         method: 'POST',
@@ -1535,7 +1647,7 @@ export const api = {
       success: true,
       count: productIds.length,
       deletedIds: productIds,
-      message: `Deleted ${productIds.length} product(s).`
+      message: `Permanently deleted ${productIds.length} product(s).`
     };
   },
 

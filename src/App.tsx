@@ -132,11 +132,16 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>(() => {
     if (typeof window !== 'undefined') {
       try {
+        const deletedIds = api.getLocallyDeletedProductIds();
+        const delSet = new Set(deletedIds.map(d => d.toLowerCase().trim()));
         const cached = localStorage.getItem('crm_home_catalog_cache');
         if (cached) {
           const list = JSON.parse(cached);
-          if (Array.isArray(list) && list.length > 0) return list;
+          if (Array.isArray(list) && list.length > 0) {
+            return list.filter((p: Product) => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
+          }
         }
+        return initialProducts.filter(p => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
       } catch {}
     }
     return initialProducts;
@@ -160,13 +165,23 @@ export default function App() {
     } catch {}
   }, [products]);
 
-
-  // Cart & Wishlist with localStorage Persistence
+  // Cart & Wishlist with localStorage Persistence (excluding any permanently deleted products)
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
+      const deletedIds = api.getLocallyDeletedProductIds();
+      const delSet = new Set(deletedIds.map(d => d.toLowerCase().trim()));
       const saved = localStorage.getItem('crm_cart');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const list = JSON.parse(saved);
+        if (Array.isArray(list)) {
+          return list.filter((item: any) => {
+            const pId = item.productId || item.product?.id || item.id;
+            return !delSet.has(String(pId).toLowerCase().trim());
+          });
+        }
+      }
+      return [];
     } catch {
       return [];
     }
@@ -175,8 +190,16 @@ export default function App() {
   const [wishlist, setWishlist] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
+      const deletedIds = api.getLocallyDeletedProductIds();
+      const delSet = new Set(deletedIds.map(d => d.toLowerCase().trim()));
       const saved = localStorage.getItem('crm_wishlist');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const list = JSON.parse(saved);
+        if (Array.isArray(list)) {
+          return list.filter((id: string) => !delSet.has(String(id).toLowerCase().trim()));
+        }
+      }
+      return [];
     } catch {
       return [];
     }

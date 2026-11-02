@@ -168,6 +168,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState(false);
 
   // Modals & Selected items
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -1391,16 +1393,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleDeleteProduct = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this product?')) return;
+  const handleDeleteProduct = (idOrProduct: string | Product) => {
+    if (typeof idOrProduct === 'string') {
+      const p = products.find(prod => prod.id === idOrProduct);
+      if (p) {
+        setProductToDelete(p);
+      } else {
+        setProductToDelete({ id: idOrProduct, name: `Product (${idOrProduct})`, price: 0, stock: 0, category: 'general', imageUrl: '/logo.png' } as any);
+      }
+    } else {
+      setProductToDelete(idOrProduct);
+    }
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    const target = productToDelete;
+    setDeletingProduct(true);
     try {
-      await api.adminDeleteProduct(id);
-      showToast('Product removed.');
-      setSelectedProductIds(prev => prev.filter(x => x !== id));
-      fetchAllData();
+      // Optimistically remove from local state
+      setProducts(prev => prev.filter(p => p.id !== target.id));
+      setSelectedProductIds(prev => prev.filter(id => id !== target.id));
+
+      await api.adminDeleteProduct(target.id, {
+        sku: target.sku,
+        alibabaProductId: target.alibabaProductId,
+        cjProductId: target.cjProductId
+      });
+
+      showToast(`Product "${target.name}" permanently deleted from database, Firestore, and catalog.`, 'success');
+      setProductToDelete(null);
+      if (editingProduct && editingProduct.id === target.id) {
+        setProductModalOpen(false);
+        setEditingProduct(null);
+      }
+      fetchAllData(true);
       onRefreshPublicData();
     } catch (err: any) {
-      showToast(err.message, 'error');
+      showToast(err.message || 'Failed to permanently delete product', 'error');
+      fetchAllData(true);
+    } finally {
+      setDeletingProduct(false);
     }
   };
 
@@ -8198,6 +8231,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <span>Saves directly to Cloud Firestore & store database</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  {editingProduct && (
+                    <button
+                      type="button"
+                      onClick={() => setProductToDelete(editingProduct)}
+                      className="px-4 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 font-bold flex items-center gap-1.5 cursor-pointer text-xs transition-colors"
+                      title="Permanently delete this product from everywhere"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete Permanently</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setProductModalOpen(false)}

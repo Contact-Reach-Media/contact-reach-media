@@ -561,12 +561,28 @@ function loadDbFromDisk() {
     }
   }
 
-  // Ensure all 200 catalog products are present in db.products
+  // Ensure all 200 catalog products are present in db.products (ONLY if not permanently deleted!)
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  const delSet = new Set(db.deletedRecordIds);
   const existingProductIds = new Set(db.products.map(p => p.id));
-  const missing200 = PRODUCTS_200_CATALOG.filter(p => !existingProductIds.has(p.id));
+  const missing200 = PRODUCTS_200_CATALOG.filter(p =>
+    !existingProductIds.has(p.id) &&
+    !delSet.has(p.id) &&
+    (!p.sku || !delSet.has(p.sku))
+  );
   if (missing200.length > 0) {
     console.log(`Injecting ${missing200.length} catalog products into database...`);
     db.products = [...missing200, ...db.products];
+  }
+
+  // Purge any tombstoned products from in-memory database to prevent resurrection
+  if (delSet.size > 0) {
+    db.products = db.products.filter(p =>
+      !delSet.has(p.id) &&
+      (!p.sku || !delSet.has(p.sku)) &&
+      (!p.alibabaProductId || !delSet.has(p.alibabaProductId)) &&
+      (!p.cjProductId || !delSet.has(p.cjProductId))
+    );
   }
 
   // Ensure SKU for each product if missing
@@ -586,6 +602,17 @@ function loadDbFromDisk() {
   }
 
   saveDbToDisk();
+}
+
+// Global Tombstone Validator: Checks if a product or any of its alias IDs (SKU, supplier PIDs) have been permanently deleted
+function isProductTombstoned(identifiers: { id?: string; sku?: string; alibabaProductId?: string; cjProductId?: string }): boolean {
+  if (!db.deletedRecordIds || db.deletedRecordIds.length === 0) return false;
+  const delSet = new Set(db.deletedRecordIds.map(d => String(d).toLowerCase().trim()));
+  if (identifiers.id && delSet.has(identifiers.id.toLowerCase().trim())) return true;
+  if (identifiers.sku && delSet.has(identifiers.sku.toLowerCase().trim())) return true;
+  if (identifiers.alibabaProductId && delSet.has(identifiers.alibabaProductId.toLowerCase().trim())) return true;
+  if (identifiers.cjProductId && delSet.has(identifiers.cjProductId.toLowerCase().trim())) return true;
+  return false;
 }
 
 loadDbFromDisk();
@@ -868,6 +895,26 @@ async function syncWithFirestore() {
       console.warn('[Firebase] Settings sync notice:', err.message || err);
     }
 
+    // 1b. Sync permanent deletion tombstones from Cloud Firestore
+    try {
+      const delCol = firestoreCollection(firestoreDb, 'deletedProducts');
+      const delSnap = await firestoreGetDocs(delCol);
+      if (delSnap.size > 0) {
+        db.deletedRecordIds = db.deletedRecordIds || [];
+        delSnap.forEach(d => {
+          if (!db.deletedRecordIds.includes(d.id)) {
+            db.deletedRecordIds.push(d.id);
+          }
+          const data = d.data();
+          if (data?.sku && !db.deletedRecordIds.includes(data.sku)) {
+            db.deletedRecordIds.push(data.sku);
+          }
+        });
+      }
+    } catch (delErr: any) {
+      console.warn('[Firebase] Deleted products tombstones sync notice:', delErr.message || delErr);
+    }
+
     // 2. Sync categories if populated in Firestore (or seed)
     try {
       const catCol = firestoreCollection(firestoreDb, 'categories');
@@ -902,21 +949,28 @@ async function syncWithFirestore() {
       if (prodSnap.size > 0) {
         const fsProds: Product[] = [];
         prodSnap.forEach(d => {
-          if (!db.deletedRecordIds?.includes(d.id)) {
-            fsProds.push({ ...(d.data() as Product), id: d.id });
+          const prodData = d.data() as Product;
+          const isTombstoned = db.deletedRecordIds?.includes(d.id) || (prodData.sku && db.deletedRecordIds?.includes(prodData.sku));
+          if (!isTombstoned) {
+            fsProds.push({ ...prodData, id: d.id });
           } else {
+            // Permanently remove from Firestore if it was deleted
             deleteFromFirestoreAsync('products', d.id);
           }
         });
         // Intelligently merge: keep valid local products and update/add remote products
         const mergedProdsMap = new Map<string, Product>();
-        db.products.filter(p => !db.deletedRecordIds?.includes(p.id)).forEach(p => mergedProdsMap.set(p.id, p));
+        db.products
+          .filter(p => !db.deletedRecordIds?.includes(p.id) && (!p.sku || !db.deletedRecordIds?.includes(p.sku)))
+          .forEach(p => mergedProdsMap.set(p.id, p));
         fsProds.forEach(p => mergedProdsMap.set(p.id, p));
         db.products = Array.from(mergedProdsMap.values());
       } else {
-        db.products.forEach(prod => {
-          saveToFirestoreAsync('products', prod.id, prod);
-        });
+        db.products
+          .filter(p => !db.deletedRecordIds?.includes(p.id) && (!p.sku || !db.deletedRecordIds?.includes(p.sku)))
+          .forEach(prod => {
+            saveToFirestoreAsync('products', prod.id, prod);
+          });
       }
     } catch (err: any) {
       console.warn('[Firebase] Products sync notice:', err.message || err);
@@ -3903,18 +3957,58 @@ app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(PROD
 
 app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const index = db.products.findIndex(p => p.id === req.params.id);
+  const targetId = String(req.params.id);
+  const index = db.products.findIndex(p => p.id === targetId);
   if (index === -1) return res.status(404).json({ error: 'Product not found' });
 
   const removed = db.products.splice(index, 1)[0];
   db.deletedRecordIds = db.deletedRecordIds || [];
-  if (!db.deletedRecordIds.includes(removed.id)) {
-    db.deletedRecordIds.push(removed.id);
+
+  // Register multi-identifier tombstones to permanently block resurrection from any supplier or cache
+  if (!db.deletedRecordIds.includes(removed.id)) db.deletedRecordIds.push(removed.id);
+  if (removed.sku && !db.deletedRecordIds.includes(removed.sku)) db.deletedRecordIds.push(removed.sku);
+  if (removed.alibabaProductId && !db.deletedRecordIds.includes(removed.alibabaProductId)) db.deletedRecordIds.push(removed.alibabaProductId);
+  if (removed.cjProductId && !db.deletedRecordIds.includes(removed.cjProductId)) db.deletedRecordIds.push(removed.cjProductId);
+
+  // Clean CJ dropshipping staging queue if present
+  if (db.cjPendingProducts) {
+    db.cjPendingProducts = db.cjPendingProducts.filter(p => p.id !== targetId);
   }
-  logAudit(admin, 'PRODUCT_DELETED', `Deleted product "${removed.name}"`, 'product', removed.id);
+
+  // Purge any connected customer reviews for this product
+  if (db.reviews) {
+    const reviewsToDelete = db.reviews.filter(r => r.productId === targetId);
+    reviewsToDelete.forEach(r => deleteFromFirestoreAsync('reviews', r.id));
+    db.reviews = db.reviews.filter(r => r.productId !== targetId);
+  }
+
+  logAudit(admin, 'PRODUCT_DELETED', `Permanently deleted product "${removed.name}" (${removed.sku || removed.id})`, 'product', removed.id);
   saveDbToDisk();
+
+  // Erase from Firestore and write persistent tombstone
   deleteFromFirestoreAsync('products', removed.id);
-  res.json({ message: 'Product deleted successfully', removed });
+  saveToFirestoreAsync('deletedProducts', removed.id, {
+    id: removed.id,
+    name: removed.name,
+    sku: removed.sku || null,
+    alibabaProductId: removed.alibabaProductId || null,
+    cjProductId: removed.cjProductId || null,
+    deletedAt: new Date().toISOString(),
+    deletedBy: admin?.name || 'Administrator'
+  });
+
+  // Broadcast real-time deletion event to all connected storefront and admin clients
+  broadcastDatabaseEvent('product_deleted', {
+    productId: removed.id,
+    sku: removed.sku,
+    stats: calculateCurrentStats()
+  });
+
+  res.json({
+    success: true,
+    message: `Product "${removed.name}" has been permanently deleted from all databases, Firestore, and live storefront catalog.`,
+    removed
+  });
 });
 
 // Bulk delete products simultaneously
@@ -3933,27 +4027,58 @@ app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(PRODUC
   db.products = db.products.filter(p => {
     if (idsToDelete.has(p.id)) {
       deletedProducts.push(p);
-      if (!db.deletedRecordIds.includes(p.id)) {
-        db.deletedRecordIds.push(p.id);
-      }
+
+      // Register multi-identifier tombstones
+      if (!db.deletedRecordIds.includes(p.id)) db.deletedRecordIds.push(p.id);
+      if (p.sku && !db.deletedRecordIds.includes(p.sku)) db.deletedRecordIds.push(p.sku);
+      if (p.alibabaProductId && !db.deletedRecordIds.includes(p.alibabaProductId)) db.deletedRecordIds.push(p.alibabaProductId);
+      if (p.cjProductId && !db.deletedRecordIds.includes(p.cjProductId)) db.deletedRecordIds.push(p.cjProductId);
+
       deleteFromFirestoreAsync('products', p.id);
+      saveToFirestoreAsync('deletedProducts', p.id, {
+        id: p.id,
+        name: p.name,
+        sku: p.sku || null,
+        alibabaProductId: p.alibabaProductId || null,
+        cjProductId: p.cjProductId || null,
+        deletedAt: new Date().toISOString(),
+        deletedBy: admin?.name || 'Administrator'
+      });
       return false;
     }
     return true;
   });
 
+  // Clean CJ dropshipping staging queue
+  if (db.cjPendingProducts) {
+    db.cjPendingProducts = db.cjPendingProducts.filter(p => !idsToDelete.has(p.id));
+  }
+
+  // Purge any connected customer reviews for deleted products
+  if (db.reviews) {
+    const reviewsToDelete = db.reviews.filter(r => idsToDelete.has(r.productId));
+    reviewsToDelete.forEach(r => deleteFromFirestoreAsync('reviews', r.id));
+    db.reviews = db.reviews.filter(r => !idsToDelete.has(r.productId));
+  }
+
   saveDbToDisk();
   logAudit(
     admin,
     'BULK_PRODUCTS_DELETED',
-    `Bulk deleted ${deletedProducts.length} product(s) at the same time (${deletedProducts.map(p => p.name).slice(0, 5).join(', ')}${deletedProducts.length > 5 ? '...' : ''})`,
+    `Bulk permanently deleted ${deletedProducts.length} product(s) (${deletedProducts.map(p => p.name).slice(0, 5).join(', ')}${deletedProducts.length > 5 ? '...' : ''})`,
     'product',
     deletedProducts.map(p => p.id).join(',')
   );
 
+  // Broadcast real-time bulk deletion event to all connected clients
+  broadcastDatabaseEvent('products_bulk_deleted', {
+    deletedIds: deletedProducts.map(p => p.id),
+    stats: calculateCurrentStats()
+  });
+
   res.json({
     success: true,
-    message: `Successfully deleted ${deletedProducts.length} product(s).`,
+    message: `Successfully deleted ${deletedProducts.length} product(s) permanently from all databases, Firestore, and live storefront catalog.`,
     count: deletedProducts.length,
     deletedIds: deletedProducts.map(p => p.id)
   });
@@ -6611,10 +6736,15 @@ async function pullLiveCjProducts(options?: {
 
         const mappedCategory = normalizeCategoryId(p.categoryName || categoryFilter, productName);
 
+        const candidateCjId = `prod-cj-${pid}`;
+        if (isProductTombstoned({ id: candidateCjId, sku, cjProductId: pid })) {
+          continue;
+        }
+
         const existingIndex = db.products.findIndex(existing =>
           existing.cjProductId === pid ||
           (existing.sku && existing.sku === sku) ||
-          existing.id === `prod-cj-${pid}`
+          existing.id === candidateCjId
         );
 
         if (existingIndex !== -1) {
@@ -6830,7 +6960,12 @@ async function syncCjDropshippingProducts(categoryFilter?: string, adminName: st
   const processedProducts: Product[] = [];
 
   for (const item of candidateFeed) {
-    const existingIndex = db.products.findIndex(p => p.cjProductId === item.pid || (p.sku && p.sku === item.productSku));
+    const candidateId = `prod-cj-${item.pid}`;
+    if (isProductTombstoned({ id: candidateId, sku: item.productSku, cjProductId: item.pid })) {
+      continue;
+    }
+
+    const existingIndex = db.products.findIndex(p => p.cjProductId === item.pid || (p.sku && p.sku === item.productSku) || p.id === candidateId);
     const landed = calculateLandedCostAndSellingPrice({
       productCostUsd: item.sellPrice,
       usdToRwfRate: usdRate,
@@ -8120,6 +8255,9 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
       let count = 0;
       for (const item of CJ_CURATED_FEED) {
         const prodId = 'prod-cj-' + item.pid;
+        if (isProductTombstoned({ id: prodId, sku: item.productSku, cjProductId: item.pid })) {
+          continue;
+        }
         const existing = db.products.find(p => p.id === prodId || p.cjProductId === item.pid);
         if (!existing) {
           const costPrice = Math.round((item.sellPrice || 10) * usdRate);
@@ -8239,6 +8377,10 @@ async function syncAlibabaProducts(categoryFilter?: string, adminName: string = 
   for (const item of feed) {
     const pid = item.pid;
     const sku = item.productSku;
+    const aliProdId = `prod-ali-${pid.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
+    if (isProductTombstoned({ id: aliProdId, sku, alibabaProductId: pid })) {
+      continue;
+    }
     const wholesaleUsd = item.unitCostUsd;
 
     // Calculate official logistics shipping quote to Kigali, Rwanda
@@ -8581,6 +8723,10 @@ Origin: Direct Factory Dispatch (China)`,
   for (const item of matchedItems) {
     const pid = item.pid;
     const sku = item.productSku;
+    const aliProdId = `prod-ali-${pid.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
+    if (isProductTombstoned({ id: aliProdId, sku, alibabaProductId: pid })) {
+      continue;
+    }
     const wholesaleUsd = item.unitCostUsd;
 
     const quote = calculateAlibabaShipping(item.weightKg, item.dimensionsCm, usdRate, item.isFreeShipping);
@@ -9687,6 +9833,10 @@ app.post('/api/admin/drive/import-products', requireAdminAuth, requireRole(['own
       const targetName = String(item.name || `Drive Product #${idx + 1}`).trim();
       const targetSku = String(item.sku || `CRM-GD-${1000 + idx}`).trim();
 
+      if (isProductTombstoned({ id: item.id, sku: targetSku, cjProductId: item.cjProductId, alibabaProductId: item.alibabaProductId })) {
+        continue;
+      }
+
       // Resolve shop: ensure it exists, auto-add with isRecommended: false if new
       const { shopId, shopName } = resolveOrCreateShop(
         item.shopName,
@@ -10023,6 +10173,11 @@ async function applyGoogleSheetEdits(
       effectiveStatus = 'Hidden';
     } else {
       effectiveStatus = 'Available';
+    }
+
+    // If product has been permanently deleted, never re-add or re-sync it from Google Sheets
+    if (isProductTombstoned({ id: rawId, sku: rawSku })) {
+      continue;
     }
 
     // Match existing product: ID takes priority, then SKU. Only match by Name if no ID was provided in the row.
