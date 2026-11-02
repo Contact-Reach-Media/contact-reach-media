@@ -13,26 +13,39 @@ export function isProductOutOfStock(product?: Product | null): boolean {
 }
 
 /**
+ * Calculates the per-unit shipping cost for any listed product.
+ * Formula strictly enforced as requested:
+ * Shipping Cost = 1500 + (cost of product * 10) / 100
+ *
+ * Base cost uses product.costPrice (or product.price / discountPrice if costPrice not set).
+ */
+export function calculateProductShippingUnitCost(product?: Product | null, unitPriceOverride?: number): number {
+  if (!product) return 0;
+
+  // If already calculated and stored on product, and no override provided
+  if (!unitPriceOverride && typeof product.shippingCost === 'number' && product.shippingCost > 0) {
+    return product.shippingCost;
+  }
+
+  // Cost of product: use product costPrice, or active unit price, or product selling price
+  const productCost = typeof unitPriceOverride === 'number' && unitPriceOverride > 0
+    ? unitPriceOverride
+    : ((typeof product.costPrice === 'number' && product.costPrice > 0)
+        ? product.costPrice
+        : ((product.discountPrice && product.discountPrice > 0)
+            ? product.discountPrice
+            : (product.price || 0)));
+
+  // 1500 + (cost of product * 10) / 100
+  return 1500 + Math.round((productCost * 10) / 100);
+}
+
+/**
  * Calculates the per-unit supplier shipping cost for a product.
- * - If product is in local stock (stock > 0 and status is Available): shipping cost is 0 RWF (Free local stock).
- * - If product is out of stock: supplier shipping to Rwanda applies (alibabaShippingCostRwf, converted USD, or standard 3,500 RWF).
+ * Returns the standard formula: 1500 + (cost of product * 10) / 100
  */
 export function getProductSupplierShippingUnitCost(product?: Product | null): number {
-  if (!product) return 0;
-  if (!isProductOutOfStock(product)) {
-    return 0; // In local stock, no supplier shipping required
-  }
-
-  if (product.alibabaShippingCostRwf && product.alibabaShippingCostRwf > 0) {
-    return product.alibabaShippingCostRwf;
-  }
-
-  if (product.alibabaShippingCostUsd && product.alibabaShippingCostUsd > 0) {
-    return Math.round(product.alibabaShippingCostUsd * 1435);
-  }
-
-  // Standard Air Freight / Supplier Import shipping fee to Kigali Hub
-  return 3500;
+  return calculateProductShippingUnitCost(product);
 }
 
 /**
@@ -63,7 +76,8 @@ export function getProductSelectionBreakdown(
   const activeUnitPrice = qty >= 10 ? Math.round(unitPrice * 0.96) : unitPrice;
   const productPriceTotal = activeUnitPrice * qty;
 
-  const unitShippingCost = isOutOfStock ? getProductSupplierShippingUnitCost(product) : 0;
+  // Formula strictly calculated: 1500 + (cost of product * 10) / 100
+  const unitShippingCost = calculateProductShippingUnitCost(product, activeUnitPrice);
   const totalShippingCost = unitShippingCost * qty;
   const deliveryFee = productPriceTotal >= 50000 ? 0 : estimatedDeliveryFee;
   const grandTotal = productPriceTotal + deliveryFee + totalShippingCost;
@@ -137,7 +151,8 @@ export function calculateCartBreakdown(
     const itemSubtotal = unitPrice * qty;
     subtotal += itemSubtotal;
 
-    const unitShippingCost = isOutOfStock ? getProductSupplierShippingUnitCost(item.product) : 0;
+    // Formula strictly calculated for every listed product: 1500 + (cost of product * 10) / 100
+    const unitShippingCost = calculateProductShippingUnitCost(item.product, unitPrice);
     const itemShippingCost = unitShippingCost * qty;
     shippingCost += itemShippingCost;
 

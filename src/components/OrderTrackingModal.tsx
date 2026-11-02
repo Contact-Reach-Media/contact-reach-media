@@ -406,7 +406,13 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                         />
                         <div>
                           <div className="font-bold text-slate-800 line-clamp-1">{item.productName}</div>
-                          <div className="text-[11px] text-slate-500">Qty: {item.quantity} × {item.price.toLocaleString()} FRW</div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
+                            <span>Qty: {item.quantity} × {item.price.toLocaleString()} FRW</span>
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.2 rounded">
+                              <Truck className="w-2.5 h-2.5 text-[#FF5500] shrink-0" />
+                              <span>To be shipped</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <div className="font-bold text-slate-900 font-mono tabular-nums">

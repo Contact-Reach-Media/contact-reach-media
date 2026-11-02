@@ -113,6 +113,8 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
     const mockTxn = `TXN${Math.floor(100000000 + Math.random() * 900000000)}`;
     const sample = paymentMethod === 'Airtel Money'
       ? `Airtel Money: You have sent ${amountPaid.toLocaleString()} RWF to Ruth (0780022600). TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
+      : paymentMethod === 'MTN Merchant Code'
+      ? `Y'ello! You have paid ${amountPaid.toLocaleString()} RWF to ContactReach Market (2328354) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 0 RWF.`
       : `Y'ello! You have transferred ${amountPaid.toLocaleString()} RWF to ContactReach Market / Ruth (0780022600) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF. Your new balance: 52,400 RWF.`;
     handleMessageChange(sample);
   };

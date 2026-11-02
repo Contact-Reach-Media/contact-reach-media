@@ -11,7 +11,7 @@ import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
-import { calculateCartBreakdown, isProductOutOfStock } from '../utils/shippingCalculator.ts';
+import { calculateCartBreakdown, isProductOutOfStock, calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -464,9 +464,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           />
                           <div className="truncate">
                             <p className="font-bold text-slate-900 truncate">{item.product.name}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               <span className="text-[11px] text-slate-500 font-mono">
                                 {item.quantity} × {formatCurrencyPrice(item.product.price, currentCurrency, exchangeRates).primary}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-800 bg-orange-50 border border-orange-200 px-1.5 py-0.2 rounded">
+                                <Truck className="w-2.5 h-2.5 text-[#FF5500] shrink-0" />
+                                <span>+{formatCurrencyPrice(calculateProductShippingUnitCost(item.product), currentCurrency, exchangeRates).primary} ship</span>
                               </span>
                               {outOfStock ? (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
@@ -513,23 +517,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Row 3: Shipping Cost (if out of stock) */}
+                  {/* Row 3: Shipping Cost: 1500 + 10% of product cost */}
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-1.5 text-slate-700">
                       <Truck className="w-3.5 h-3.5 text-[#FF5500]" />
-                      <span>3. Supplier Shipping Cost:</span>
-                      {shippingCost === 0 ? (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
-                          Local Stock (0 RWF)
-                        </span>
-                      ) : (
-                        <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded font-bold">
-                          Out of Stock Import
-                        </span>
-                      )}
+                      <span>3. Shipping Cost:</span>
+                      <span className="text-[10px] bg-orange-100 text-[#FF5500] px-1.5 py-0.2 rounded font-bold font-mono">
+                        1,500 + 10%
+                      </span>
                     </div>
-                    <span className={`font-mono font-bold ${shippingCost > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
-                      {shippingCost === 0 ? '0 RWF' : `+${formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates).primary}`}
+                    <span className="font-mono font-bold text-slate-900">
+                      +{formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates).primary}
                     </span>
                   </div>
 
@@ -546,7 +544,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       Total = Product Price + Delivery Fee + Shipping Cost
                     </span>
                     <span className="text-[10px] font-bold text-[#FF5500]">
-                      {shippingCost > 0 ? `${cartBreakdown.outOfStockCount} out of stock` : '0 supplier fees'}
+                      Standard 1,500 + 10% shipping
                     </span>
                   </div>
 
@@ -849,12 +847,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <div className="flex justify-between text-slate-600 items-center">
                     <span className="flex items-center gap-1 font-bold text-slate-700">
                       <Truck className="w-3.5 h-3.5 text-[#FF5500]" />
-                      <span>3. Supplier Shipping Cost:</span>
+                      <span>3. Shipping Cost:</span>
                     </span>
-                    <span className={`font-mono font-bold ${(createdOrder.shippingCost || 0) > 0 ? 'text-purple-700' : 'text-emerald-700'}`}>
-                      {(createdOrder.shippingCost || 0) > 0
-                        ? `+${(createdOrder.shippingCost || 0).toLocaleString()} RWF`
-                        : '0 RWF (Local Stock)'}
+                    <span className="font-mono font-bold text-slate-900">
+                      +{(createdOrder.shippingCost || 0).toLocaleString()} RWF
                     </span>
                   </div>
                   {(createdOrder.discountAmount || 0) > 0 && (

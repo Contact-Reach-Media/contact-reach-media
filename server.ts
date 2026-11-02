@@ -463,8 +463,8 @@ function loadDbFromDisk() {
       if (parsed.products && Array.isArray(parsed.products)) {
         db.products = parsed.products.map((p: any) => ({
           ...p,
-          merchantCode: (!p.merchantCode || p.merchantCode === '078002') ? '2328354' : p.merchantCode,
-          receiverPhone: (!p.receiverPhone || p.receiverPhone === '078002260') ? '0780022600' : p.receiverPhone
+          merchantCode: (!p.merchantCode || p.merchantCode === '078002' || p.merchantCode === '23283542600') ? '2328354' : p.merchantCode,
+          receiverPhone: (!p.receiverPhone || p.receiverPhone === '078002260' || p.receiverPhone === '23283542600') ? '0780022600' : p.receiverPhone
         }));
       }
       if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
@@ -477,7 +477,9 @@ function loadDbFromDisk() {
       if (parsed.orders && Array.isArray(parsed.orders)) {
         db.orders = parsed.orders.map((o: any) => ({
           ...o,
-          receiverDetails: o.receiverDetails === '078002' ? '2328354' : (o.receiverDetails === '078002260' ? '0780022600' : o.receiverDetails)
+          receiverDetails: (o.receiverDetails === '078002' || (o.paymentMethod === 'MTN Merchant Code' && o.receiverDetails !== '2328354'))
+            ? '2328354'
+            : (o.receiverDetails === '078002260' || o.receiverDetails === '23283542600' ? '0780022600' : o.receiverDetails)
         }));
       }
       if (parsed.paymentConfirmations && Array.isArray(parsed.paymentConfirmations)) db.paymentConfirmations = parsed.paymentConfirmations;
@@ -521,14 +523,15 @@ function loadDbFromDisk() {
           ...parsed.settings,
           email: 'contactreachmedialimited@gmail.com',
           phone: '0780022600',
-          paymentNumber: (!parsed.settings.paymentNumber || parsed.settings.paymentNumber === '078002260') ? '0780022600' : parsed.settings.paymentNumber,
-          merchantCode: (!parsed.settings.merchantCode || parsed.settings.merchantCode === '078002') ? '2328354' : parsed.settings.merchantCode,
-          mtnUssdPattern: (parsed.settings.mtnUssdPattern && !parsed.settings.mtnUssdPattern.includes('078002260*') && !parsed.settings.mtnUssdPattern.includes('232835426000'))
+          paymentNumber: (!parsed.settings.paymentNumber || parsed.settings.paymentNumber === '078002260' || parsed.settings.paymentNumber === '23283542600') ? '0780022600' : parsed.settings.paymentNumber,
+          merchantCode: (!parsed.settings.merchantCode || parsed.settings.merchantCode === '078002' || parsed.settings.merchantCode === '23283542600') ? '2328354' : parsed.settings.merchantCode,
+          mtnUssdPattern: (parsed.settings.mtnUssdPattern && !parsed.settings.mtnUssdPattern.includes('078002260*') && !parsed.settings.mtnUssdPattern.includes('23283542600') && !parsed.settings.mtnUssdPattern.includes('232835426000'))
             ? parsed.settings.mtnUssdPattern
             : '*182*1*1*0780022600*{AMOUNT}#',
-          airtelUssdPattern: (parsed.settings.airtelUssdPattern && !parsed.settings.airtelUssdPattern.includes('078002260*') && !parsed.settings.airtelUssdPattern.includes('07800226000'))
+          airtelUssdPattern: (parsed.settings.airtelUssdPattern && !parsed.settings.airtelUssdPattern.includes('078002260*') && !parsed.settings.airtelUssdPattern.includes('23283542600') && !parsed.settings.airtelUssdPattern.includes('07800226000'))
             ? parsed.settings.airtelUssdPattern
             : '*182*1*2*0780022600*{AMOUNT}#',
+          whatsAppNumber: '+250780022600',
           alibabaConfig: {
             ...initialSettings.alibabaConfig,
             ...(parsed.settings.alibabaConfig || {})
@@ -1725,17 +1728,15 @@ app.post('/api/orders', (req: Request, res: Response) => {
     // Check if item is out of stock in local Kigali hub
     const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0 || availableStock < qty;
 
-    // Supplier Shipping Cost: If out of stock, supplier shipping to Rwanda applies (0 RWF if in stock)
-    let itemShippingCost = 0;
-    if (isOutOfStock) {
-      const unitShipping = (product.alibabaShippingCostRwf && product.alibabaShippingCostRwf > 0)
-        ? product.alibabaShippingCostRwf
-        : (product.alibabaShippingCostUsd && product.alibabaShippingCostUsd > 0
-            ? Math.round(product.alibabaShippingCostUsd * 1435)
-            : 3500);
-      itemShippingCost = unitShipping * qty;
-      calculatedShippingCost += itemShippingCost;
-    }
+    // Shipping Cost strictly calculated for every listed product: 1500 + (cost of product * 10) / 100
+    const baseProductCost = (typeof product.costPrice === 'number' && product.costPrice > 0)
+      ? product.costPrice
+      : (product.discountPrice && product.discountPrice > 0 ? product.discountPrice : (product.price || 0));
+    const unitShipping = (typeof product.shippingCost === 'number' && product.shippingCost > 0)
+      ? product.shippingCost
+      : (1500 + Math.round((baseProductCost * 10) / 100));
+    const itemShippingCost = unitShipping * qty;
+    calculatedShippingCost += itemShippingCost;
 
     if (product.shopName) primaryShopName = product.shopName;
     if (product.receiverName) primaryReceiverName = product.receiverName;
@@ -3972,7 +3973,9 @@ app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_
     product.discountPercent = product.price > 0 ? Math.round(((product.price - product.discountPrice) / product.price) * 100) : undefined;
   }
 
-  // Recalculate profit margin in RWF
+  // Recalculate profit margin in RWF and shipping cost: 1500 + (cost of product * 10) / 100
+  const effCost = (product.costPrice !== undefined && product.costPrice > 0) ? product.costPrice : (product.price || 0);
+  product.shippingCost = 1500 + Math.round((effCost * 10) / 100);
   if (product.costPrice !== undefined) {
     const currentSellingPrice = product.discountPrice || product.price;
     product.profitMargin = currentSellingPrice - product.costPrice;

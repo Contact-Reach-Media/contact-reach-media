@@ -40,7 +40,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2500
     },
     {
       "id": "prod-200-012-lightweight-breathable-sports-",
@@ -82,7 +83,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3725
     },
     {
       "id": "prod-street-sneakers",
@@ -107,7 +109,8 @@
           "action": "Updated via SKU match",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3000
     },
     {
       "id": "prod-200-002-waterproof-smart-fitness-watch",
@@ -149,7 +152,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3495
     },
     {
       "id": "prod-200-003-ergonomic-usb-optical-gaming-m",
@@ -191,7 +195,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2470
     },
     {
       "id": "prod-200-004-portable-bluetooth-speaker-10w",
@@ -233,7 +238,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2565
     },
     {
       "id": "prod-200-005-fast-charging-usb-c-cable-2m",
@@ -275,7 +281,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 1900
     },
     {
       "id": "prod-200-006-adjustable-aluminum-laptop-sta",
@@ -317,7 +324,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3395
     },
     {
       "id": "prod-200-007-over-ear-noise-cancelling-head",
@@ -359,7 +367,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3590
     },
     {
       "id": "prod-200-008-hd-web-camera-with-microphone",
@@ -401,7 +410,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2825
     },
     {
       "id": "prod-200-009-multi-port-usb-c-hub-adapter",
@@ -443,7 +453,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2470
     },
     {
       "id": "prod-200-010-wireless-fast-charging-pad",
@@ -485,7 +496,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2345
     },
     {
       "id": "prod-200-011-men-casual-running-sneakers",
@@ -527,7 +539,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3860
     },
     {
       "id": "prod-200-013-classic-leather-dress-shoes",
@@ -569,7 +582,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 4100
     },
     {
       "id": "prod-200-014-women-high-heel-sandals",
@@ -611,7 +625,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3755
     },
     {
       "id": "prod-200-015-unisex-canvas-slip-on-shoes",
@@ -653,7 +668,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2410
     },
     {
       "id": "prod-200-016-women-leather-crossbody-bag",
@@ -695,7 +711,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3025
     },
     {
       "id": "prod-200-017-slim-leather-bi-fold-wallet",
@@ -737,7 +754,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2090
     },
     {
       "id": "prod-200-018-polarized-classic-sunglasses",
@@ -779,7 +797,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2305
     },
     {
       "id": "prod-200-019-waterproof-travel-backpack",
@@ -821,7 +840,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3270
     },
     {
       "id": "prod-200-020-stainless-steel-quartz-watch",
@@ -863,7 +883,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3545
     },
     {
       "id": "prod-200-021-stainless-steel-thermal-water-",
@@ -905,7 +926,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2410
     },
     {
       "id": "prod-200-022-electric-coffee-grinder-lite",
@@ -947,7 +969,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2555
     },
     {
       "id": "prod-200-023-automatic-soap-dispenser-premi",
@@ -989,7 +1012,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2490
     },
     {
       "id": "prod-200-024-led-desk-lamp-with-touch-contr",
@@ -1031,7 +1055,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2595
     },
     {
       "id": "prod-200-025-non-stick-ceramic-frying-pan-c",
@@ -1073,7 +1098,8 @@
           "action": "Imported from 200 Catalog Dataset",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 2940
     },
     {
       "id": "prod-cj-cj-smart-rgb-sunset-lamp-02",
@@ -1219,7 +1245,8 @@
         }
       ],
       "updatedAt": "2026-11-02T06:45:13.263Z",
-      "reviewStatus": "Approved"
+      "reviewStatus": "Approved",
+      "shippingCost": 3275
     },
     {
       "id": "prod-cj-cj-seamless-workout-leggings-37",
@@ -1289,7 +1316,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 4243
     },
     {
       "id": "prod-cj-cj-sun-uv-jacket-36",
@@ -1359,7 +1387,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 4514
     },
     {
       "id": "prod-cj-cj-sonic-facial-cleansing-brush-05",
@@ -1515,7 +1544,8 @@
         }
       ],
       "updatedAt": "2026-11-02T06:45:13.263Z",
-      "reviewStatus": "Approved"
+      "reviewStatus": "Approved",
+      "shippingCost": 2622
     },
     {
       "id": "prod-cj-cj-led-photon-facial-mask-33",
@@ -1565,7 +1595,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 7037
     },
     {
       "id": "prod-cj-cj-cordless-hair-straightener-32",
@@ -1625,7 +1656,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 5581
     },
     {
       "id": "prod-cj-cj-oxford-men-sling-bag-27",
@@ -1685,7 +1717,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 4294
     },
     {
       "id": "prod-cj-cj-sport-fitness-smartwatch-03",
@@ -1841,7 +1874,8 @@
         }
       ],
       "updatedAt": "2026-11-02T06:45:13.263Z",
-      "reviewStatus": "Approved"
+      "reviewStatus": "Approved",
+      "shippingCost": 4084
     },
     {
       "id": "prod-cj-cj-amoled-bt-call-watch-24",
@@ -1901,7 +1935,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 6936
     },
     {
       "id": "prod-cj-cj-shower-bluetooth-speaker-22",
@@ -1961,7 +1996,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 4345
     },
     {
       "id": "prod-cj-cj-rgbic-floor-lamp-21",
@@ -2011,7 +2047,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 6089
     },
     {
       "id": "prod-cj-cj-1080p-mini-projector-20",
@@ -2062,7 +2099,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.265Z"
+      "updatedAt": "2026-11-02T06:45:13.265Z",
+      "shippingCost": 9255
     },
     {
       "id": "prod-cj-cj-vert-rgb-mouse-19",
@@ -2121,7 +2159,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.264Z"
+      "updatedAt": "2026-11-02T06:45:13.264Z",
+      "shippingCost": 4243
     },
     {
       "id": "prod-cj-cj-mag-powerbank-10k-18",
@@ -2182,7 +2221,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.264Z"
+      "updatedAt": "2026-11-02T06:45:13.264Z",
+      "shippingCost": 5141
     },
     {
       "id": "prod-1792760668330-e73s",
@@ -2243,7 +2283,8 @@
       "aliExpressUrl": "https://www.aliexpress.com/item/1005007129482103.html",
       "supplierVariant": "Color: Midnight Black, Size: Large",
       "supplierSku": "ALI-TEST-7129-L",
-      "isSupplierMapped": true
+      "isSupplierMapped": true,
+      "shippingCost": 2450
     },
     {
       "id": "prod-cj-cj-magsafe-car-mount-charger-16",
@@ -2302,7 +2343,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.264Z"
+      "updatedAt": "2026-11-02T06:45:13.264Z",
+      "shippingCost": 4463
     },
     {
       "id": "prod-cj-cj-2610260852281601700",
@@ -2352,7 +2394,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2272
     },
     {
       "id": "prod-cj-cj-2610260853101634300",
@@ -2402,7 +2445,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-2610260855331633100",
@@ -2452,7 +2496,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2373
     },
     {
       "id": "prod-cj-cj-2610260856201636100",
@@ -2502,7 +2547,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-2610260902221625800",
@@ -2552,7 +2598,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 1540
     },
     {
       "id": "prod-cj-cj-2610260902231634000",
@@ -2602,7 +2649,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-2610260904251610200",
@@ -2652,7 +2700,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2265
     },
     {
       "id": "prod-cj-cj-2610260904531603100",
@@ -2702,7 +2751,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 1763
     },
     {
       "id": "prod-cj-cj-2610260905181602900",
@@ -2752,7 +2802,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-2610260906231637000",
@@ -2802,7 +2853,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 1718
     },
     {
       "id": "prod-cj-cj-2610260906381628300",
@@ -2852,7 +2904,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2496
     },
     {
       "id": "prod-cj-cj-2610260908021638100",
@@ -2902,7 +2955,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2054
     },
     {
       "id": "prod-cj-cj-2610260908301634000",
@@ -2952,7 +3006,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 1750
     },
     {
       "id": "prod-cj-cj-2610260908581609400",
@@ -3002,7 +3057,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2700
     },
     {
       "id": "prod-cj-cj-2610260909531637400",
@@ -3052,7 +3108,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 1800
     },
     {
       "id": "prod-cj-cj-2610260910171634400",
@@ -3102,7 +3159,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 1764
     },
     {
       "id": "prod-cj-cj-2610260910191606400",
@@ -3152,7 +3210,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-2610260911571609800",
@@ -3202,7 +3261,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-2610260917171614600",
@@ -3252,7 +3312,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-2610260955321611000",
@@ -3302,7 +3363,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-10-27T13:00:38.923Z"
+      "updatedAt": "2026-10-27T13:00:38.923Z",
+      "shippingCost": 2935
     },
     {
       "id": "prod-cj-cj-hair-trimmer-grooming-kit-11",
@@ -3557,7 +3619,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.264Z"
+      "updatedAt": "2026-11-02T06:45:13.264Z",
+      "shippingCost": 2500
     },
     {
       "id": "prod-cj-cj-magnetic-wireless-fast-charger-10",
@@ -3702,7 +3765,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.264Z"
+      "updatedAt": "2026-11-02T06:45:13.264Z",
+      "shippingCost": 3460
     },
     {
       "id": "prod-cj-cj-4k-wifi-action-camera-09",
@@ -3848,7 +3912,8 @@
           "user": "Ruth (System Owner)"
         }
       ],
-      "updatedAt": "2026-11-02T06:45:13.264Z"
+      "updatedAt": "2026-11-02T06:45:13.264Z",
+      "shippingCost": 5547
     },
     {
       "id": "prod-cj-cj-rechargeable-massage-gun-07",
@@ -4073,7 +4138,8 @@
         }
       ],
       "updatedAt": "2026-11-02T06:45:13.264Z",
-      "reviewStatus": "Approved"
+      "reviewStatus": "Approved",
+      "shippingCost": 2500
     },
     {
       "id": "prod-1792505244812-91dl",
@@ -4199,7 +4265,8 @@
       "costPrice": 9750,
       "profitMargin": 5250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "name": "Satin Party Dress V Neck Backless Mini Sleeveless Summer Party Dress",
@@ -4323,7 +4390,8 @@
       "shopId": "shop-sky-beauty-fashion-store-102",
       "createdAt": "2026-10-25T21:03:45.043Z",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3515
     },
     {
       "id": "prod-1792506632410-ov3q",
@@ -4449,7 +4517,8 @@
       "costPrice": 9750,
       "profitMargin": 5250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "id": "prod-1792672328881-780m",
@@ -4497,7 +4566,8 @@
       "costPrice": 7150,
       "profitMargin": 3850,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2215
     },
     {
       "id": "prod-1792672457864-6vun",
@@ -4545,7 +4615,8 @@
       "costPrice": 19500,
       "profitMargin": 10500,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3450
     },
     {
       "name": "art",
@@ -4594,7 +4665,8 @@
         }
       ],
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "name": "304 316 High-Quality Stainless Steel Cutting Board Durable Hygienic Versatile Kitchen Tool for Food Preparation",
@@ -5004,7 +5076,8 @@
       "shopId": "shop-sky-beauty-fashion-store-102",
       "createdAt": "2026-10-25T15:03:45.044Z",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1799
     },
     {
       "id": "prod-1792749188181-vm23",
@@ -5130,7 +5203,8 @@
       "costPrice": 3250,
       "profitMargin": 1750,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1825
     },
     {
       "id": "prod-1792749681912-h9du",
@@ -5256,7 +5330,8 @@
       "costPrice": 16250,
       "profitMargin": 8750,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3125
     },
     {
       "id": "prod-1792750082013-uqvc",
@@ -5382,7 +5457,8 @@
       "costPrice": 19500,
       "profitMargin": 10500,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3450
     },
     {
       "name": "2026 Bicep Loop Bracelet Custom Arm Belt Wristband Watch Band Nylon Strap for Google Fitbit Air Charge 6 Versa Sense 2 4 Ace",
@@ -5434,7 +5510,8 @@
       "shopId": "shop-sky-beauty-fashion-store-102",
       "createdAt": "2026-10-25T11:03:45.044Z",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1825
     },
     {
       "name": "Smart Adjustable Electric Negative Pressure Suction Massage Device, Multifunctional Vacuum Cupping Shaped Contact Massage Tool",
@@ -5481,7 +5558,8 @@
       "shopId": "shop-sky-beauty-fashion-store-102",
       "createdAt": "2026-10-25T10:03:45.044Z",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2020
     },
     {
       "id": "prod-1792751591576-yfjw",
@@ -5607,7 +5685,8 @@
       "costPrice": 7800,
       "profitMargin": 4200,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2280
     },
     {
       "id": "prod-1792751971687-46q6",
@@ -5733,7 +5812,8 @@
       "costPrice": 9750,
       "profitMargin": 5250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "id": "prod-1792752095932-zlim",
@@ -5781,7 +5861,8 @@
       "costPrice": 5850,
       "profitMargin": 3150,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2085
     },
     {
       "id": "prod-1792752293413-a4h4",
@@ -5829,7 +5910,8 @@
       "costPrice": 14950,
       "profitMargin": 8050,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2995
     },
     {
       "id": "prod-1792752669364-xmfu",
@@ -5877,7 +5959,8 @@
       "costPrice": 23400,
       "profitMargin": 12600,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3840
     },
     {
       "id": "prod-1792752970154-ythm",
@@ -6005,7 +6088,8 @@
       "costPrice": 3250,
       "profitMargin": 1750,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1825
     },
     {
       "name": "SMALLRIG-VK-50 Vlogging Kit for iPhone Content Creator Kit with LED Light Phone Holder Microphone Tripod Phone Mount",
@@ -6052,7 +6136,8 @@
       "shopId": "shop-sky-beauty-fashion-store-102",
       "createdAt": "2026-10-25T03:03:45.044Z",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 9300
     },
     {
       "id": "prod-1792753052681-nl75",
@@ -6100,7 +6185,8 @@
       "costPrice": 22750,
       "profitMargin": 12250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3775
     },
     {
       "id": "prod-1792753283292-8w0e",
@@ -6226,7 +6312,8 @@
       "costPrice": 16250,
       "profitMargin": 8750,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3125
     },
     {
       "id": "prod-1792753318574-0cmv",
@@ -6274,7 +6361,8 @@
       "costPrice": 9750,
       "profitMargin": 5250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "id": "prod-1792753378995-djth",
@@ -6400,7 +6488,8 @@
       "costPrice": 650,
       "profitMargin": 350,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1565
     },
     {
       "id": "prod-1792753492181-dhmt",
@@ -6451,7 +6540,8 @@
       "isSupplierMapped": true,
       "reviewStatus": "Approved",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3400
     },
     {
       "id": "prod-1792753580174-j87o",
@@ -6577,7 +6667,8 @@
       "costPrice": 3250,
       "profitMargin": 1750,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1825
     },
     {
       "id": "prod-1792753699003-7zza",
@@ -6703,7 +6794,8 @@
       "costPrice": 1800,
       "profitMargin": 1700,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1680
     },
     {
       "id": "prod-1792753753379-iroj",
@@ -6751,7 +6843,8 @@
       "costPrice": 14300,
       "profitMargin": 7700,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2930
     },
     {
       "id": "prod-1792754148556-e447",
@@ -6877,7 +6970,8 @@
       "costPrice": 19500,
       "profitMargin": 10500,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3450
     },
     {
       "id": "prod-1792754419719-qzib",
@@ -7003,7 +7097,8 @@
       "costPrice": 19500,
       "profitMargin": 10500,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3450
     },
     {
       "id": "prod-1792754946194-kkzr",
@@ -7132,7 +7227,8 @@
       "isSupplierMapped": true,
       "reviewStatus": "Approved",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3400
     },
     {
       "id": "prod-1792757034998-bpfi",
@@ -7258,7 +7354,8 @@
       "costPrice": 16250,
       "profitMargin": 8750,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3125
     },
     {
       "id": "prod-1792757418285-tvct",
@@ -7384,7 +7481,8 @@
       "costPrice": 8450,
       "profitMargin": 4550,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2345
     },
     {
       "id": "prod-1792757450389-v1zh",
@@ -7435,7 +7533,8 @@
       "isSupplierMapped": true,
       "reviewStatus": "Approved",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3400
     },
     {
       "id": "prod-1792757589373-2uci",
@@ -7561,7 +7660,8 @@
       "costPrice": 2600,
       "profitMargin": 1400,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1760
     },
     {
       "id": "prod-1792757779045-ohge",
@@ -7687,7 +7787,8 @@
       "costPrice": 9750,
       "profitMargin": 5250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "id": "prod-1792758445933-cbck",
@@ -7735,7 +7836,8 @@
       "costPrice": 57850,
       "profitMargin": 31150,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 7285
     },
     {
       "id": "prod-1792758602068-wxkp",
@@ -7861,7 +7963,8 @@
       "costPrice": 6500,
       "profitMargin": 3500,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2150
     },
     {
       "id": "prod-1792758751764-9mz7",
@@ -7909,7 +8012,8 @@
       "costPrice": 14300,
       "profitMargin": 7700,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2930
     },
     {
       "id": "prod-1792758793045-zbab",
@@ -8035,7 +8139,8 @@
       "costPrice": 9750,
       "profitMargin": 5250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "id": "prod-1792758971143-ua25",
@@ -8083,7 +8188,8 @@
       "costPrice": 15600,
       "profitMargin": 8400,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3060
     },
     {
       "id": "prod-1792759224408-6hn0",
@@ -8131,7 +8237,8 @@
       "costPrice": 12350,
       "profitMargin": 6650,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2735
     },
     {
       "id": "prod-1792759480760-nbtl",
@@ -8179,7 +8286,8 @@
       "costPrice": 91000,
       "profitMargin": 49000,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 10600
     },
     {
       "name": "2026 New Fashion Custom Anti-Theft Nylon Men's Chest Bags with USB Cross Body Sling Chest Bag for Men",
@@ -8225,7 +8333,8 @@
       "shopId": "shop-sky-beauty-fashion-store-102",
       "createdAt": "2026-10-24T03:03:45.044Z",
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3125
     },
     {
       "id": "prod-1792759677973-dhdd",
@@ -8351,7 +8460,8 @@
       "costPrice": 2600,
       "profitMargin": 1400,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1760
     },
     {
       "id": "prod-1792759889867-vpxu",
@@ -8399,7 +8509,8 @@
       "costPrice": 4674,
       "profitMargin": 2516,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1967
     },
     {
       "id": "prod-1792759926086-kmkq",
@@ -8525,7 +8636,8 @@
       "costPrice": 130000,
       "profitMargin": 70000,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 14500
     },
     {
       "id": "prod-1792760032672-scpn",
@@ -8573,7 +8685,8 @@
       "costPrice": 65000,
       "profitMargin": 35000,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 8000
     },
     {
       "id": "prod-1792760096502-7ice",
@@ -8699,7 +8812,8 @@
       "costPrice": 9750,
       "profitMargin": 5250,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 2475
     },
     {
       "id": "prod-1792760330243-5dcv",
@@ -8747,7 +8861,8 @@
       "costPrice": 292500,
       "profitMargin": 157500,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 30750
     },
     {
       "id": "prod-1792760883731-j1yn",
@@ -8795,7 +8910,8 @@
       "costPrice": 15600,
       "profitMargin": 8400,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 3060
     },
     {
       "id": "prod-1792760896668-f5p7",
@@ -8921,7 +9037,8 @@
       "costPrice": 2500,
       "profitMargin": 2000,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 1750
     },
     {
       "id": "prod-1792763702374-49hl",
@@ -9048,7 +9165,8 @@
       "costPrice": 29250,
       "profitMargin": 15750,
       "merchantCode": "2328354",
-      "receiverPhone": "0780022600"
+      "receiverPhone": "0780022600",
+      "shippingCost": 4425
     },
     {
       "id": "prod-cj-cj-portable-blender-juicer-08",
@@ -9109,7 +9227,8 @@
           "action": "Imported from CJ Dropshipping and Published Live",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3107
     },
     {
       "id": "prod-cj-cj-stem-solar-robot-kit-13",
@@ -9160,7 +9279,8 @@
           "action": "Imported from CJ Dropshipping and Published Live",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 3868
     },
     {
       "id": "prod-cj-cj-ergonomic-baby-carrier-14",
@@ -9221,7 +9341,8 @@
           "action": "Imported from CJ Dropshipping and Published Live",
           "user": "Ruth (System Owner)"
         }
-      ]
+      ],
+      "shippingCost": 4514
     }
   ],
   "cjPendingProducts": [],
@@ -108144,13 +108265,14 @@
       "name": "MoMo Test Buyer",
       "phone": "0780022600",
       "createdAt": "2026-10-29T12:05:56.593Z",
-      "totalOrders": 0,
-      "totalSpent": 0,
+      "totalOrders": 1,
+      "totalSpent": 34500,
       "status": "Active",
       "accountType": "buyer",
       "lastLogin": "2026-11-02T06:45:20.457Z",
       "authProvider": "phone",
-      "isRegisteredBuyer": true
+      "isRegisteredBuyer": true,
+      "deliveryAddress": "Gasabo, Kigali"
     },
     {
       "id": "cust-g-google_uid_1793275673166",

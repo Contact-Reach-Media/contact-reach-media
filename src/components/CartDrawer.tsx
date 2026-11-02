@@ -2,7 +2,7 @@ import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Truck } from 'lucide-r
 import { CartItem } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { calculateCartBreakdown, isProductOutOfStock } from '../utils/shippingCalculator.ts';
+import { calculateCartBreakdown, isProductOutOfStock, calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -104,7 +104,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       )}
                     </div>
 
-                    <div className="mt-1">
+                    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-50 text-orange-800 border border-orange-200">
+                        <Truck className="w-2.5 h-2.5 text-[#FF5500] shrink-0" />
+                        <span>Ship: +{formatCurrencyPrice(calculateProductShippingUnitCost(product), currentCurrency, exchangeRates).primary}</span>
+                      </span>
                       {isProductOutOfStock(product) ? (
                         <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
                           ⚡ Supplier Order
@@ -175,14 +179,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </span>
               </div>
 
-              {/* Row 3: Supplier Shipping Cost (if out of stock) */}
+              {/* Row 3: Shipping Cost (1,500 + 10% of product cost) */}
               <div className="flex justify-between text-[11px] items-center">
                 <span className="flex items-center gap-1">
                   <Truck className="w-3.5 h-3.5 text-[#EA580C]" />
-                  <span>3. Supplier Shipping:</span>
+                  <span>3. Shipping Cost:</span>
+                  <span className="text-[9px] bg-orange-100 text-[#EA580C] px-1 py-0.2 rounded font-bold font-mono">
+                    1,500 + 10%
+                  </span>
                 </span>
-                <span className={`font-mono font-bold ${breakdown.shippingCost > 0 ? 'text-purple-700' : 'text-emerald-700'}`}>
-                  {breakdown.shippingCost === 0 ? '0 RWF (Local Stock)' : `+${breakdown.shippingCost.toLocaleString()} RWF`}
+                <span className="font-mono font-bold text-slate-900">
+                  +{formatCurrencyPrice(breakdown.shippingCost, currentCurrency, exchangeRates).primary}
                 </span>
               </div>
 
@@ -191,7 +198,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <div>
                   <span className="text-xs uppercase block">Total Payment:</span>
                   <span className="text-[10px] text-slate-400 font-normal">
-                    Product + Delivery {breakdown.shippingCost > 0 ? '+ Shipping' : ''}
+                    Product Price + Delivery Fee + Shipping Cost
                   </span>
                 </div>
                 <span className="text-base text-[#EA580C] font-mono tabular-nums">

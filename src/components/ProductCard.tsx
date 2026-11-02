@@ -1,8 +1,9 @@
 import React from 'react';
-import { Heart, Star, Camera, Youtube } from 'lucide-react';
+import { Heart, Star, Camera, Youtube, Truck } from 'lucide-react';
 import { Product } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
+import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 
 interface ProductCardProps {
   product: Product;
@@ -44,13 +45,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const priceFormat = formatCurrencyPrice(currentPriceRwf, currentCurrency, exchangeRates, { showBaseSecondary: true });
   const originalFormat = hasDiscount ? formatCurrencyPrice(product.price, currentCurrency, exchangeRates) : null;
+  const shippingCost = calculateProductShippingUnitCost(product, currentPriceRwf);
+  const shippingFormat = formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates);
 
   return (
     <div
       onClick={() => onViewProduct(product)}
       className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer relative hover:-translate-y-0.5 text-start"
     >
-      {/* Top Floating Discount % & Alibaba Badges */}
+      {/* Top Floating Discount %, Alibaba & Shipping Badges */}
       <div className="absolute top-2.5 start-2.5 z-10 flex flex-col gap-1 items-start">
         {hasDiscount && discountPercent > 0 && (
           <span className="bg-[#FF6000] text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center gap-0.5 tracking-tight">
@@ -62,6 +65,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             Alibaba Verified
           </span>
         )}
+        <span
+          className="bg-white/95 backdrop-blur-xs text-orange-700 border border-orange-200/90 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs tracking-tight flex items-center gap-1"
+          title={`Standard Shipping: +${shippingFormat.primary}`}
+        >
+          <Truck className="w-2.5 h-2.5 text-[#FF5500] shrink-0" />
+          <span>+{shippingFormat.primary}</span>
+        </span>
       </div>
 
       {/* Top Floating Wishlist Button */}
@@ -163,6 +173,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {priceFormat.secondary}
             </div>
           )}
+
+          {/* Shipping fee indicator with small shipping icon */}
+          <div className="flex items-center gap-1 mb-1.5 flex-wrap">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-800 bg-orange-50/90 border border-orange-200/80 px-1.5 py-0.5 rounded-md"
+              title={`Standard Shipping: +${shippingFormat.primary} (1,500 + 10%)`}
+            >
+              <Truck className="w-3 h-3 text-[#FF5500] shrink-0" />
+              <span>+{shippingFormat.primary}</span>
+              <span className="text-orange-600/80 text-[9px] font-medium">ship</span>
+            </span>
+          </div>
 
           {/* Shop label */}
           {product.shopName && (

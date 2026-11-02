@@ -492,6 +492,14 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">
                     #1 Most popular in {product.category}
                   </span>
+                  <span>·</span>
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-800 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md shadow-2xs"
+                    title={`Standard Shipping: ${costBreakdown.unitShippingCost.toLocaleString()} RWF (1,500 + 10%)`}
+                  >
+                    <Truck className="w-3 h-3 text-[#FF5500] shrink-0" />
+                    <span>Shipping: +{formatCurrencyPrice(costBreakdown.unitShippingCost, currentCurrency, exchangeRates).primary}</span>
+                  </span>
                 </div>
               </div>
 
@@ -653,34 +661,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Line 3: Supplier Shipping Cost (Applies if out of stock) */}
+                  {/* Line 3: Shipping Cost: 1500 + 10% of product cost */}
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-600 flex items-center gap-1">
+                    <span className="text-slate-600 flex items-center gap-1.5">
                       <Truck className="w-3.5 h-3.5 text-[#f95700]" />
-                      <span>3. Supplier Shipping Cost:</span>
+                      <span>3. Shipping Cost:</span>
+                      <span className="text-[10px] bg-orange-100 text-[#ea4e00] px-1.5 py-0.5 rounded font-bold font-mono">
+                        1,500 + 10%
+                      </span>
                     </span>
-                    <span className={`font-mono font-bold ${isOutOfStock ? 'text-purple-700' : 'text-emerald-700'}`}>
-                      {isOutOfStock
-                        ? `+${costBreakdown.totalShippingCost.toLocaleString()} RWF`
-                        : '0 RWF (In Stock)'}
+                    <span className="font-mono font-bold text-[#f95700]">
+                      +{costBreakdown.totalShippingCost.toLocaleString()} RWF
                     </span>
                   </div>
 
-                  {/* Out-of-stock / in-stock explanatory notice */}
-                  <div className={`p-2 rounded-xl text-[10px] leading-relaxed border ${
-                    isOutOfStock
-                      ? 'bg-amber-50/80 border-amber-200 text-amber-950 font-medium'
-                      : 'bg-emerald-50/80 border-emerald-200 text-emerald-950 font-medium'
-                  }`}>
-                    {isOutOfStock ? (
-                      <span>
-                        <strong>Out of Local Stock Notice:</strong> This item is imported directly from the verified supplier to Kigali. Supplier international shipping ({costBreakdown.totalShippingCost.toLocaleString()} RWF) has been added to the total.
-                      </span>
-                    ) : (
-                      <span>
-                        <strong>In Kigali Stock:</strong> Sourced locally from Kigali warehouse. You pay only the product price and local delivery fee (0 supplier shipping fee).
-                      </span>
-                    )}
+                  {/* Shipping cost formula explanation notice */}
+                  <div className="p-2 rounded-xl text-[10px] leading-relaxed border bg-orange-50/80 border-orange-200 text-orange-950 font-medium">
+                    <span>
+                      <strong>Standard Shipping:</strong> 1,500 RWF base + 10% of product cost ({costBreakdown.unitShippingCost.toLocaleString()} RWF per unit) applied to every listed product.
+                    </span>
                   </div>
 
                   {/* Total Payment to Pay */}

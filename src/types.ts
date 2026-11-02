@@ -128,6 +128,7 @@ export interface Product {
   rating?: number;
   reviewsCount?: number;
   unit?: string;
+  shippingCost?: number; // Calculated shipping cost: 1500 + (cost * 10) / 100
   // CJ Dropshipping & Supplier Cost Automation & Google Drive & Alibaba
   source?: 'local' | 'cjdropshipping' | 'googledrive' | 'alibaba';
   cjProductId?: string;
