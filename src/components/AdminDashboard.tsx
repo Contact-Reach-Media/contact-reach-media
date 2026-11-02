@@ -35,6 +35,7 @@ import {
   exportOrdersToDsersOrderTemplate
 } from '../utils/spreadsheet.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
+import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -199,6 +200,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     description: string;
     price: number | string;
     costPrice: number | string; // Product / Supplier Cost in RWF
+    shippingCost: number | string; // Custom Shipping Cost in RWF (leave blank for automatic 1,500 + 10%)
     discountPercent: number | string;
     discountPrice: number | string;
     category: string;
@@ -228,6 +230,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     description: '',
     price: 15000,
     costPrice: '',
+    shippingCost: '',
     discountPercent: '',
     discountPrice: '',
     category: 'hair-beauty',
@@ -1179,6 +1182,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       description: '',
       price: 15000,
       costPrice: '',
+      shippingCost: '',
       discountPercent: '',
       discountPrice: '',
       category: categories[0]?.id || 'hair-beauty',
@@ -1228,6 +1232,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       description: p.description,
       price: p.price,
       costPrice: p.costPrice !== undefined ? p.costPrice : '',
+      shippingCost: p.shippingCost !== undefined && p.shippingCost !== null ? p.shippingCost : '',
       discountPercent: existingPercent,
       discountPrice: p.discountPrice || '',
       category: p.category,
@@ -1341,6 +1346,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       price: finalPrice,
       costPrice: prodForm.costPrice !== '' && !isNaN(Number(prodForm.costPrice)) ? Math.max(0, Number(prodForm.costPrice)) : undefined,
       costOverriddenByAdmin: prodForm.costPrice !== '' ? true : (editingProduct?.costOverriddenByAdmin ?? false),
+      shippingCost: prodForm.shippingCost !== '' && !isNaN(Number(prodForm.shippingCost)) ? Math.max(0, Number(prodForm.shippingCost)) : undefined,
       discountPercent: numPercent,
       discountPrice: finalDiscountPrice,
       category: prodForm.category,
@@ -1520,6 +1526,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onRefreshPublicData();
     } catch (err: any) {
       showToast(err.message || 'Failed to update product cost', 'error');
+    } finally {
+      setSavingProductCostId(null);
+    }
+  };
+
+  const handleQuickUpdateProductShipping = async (productId: string, customShipping?: number) => {
+    setSavingProductCostId(productId);
+    try {
+      await api.adminUpdateProductCost(productId, { shippingCost: customShipping });
+      showToast(customShipping !== undefined ? `Product shipping cost updated to ${customShipping.toLocaleString()} FRW!` : 'Reset to auto standard shipping (1,500 + 10%)!');
+      fetchAllData();
+      onRefreshPublicData();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update shipping cost', 'error');
     } finally {
       setSavingProductCostId(null);
     }
@@ -3267,7 +3287,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <th className="py-3 px-3">Category</th>
                         <th className="py-3 px-3">Shop / Source</th>
                         <th className="py-3 px-3">Cost (FRW)</th>
-                        <th className="py-3 px-3">Price (FRW)</th>
+                        <th className="py-3 px-3">Price & Shipping (FRW)</th>
                         <th className="py-3 px-3">Stock</th>
                         <th className="py-3 px-3">Status</th>
                         <th className="py-3 px-4 text-right">Actions</th>
@@ -3417,6 +3437,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     </span>
                                   </div>
                                 )}
+                                {/* Shipping Cost Indicator */}
+                                <div className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 mt-1" title={p.shippingCost !== undefined ? `Custom shipping cost: ${Number(p.shippingCost).toLocaleString()} FRW` : 'Auto standard shipping (1,500 + 10%)'}>
+                                  <Truck className="w-3 h-3 text-blue-500 shrink-0" />
+                                  <span>Ship: {calculateProductShippingUnitCost(p).toLocaleString()} FRW</span>
+                                  {p.shippingCost !== undefined ? (
+                                    <span className="text-[8px] bg-blue-100 text-blue-800 font-bold px-1 rounded">Custom</span>
+                                  ) : (
+                                    <span className="text-[8px] text-slate-400">auto</span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const currentShip = p.shippingCost !== undefined ? String(p.shippingCost) : '';
+                                    const val = window.prompt(`Set custom shipping cost for "${p.name}" in FRW:\n(Leave blank to restore automatic 1,500 + 10%)`, currentShip);
+                                    if (val !== null) {
+                                      const trimmed = val.trim();
+                                      handleQuickUpdateProductShipping(p.id, trimmed === '' ? undefined : Math.max(0, Number(trimmed)));
+                                    }
+                                  }}
+                                  className="text-[9px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                >
+                                  {p.shippingCost !== undefined ? 'Edit Shipping' : '+ Custom Shipping'}
+                                </button>
                               </td>
                               <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                                 <button
@@ -7711,17 +7756,123 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+              {/* Product Shipping Fee Configuration */}
+              {(() => {
+                const effCost = (prodForm.costPrice !== '' && Number(prodForm.costPrice) > 0)
+                  ? Number(prodForm.costPrice)
+                  : (prodForm.discountPrice !== '' && Number(prodForm.discountPrice) > 0
+                      ? Number(prodForm.discountPrice)
+                      : (Number(prodForm.price) || 0));
+                const autoShipping = Math.round(1500 + (effCost * 0.10));
+                const currentShippingFee = (prodForm.shippingCost !== '' && !isNaN(Number(prodForm.shippingCost)))
+                  ? Math.max(0, Number(prodForm.shippingCost))
+                  : autoShipping;
+
+                return (
+                  <div className="p-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-blue-50/80 rounded-2xl border border-blue-200/90 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-2xs">
+                          <Truck className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-900 text-xs">Shipping Cost for Product (FRW)</span>
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-full border border-blue-200">
+                              🚚 Displayed with shipping badge
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Standard shipping formula is <code className="font-mono bg-blue-100/70 px-1 py-0.2 rounded text-blue-900 font-bold">1,500 + 10% of product cost</code>. You can set a custom shipping cost here or leave blank to use the standard calculation.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Applied Shipping:</span>
+                        <span className="font-mono font-black text-sm text-blue-700 block">
+                          {currentShippingFee.toLocaleString()} FRW
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {prodForm.shippingCost !== '' ? '(Admin Custom Override)' : '(Auto: 1,500 + 10%)'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pt-1">
+                      <div className="sm:col-span-6 relative">
+                        <input
+                          type="number"
+                          min="0"
+                          value={prodForm.shippingCost}
+                          onChange={(e) => setProdForm({ ...prodForm, shippingCost: e.target.value })}
+                          placeholder={`Auto standard: ${autoShipping.toLocaleString()} FRW`}
+                          className="w-full pl-9 pr-14 py-2.5 rounded-xl border border-blue-300 bg-white font-mono font-bold text-xs text-blue-950 focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                        />
+                        <Truck className="w-4 h-4 text-blue-600 absolute left-3 top-3 pointer-events-none" />
+                        <span className="absolute right-3.5 top-2.5 font-bold text-slate-400 pointer-events-none text-xs">FRW</span>
+                      </div>
+
+                      {/* Quick Presets */}
+                      <div className="sm:col-span-6 flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setProdForm({ ...prodForm, shippingCost: '' })}
+                          className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                            prodForm.shippingCost === ''
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                          }`}
+                          title="Use auto formula: 1500 + 10%"
+                        >
+                          Auto ({autoShipping.toLocaleString()} FRW)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProdForm({ ...prodForm, shippingCost: 0 })}
+                          className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                            prodForm.shippingCost === 0 || prodForm.shippingCost === '0'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                          }`}
+                          title="Free shipping for this product"
+                        >
+                          Free (0 FRW)
+                        </button>
+                        {[1500, 2000, 3000, 5000].map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setProdForm({ ...prodForm, shippingCost: val })}
+                            className={`text-[10px] font-bold px-2 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                              Number(prodForm.shippingCost) === val
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                            }`}
+                          >
+                            {val.toLocaleString()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {prodForm.costPrice !== '' && Number(prodForm.costPrice) > 0 && Number(prodForm.price) > 0 && (
-                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-950 font-bold">
+                <div className="p-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-emerald-950 font-bold">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>
+                        Estimated Gross Profit: {(Number(prodForm.price) - Number(prodForm.costPrice)).toLocaleString()} FRW / unit
+                      </span>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Estimated Profit: {(Number(prodForm.price) - Number(prodForm.costPrice)).toLocaleString()} FRW / unit
+                    <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded-lg font-mono">
+                      {Math.round(((Number(prodForm.price) - Number(prodForm.costPrice)) / Number(prodForm.price)) * 100)}% Margin
                     </span>
                   </div>
-                  <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded-lg font-mono">
-                    {Math.round(((Number(prodForm.price) - Number(prodForm.costPrice)) / Number(prodForm.price)) * 100)}% Margin
-                  </span>
                 </div>
               )}
 

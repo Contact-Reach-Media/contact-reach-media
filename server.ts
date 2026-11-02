@@ -1732,7 +1732,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
     const baseProductCost = (typeof product.costPrice === 'number' && product.costPrice > 0)
       ? product.costPrice
       : (product.discountPrice && product.discountPrice > 0 ? product.discountPrice : (product.price || 0));
-    const unitShipping = (typeof product.shippingCost === 'number' && product.shippingCost > 0)
+    const unitShipping = (typeof product.shippingCost === 'number' && product.shippingCost >= 0)
       ? product.shippingCost
       : (1500 + Math.round((baseProductCost * 10) / 100));
     const itemShippingCost = unitShipping * qty;
@@ -3647,6 +3647,11 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     if (finalDiscountPercent !== undefined) existingBySku.discountPercent = finalDiscountPercent;
     if (finalDiscountPrice !== undefined) existingBySku.discountPrice = finalDiscountPrice;
     if (req.body.costPrice !== undefined) existingBySku.costPrice = Number(req.body.costPrice);
+    if (req.body.shippingCost !== undefined) {
+      existingBySku.shippingCost = (req.body.shippingCost !== '' && req.body.shippingCost !== null && !isNaN(Number(req.body.shippingCost)))
+        ? Math.max(0, Number(req.body.shippingCost))
+        : undefined;
+    }
     existingBySku.category = normCategory;
     existingBySku.subcategory = subcategory?.trim() || existingBySku.subcategory;
     existingBySku.stock = stockNum;
@@ -3670,6 +3675,9 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     description: cleanDescription,
     price: finalPrice,
     costPrice: req.body.costPrice !== undefined ? Number(req.body.costPrice) : undefined,
+    shippingCost: (req.body.shippingCost !== undefined && req.body.shippingCost !== '' && req.body.shippingCost !== null && !isNaN(Number(req.body.shippingCost)))
+      ? Math.max(0, Number(req.body.shippingCost))
+      : undefined,
     discountPercent: finalDiscountPercent,
     discountPrice: finalDiscountPrice,
     category: normCategory,
@@ -3805,6 +3813,13 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
       updatedShopId = resolved.shopId;
     }
 
+    let finalShippingCost: number | undefined = existing.shippingCost;
+    if (req.body.shippingCost !== undefined) {
+      finalShippingCost = (req.body.shippingCost !== '' && req.body.shippingCost !== null && !isNaN(Number(req.body.shippingCost)))
+        ? Math.max(0, Number(req.body.shippingCost))
+        : undefined;
+    }
+
     const updated: Product = {
       ...existing,
       ...req.body,
@@ -3814,6 +3829,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
       shopName: updatedShopName,
       shopId: updatedShopId,
       price: newPrice,
+      shippingCost: finalShippingCost,
       discountPercent: finalDiscountPercent,
       discountPrice: finalDiscountPrice,
       stock: newStock,
@@ -3953,7 +3969,7 @@ app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_
   const product = db.products.find(p => p.id === req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
 
-  const { costPrice, price, discountPrice, discountPercent } = req.body;
+  const { costPrice, price, discountPrice, discountPercent, shippingCost } = req.body;
 
   if (costPrice !== undefined) {
     product.costPrice = Math.max(0, Number(costPrice));
@@ -3962,6 +3978,12 @@ app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_
 
   if (price !== undefined && !isNaN(Number(price))) {
     product.price = Math.max(0, Number(price));
+  }
+
+  if (shippingCost !== undefined) {
+    product.shippingCost = (shippingCost !== '' && shippingCost !== null && !isNaN(Number(shippingCost)))
+      ? Math.max(0, Number(shippingCost))
+      : undefined;
   }
 
   if (discountPercent !== undefined && discountPercent !== '' && !isNaN(Number(discountPercent)) && Number(discountPercent) > 0) {
@@ -3973,9 +3995,11 @@ app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_
     product.discountPercent = product.price > 0 ? Math.round(((product.price - product.discountPrice) / product.price) * 100) : undefined;
   }
 
-  // Recalculate profit margin in RWF and shipping cost: 1500 + (cost of product * 10) / 100
-  const effCost = (product.costPrice !== undefined && product.costPrice > 0) ? product.costPrice : (product.price || 0);
-  product.shippingCost = 1500 + Math.round((effCost * 10) / 100);
+  // Recalculate profit margin in RWF and shipping cost: 1500 + (cost of product * 10) / 100 if shippingCost not custom
+  if (product.shippingCost === undefined) {
+    const effCost = (product.costPrice !== undefined && product.costPrice > 0) ? product.costPrice : (product.price || 0);
+    product.shippingCost = 1500 + Math.round((effCost * 10) / 100);
+  }
   if (product.costPrice !== undefined) {
     const currentSellingPrice = product.discountPrice || product.price;
     product.profitMargin = currentSellingPrice - product.costPrice;

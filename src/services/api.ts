@@ -1476,6 +1476,8 @@ export const api = {
       sku: product.sku || `CRM-${Date.now().toString().slice(-4)}`,
       description: product.description || '',
       price: Number(product.price) || 0,
+      costPrice: product.costPrice !== undefined ? Number(product.costPrice) : undefined,
+      shippingCost: (product.shippingCost !== undefined && product.shippingCost !== null && !isNaN(Number(product.shippingCost))) ? Math.max(0, Number(product.shippingCost)) : undefined,
       discountPercent: product.discountPercent ? Number(product.discountPercent) : undefined,
       discountPrice: product.discountPrice ? Number(product.discountPrice) : undefined,
       category: product.category || 'hair-beauty',
@@ -2822,6 +2824,7 @@ export const api = {
     price?: number;
     discountPrice?: number;
     discountPercent?: number;
+    shippingCost?: number;
   }): Promise<Product> {
     const res = await fetch(`/api/admin/products/${id}/cost`, {
       method: 'PATCH',

@@ -23,7 +23,7 @@ export function calculateProductShippingUnitCost(product?: Product | null, unitP
   if (!product) return 0;
 
   // If already calculated and stored on product, and no override provided
-  if (!unitPriceOverride && typeof product.shippingCost === 'number' && product.shippingCost > 0) {
+  if (!unitPriceOverride && typeof product.shippingCost === 'number' && product.shippingCost >= 0) {
     return product.shippingCost;
   }
 
