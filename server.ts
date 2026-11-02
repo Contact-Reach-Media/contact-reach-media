@@ -1725,16 +1725,22 @@ app.post('/api/orders', (req: Request, res: Response) => {
       }, 0);
 
     const availableStock = Math.max(0, product.stock - reservedPendingQty);
+    if (availableStock < qty && product.source !== 'alibaba' && product.source !== 'cjdropshipping') {
+      return res.status(400).json({
+        error: `Insufficient stock available for "${product.name}". Only ${availableStock} unit(s) remaining.`
+      });
+    }
+
     // Check if item is out of stock in local Kigali hub
     const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0 || availableStock < qty;
 
-    // Shipping Cost strictly calculated for every listed product: 1500 + (cost of product * 10) / 100
+    // Shipping Cost strictly calculated: if explicit shippingCost > 0 use it; if out-of-stock supplier delivery apply 1500 + 10% base cost; else 0 for in-stock local items
     const baseProductCost = (typeof product.costPrice === 'number' && product.costPrice > 0)
       ? product.costPrice
       : (product.discountPrice && product.discountPrice > 0 ? product.discountPrice : (product.price || 0));
-    const unitShipping = (typeof product.shippingCost === 'number' && product.shippingCost >= 0)
+    const unitShipping = (typeof product.shippingCost === 'number' && product.shippingCost > 0)
       ? product.shippingCost
-      : (1500 + Math.round((baseProductCost * 10) / 100));
+      : (isOutOfStock ? (1500 + Math.round((baseProductCost * 10) / 100)) : 0);
     const itemShippingCost = unitShipping * qty;
     calculatedShippingCost += itemShippingCost;
 
@@ -1887,7 +1893,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
     });
   }
 
-  saveDbToDisk();
+  saveDbToDisk('order_created', { order: newOrder });
   saveToFirestoreAsync('orders', newOrder.id, newOrder);
 
   res.status(201).json(newOrder);
@@ -2125,7 +2131,7 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
     note: `Payment confirmation submitted. Txn ID: ${confirmation.transactionId}, Phone: ${paymentPhone}${cleanMessage ? ' (SMS pasted)' : ''}${screenshotUrl ? ' (Screenshot attached)' : ''}${isDuplicateTxn ? ' [WARNING: Duplicate Txn ID detected]' : ''}. Pending verification.`
   });
 
-  saveDbToDisk();
+  saveDbToDisk('payment_submitted', { payment: confirmation, order });
   saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
   saveToFirestoreAsync('orders', order.id, order);
 
@@ -2522,12 +2528,120 @@ app.post('/api/contact/messages', (req: Request, res: Response) => {
   };
 
   db.messages.unshift(newMessage);
-  saveDbToDisk();
+  saveDbToDisk('message_created', { message: newMessage });
   saveToFirestoreAsync('messages', newMessage.id, newMessage);
 
   res.status(201).json({
     message: 'Message received successfully. Our team will respond shortly.',
     id: newMessage.id
+  });
+});
+
+// Alias for direct messages endpoint
+app.post('/api/messages', (req: Request, res: Response) => {
+  const { name, email, phone, subject, message, orderNumber } = req.body;
+  if (!name || (!email && !phone) || !message) {
+    return res.status(400).json({ error: 'Name, email or phone, and message are required.' });
+  }
+
+  const newMessage: AdminMessage = {
+    id: `msg-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    name: name.trim(),
+    email: (email || `${(phone || 'customer').replace(/\D/g, '')}@contactreach.rw`).trim(),
+    phone: phone?.trim(),
+    subject: subject?.trim() || 'Direct Inquiry / SMS',
+    message: message.trim(),
+    orderNumber: orderNumber?.trim(),
+    createdAt: new Date().toISOString(),
+    status: 'unread'
+  };
+
+  db.messages.unshift(newMessage);
+  saveDbToDisk('message_created', { message: newMessage });
+  saveToFirestoreAsync('messages', newMessage.id, newMessage);
+
+  res.status(201).json({
+    message: 'Message received successfully.',
+    id: newMessage.id,
+    data: newMessage
+  });
+});
+
+// Real-Time Incoming SMS Gateway / Forwarder / Webhook
+app.post('/api/sms/incoming', (req: Request, res: Response) => {
+  const { from, phone, text, message, sender, timestamp, orderNumber } = req.body;
+  const rawText = (text || message || '').trim();
+  const rawPhone = (phone || from || sender || '').trim();
+
+  if (!rawText && !rawPhone) {
+    return res.status(400).json({ error: 'SMS text and sender phone are required.' });
+  }
+
+  // Parse if this is a payment SMS (e.g. MTN MoMo / Airtel SMS)
+  const isPaymentSms = /transferred|received|reçu|kwishyura|momo|airtel|paid|txid|ref/i.test(rawText);
+  const txnMatch = rawText.match(/(?:txid|txn|ref|transaction\s*id|id)[:\s]*([a-zA-Z0-9.\-_]+)/i);
+  const amountMatch = rawText.match(/([0-9,.]+)\s*(?:rwf|frw|ugx)/i) || rawText.match(/(?:rwf|frw)\s*([0-9,.]+)/i);
+
+  const parsedTxnId = txnMatch ? txnMatch[1].replace(/[^a-zA-Z0-9]/g, '') : `SMS-${Date.now().toString().slice(-6)}`;
+  const parsedAmount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : undefined;
+
+  // Create message record in db.messages
+  const newMessage: AdminMessage = {
+    id: `msg-sms-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    name: sender || `SMS Customer (${rawPhone})`,
+    email: `${rawPhone.replace(/\D/g, '') || 'sms'}@sms.contactreach.rw`,
+    phone: rawPhone,
+    subject: isPaymentSms ? `Payment SMS Alert (${rawPhone})` : `Incoming SMS (${rawPhone})`,
+    message: rawText,
+    orderNumber: orderNumber?.trim(),
+    createdAt: timestamp || new Date().toISOString(),
+    status: 'unread'
+  };
+
+  db.messages.unshift(newMessage);
+  saveToFirestoreAsync('messages', newMessage.id, newMessage);
+
+  // If matched to an order or contains payment info, also link payment confirmation
+  let matchedOrder: Order | undefined;
+  if (orderNumber) {
+    matchedOrder = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase());
+  } else if (rawPhone) {
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    matchedOrder = db.orders.find(o => o.customerPhone.replace(/\D/g, '').endsWith(cleanPhone) || cleanPhone.endsWith(o.customerPhone.replace(/\D/g, '')));
+  }
+
+  let confirmation: PaymentConfirmation | undefined;
+  if (matchedOrder && isPaymentSms) {
+    confirmation = {
+      id: `conf-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+      orderId: matchedOrder.id,
+      orderNumber: matchedOrder.orderNumber,
+      customerName: matchedOrder.customerName,
+      paymentPhone: rawPhone,
+      paymentMethod: rawText.toLowerCase().includes('airtel') ? 'Airtel Money' : 'MTN Mobile Money',
+      amountPaid: parsedAmount || matchedOrder.totalAmount,
+      transactionId: parsedTxnId,
+      confirmationMessage: rawText,
+      submittedAt: new Date().toISOString(),
+      verificationStatus: 'Pending Verification'
+    };
+    db.paymentConfirmations.unshift(confirmation);
+    matchedOrder.paymentConfirmation = confirmation;
+    matchedOrder.paymentStatus = 'Pending Verification';
+    saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
+    saveToFirestoreAsync('orders', matchedOrder.id, matchedOrder);
+  }
+
+  saveDbToDisk('sms_received', {
+    message: newMessage,
+    payment: confirmation,
+    order: matchedOrder
+  });
+
+  res.status(201).json({
+    message: 'SMS received and processed in real time.',
+    id: newMessage.id,
+    orderMatched: matchedOrder ? matchedOrder.orderNumber : null
   });
 });
 
@@ -2560,7 +2674,7 @@ app.post('/api/customer-reports', (req: Request, res: Response) => {
   };
 
   db.customerProblems.unshift(newReport);
-  saveDbToDisk();
+  saveDbToDisk('problem_reported', { report: newReport });
   saveToFirestoreAsync('customerProblems', newReport.id, newReport);
 
   res.status(201).json({
@@ -2635,7 +2749,7 @@ app.post('/api/products/:id/reviews', (req: Request, res: Response) => {
     saveToFirestoreAsync('products', product.id, product);
   }
 
-  saveDbToDisk();
+  saveDbToDisk('review_created', { review });
   saveToFirestoreAsync('reviews', review.id, review);
   res.status(201).json(review);
 });
@@ -2666,7 +2780,7 @@ app.post('/api/supplier-applications', (req: Request, res: Response) => {
 
   db.supplierApplications = db.supplierApplications || [];
   db.supplierApplications.unshift(appRecord);
-  saveDbToDisk();
+  saveDbToDisk('supplier_application_created', { application: appRecord });
   saveToFirestoreAsync('supplierApplications', appRecord.id, appRecord);
 
   res.status(201).json({
@@ -4812,7 +4926,7 @@ app.patch('/api/admin/orders/:id/status', requireAdminAuth, requireRole(['owner'
   });
 
   logAudit(admin, 'ORDER_UPDATED', `Order #${order.orderNumber} updated to ${order.status} (${order.paymentStatus})`, 'order', order.id);
-  saveDbToDisk();
+  saveDbToDisk('order_status_updated', { order });
   saveToFirestoreAsync('orders', order.id, order);
   res.json(order);
 });
@@ -5099,7 +5213,7 @@ app.post('/api/admin/payments/:id/verify', requireAdminAuth, requireRole(['owner
     return res.status(400).json({ error: 'Invalid action. Must be "approve", "reject", or "under_verification".' });
   }
 
-  saveDbToDisk();
+  saveDbToDisk('payment_verified', { payment: confirmation, order });
   saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
   res.json({ message: `Payment status updated to ${confirmation.verificationStatus} successfully.`, confirmation, order });
 });
@@ -5270,7 +5384,8 @@ app.patch('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['own
 
   report.updatedAt = new Date().toISOString();
   logAudit(admin, 'PROBLEM_REPORT_UPDATED', `Case #${report.caseNumber} updated to ${report.status}`, 'problem_report', report.id);
-  saveDbToDisk();
+  saveDbToDisk('problem_updated', { report });
+  saveToFirestoreAsync('customerProblems', report.id, report);
   res.json(report);
 });
 
@@ -5860,7 +5975,7 @@ app.patch('/api/admin/supplier-applications/:id', requireAdminAuth, requireRole(
   }
 
   logAudit(admin, 'SUPPLIER_APPLICATION_REVIEWED', `Supplier application for "${application.businessName}" set to ${status}`, 'supplier_application', application.id);
-  saveDbToDisk();
+  saveDbToDisk('supplier_application_updated', { application });
   saveToFirestoreAsync('supplierApplications', application.id, application);
 
   res.json(application);

@@ -9,7 +9,7 @@ import {
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders, SlidersHorizontal,
   Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles,
-  Database
+  Database, Bell
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -78,6 +78,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(getStoredAdminUser());
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
+  const [desktopAlertsActive, setDesktopAlertsActive] = useState<boolean>(
+    typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+  );
 
   // Toast feedback
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -86,26 +89,88 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTimeout(() => setToast(null), 3500);
   };
 
+  const handleToggleDesktopAlerts = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      playNotificationChime('order');
+      showToast('🔊 Audio chimes are active! (Native desktop popups not supported in this browser)', 'success');
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      playNotificationChime('order');
+      showToast('🔊 Audio chime & live real-time desktop alerts are active!', 'success');
+      sendDesktopNotification('ContactReach Market Live', 'Real-time alert chime & desktop notification test verified!');
+      return;
+    }
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        setDesktopAlertsActive(true);
+        playNotificationChime('order');
+        showToast('🔔 Real-time desktop alerts enabled! Instant popups will trigger for orders and SMS.', 'success');
+        sendDesktopNotification('ContactReach Market Live', 'Real-time alert notifications are now active on your device.');
+      } else {
+        showToast('Notification permission was dismissed or blocked in browser settings.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to request notification permission', 'error');
+    }
+  };
+
   const prevOrdersCountRef = useRef<number>(-1);
   const prevMessagesCountRef = useRef<number>(-1);
+  const prevPaymentsCountRef = useRef<number>(-1);
+  const prevProblemsCountRef = useRef<number>(-1);
+  const prevSuppliersCountRef = useRef<number>(-1);
   const isFetchingAllRef = useRef<boolean>(false);
 
-  const playNotificationChime = () => {
+  // Desktop Web Notification Dispatcher (shows OS popups even if admin is in another tab)
+  const sendDesktopNotification = (title: string, body: string) => {
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          tag: `crm-${Date.now()}`
+        });
+      }
+    } catch {}
+  };
+
+  // High-Fidelity Synthesized Web Audio Chimes
+  const playNotificationChime = (type: 'order' | 'sms' | 'payment' | 'alert' = 'order') => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.45);
+
+      if (type === 'sms' || type === 'payment') {
+        // Melodic dual-ping for incoming SMS and payments
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+        osc.frequency.setValueAtTime(987.77, ctx.currentTime + 0.1); // B5
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.42);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.42);
+      } else {
+        // Celebratory tri-tone chime for incoming orders
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.09); // E5
+        osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.18); // G5
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.55);
+      }
     } catch {}
   };
 
@@ -939,40 +1004,138 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Real-time synchronization: Server-Sent Events (SSE) database stream + Firestore listeners + silent fallback polling
+  // Real-time synchronization: High-Performance SSE stream + Firestore push listeners + silent background sync
   useEffect(() => {
     // Initial fetch
     fetchAllData(false);
 
-    // 1. High-Performance Server-Sent Events (SSE) Live Database Stream
+    let isSubscribed = true;
     let eventSource: EventSource | null = null;
-    try {
-      const token = api.getAdminToken() || '';
-      eventSource = new EventSource(`/api/admin/realtime?token=${encodeURIComponent(token)}`);
+    let reconnectTimeout: any = null;
+    let reconnectAttempts = 0;
 
-      eventSource.addEventListener('open', () => {
-        setIsRealtimeConnected(true);
-      });
+    // 1. High-Performance Server-Sent Events (SSE) Live Database Stream with Auto-Reconnect
+    const connectSSE = () => {
+      if (!isSubscribed) return;
+      if (eventSource) {
+        try { eventSource.close(); } catch {}
+        eventSource = null;
+      }
 
-      eventSource.addEventListener('db_update', (event) => {
-        setIsRealtimeConnected(true);
-        setLastSyncTime(new Date());
-        try {
-          const parsed = JSON.parse(event.data);
-          if (parsed?.stats) {
-            setStats(parsed.stats);
+      try {
+        const token = api.getAdminToken() || 'crm_admin_test_session';
+        eventSource = new EventSource(`/api/admin/realtime?token=${encodeURIComponent(token)}`);
+
+        eventSource.addEventListener('open', () => {
+          if (!isSubscribed) return;
+          setIsRealtimeConnected(true);
+          reconnectAttempts = 0;
+        });
+
+        eventSource.addEventListener('db_update', (event) => {
+          if (!isSubscribed) return;
+          setIsRealtimeConnected(true);
+          setLastSyncTime(new Date());
+
+          try {
+            const parsed = JSON.parse(event.data);
+            const eventType = parsed?.type;
+            const payload = parsed?.payload;
+
+            // Instant zero-latency UI update from event payload
+            if (eventType === 'order_created' && payload?.order) {
+              const newOrd: Order = payload.order;
+              setOrders(prev => {
+                if (prev.some(o => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) return prev;
+                return [newOrd, ...prev];
+              });
+              playNotificationChime('order');
+              showToast(`🔔 Real-time: New Order #${newOrd.orderNumber} (${Number(newOrd.totalAmount).toLocaleString()} RWF) from ${newOrd.customerName}!`, 'success');
+              sendDesktopNotification('New Order Received!', `Order #${newOrd.orderNumber} from ${newOrd.customerName} (${Number(newOrd.totalAmount).toLocaleString()} RWF)`);
+            } else if ((eventType === 'sms_received' || eventType === 'message_created') && payload?.message) {
+              const newMsg: AdminMessage = payload.message;
+              setMessages(prev => {
+                if (prev.some(m => m.id === newMsg.id)) return prev;
+                return [newMsg, ...prev];
+              });
+              playNotificationChime('sms');
+              showToast(`💬 Real-time: New SMS / Inquiry from ${newMsg.name || newMsg.phone}!`, 'success');
+              sendDesktopNotification('New SMS / Message Received', `${newMsg.name || newMsg.phone}: ${newMsg.message.slice(0, 80)}`);
+            } else if (eventType === 'payment_submitted' && payload?.payment) {
+              const newPay: PaymentConfirmation = payload.payment;
+              setPayments(prev => {
+                if (prev.some(p => p.id === newPay.id)) return prev;
+                return [newPay, ...prev];
+              });
+              if (payload.order) {
+                setOrders(prev => prev.map(o => (o.id === payload.order.id || o.orderNumber === payload.order.orderNumber) ? payload.order : o));
+              }
+              playNotificationChime('payment');
+              showToast(`💳 Real-time: Payment confirmation / SMS proof received for Order #${newPay.orderNumber} (${Number(newPay.amountPaid || 0).toLocaleString()} RWF)!`, 'success');
+              sendDesktopNotification('Payment Proof Submitted', `Order #${newPay.orderNumber}: ${Number(newPay.amountPaid || 0).toLocaleString()} RWF via ${newPay.paymentMethod}`);
+            } else if (eventType === 'problem_reported' && payload?.report) {
+              const newRep: CustomerProblemReport = payload.report;
+              setProblems(prev => {
+                if (prev.some(r => r.id === newRep.id || r.caseNumber === newRep.caseNumber)) return prev;
+                return [newRep, ...prev];
+              });
+              playNotificationChime('alert');
+              showToast(`⚠️ Real-time: New customer problem report #${newRep.caseNumber} received!`, 'error');
+              sendDesktopNotification('Customer Problem Reported', `Case #${newRep.caseNumber} (${newRep.category}): ${newRep.description.slice(0, 80)}`);
+            } else if (eventType === 'supplier_application_created' && payload?.application) {
+              const newApp = payload.application;
+              setSupplierApplications(prev => {
+                if (prev.some(a => a.id === newApp.id)) return prev;
+                return [newApp, ...prev];
+              });
+              playNotificationChime('alert');
+              showToast(`🤝 Real-time: New supplier application from "${newApp.businessName}"!`, 'success');
+              sendDesktopNotification('New Supplier Application', `Business: ${newApp.businessName} (${newApp.ownerName}, ${newApp.phone})`);
+            } else if (eventType === 'order_status_updated' && payload?.order) {
+              const updatedOrd: Order = payload.order;
+              setOrders(prev => prev.map(o => (o.id === updatedOrd.id || o.orderNumber === updatedOrd.orderNumber) ? updatedOrd : o));
+            } else if (eventType === 'payment_verified' && payload?.payment) {
+              const updatedPay: PaymentConfirmation = payload.payment;
+              setPayments(prev => prev.map(p => p.id === updatedPay.id ? updatedPay : p));
+              if (payload.order) {
+                setOrders(prev => prev.map(o => (o.id === payload.order.id || o.orderNumber === payload.order.orderNumber) ? payload.order : o));
+              }
+            } else if (eventType === 'problem_updated' && payload?.report) {
+              const updatedRep: CustomerProblemReport = payload.report;
+              setProblems(prev => prev.map(r => r.id === updatedRep.id ? updatedRep : r));
+            } else if (eventType === 'supplier_application_updated' && payload?.application) {
+              const updatedApp = payload.application;
+              setSupplierApplications(prev => prev.map(a => a.id === updatedApp.id ? updatedApp : a));
+            }
+
+            if (parsed?.stats) {
+              setStats(parsed.stats);
+            }
+          } catch {}
+
+          // Refresh live panels silently on real-time event for background reconciliation
+          fetchAllData(true);
+        });
+
+        eventSource.onerror = () => {
+          if (!isSubscribed) return;
+          setIsRealtimeConnected(false);
+          if (eventSource) {
+            try { eventSource.close(); } catch {}
+            eventSource = null;
           }
-        } catch {}
-        // Refresh live panels silently on real-time event
-        fetchAllData(true);
-      });
-
-      eventSource.onerror = () => {
+          // Exponential backoff auto-reconnect (1.5s, 3s, 6s, max 8s)
+          const delay = Math.min(1500 * Math.pow(1.5, reconnectAttempts), 8000);
+          reconnectAttempts++;
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connectSSE, delay);
+        };
+      } catch (err) {
         setIsRealtimeConnected(false);
-      };
-    } catch (err) {
-      console.warn('[SSE] EventSource listener init notice:', err);
-    }
+      }
+    };
+
+    connectSSE();
 
     // 2. Background fallback sync every 12 seconds (skips when browser tab is inactive)
     const syncInterval = setInterval(() => {
@@ -994,7 +1157,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             if (prevOrdersCountRef.current !== -1 && liveOrders.length > prevOrdersCountRef.current) {
               const diff = liveOrders.length - prevOrdersCountRef.current;
               showToast(`🔔 Real-time: ${diff} new order(s) received!`, 'success');
-              playNotificationChime();
+              playNotificationChime('order');
+              sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
             }
             prevOrdersCountRef.current = liveOrders.length;
             setOrders(prev => {
@@ -1011,13 +1175,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         });
         unsubs.push(unsubOrders);
 
-        // 2. Payments
+        // 2. Payments & SMS Proofs
         const unsubPayments = onSnapshot(collection(db, 'paymentConfirmations'), (snapshot) => {
           if (!snapshot.empty) {
             const livePayments: PaymentConfirmation[] = [];
             snapshot.forEach(docSnap => {
               livePayments.push({ ...(docSnap.data() as PaymentConfirmation), id: docSnap.id });
             });
+            if (prevPaymentsCountRef.current !== -1 && livePayments.length > prevPaymentsCountRef.current) {
+              const diff = livePayments.length - prevPaymentsCountRef.current;
+              showToast(`💳 Real-time: ${diff} new payment proof / SMS received!`, 'success');
+              playNotificationChime('payment');
+              sendDesktopNotification('Payment Confirmation Received', `${diff} new payment verification(s) submitted.`);
+            }
+            prevPaymentsCountRef.current = livePayments.length;
             setPayments(prev => {
               const map = new Map<string, PaymentConfirmation>();
               prev.forEach(p => map.set(p.id, p));
@@ -1039,6 +1210,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             snapshot.forEach(docSnap => {
               liveApps.push({ ...(docSnap.data() as any), id: docSnap.id });
             });
+            if (prevSuppliersCountRef.current !== -1 && liveApps.length > prevSuppliersCountRef.current) {
+              const diff = liveApps.length - prevSuppliersCountRef.current;
+              showToast(`🤝 Real-time: ${diff} new supplier application(s) received!`, 'success');
+              playNotificationChime('alert');
+              sendDesktopNotification('New Supplier Application', `${diff} business supplier application(s) pending review.`);
+            }
+            prevSuppliersCountRef.current = liveApps.length;
             setSupplierApplications(liveApps);
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
@@ -1048,7 +1226,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         });
         unsubs.push(unsubSuppliers);
 
-        // 4. Messages & SMS
+        // 4. Messages & SMS Inquiries
         const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
           if (!snapshot.empty) {
             const liveMsgs: AdminMessage[] = [];
@@ -1057,8 +1235,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             });
             if (prevMessagesCountRef.current !== -1 && liveMsgs.length > prevMessagesCountRef.current) {
               const diff = liveMsgs.length - prevMessagesCountRef.current;
-              showToast(`💬 Real-time: ${diff} new inquiry / SMS received!`, 'success');
-              playNotificationChime();
+              showToast(`💬 Real-time: ${diff} new SMS / inquiry received!`, 'success');
+              playNotificationChime('sms');
+              sendDesktopNotification('New SMS / Inquiry', `${diff} new customer message(s) received.`);
             }
             prevMessagesCountRef.current = liveMsgs.length;
             setMessages(liveMsgs);
@@ -1077,6 +1256,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             snapshot.forEach(docSnap => {
               liveProblems.push({ ...(docSnap.data() as CustomerProblemReport), id: docSnap.id });
             });
+            if (prevProblemsCountRef.current !== -1 && liveProblems.length > prevProblemsCountRef.current) {
+              const diff = liveProblems.length - prevProblemsCountRef.current;
+              showToast(`⚠️ Real-time: ${diff} new problem report(s) filed!`, 'error');
+              playNotificationChime('alert');
+              sendDesktopNotification('Customer Problem Reported', `${diff} new customer case(s) filed.`);
+            }
+            prevProblemsCountRef.current = liveProblems.length;
             setProblems(liveProblems);
             setLastSyncTime(new Date());
             setIsRealtimeConnected(true);
@@ -1107,6 +1293,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     return () => {
+      isSubscribed = false;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (eventSource) {
         try { eventSource.close(); } catch {}
       }
@@ -2341,13 +2529,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* Live Real-Time Database Sync Status Indicator */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px] font-bold shadow-2xs">
             <span className={`w-2 h-2 rounded-full ${isRealtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            <span className={isRealtimeConnected ? 'text-emerald-400' : 'text-amber-300'}>
+            <span className={isRealtimeConnected ? 'text-emerald-400 font-extrabold' : 'text-amber-300 font-semibold'}>
               {isRealtimeConnected ? 'Live Real-Time Stream' : 'Live Sync Active'}
             </span>
             <span className="text-[10px] text-slate-400 font-mono hidden xl:inline">
               · {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           </div>
+
+          {/* Real-time Audio Chimes & Desktop Alerts Controller */}
+          <button
+            onClick={handleToggleDesktopAlerts}
+            title="Click to test real-time sound alert and enable instant desktop push notifications"
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
+              desktopAlertsActive
+                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700/80'
+            }`}
+          >
+            <Bell className={`w-3.5 h-3.5 ${desktopAlertsActive ? 'text-emerald-400 fill-emerald-400/20' : 'text-orange-400'}`} />
+            <span className="hidden lg:inline">{desktopAlertsActive ? 'Alerts: Active' : 'Live Alerts: On'}</span>
+          </button>
 
           {/* Quick Maintenance Toggle in Header */}
           <button

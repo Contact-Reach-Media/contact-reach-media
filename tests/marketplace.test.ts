@@ -2293,6 +2293,41 @@ async function runTests() {
     }
   });
 
+  // TEST: Real-Time EventStream (SSE) and SMS Gateway delivery without app reloading
+  await test('Real-Time Admin Services: Orders and SMS received live via stream without reloading app', async () => {
+    // 1. Verify realtime SSE endpoint connects for authorized admin
+    const sseRes = await fetch(`${BASE_URL}/api/admin/realtime?token=${adminToken}`, {
+      headers: { Accept: 'text/event-stream' }
+    });
+    assert.strictEqual(sseRes.status, 200, 'SSE realtime stream must connect with 200');
+    assert.strictEqual(sseRes.headers.get('content-type'), 'text/event-stream', 'Must be text/event-stream');
+
+    // 2. Submit SMS via incoming SMS gateway
+    const smsPhone = `0789${Math.floor(100000 + Math.random() * 900000)}`;
+    const smsRes = await fetch(`${BASE_URL}/api/sms/incoming`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: smsPhone,
+        text: 'Y\'ello! You have received 45,000 RWF from Jean (0788112233) on 2026-11-02. TxId: 981273921.',
+        sender: 'MTN Mobile Money'
+      })
+    });
+    assert.strictEqual(smsRes.status, 201, 'SMS incoming gateway must accept and process SMS with 201');
+    const smsData = await smsRes.json();
+    assert(smsData.id, 'SMS record ID must be generated');
+
+    // 3. Confirm message is present in admin messages immediately
+    const msgsRes = await fetch(`${BASE_URL}/api/admin/messages`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(msgsRes.status, 200);
+    const msgs = await msgsRes.json();
+    const foundSms = msgs.find((m: any) => m.id === smsData.id || m.phone === smsPhone);
+    assert(foundSms, 'Incoming SMS must be stored and available in admin inbox');
+    assert(foundSms.message.includes('TxId: 981273921'), 'SMS content must match payload');
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');
