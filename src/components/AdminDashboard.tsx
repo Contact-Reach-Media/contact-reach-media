@@ -1285,12 +1285,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             } else if (eventType === 'order_deleted' && (payload?.orderId || payload?.orderNumber)) {
               const { orderId, orderNumber } = payload;
               setOrders(prev => prev.filter(o => o.id !== orderId && o.orderNumber !== orderNumber));
-              showToast(`🗑️ Order #${orderNumber || orderId} deleted by admin`, 'info');
+              showToast(`🗑️ Order #${orderNumber || orderId} deleted by admin`);
             } else if (eventType === 'orders_bulk_deleted' && Array.isArray(payload?.orderIds)) {
               const idSet = new Set(payload.orderIds);
               const numSet = new Set(payload.orderNumbers || []);
               setOrders(prev => prev.filter(o => !idSet.has(o.id) && !numSet.has(o.orderNumber)));
-              showToast(`🗑️ ${payload.orderIds.length} orders deleted by admin`, 'info');
+              showToast(`🗑️ ${payload.orderIds.length} orders deleted by admin`);
             } else if (eventType === 'payment_verified' && payload?.payment) {
               const updatedPay: PaymentConfirmation = payload.payment;
               setPayments(prev => prev.map(p => p.id === updatedPay.id ? updatedPay : p));
@@ -2624,16 +2624,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!orderStatusModal) return;
     try {
-      await api.adminUpdateOrderStatus(orderStatusModal.id, {
+      const updated = await api.adminUpdateOrderStatus(orderStatusModal.id, {
         status: orderStatusModal.status,
         paymentStatus: orderStatusModal.paymentStatus,
         assignedCourier: orderStatusModal.assignedCourier,
         courierPhone: orderStatusModal.courierPhone,
         internalNotes: orderStatusModal.internalNotes
       });
+      if (updated && updated.id) {
+        setOrders(prev => prev.map(o => (o.id === updated.id || o.orderNumber === updated.orderNumber) ? updated : o));
+      }
       showToast(`Order #${orderStatusModal.orderNumber} updated!`);
       setOrderStatusModal(null);
-      fetchAllData();
+      fetchAllData(true);
     } catch (err: any) {
       showToast(err.message, 'error');
     }

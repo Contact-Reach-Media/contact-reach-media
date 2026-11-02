@@ -157,20 +157,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     if (!customerName.trim() || !customerPhone.trim() || !deliveryAddress.trim()) {
       setError(
         currentLang === 'en'
-          ? 'Please enter your full name, Rwandan phone number, and delivery address.'
-          : 'Nyamuneka wuzuze amazina yawe, telefone yo mu Rwanda n\'aderesi yo koherezaho.'
+          ? 'Please enter your full name, phone number, and delivery address.'
+          : 'Nyamuneka wuzuze amazina yawe, telefone n\'aderesi yo koherezaho.'
       );
       return;
     }
 
-    // Rwandan phone validation (078, 073, 072, 079, or +25078...)
-    const cleanPhone = customerPhone.replace(/\s+/g, '');
+    // Phone validation: supports Rwandan numbers (078, 079, 072, 073, +250...) AND international numbers (+country code, 7-15 digits)
+    const cleanPhone = customerPhone.replace(/[\s\-\(\)]/g, '');
     const isRwandaPhone = /^(?:\+?250|0)?7[2389]\d{7}$/.test(cleanPhone);
-    if (!isRwandaPhone) {
+    const isInternationalPhone = /^\+?[0-9]{7,15}$/.test(cleanPhone);
+    if (!isRwandaPhone && !isInternationalPhone) {
       setError(
         currentLang === 'en'
-          ? 'Please enter a valid Rwandan mobile number (e.g., 0780 022 600 or 0730 000 000).'
-          : 'Shyiramo numero ya telefone yo mu Rwanda yemewe (urugero: 078... cyangwa 073...).'
+          ? 'Please enter a valid phone number (e.g., 0780 022 600 or international +254..., +1..., +44...).'
+          : 'Shyiramo numero ya telefone yemewe (urugero: 078... cyangwa mpuzamahanga).'
       );
       return;
     }
@@ -182,13 +183,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     setLoading(true);
     try {
-      const selectedLocationName = isOutsideKigali
-        ? 'Outside Kigali (Upcountry / Intara)'
-        : (currentArea?.name || 'Kigali Area');
+      let selectedLocationName = currentArea?.name || 'Kigali Area';
+      if (selectedLocationId === 'pickup') {
+        selectedLocationName = 'Store Pickup (Fair View Plaza, Kigali)';
+      } else if (selectedLocationId === 'international') {
+        selectedLocationName = 'International / Worldwide Delivery';
+      } else if (isOutsideKigali) {
+        selectedLocationName = 'Outside Kigali (Upcountry / Intara)';
+      }
 
       const orderPayload = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
+        deliveryType: selectedLocationId === 'pickup' ? ('pickup' as const) : ('delivery' as const),
         deliveryLocation: selectedLocationName,
         deliveryAddress: deliveryAddress.trim(),
         deliveryNotes: deliveryNotes.trim() || undefined,
@@ -588,7 +595,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <MapPin className="w-3.5 h-3.5 text-[#FF5500]" />
                   <span>{currentLang === 'en' ? 'Delivery Zone & Sector' : 'Akarere & Aho uherereye'} *</span>
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                   {settings.kigaliAreas?.map(area => (
                     <button
                       key={area.id}
@@ -615,9 +622,37 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
                     }`}
                   >
-                    <div className="font-bold text-xs">Outside Kigali</div>
+                    <div className="font-bold text-xs truncate">Outside Kigali</div>
                     <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
                       {(settings.deliveryFeeUpcountry || 3500).toLocaleString()} RWF
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLocationId('international')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      selectedLocationId === 'international'
+                        ? 'border-[#FF5500] bg-orange-50/70 text-slate-900 ring-2 ring-orange-500/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs truncate">International</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                      5,000 RWF (Global)
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLocationId('pickup')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      selectedLocationId === 'pickup'
+                        ? 'border-[#FF5500] bg-orange-50/70 text-slate-900 ring-2 ring-orange-500/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs truncate">Store Pickup</div>
+                    <div className="text-[10px] text-emerald-600 mt-0.5 font-mono font-bold">
+                      0 RWF (Free)
                     </div>
                   </button>
                 </div>
@@ -641,14 +676,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {currentLang === 'en' ? 'Rwandan Phone (MTN/Airtel)' : 'Telefoni (MTN / Airtel)'} *
+                    {currentLang === 'en' ? 'Phone Number (Local or International)' : 'Telefoni (Yo mu Rwanda cyangwa Mpuzamahanga)'} *
                   </label>
                   <input
                     type="tel"
                     required
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="078... / 073..."
+                    placeholder="078... or +254... / +1..."
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-orange-500 bg-white"
                   />
                 </div>

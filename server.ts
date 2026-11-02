@@ -1812,8 +1812,11 @@ app.post('/api/orders', (req: Request, res: Response) => {
 
   if (!isPickup) {
     const locStr = (deliveryLocation || deliveryAddress || '').toLowerCase();
+    const isInternational = locStr.includes('international') || locStr.includes('worldwide') || locStr.includes('global') || locStr.includes('cross-border') || locStr.includes('outside rwanda');
     const isOutsideKigali = locStr.includes('outside') || locStr.includes('upcountry') || locStr.includes('intara');
-    if (isOutsideKigali) {
+    if (isInternational) {
+      deliveryFee = (db.settings as any).deliveryFeeInternational || 5000;
+    } else if (isOutsideKigali) {
       deliveryFee = db.settings.deliveryFeeUpcountry || 3500;
     } else {
       if (calculatedSubtotal >= (db.settings.freeDeliveryThreshold || 50000)) {

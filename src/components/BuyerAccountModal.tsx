@@ -53,6 +53,27 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
       setDeliveryAddress(user.deliveryAddress || '');
       setPhone(user.phone || '');
       setErrorMsg(null);
+
+      // Real-time synchronization: silently refresh buyer orders every 6 seconds while modal is open
+      const syncTimer = setInterval(() => {
+        api.buyerGetOrders()
+          .then(data => setOrders(data))
+          .catch(() => {});
+      }, 6000);
+
+      const handleFocus = () => {
+        if (document.visibilityState === 'visible') {
+          api.buyerGetOrders().then(data => setOrders(data)).catch(() => {});
+        }
+      };
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleFocus);
+
+      return () => {
+        clearInterval(syncTimer);
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleFocus);
+      };
     }
   }, [isOpen, user]);
 

@@ -177,20 +177,25 @@ export function calculateCartBreakdown(
   let deliveryFee = 0;
   let isFreeDelivery = false;
 
-  if (!isPickup) {
+  if (!isPickup && selectedLocationId !== 'pickup') {
     const isOutsideKigali = selectedLocationId === 'outside';
+    const isInternational = selectedLocationId === 'international';
     const freeDeliveryThreshold = settings?.freeDeliveryThreshold || 50000;
-    const qualifiesForFree = subtotal >= freeDeliveryThreshold && !isOutsideKigali;
+    const qualifiesForFree = subtotal >= freeDeliveryThreshold && !isOutsideKigali && !isInternational;
 
     if (qualifiesForFree) {
       deliveryFee = 0;
       isFreeDelivery = true;
+    } else if (isInternational) {
+      deliveryFee = (settings as any)?.deliveryFeeInternational || 5000;
     } else if (isOutsideKigali) {
       deliveryFee = settings?.deliveryFeeUpcountry || 3500;
     } else {
       const currentArea = settings?.kigaliAreas?.find(a => a.id === selectedLocationId);
       deliveryFee = currentArea ? currentArea.fee : (settings?.deliveryFeeKigali || 1500);
     }
+  } else {
+    deliveryFee = 0;
   }
 
   const grandTotal = Math.max(0, subtotal + deliveryFee + shippingCost - appliedDiscount);

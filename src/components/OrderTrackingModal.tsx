@@ -54,6 +54,67 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
     }
   }, [isOpen, initialOrderNumber]);
 
+  const [liveStatusNotice, setLiveStatusNotice] = React.useState<string | null>(null);
+
+  // High-Fidelity Synthesized chime for customer order tracking updates
+  const playTrackChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.1); // A5
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.38);
+    } catch {}
+  };
+
+  // Real-Time Auto-Synchronization: Live poll order status every 5 seconds while modal is open
+  React.useEffect(() => {
+    if (!isOpen || !trackedOrder) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const latest = await api.trackOrder(trackedOrder.orderNumber, trackedOrder.customerPhone || phoneQuery);
+        if (latest) {
+          if (latest.status !== trackedOrder.status || latest.paymentStatus !== trackedOrder.paymentStatus) {
+            setTrackedOrder(latest);
+            playTrackChime();
+            setLiveStatusNotice(`⚡ Order status updated live: "${latest.status}" (${latest.paymentStatus})`);
+            setTimeout(() => setLiveStatusNotice(null), 6000);
+          } else {
+            setTrackedOrder(latest);
+          }
+        }
+      } catch {}
+    }, 5000);
+
+    const handleFocus = async () => {
+      if (document.visibilityState === 'visible' && trackedOrder) {
+        try {
+          const latest = await api.trackOrder(trackedOrder.orderNumber, trackedOrder.customerPhone || phoneQuery);
+          if (latest) setTrackedOrder(latest);
+        } catch {}
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [isOpen, trackedOrder?.orderNumber, trackedOrder?.status, trackedOrder?.paymentStatus, phoneQuery]);
+
   if (!isOpen) return null;
 
   const handleTrack = async (e?: React.FormEvent) => {
@@ -73,7 +134,6 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
       if (phoneQuery.trim()) queryParams.set('phone', phoneQuery.trim());
       if (urlToken) queryParams.set('token', urlToken);
 
-      const q = queryParams.toString() ? `?${queryParams.toString()}` : '';
       const data = await api.trackOrder(searchQuery.trim().toUpperCase(), phoneQuery.trim());
       setTrackedOrder(data);
     } catch (err: any) {
@@ -175,10 +235,23 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
           {/* Tracked Order Details */}
           {trackedOrder && (
             <div className="space-y-6 pt-2 border-t border-slate-100 animate-in fade-in">
+              {liveStatusNotice && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-bounce shadow-sm">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{liveStatusNotice}</span>
+                </div>
+              )}
+
               {/* Order Top Summary */}
               <div className="p-4 rounded-2xl bg-orange-50/70 border border-orange-100 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Order Reference</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Order Reference</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Sync
+                    </span>
+                  </div>
                   <div className="text-base font-extrabold text-[#EA580C] font-mono">
                     {trackedOrder.orderNumber}
                   </div>
