@@ -578,6 +578,7 @@ export interface CustomerUser {
 
 export interface AdminMessage {
   id: string;
+  customerId?: string;
   name: string;
   email: string;
   phone?: string;
@@ -589,6 +590,25 @@ export interface AdminMessage {
   replyNote?: string;
   repliedAt?: string;
   repliedBy?: string;
+  sender?: 'customer' | 'admin' | 'system';
+  senderName?: string;
+  isReadByCustomer?: boolean;
+  isReadByAdmin?: boolean;
+  notificationType?: 'chat' | 'order_update' | 'payment_update' | 'general';
+}
+
+export interface CustomerConversation {
+  customerId: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  lastSender: 'customer' | 'admin' | 'system';
+  unreadAdminCount: number;
+  unreadCustomerCount: number;
+  totalMessages: number;
+  orderNumbers?: string[];
 }
 
 export type ProblemCategory =

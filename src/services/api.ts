@@ -1,6 +1,6 @@
 import {
   Product, Order, PaymentConfirmation, AppSettings, Category, OrderStatus, OrderDeliveryStatus,
-  VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage,
+  VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage, CustomerConversation,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority,
   CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig,
@@ -583,13 +583,17 @@ export const api = {
     shippingCost?: number;
     paymentMethod: PaymentMethod;
     couponCode?: string;
+    userId?: string;
   }): Promise<Order> {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 20000);
       const res = await fetch('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getBuyerAuthHeaders()
+        },
         body: JSON.stringify(orderPayload),
         signal: controller.signal
       });
@@ -2830,6 +2834,99 @@ export const api = {
       }
     } catch {}
     return [];
+  },
+
+  async buyerGetMessages(): Promise<AdminMessage[]> {
+    try {
+      const res = await fetch('/api/buyers/messages', { headers: getBuyerAuthHeaders() });
+      const parsed = await safeParseResponse<AdminMessage[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+    return [];
+  },
+
+  async buyerSendMessage(payload: { message: string; subject?: string; orderNumber?: string }): Promise<AdminMessage> {
+    const res = await fetch('/api/buyers/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getBuyerAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<{ message: string; data: AdminMessage }>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.data) {
+      throw new Error(parsed.json?.message || 'Failed to send message');
+    }
+    return parsed.json.data;
+  },
+
+  async buyerMarkMessagesRead(): Promise<{ success: boolean; updatedCount: number }> {
+    try {
+      const res = await fetch('/api/buyers/messages/mark-read', {
+        method: 'PUT',
+        headers: getBuyerAuthHeaders()
+      });
+      const parsed = await safeParseResponse<{ success: boolean; updatedCount: number }>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { success: false, updatedCount: 0 };
+  },
+
+  async adminGetConversations(): Promise<CustomerConversation[]> {
+    try {
+      const res = await fetch('/api/admin/conversations', { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<CustomerConversation[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+    return [];
+  },
+
+  async adminGetConversationThread(customerId: string): Promise<AdminMessage[]> {
+    try {
+      const res = await fetch(`/api/admin/conversations/${encodeURIComponent(customerId)}`, { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<AdminMessage[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+    return [];
+  },
+
+  async adminReplyToConversation(customerId: string, payload: { message: string; orderNumber?: string; subject?: string }): Promise<AdminMessage> {
+    const res = await fetch(`/api/admin/conversations/${encodeURIComponent(customerId)}/reply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<{ message: string; data: AdminMessage }>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.data) {
+      throw new Error((parsed.json as any)?.error || 'Failed to send reply');
+    }
+    return parsed.json.data;
+  },
+
+  async adminMarkConversationRead(customerId: string): Promise<{ success: boolean; updatedCount: number }> {
+    try {
+      const res = await fetch(`/api/admin/conversations/${encodeURIComponent(customerId)}/mark-read`, {
+        method: 'PUT',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<{ success: boolean; updatedCount: number }>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { success: false, updatedCount: 0 };
   },
 
   async buyerLogout(): Promise<void> {

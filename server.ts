@@ -2086,82 +2086,130 @@ app.post('/api/orders', (req: Request, res: Response) => {
     return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
   });
 
-  const orderNumber = `CRM-${Math.floor(10000 + Math.random() * 90000)}`;
-  const trackingToken = crypto.randomBytes(16).toString('hex');
-
-  const newOrder: Order = {
-    id: `ord-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-    orderNumber,
-    trackingToken,
-    createdAt: new Date().toISOString(),
-    customerName: customerName.trim(),
-    customerPhone: customerPhone.trim(),
-    customerEmail: customerEmail?.trim(),
-    deliveryType: isPickup ? 'pickup' : 'delivery',
-    deliveryLocation: isPickup ? 'Store Pickup (Fair View Plaza)' : (deliveryLocation || 'Kigali Area'),
-    deliveryAddress: isPickup ? (db.settings.pickupAddress || 'Fair View Plaza, Kigali, Rwanda') : (deliveryAddress || 'Kigali'),
-    deliveryNotes: deliveryNotes?.trim(),
-    items: verifiedItems,
-    subtotal: calculatedSubtotal,
-    discountAmount: discountAmount > 0 ? discountAmount : undefined,
-    couponCode: appliedCouponCode,
-    deliveryFee,
-    shippingCost: calculatedShippingCost,
-    totalAmount,
-    commissionRate,
-    commissionEarned,
-    supplierPayoutAmount,
-    supplierPayoutStatus: 'Pending',
-    supplierFulfillmentStatus: 'Pending',
-    supplierApprovalStatus: 'Pending Review',
-    cjFulfillmentStatus: hasCjItems ? 'Pending Admin Approval' : 'Not Applicable',
-    paymentMethod: method,
-    receiverName: primaryReceiverName,
-    receiverDetails,
-    shopName: primaryShopName,
-    supplierName: verifiedItems.map(i => {
-      const prod = db.products.find(p => p.id === i.productId);
-      if (prod?.source === 'cjdropshipping' || prod?.cjProductId) return 'CJ Dropshipping';
-      if (prod?.source === 'alibaba' || prod?.alibabaProductId) return 'Alibaba Wholesale';
-      return prod?.supplierName || i.supplierName || prod?.shopName || i.shopName;
-    }).filter(Boolean)[0] || primaryShopName || 'Contact Reach Market',
-    paymentStatus: 'Pending Payment',
-    status: 'New',
-    deliveryStatus: 'Pending',
-    stockDeducted: false,
-    statusHistory: [
-      {
-        status: 'New',
-        deliveryStatus: 'Pending',
-        paymentStatus: 'Pending Payment',
-        timestamp: new Date().toISOString(),
-        note: hasCjItems
-          ? 'Order successfully created. Contains CJ dropshipping items awaiting admin fulfillment review.'
-          : 'Order successfully created. Awaiting mobile money payment initiation.'
+    // Link to registered buyer account if token or phone/email match
+    let buyerUserId: string | undefined = (req.body as any).userId;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const bToken = authHeader.split(' ')[1];
+      const session = db.customerTokens.get(bToken);
+      if (session && session.expiresAt > Date.now()) {
+        const loggedInBuyer = db.customers.find(c => c.id === session.customerId);
+        if (loggedInBuyer) {
+          buyerUserId = loggedInBuyer.id;
+        }
       }
-    ]
-  };
+    }
+    if (!buyerUserId) {
+      const cleanPhone = customerPhone.replace(/\D/g, '');
+      const existingCustomer = db.customers.find(c =>
+        (cleanPhone.length >= 7 && c.phone && c.phone.replace(/\D/g, '') === cleanPhone) ||
+        (customerEmail && c.email && c.email.toLowerCase().trim() === customerEmail.toLowerCase().trim())
+      );
+      if (existingCustomer) buyerUserId = existingCustomer.id;
+    }
 
-  db.orders.unshift(newOrder);
+    const orderNumber = `CRM-${Math.floor(10000 + Math.random() * 90000)}`;
+    const trackingToken = crypto.randomBytes(16).toString('hex');
 
-  // Update or create customer record
-  let customer = db.customers.find(c => c.phone.replace(/\D/g, '') === customerPhone.replace(/\D/g, ''));
-  if (customer) {
-    customer.totalOrders += 1;
-    customer.totalSpent += totalAmount;
-    if (deliveryAddress) customer.deliveryAddress = deliveryAddress;
-  } else {
-    db.customers.push({
-      id: `cust-${Date.now()}`,
-      name: customerName.trim(),
-      phone: customerPhone.trim(),
-      email: customerEmail?.trim(),
-      deliveryAddress: deliveryAddress?.trim(),
+    const newOrder: Order = {
+      id: `ord-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      orderNumber,
+      trackingToken,
+      userId: buyerUserId,
       createdAt: new Date().toISOString(),
-      totalOrders: 1,
-      totalSpent: totalAmount
-    });
-  }
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      customerEmail: customerEmail?.trim(),
+      deliveryType: isPickup ? 'pickup' : 'delivery',
+      deliveryLocation: isPickup ? 'Store Pickup (Fair View Plaza)' : (deliveryLocation || 'Kigali Area'),
+      deliveryAddress: isPickup ? (db.settings.pickupAddress || 'Fair View Plaza, Kigali, Rwanda') : (deliveryAddress || 'Kigali'),
+      deliveryNotes: deliveryNotes?.trim(),
+      items: verifiedItems,
+      subtotal: calculatedSubtotal,
+      discountAmount: discountAmount > 0 ? discountAmount : undefined,
+      couponCode: appliedCouponCode,
+      deliveryFee,
+      shippingCost: calculatedShippingCost,
+      totalAmount,
+      commissionRate,
+      commissionEarned,
+      supplierPayoutAmount,
+      supplierPayoutStatus: 'Pending',
+      supplierFulfillmentStatus: 'Pending',
+      supplierApprovalStatus: 'Pending Review',
+      cjFulfillmentStatus: hasCjItems ? 'Pending Admin Approval' : 'Not Applicable',
+      paymentMethod: method,
+      receiverName: primaryReceiverName,
+      receiverDetails,
+      shopName: primaryShopName,
+      supplierName: verifiedItems.map(i => {
+        const prod = db.products.find(p => p.id === i.productId);
+        if (prod?.source === 'cjdropshipping' || prod?.cjProductId) return 'CJ Dropshipping';
+        if (prod?.source === 'alibaba' || prod?.alibabaProductId) return 'Alibaba Wholesale';
+        return prod?.supplierName || i.supplierName || prod?.shopName || i.shopName;
+      }).filter(Boolean)[0] || primaryShopName || 'Contact Reach Market',
+      paymentStatus: 'Pending Payment',
+      status: 'New',
+      deliveryStatus: 'Pending',
+      stockDeducted: false,
+      statusHistory: [
+        {
+          status: 'New',
+          deliveryStatus: 'Pending',
+          paymentStatus: 'Pending Payment',
+          timestamp: new Date().toISOString(),
+          note: hasCjItems
+            ? 'Order successfully created. Contains CJ dropshipping items awaiting admin fulfillment review.'
+            : 'Order successfully created. Awaiting mobile money payment initiation.'
+        }
+      ]
+    };
+
+    db.orders.unshift(newOrder);
+
+    // Update or create customer record
+    let customer = db.customers.find(c => c.phone && c.phone.replace(/\D/g, '') === customerPhone.replace(/\D/g, ''));
+    if (customer) {
+      customer.totalOrders += 1;
+      customer.totalSpent += totalAmount;
+      if (deliveryAddress) customer.deliveryAddress = deliveryAddress;
+      if (!newOrder.userId) newOrder.userId = customer.id;
+    } else {
+      const newCustId = buyerUserId || `cust-${Date.now()}`;
+      customer = {
+        id: newCustId,
+        name: customerName.trim(),
+        phone: customerPhone.trim(),
+        email: customerEmail?.trim(),
+        deliveryAddress: deliveryAddress?.trim(),
+        createdAt: new Date().toISOString(),
+        totalOrders: 1,
+        totalSpent: totalAmount
+      };
+      db.customers.push(customer);
+      if (!newOrder.userId) newOrder.userId = newCustId;
+    }
+
+    // Automatically push an order tracking notification to the customer's personal Inbox
+    const orderWelcomeMsg: AdminMessage = {
+      id: `msg-ord-${newOrder.id}`,
+      customerId: newOrder.userId || customer.id,
+      name: customerName.trim(),
+      email: customerEmail?.trim() || `${customerPhone.replace(/\D/g, '')}@contactreach.rw`,
+      phone: customerPhone.trim(),
+      subject: `Order ${newOrder.orderNumber} Received`,
+      message: `Your order ${newOrder.orderNumber} for ${newOrder.items.length} item(s) (Total: ${newOrder.totalAmount.toLocaleString()} RWF) has been received. Track your payment and delivery progress in real time here!`,
+      orderNumber: newOrder.orderNumber,
+      createdAt: new Date().toISOString(),
+      status: 'read',
+      sender: 'system',
+      senderName: 'ContactReach System',
+      isReadByCustomer: false,
+      isReadByAdmin: true,
+      notificationType: 'order_update'
+    };
+    db.messages.unshift(orderWelcomeMsg);
+    saveToFirestoreAsync('messages', orderWelcomeMsg.id, orderWelcomeMsg);
 
   saveDbToDisk('order_created', { order: newOrder });
   saveToFirestoreAsync('orders', newOrder.id, newOrder);
@@ -4001,17 +4049,101 @@ app.put('/api/buyers/profile', requireBuyerAuth, (req: Request, res: Response) =
   });
 });
 
-// 5. Buyer Order History
+// 5. Buyer Order History & Real-Time Tracking
 app.get('/api/buyers/orders', requireBuyerAuth, (req: Request, res: Response) => {
   const buyer = (req as any).buyerUser as CustomerUser;
   const cleanPhone = buyer.phone ? buyer.phone.replace(/\D/g, '') : '';
+  const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
 
   const buyerOrders = db.orders.filter(o =>
     (o.userId && o.userId === buyer.id) ||
-    (cleanPhone.length >= 7 && o.customerPhone && o.customerPhone.replace(/\D/g, '') === cleanPhone)
+    (cleanPhone.length >= 7 && o.customerPhone && o.customerPhone.replace(/\D/g, '') === cleanPhone) ||
+    (cleanEmail && o.customerEmail && o.customerEmail.toLowerCase().trim() === cleanEmail)
   );
 
+  // Sort orders descending by createdAt (newest first)
+  buyerOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json(buyerOrders);
+});
+
+// 5b. Buyer Inbox & Live Chat Messages (Real-Time Bidirectional Messages)
+app.get('/api/buyers/messages', requireBuyerAuth, (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  const cleanPhone = buyer.phone ? buyer.phone.replace(/\D/g, '') : '';
+  const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
+
+  const buyerMessages = db.messages.filter(m =>
+    (m.customerId && (m.customerId === buyer.id || m.customerId === `cust-${cleanPhone}` || (buyer.googleUid && m.customerId === `cust-g-${buyer.googleUid}`))) ||
+    (cleanPhone.length >= 7 && m.phone && m.phone.replace(/\D/g, '') === cleanPhone) ||
+    (cleanEmail && m.email && m.email.toLowerCase().trim() === cleanEmail)
+  );
+
+  // Return sorted chronologically (oldest to newest for chat view)
+  buyerMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  res.json(buyerMessages);
+});
+
+// 5c. Buyer Send Message to Admin
+app.post('/api/buyers/messages', requireBuyerAuth, (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  const { message, subject, orderNumber } = req.body;
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'Message text is required.' });
+  }
+
+  const newMessage: AdminMessage = {
+    id: `msg-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    customerId: buyer.id,
+    name: buyer.name,
+    email: buyer.email || `${(buyer.phone || 'customer').replace(/\D/g, '')}@contactreach.rw`,
+    phone: buyer.phone || '',
+    subject: subject?.trim() || (orderNumber ? `Inquiry regarding Order #${orderNumber}` : 'Customer Support Chat'),
+    message: message.trim(),
+    orderNumber: orderNumber?.trim() || undefined,
+    createdAt: new Date().toISOString(),
+    status: 'unread',
+    sender: 'customer',
+    senderName: buyer.name,
+    isReadByCustomer: true,
+    isReadByAdmin: false,
+    notificationType: 'chat'
+  };
+
+  db.messages.unshift(newMessage);
+  saveDbToDisk('message_created', { message: newMessage });
+  saveToFirestoreAsync('messages', newMessage.id, newMessage);
+
+  res.status(201).json({
+    message: 'Message sent successfully',
+    data: newMessage
+  });
+});
+
+// 5d. Buyer Mark Inbox Messages As Read
+app.put('/api/buyers/messages/mark-read', requireBuyerAuth, (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  const cleanPhone = buyer.phone ? buyer.phone.replace(/\D/g, '') : '';
+  const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
+
+  let updatedCount = 0;
+  db.messages.forEach(m => {
+    const isTarget = (m.customerId && (m.customerId === buyer.id || m.customerId === `cust-${cleanPhone}`)) ||
+      (cleanPhone.length >= 7 && m.phone && m.phone.replace(/\D/g, '') === cleanPhone) ||
+      (cleanEmail && m.email && m.email.toLowerCase().trim() === cleanEmail);
+
+    if (isTarget && m.isReadByCustomer === false) {
+      m.isReadByCustomer = true;
+      updatedCount++;
+      saveToFirestoreAsync('messages', m.id, m);
+    }
+  });
+
+  if (updatedCount > 0) {
+    saveDbToDisk();
+  }
+
+  res.json({ success: true, updatedCount });
 });
 
 // 6. Buyer Logout
@@ -5991,6 +6123,30 @@ app.patch('/api/admin/orders/:id/status', requireAdminAuth, requireRole(['owner'
   logAudit(admin, 'ORDER_UPDATED', `Order #${order.orderNumber} updated to Delivery: ${order.deliveryStatus || 'Pending'} (${order.paymentStatus})`, 'order', order.id);
   saveDbToDisk('order_status_updated', { order });
   saveToFirestoreAsync('orders', order.id, order);
+
+  // Real-time synchronization notification to Customer Inbox
+  if (previousStatus !== order.status || previousPaymentStatus !== order.paymentStatus || previousDeliveryStatus !== order.deliveryStatus || trackingNumber) {
+    const statusNotice: AdminMessage = {
+      id: `msg-ordstat-${order.id}-${Date.now()}`,
+      customerId: order.userId || (order.customerPhone ? `cust-${order.customerPhone.replace(/\D/g, '')}` : undefined),
+      name: order.customerName,
+      email: order.customerEmail || `${order.customerPhone.replace(/\D/g, '')}@contactreach.rw`,
+      phone: order.customerPhone,
+      subject: `Order ${order.orderNumber}: ${order.deliveryStatus || order.status}`,
+      message: `Status update on Order ${order.orderNumber}: Delivery Status is now "${order.deliveryStatus || order.status}", Payment is "${order.paymentStatus}".${order.trackingNumber ? ` Tracking Number: ${order.trackingNumber} (${order.trackingCarrier || 'Courier'}).` : ''}${order.expectedDeliveryDate ? ` Estimated arrival: ${order.expectedDeliveryDate}.` : ''}`,
+      orderNumber: order.orderNumber,
+      createdAt: new Date().toISOString(),
+      status: 'read',
+      sender: 'system',
+      senderName: 'ContactReach Fulfillment',
+      isReadByCustomer: false,
+      isReadByAdmin: true,
+      notificationType: 'order_update'
+    };
+    db.messages.unshift(statusNotice);
+    saveToFirestoreAsync('messages', statusNotice.id, statusNotice);
+  }
+
   res.json(order);
 });
 
@@ -6654,6 +6810,189 @@ app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'a
   saveDbToDisk();
   deleteFromFirestoreAsync('messages', removed.id);
   res.json({ message: 'Message deleted', removed });
+});
+
+// -------------------------------------------------------------
+// ADMIN CONVERSATIONS & REAL-TIME CHAT THREADS
+// -------------------------------------------------------------
+
+app.get('/api/admin/conversations', requireAdminAuth, (req: Request, res: Response) => {
+  const threadMap = new Map<string, {
+    customerId: string;
+    customerName: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    messages: AdminMessage[];
+    lastMessage: string;
+    lastMessageAt: string;
+    lastSender: 'customer' | 'admin' | 'system';
+    unreadAdminCount: number;
+    unreadCustomerCount: number;
+    orderNumbers: Set<string>;
+  }>();
+
+  for (const m of db.messages) {
+    const key = (m.customerId && m.customerId.trim()) ||
+      (m.email && m.email.toLowerCase().trim()) ||
+      (m.phone && m.phone.replace(/\D/g, '')) ||
+      m.id;
+
+    if (!threadMap.has(key)) {
+      threadMap.set(key, {
+        customerId: m.customerId || key,
+        customerName: m.name || 'Valued Customer',
+        customerEmail: m.email,
+        customerPhone: m.phone,
+        messages: [],
+        lastMessage: m.message,
+        lastMessageAt: m.createdAt,
+        lastSender: m.sender || 'customer',
+        unreadAdminCount: 0,
+        unreadCustomerCount: 0,
+        orderNumbers: new Set()
+      });
+    }
+
+    const thread = threadMap.get(key)!;
+    thread.messages.push(m);
+    if (m.orderNumber) thread.orderNumbers.add(m.orderNumber);
+
+    if (m.isReadByAdmin === false || (m.status === 'unread' && m.sender !== 'admin')) {
+      thread.unreadAdminCount++;
+    }
+    if (m.isReadByCustomer === false && m.sender === 'admin') {
+      thread.unreadCustomerCount++;
+    }
+
+    if (new Date(m.createdAt).getTime() > new Date(thread.lastMessageAt).getTime()) {
+      thread.lastMessage = m.message;
+      thread.lastMessageAt = m.createdAt;
+      thread.lastSender = m.sender || 'customer';
+    }
+  }
+
+  const conversations = Array.from(threadMap.values()).map(t => ({
+    customerId: t.customerId,
+    customerName: t.customerName,
+    customerEmail: t.customerEmail,
+    customerPhone: t.customerPhone,
+    lastMessage: t.lastMessage,
+    lastMessageAt: t.lastMessageAt,
+    lastSender: t.lastSender,
+    unreadAdminCount: t.unreadAdminCount,
+    unreadCustomerCount: t.unreadCustomerCount,
+    totalMessages: t.messages.length,
+    orderNumbers: Array.from(t.orderNumbers)
+  }));
+
+  conversations.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+  res.json(conversations);
+});
+
+app.get('/api/admin/conversations/:customerId', requireAdminAuth, (req: Request, res: Response) => {
+  const targetId = req.params.customerId;
+  const cleanTarget = targetId.toLowerCase().trim();
+
+  const threadMessages = db.messages.filter(m =>
+    (m.customerId && (m.customerId === targetId || m.customerId.toLowerCase() === cleanTarget)) ||
+    (m.email && m.email.toLowerCase().trim() === cleanTarget) ||
+    (m.phone && cleanTarget.length >= 7 && m.phone.replace(/\D/g, '') === cleanTarget.replace(/\D/g, '')) ||
+    m.id === targetId
+  );
+
+  threadMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  res.json(threadMessages);
+});
+
+app.post('/api/admin/conversations/:customerId/reply', requireAdminAuth, requireRole(['owner', 'administrator', 'customer_support']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const targetId = req.params.customerId;
+  const cleanTarget = targetId.toLowerCase().trim();
+  const { message, orderNumber, subject } = req.body;
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'Reply message cannot be empty' });
+  }
+
+  const customer = db.customers.find(c =>
+    c.id === targetId ||
+    (c.email && c.email.toLowerCase().trim() === cleanTarget) ||
+    (c.phone && cleanTarget.length >= 7 && c.phone.replace(/\D/g, '') === cleanTarget.replace(/\D/g, ''))
+  );
+  const prevMsg = db.messages.find(m =>
+    m.customerId === targetId ||
+    (m.email && m.email.toLowerCase().trim() === cleanTarget) ||
+    (m.phone && cleanTarget.length >= 7 && m.phone.replace(/\D/g, '') === cleanTarget.replace(/\D/g, ''))
+  );
+
+  const customerName = customer?.name || prevMsg?.name || 'Customer';
+  const customerEmail = customer?.email || prevMsg?.email || `${(customer?.phone || prevMsg?.phone || 'customer').replace(/\D/g, '')}@contactreach.rw`;
+  const customerPhone = customer?.phone || prevMsg?.phone || '';
+
+  const replyMsg: AdminMessage = {
+    id: `msg-reply-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    customerId: customer?.id || targetId,
+    name: customerName,
+    email: customerEmail,
+    phone: customerPhone,
+    subject: subject?.trim() || (orderNumber ? `Re: Order #${orderNumber}` : 'Customer Support Response'),
+    message: message.trim(),
+    orderNumber: orderNumber?.trim() || prevMsg?.orderNumber,
+    createdAt: new Date().toISOString(),
+    status: 'replied',
+    sender: 'admin',
+    senderName: admin?.name || 'ContactReach Support',
+    isReadByCustomer: false,
+    isReadByAdmin: true,
+    notificationType: 'chat'
+  };
+
+  // Mark all preceding customer messages in thread as replied and read by admin
+  db.messages.forEach(m => {
+    const isTarget = m.customerId === targetId ||
+      (m.email && m.email.toLowerCase().trim() === cleanTarget) ||
+      (m.phone && cleanTarget.length >= 7 && m.phone.replace(/\D/g, '') === cleanTarget.replace(/\D/g, ''));
+    if (isTarget && m.sender !== 'admin') {
+      m.status = 'replied';
+      m.replyNote = message.trim();
+      m.repliedAt = new Date().toISOString();
+      m.repliedBy = admin?.name || 'Admin';
+      m.isReadByAdmin = true;
+      saveToFirestoreAsync('messages', m.id, m);
+    }
+  });
+
+  db.messages.unshift(replyMsg);
+  saveDbToDisk('admin_reply_created', { message: replyMsg });
+  saveToFirestoreAsync('messages', replyMsg.id, replyMsg);
+
+  logAudit(admin, 'CUSTOMER_REPLY_SENT', `Replied to customer ${customerName} (${customerPhone || customerEmail})`, 'message', replyMsg.id);
+
+  res.status(201).json({
+    message: 'Reply sent successfully',
+    data: replyMsg
+  });
+});
+
+app.put('/api/admin/conversations/:customerId/mark-read', requireAdminAuth, (req: Request, res: Response) => {
+  const targetId = req.params.customerId;
+  const cleanTarget = targetId.toLowerCase().trim();
+
+  let count = 0;
+  db.messages.forEach(m => {
+    const isTarget = m.customerId === targetId ||
+      (m.email && m.email.toLowerCase().trim() === cleanTarget) ||
+      (m.phone && cleanTarget.length >= 7 && m.phone.replace(/\D/g, '') === cleanTarget.replace(/\D/g, ''));
+    if (isTarget && (m.isReadByAdmin === false || m.status === 'unread')) {
+      m.isReadByAdmin = true;
+      m.status = 'read';
+      count++;
+      saveToFirestoreAsync('messages', m.id, m);
+    }
+  });
+
+  if (count > 0) saveDbToDisk();
+  res.json({ success: true, updatedCount: count });
 });
 
 // -------------------------------------------------------------

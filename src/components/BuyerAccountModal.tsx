@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X, User, Phone, MapPin, Mail, Calendar, ShoppingBag,
-  LogOut, ShieldCheck, CheckCircle2, ChevronRight, AlertCircle, Edit3
+  LogOut, ShieldCheck, CheckCircle2, ChevronRight, AlertCircle, Edit3,
+  MessageSquare, Send, Bell, Clock, Truck, Package, Copy, ExternalLink,
+  RefreshCw, Check, ArrowRight, Info
 } from 'lucide-react';
-import { CustomerUser, Order } from '../types.ts';
+import { CustomerUser, Order, AdminMessage } from '../types.ts';
 import { api } from '../services/api.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
@@ -14,9 +16,11 @@ interface BuyerAccountModalProps {
   user: CustomerUser;
   onLogout: () => void;
   onTrackOrder: (orderNumber: string) => void;
+  onOpenPaymentConfirmation?: (order: Order) => void;
   currentLang: Language;
   currentCurrency?: CurrencyCode;
   exchangeRates?: Record<string, number>;
+  initialTab?: 'inbox' | 'orders' | 'profile';
 }
 
 export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
@@ -25,15 +29,31 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   user,
   onLogout,
   onTrackOrder,
+  onOpenPaymentConfirmation,
   currentLang,
   currentCurrency = 'RWF',
-  exchangeRates
+  exchangeRates,
+  initialTab = 'orders'
 }) => {
   const t = translations[currentLang] || translations.en;
   const isRTL = currentLang === 'ar';
+
+  const [activeTab, setActiveTab] = useState<'inbox' | 'orders' | 'profile'>(initialTab);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profile' | 'orders'>('profile');
+
+  // Chat & Inbox state
+  const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  const [chatInput, setChatInput] = useState('');
+  const [selectedOrderRef, setSelectedOrderRef] = useState<string>('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [copiedOrder, setCopiedOrder] = useState<string | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
+
+  // Order search/filter in Order Tracking tab
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'delivered'>('all');
 
   // Contact & Delivery details edit state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -43,27 +63,49 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   const [savedMsg, setSavedMsg] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Calculate unread count for customer
+  const unreadMessagesCount = messages.filter(
+    m => m.sender === 'admin' && m.isReadByCustomer === false
+  ).length;
+
+  const loadData = async (silent = false) => {
+    if (!silent) {
+      setLoadingOrders(true);
+      setLoadingMessages(true);
+    }
+    try {
+      const [fetchedOrders, fetchedMessages] = await Promise.all([
+        api.buyerGetOrders(),
+        api.buyerGetMessages()
+      ]);
+      setOrders(fetchedOrders);
+      setMessages(fetchedMessages);
+    } catch (err) {
+      console.warn('[BuyerAccount] Sync notice:', err);
+    } finally {
+      if (!silent) {
+        setLoadingOrders(false);
+        setLoadingMessages(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
-      setLoadingOrders(true);
-      api.buyerGetOrders()
-        .then(data => setOrders(data))
-        .catch(() => setOrders([]))
-        .finally(() => setLoadingOrders(false));
+      setActiveTab(initialTab);
+      loadData(false);
       setDeliveryAddress(user.deliveryAddress || '');
       setPhone(user.phone || '');
       setErrorMsg(null);
 
-      // Real-time synchronization: silently refresh buyer orders every 6 seconds while modal is open
+      // Real-time synchronization: silently refresh buyer orders & messages every 4 seconds
       const syncTimer = setInterval(() => {
-        api.buyerGetOrders()
-          .then(data => setOrders(data))
-          .catch(() => {});
-      }, 6000);
+        loadData(true);
+      }, 4000);
 
       const handleFocus = () => {
         if (document.visibilityState === 'visible') {
-          api.buyerGetOrders().then(data => setOrders(data)).catch(() => {});
+          loadData(true);
         }
       };
       window.addEventListener('focus', handleFocus);
@@ -75,9 +117,70 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
         document.removeEventListener('visibilitychange', handleFocus);
       };
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, initialTab]);
+
+  // When switching to inbox tab, mark messages as read and scroll to bottom
+  useEffect(() => {
+    if (activeTab === 'inbox' && isOpen) {
+      api.buyerMarkMessagesRead().then(() => {
+        setMessages(prev => prev.map(m => ({ ...m, isReadByCustomer: true })));
+      }).catch(() => {});
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [activeTab, isOpen, messages.length]);
 
   if (!isOpen) return null;
+
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = chatInput.trim();
+    if (!text || sendingMessage) return;
+
+    setSendingMessage(true);
+    setErrorMsg(null);
+
+    // Optimistic message creation
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: AdminMessage = {
+      id: tempId,
+      customerId: user.id,
+      name: user.name,
+      email: user.email || '',
+      phone: user.phone || '',
+      subject: selectedOrderRef ? `Inquiry regarding Order #${selectedOrderRef}` : 'Customer Support Chat',
+      message: text,
+      orderNumber: selectedOrderRef || undefined,
+      createdAt: new Date().toISOString(),
+      status: 'unread',
+      sender: 'customer',
+      senderName: user.name,
+      isReadByCustomer: true,
+      isReadByAdmin: false,
+      notificationType: 'chat'
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    setChatInput('');
+
+    try {
+      const created = await api.buyerSendMessage({
+        message: text,
+        orderNumber: selectedOrderRef || undefined,
+        subject: selectedOrderRef ? `Inquiry regarding Order #${selectedOrderRef}` : undefined
+      });
+      setMessages(prev => prev.map(m => m.id === tempId ? created : m));
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to send message. Please try again.');
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
@@ -99,9 +202,42 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedOrder(text);
+    setTimeout(() => setCopiedOrder(null), 2000);
+  };
+
+  const openChatForOrder = (orderNumber: string) => {
+    setSelectedOrderRef(orderNumber);
+    setActiveTab('inbox');
+    setChatInput(`Hello! I have a question regarding my order #${orderNumber}: `);
+  };
+
+  // Filtered orders for tracking tab
+  const filteredOrders = orders.filter(ord => {
+    if (orderStatusFilter === 'active') {
+      if (ord.status === 'Delivered' || ord.status === 'Cancelled' || ord.deliveryStatus === 'Delivered' || ord.deliveryStatus === 'Cancelled') {
+        return false;
+      }
+    } else if (orderStatusFilter === 'delivered') {
+      if (ord.status !== 'Delivered' && ord.deliveryStatus !== 'Delivered') {
+        return false;
+      }
+    }
+
+    if (!orderSearch.trim()) return true;
+    const q = orderSearch.toLowerCase();
+    return (
+      ord.orderNumber.toLowerCase().includes(q) ||
+      (ord.trackingNumber && ord.trackingNumber.toLowerCase().includes(q)) ||
+      ord.items?.some(it => it.productName.toLowerCase().includes(q))
+    );
+  });
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative border border-slate-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl relative border border-slate-200 flex flex-col max-h-[92vh]">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -111,88 +247,603 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {/* Profile Card Header */}
-        <div className="flex items-center gap-4 mb-6 pb-4 border-b border-slate-100">
+        {/* Dashboard Header Profile Banner */}
+        <div className="flex items-center gap-3.5 pb-4 mb-4 border-b border-slate-100">
           {user.photoURL ? (
             <img
               src={user.photoURL}
               alt={user.name}
-              className="w-14 h-14 rounded-2xl object-cover border-2 border-orange-500 shadow-md shrink-0"
+              className="w-13 h-13 rounded-2xl object-cover border-2 border-[#FF6000] shadow-sm shrink-0"
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#FF6000] to-amber-500 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
+            <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-[#FF6000] to-amber-500 text-white flex items-center justify-center font-black text-xl shadow-sm shrink-0">
               {user.name.charAt(0).toUpperCase()}
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black text-slate-900 truncate">{user.name}</h2>
+          <div className="flex-1 min-w-0 pr-6">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base sm:text-lg font-black text-slate-900 truncate">{user.name}</h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 shrink-0 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>Google Verified</span>
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Verified Buyer</span>
               </span>
             </div>
-            {user.email && (
-              <p className="text-xs font-medium text-slate-500 truncate mt-0.5">{user.email}</p>
-            )}
-            <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-              <Calendar className="w-3 h-3" />
-              <span>
-                {currentLang === 'en' ? 'Customer since' : 'Yiyandikishije'}{' '}
-                {new Date(user.createdAt).toLocaleDateString()}
-              </span>
-            </p>
+            <div className="flex items-center gap-2.5 text-xs text-slate-500 mt-0.5 flex-wrap">
+              {user.email && <span className="truncate">{user.email}</span>}
+              {user.phone && <span className="font-mono">{user.phone}</span>}
+            </div>
           </div>
         </div>
 
-        {/* Tab Selection */}
-        <div className="flex bg-slate-100 p-1 rounded-2xl mb-5 text-xs font-bold">
+        {/* Navigation Tabs */}
+        <div className="flex bg-slate-100 p-1 rounded-2xl mb-4 text-xs font-bold gap-1 shrink-0">
           <button
             type="button"
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'profile'
+            onClick={() => setActiveTab('inbox')}
+            className={`flex-1 py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'inbox'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {currentLang === 'en' ? 'My Account Details' : 'Imyirondoro'}
+            <MessageSquare className="w-3.5 h-3.5 text-[#FF6000]" />
+            <span>{currentLang === 'en' ? 'Inbox & Chat' : 'Ubutumwa'}</span>
+            {unreadMessagesCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-[#FF6000] text-white text-[10px] font-extrabold animate-pulse">
+                {unreadMessagesCount}
+              </span>
+            )}
           </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('orders')}
-            className={`flex-1 py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
               activeTab === 'orders'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>{currentLang === 'en' ? 'My Orders' : 'Komande Zanjye'}</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-orange-100 text-[#FF6000] text-[10px] font-extrabold">
+            <Truck className="w-3.5 h-3.5 text-blue-600" />
+            <span>{currentLang === 'en' ? 'Order Tracking' : 'Gukurikirana'}</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px] font-extrabold">
               {orders.length}
             </span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('profile')}
+            className={`flex-1 py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'profile'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <User className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{currentLang === 'en' ? 'My Profile' : 'Imyirondoro'}</span>
+          </button>
         </div>
 
-        {/* Error Alert */}
+        {/* Global Error Banner */}
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+          <div className="mb-3 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 shrink-0">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
             <span className="font-semibold">{errorMsg}</span>
           </div>
         )}
 
-        {/* Tab 1: Profile Details */}
+        {/* TAB 1: INBOX & LIVE ADMIN CHAT */}
+        {activeTab === 'inbox' && (
+          <div className="flex flex-col flex-1 min-h-[360px] max-h-[55vh] overflow-hidden">
+            {/* Live Chat Header Status */}
+            <div className="bg-slate-50 px-3.5 py-2.5 rounded-2xl border border-slate-200/80 flex items-center justify-between mb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-bold text-slate-800">
+                  {currentLang === 'en' ? 'ContactReach Admin & Support Desk' : 'Abakozi ba ContactReach'}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">
+                {currentLang === 'en' ? 'Direct Real-time Sync' : 'Birasangizwa ako kanya'}
+              </span>
+            </div>
+
+            {/* Quick Topic Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 text-[11px] shrink-0 scrollbar-none">
+              <span className="text-slate-400 font-bold shrink-0 text-[10px]">
+                {currentLang === 'en' ? 'Quick Topic:' : 'Inyandiko:'}
+              </span>
+              {[
+                { label: 'Delivery Status', rw: 'Aho komande igeze' },
+                { label: 'Payment Verification', rw: 'Kwishyura' },
+                { label: 'Change Address', rw: 'Guhindura aderesi' },
+                { label: 'Order Assistance', rw: 'Ubufasha' }
+              ].map(chip => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => {
+                    const prefix = currentLang === 'en' ? chip.label : chip.rw;
+                    setChatInput(prev => prev ? `${prev} [${prefix}]` : `Inquiry about ${prefix}: `);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 hover:text-[#FF6000] text-slate-600 font-semibold shrink-0 cursor-pointer transition-colors"
+                >
+                  {currentLang === 'en' ? chip.label : chip.rw}
+                </button>
+              ))}
+            </div>
+
+            {/* Message Thread List */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0 bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+              {loadingMessages ? (
+                <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#FF6000]" />
+                  <span>{currentLang === 'en' ? 'Loading message history...' : 'Kureba ubutumwa...'}</span>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="py-12 text-center space-y-2">
+                  <MessageSquare className="w-10 h-10 text-slate-300 mx-auto" />
+                  <p className="text-xs text-slate-600 font-bold">
+                    {currentLang === 'en' ? 'No messages in your inbox yet.' : 'Nta butumwa urabona.'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                    {currentLang === 'en'
+                      ? 'Have a question about your order, delivery, or payments? Send a message directly to our admin team below!'
+                      : 'Ufite ikibazo kuri komande yawe cyangwa kwishyura? Andikira abakozi bacu hasi!'}
+                  </p>
+                </div>
+              ) : (
+                messages.map(msg => {
+                  const isCustomer = msg.sender === 'customer';
+                  const isSystem = msg.sender === 'system' || msg.notificationType === 'order_update';
+
+                  if (isSystem) {
+                    return (
+                      <div key={msg.id} className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-2xl text-xs space-y-1 my-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 font-bold text-amber-900 text-[11px]">
+                            <Bell className="w-3.5 h-3.5 text-amber-600" />
+                            <span>{msg.subject || 'Order Notification'}</span>
+                          </div>
+                          <span className="text-[10px] text-amber-600/80 font-mono">
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-amber-900 leading-relaxed font-medium">
+                          {msg.message}
+                        </p>
+                        {msg.orderNumber && (
+                          <div className="pt-1 flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold bg-amber-200/60 px-2 py-0.5 rounded text-amber-900">
+                              Order #{msg.orderNumber}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onTrackOrder(msg.orderNumber!);
+                              }}
+                              className="text-[10px] text-[#FF6000] font-bold hover:underline cursor-pointer"
+                            >
+                              {currentLang === 'en' ? 'View live tracking →' : 'Kureba komande →'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col ${isCustomer ? 'items-end' : 'items-start'}`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px] text-slate-400">
+                        <span className="font-bold text-slate-600">
+                          {isCustomer ? (currentLang === 'en' ? 'You' : 'Wowe') : (msg.senderName || 'Customer Support')}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <div
+                        className={`max-w-[85%] sm:max-w-[75%] p-3.5 rounded-2xl text-xs shadow-xs leading-relaxed ${
+                          isCustomer
+                            ? 'bg-[#FF6000] text-white rounded-tr-xs'
+                            : 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs'
+                        }`}
+                      >
+                        {msg.orderNumber && (
+                          <div className={`text-[10px] font-bold mb-1 pb-1 border-b flex items-center gap-1 ${
+                            isCustomer ? 'border-white/30 text-white/90' : 'border-slate-100 text-[#FF6000]'
+                          }`}>
+                            <Package className="w-3 h-3" />
+                            <span>Order #{msg.orderNumber}</span>
+                          </div>
+                        )}
+                        <p className="whitespace-pre-wrap">{msg.message}</p>
+                      </div>
+
+                      {msg.replyNote && isCustomer && (
+                        <div className="mt-1.5 max-w-[85%] p-2.5 bg-slate-100 rounded-xl text-[11px] text-slate-700 border border-slate-200">
+                          <span className="font-bold text-[#FF6000] block text-[10px]">
+                            {currentLang === 'en' ? 'Admin note:' : 'Icyo ubuyobozi bwasubije:'}
+                          </span>
+                          <p>{msg.replyNote}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+
+            {/* Message Composer */}
+            <form onSubmit={handleSendMessage} className="pt-3 space-y-2 shrink-0">
+              {/* Optional Order Attachment Selector */}
+              {orders.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-bold shrink-0">
+                    {currentLang === 'en' ? 'Attach Order (optional):' : 'Huza na komande:'}
+                  </span>
+                  <select
+                    value={selectedOrderRef}
+                    onChange={(e) => setSelectedOrderRef(e.target.value)}
+                    className="text-[11px] bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-[#FF6000]"
+                  >
+                    <option value="">{currentLang === 'en' ? 'None (General Inquiry)' : 'Nta komande'}</option>
+                    {orders.map(o => (
+                      <option key={o.id} value={o.orderNumber}>
+                        {o.orderNumber} ({o.items?.length || 1} item - {o.status})
+                      </option>
+                    ))}
+                  </select>
+                  {selectedOrderRef && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderRef('')}
+                      className="text-slate-400 hover:text-slate-600 text-[10px] cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder={currentLang === 'en' ? 'Type your message to admin support here...' : 'Andika ubutumwa hano...'}
+                  className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-medium focus:ring-2 focus:ring-[#FF6000] focus:bg-white focus:outline-none"
+                  disabled={sendingMessage}
+                />
+                <button
+                  type="submit"
+                  disabled={!chatInput.trim() || sendingMessage}
+                  className="px-4 py-2.5 bg-[#FF6000] hover:bg-orange-600 text-white rounded-2xl font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-colors shadow-xs"
+                >
+                  {sendingMessage ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{currentLang === 'en' ? 'Send' : 'Ohereza'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* TAB 2: ORDER TRACKING */}
+        {activeTab === 'orders' && (
+          <div className="flex flex-col flex-1 min-h-[360px] max-h-[55vh] overflow-hidden">
+            {/* Search & Filter Bar */}
+            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between mb-3 shrink-0">
+              <input
+                type="text"
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                placeholder={currentLang === 'en' ? 'Search by Order # or product...' : 'Shakisha komande...'}
+                className="flex-1 px-3.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:ring-2 focus:ring-[#FF6000] focus:outline-none font-medium"
+              />
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl text-[11px] font-bold shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setOrderStatusFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg cursor-pointer ${
+                    orderStatusFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  All ({orders.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderStatusFilter('active')}
+                  className={`px-2.5 py-1 rounded-lg cursor-pointer ${
+                    orderStatusFilter === 'active' ? 'bg-white text-[#FF6000] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Active
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderStatusFilter('delivered')}
+                  className={`px-2.5 py-1 rounded-lg cursor-pointer ${
+                    orderStatusFilter === 'delivered' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Delivered
+                </button>
+              </div>
+            </div>
+
+            {/* Orders List */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
+              {loadingOrders ? (
+                <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#FF6000]" />
+                  <span>{currentLang === 'en' ? 'Fetching live orders...' : 'Kureba komande...'}</span>
+                </div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="py-12 text-center space-y-2 bg-slate-50 rounded-2xl border border-slate-100 p-6">
+                  <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto" />
+                  <p className="text-xs text-slate-600 font-bold">
+                    {orderSearch || orderStatusFilter !== 'all'
+                      ? (currentLang === 'en' ? 'No orders match your filter.' : 'Nta komande ihuye nibyo ushatse.')
+                      : (currentLang === 'en' ? 'No orders placed yet.' : 'Nta komande urakora.')}
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                    {currentLang === 'en'
+                      ? 'Browse through our catalog, pick items you love, and enjoy nationwide doorstep delivery!'
+                      : 'Hitamo ibicuruzwa ukunda tubikugezeho aho uri hose mu Rwanda!'}
+                  </p>
+                </div>
+              ) : (
+                filteredOrders.map(ord => {
+                  const isDelivered = ord.status === 'Delivered' || ord.deliveryStatus === 'Delivered';
+                  const isCancelled = ord.status === 'Cancelled' || ord.deliveryStatus === 'Cancelled';
+                  const isPaid = ord.paymentStatus === 'Paid';
+                  const isPendingPayment = ord.paymentStatus === 'Pending Payment' || ord.paymentStatus === 'Awaiting Payment';
+
+                  // Step tracker logic: 1. Placed, 2. Payment Verified, 3. Preparing, 4. Shipped/In Transit, 5. Delivered
+                  let currentStep = 1;
+                  if (isPaid) currentStep = 2;
+                  if (ord.status === 'Preparing' || ord.deliveryStatus === 'Processing' || ord.deliveryStatus === 'Awaiting Shipment') currentStep = 3;
+                  if (ord.status === 'Out for Delivery' || ord.deliveryStatus === 'In Transit' || ord.deliveryStatus === 'Shipped' || ord.deliveryStatus === 'Out for Delivery') currentStep = 4;
+                  if (isDelivered) currentStep = 5;
+
+                  return (
+                    <div
+                      key={ord.id}
+                      className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 hover:border-orange-300 transition-all text-xs space-y-3 shadow-2xs"
+                    >
+                      {/* Top Header: Order Number, Copy & Statuses */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-slate-900 text-sm">
+                            {ord.orderNumber}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(ord.orderNumber)}
+                            className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-200/60 cursor-pointer"
+                            title="Copy Order #"
+                          >
+                            {copiedOrder === ord.orderNumber ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Payment Status Pill */}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            isPaid
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : ord.paymentStatus === 'Under Verification' || ord.paymentStatus === 'Payment Submitted'
+                              ? 'bg-blue-100 text-blue-800'
+                              : ord.paymentStatus === 'Payment Rejected' || ord.paymentStatus === 'Failed'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {ord.paymentStatus || 'Pending Payment'}
+                          </span>
+
+                          {/* Delivery Status Pill */}
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                            isDelivered
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : isCancelled
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-[#FF6000]/15 text-[#FF6000]'
+                          }`}>
+                            {ord.deliveryStatus || ord.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Visual Step Progress Tracker (only if not cancelled) */}
+                      {!isCancelled && (
+                        <div className="py-1">
+                          <div className="grid grid-cols-4 gap-1 relative text-[10px]">
+                            {[
+                              { label: 'Placed', step: 1 },
+                              { label: 'Payment', step: 2 },
+                              { label: 'In Transit', step: 4 },
+                              { label: 'Delivered', step: 5 }
+                            ].map((s, idx) => (
+                              <div key={s.label} className="flex flex-col items-center text-center">
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold mb-1 transition-colors ${
+                                  currentStep >= s.step
+                                    ? 'bg-[#FF6000] text-white'
+                                    : 'bg-slate-200 text-slate-500'
+                                }`}>
+                                  {currentStep > s.step ? '✓' : s.step}
+                                </div>
+                                <span className={`font-semibold ${currentStep >= s.step ? 'text-slate-800' : 'text-slate-400'}`}>
+                                  {s.label}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Order Info & Total */}
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                        <span className="flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{new Date(ord.createdAt).toLocaleDateString()}</span>
+                        </span>
+                        <div className="text-right">
+                          <span className="font-black text-[#FF6000] text-sm block">
+                            {(() => {
+                              const formatted = formatCurrencyPrice(ord.totalAmount, currentCurrency, exchangeRates, { showBaseSecondary: true });
+                              return (
+                                <span>
+                                  <span>{formatted.primary}</span>
+                                  {formatted.secondary && (
+                                    <span className="text-[10px] text-slate-400 block font-normal">
+                                      {formatted.secondary}
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Courier & Tracking info if available */}
+                      {(ord.trackingNumber || ord.expectedDeliveryDate || ord.assignedCourier) && (
+                        <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/60 text-[11px] space-y-1">
+                          {ord.trackingNumber && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-blue-900 font-bold flex items-center gap-1">
+                                <Truck className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Tracking: <strong className="font-mono">{ord.trackingNumber}</strong></span>
+                                {ord.trackingCarrier && <span className="text-blue-600">({ord.trackingCarrier})</span>}
+                              </span>
+                              {ord.trackingUrl && (
+                                <a
+                                  href={ord.trackingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 font-bold hover:underline flex items-center gap-0.5 text-[10px]"
+                                >
+                                  <span>Track Live</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          {ord.expectedDeliveryDate && (
+                            <p className="text-blue-800 text-[10px]">
+                              Expected Arrival: <strong>{ord.expectedDeliveryDate}</strong>
+                            </p>
+                          )}
+                          {ord.assignedCourier && (
+                            <p className="text-blue-800 text-[10px]">
+                              Courier: <strong>{ord.assignedCourier}</strong> {ord.courierPhone && `(${ord.courierPhone})`}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Items Preview */}
+                      <div className="space-y-1.5 pt-1">
+                        {ord.items?.slice(0, 2).map((it, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-[11px]">
+                            {it.imageUrl && (
+                              <img
+                                src={it.imageUrl}
+                                alt={it.productName}
+                                className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-slate-800 truncate">{it.productName}</p>
+                              <p className="text-[10px] text-slate-400">Qty: {it.quantity} {it.variation && `• ${it.variation}`}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {ord.items && ord.items.length > 2 && (
+                          <p className="text-[10px] text-slate-400 pl-1">
+                            +{ord.items.length - 2} more item(s)...
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Card Action Buttons */}
+                      <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => openChatForOrder(ord.orderNumber)}
+                          className="text-[#FF6000] hover:text-orange-700 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>{currentLang === 'en' ? 'Chat about this order' : 'Baza kuri iyi komande'}</span>
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                          {isPendingPayment && onOpenPaymentConfirmation && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOpenPaymentConfirmation(ord);
+                              }}
+                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[10px] cursor-pointer"
+                            >
+                              {currentLang === 'en' ? 'Pay Now' : 'Ishyura'}
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onTrackOrder(ord.orderNumber);
+                            }}
+                            className="text-slate-700 hover:text-slate-900 font-bold flex items-center gap-1 text-[11px] cursor-pointer px-2.5 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-100"
+                          >
+                            <span>{currentLang === 'en' ? 'Track In Detail' : 'Ibisobanuro'}</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: PROFILE & DELIVERY ADDRESS */}
         {activeTab === 'profile' && (
-          <div className="space-y-4 text-xs">
+          <div className="space-y-4 text-xs overflow-y-auto pr-1 max-h-[55vh]">
             {/* Account Info Cards */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
                   {currentLang === 'en' ? 'Total Orders' : 'Komande Zose'}
                 </span>
-                <span className="text-lg font-black text-slate-900 mt-1 block">
+                <span className="text-xl font-black text-slate-900 mt-1 block">
                   {orders.length}
                 </span>
               </div>
@@ -228,6 +879,7 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                 </div>
                 {!isEditingProfile && (
                   <button
+                    type="button"
                     onClick={() => setIsEditingProfile(true)}
                     className="text-[#FF6000] font-bold hover:underline text-[11px] flex items-center gap-1 cursor-pointer"
                   >
@@ -283,8 +935,8 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                       className="px-4 py-1.5 bg-[#FF6000] text-white rounded-xl font-bold hover:bg-orange-600 cursor-pointer disabled:opacity-50"
                     >
                       {savingProfile
-                        ? currentLang === 'en' ? 'Saving...' : 'Kubika...'
-                        : currentLang === 'en' ? 'Save Changes' : 'Bika'}
+                        ? (currentLang === 'en' ? 'Saving...' : 'Kubika...')
+                        : (currentLang === 'en' ? 'Save Changes' : 'Bika')}
                     </button>
                   </div>
                 </div>
@@ -334,87 +986,10 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Orders List */}
-        {activeTab === 'orders' && (
-          <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-            {loadingOrders ? (
-              <div className="py-8 text-center text-xs text-slate-400">
-                {currentLang === 'en' ? 'Loading orders...' : 'Kureba komande...'}
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="py-8 text-center space-y-2">
-                <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto" />
-                <p className="text-xs text-slate-500 font-bold">
-                  {currentLang === 'en' ? 'No orders yet.' : 'Nta komande urakora.'}
-                </p>
-                <p className="text-[11px] text-slate-400">
-                  {currentLang === 'en' ? 'Browse our catalog and start shopping!' : 'Sura ibicuruzwa utangire kugura!'}
-                </p>
-              </div>
-            ) : (
-              orders.map((ord) => (
-                <div
-                  key={ord.id}
-                  className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 hover:bg-orange-50/40 transition-colors text-xs space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-black text-slate-900">{ord.orderNumber}</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                        ord.status === 'Delivered'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : ord.status === 'Cancelled'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {ord.status}
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] text-slate-500 flex items-center justify-between">
-                    <span>{new Date(ord.createdAt).toLocaleDateString()}</span>
-                    <span className="font-extrabold text-[#FF6000] text-right">
-                      {(() => {
-                        const formatted = formatCurrencyPrice(ord.totalAmount, currentCurrency, exchangeRates, { showBaseSecondary: true });
-                        return (
-                          <span>
-                            <span>{formatted.primary}</span>
-                            {formatted.secondary && (
-                              <span className="text-[9px] text-slate-400 block font-normal">
-                                {formatted.secondary}
-                              </span>
-                            )}
-                          </span>
-                        );
-                      })()}
-                    </span>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400">
-                      {ord.items?.length || 1} {ord.items?.length === 1 ? 'item' : 'items'}
-                    </span>
-                    <button
-                      onClick={() => {
-                        onClose();
-                        onTrackOrder(ord.orderNumber);
-                      }}
-                      className="text-[#FF6000] font-bold hover:underline flex items-center gap-1 text-[11px] cursor-pointer"
-                    >
-                      <span>{currentLang === 'en' ? 'Track Order' : 'Kurikirana'}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
         {/* Footer Logout Action */}
-        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
           <button
+            type="button"
             onClick={() => {
               onLogout();
               onClose();
@@ -422,9 +997,10 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
             className="text-rose-600 hover:text-rose-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
-            <span>{currentLang === 'en' ? 'Sign Out of Account' : 'Sohoka muri Konti'}</span>
+            <span>{currentLang === 'en' ? 'Sign Out' : 'Sohoka muri Konti'}</span>
           </button>
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
           >

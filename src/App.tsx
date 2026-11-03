@@ -1504,6 +1504,10 @@ export default function App() {
             setTrackingOrderNumber(orderRef);
             setIsTrackingOpen(true);
           }}
+          onOpenPaymentConfirmation={(order) => {
+            setConfirmationOrder(order);
+            setIsConfirmationOpen(true);
+          }}
           currentLang={currentLang}
           currentCurrency={currentCurrency}
           exchangeRates={exchangeRates}

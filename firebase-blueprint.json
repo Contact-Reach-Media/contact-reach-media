@@ -341,7 +341,12 @@
         "status": { "type": "string", "maxLength": 32 },
         "replyNote": { "type": "string", "maxLength": 2000 },
         "repliedAt": { "type": "string", "format": "date-time" },
-        "repliedBy": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "sender": { "type": "string", "maxLength": 32 },
+        "senderName": { "type": "string", "maxLength": 128 },
+        "isReadByCustomer": { "type": "boolean" },
+        "isReadByAdmin": { "type": "boolean" },
+        "notificationType": { "type": "string", "maxLength": 64 },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "email", "message"]

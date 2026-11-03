@@ -820,6 +820,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Messages Filter & Search
   const [messageSearch, setMessageSearch] = useState('');
   const [messageFilter, setMessageFilter] = useState<'all' | 'unread' | 'read' | 'replied'>('all');
+  const [messageViewMode, setMessageViewMode] = useState<'conversations' | 'feed'>('conversations');
+  const [selectedChatCustomerId, setSelectedChatCustomerId] = useState<string | null>(null);
+  const [adminChatReplyInput, setAdminChatReplyInput] = useState('');
+  const [sendingAdminChatReply, setSendingAdminChatReply] = useState(false);
 
   // Customer Edit Modal
   const [editingCustomerModal, setEditingCustomerModal] = useState<CustomerUser | null>(null);
@@ -5945,13 +5949,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {/* TAB 8: MESSAGES INBOX */}
+          {/* TAB 8: MESSAGES & CUSTOMER CONVERSATIONS */}
           {activeTab === 'messages' && (() => {
-            const unreadCount = messages.filter(m => m.status === 'unread').length;
+            const unreadCount = messages.filter(m => m.status === 'unread' && m.sender !== 'admin').length;
+
+            // Group messages into customer conversations
+            const conversationMap = new Map<string, {
+              customerId: string;
+              customerName: string;
+              customerEmail?: string;
+              customerPhone?: string;
+              messages: AdminMessage[];
+              lastMessage: string;
+              lastMessageAt: string;
+              lastSender: 'customer' | 'admin' | 'system';
+              unreadCount: number;
+              orderNumbers: Set<string>;
+            }>();
+
+            for (const m of messages) {
+              const key = (m.customerId && m.customerId.trim()) ||
+                (m.email && m.email.toLowerCase().trim()) ||
+                (m.phone && m.phone.replace(/\D/g, '')) ||
+                m.id;
+
+              if (!conversationMap.has(key)) {
+                conversationMap.set(key, {
+                  customerId: m.customerId || key,
+                  customerName: m.name || 'Valued Customer',
+                  customerEmail: m.email,
+                  customerPhone: m.phone,
+                  messages: [],
+                  lastMessage: m.message,
+                  lastMessageAt: m.createdAt,
+                  lastSender: m.sender || 'customer',
+                  unreadCount: 0,
+                  orderNumbers: new Set()
+                });
+              }
+
+              const conv = conversationMap.get(key)!;
+              conv.messages.push(m);
+              if (m.orderNumber) conv.orderNumbers.add(m.orderNumber);
+              if (m.isReadByAdmin === false || (m.status === 'unread' && m.sender !== 'admin')) {
+                conv.unreadCount++;
+              }
+              if (new Date(m.createdAt).getTime() > new Date(conv.lastMessageAt).getTime()) {
+                conv.lastMessage = m.message;
+                conv.lastMessageAt = m.createdAt;
+                conv.lastSender = m.sender || 'customer';
+              }
+            }
+
+            const conversationList = Array.from(conversationMap.values()).map(c => ({
+              ...c,
+              messages: c.messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+              orderNumbers: Array.from(c.orderNumbers)
+            }));
+            conversationList.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+
+            // Auto-select first conversation if none selected
+            const activeCustomerId = selectedChatCustomerId || (conversationList[0]?.customerId ?? null);
+            const activeConversation = conversationList.find(c => c.customerId === activeCustomerId) || conversationList[0];
+
+            // Filtered messages for feed view
             const filteredMessages = messages.filter(msg => {
               if (messageFilter === 'unread' && msg.status !== 'unread') return false;
               if (messageFilter === 'read' && msg.status !== 'read') return false;
-              if (messageFilter === 'replied' && !msg.replyNote) return false;
+              if (messageFilter === 'replied' && !msg.replyNote && msg.sender !== 'admin') return false;
 
               if (!messageSearch.trim()) return true;
               const q = messageSearch.toLowerCase();
@@ -5965,194 +6030,514 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               );
             });
 
+            const handleSendAdminReply = async (e?: React.FormEvent) => {
+              if (e) e.preventDefault();
+              if (!adminChatReplyInput.trim() || !activeConversation || sendingAdminChatReply) return;
+
+              setSendingAdminChatReply(true);
+              const text = adminChatReplyInput.trim();
+              const primaryOrder = activeConversation.orderNumbers[0];
+
+              try {
+                await api.adminReplyToConversation(activeConversation.customerId, {
+                  message: text,
+                  orderNumber: primaryOrder,
+                  subject: primaryOrder ? `Re: Order #${primaryOrder}` : 'Customer Support Response'
+                });
+                setAdminChatReplyInput('');
+                showToast('Reply sent to customer inbox in real time!');
+                fetchAllData();
+              } catch (err: any) {
+                alert(err.message || 'Failed to send reply to customer.');
+              } finally {
+                setSendingAdminChatReply(false);
+              }
+            };
+
             return (
-              <div className="space-y-5">
+              <div className="space-y-4">
+                {/* Header & Controls */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <h1 className="text-xl font-black text-slate-900 tracking-tight">Admin Messages & SMS Inbox</h1>
+                      <h1 className="text-xl font-black text-slate-900 tracking-tight">Customer Inbox & Live Conversations</h1>
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Live SMS Stream Active (No Reloading)
+                        Live Synchronized Across Devices
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500">Incoming customer SMS, MTN MoMo/Airtel payment SMS proofs, and contact inquiries received live without reloading</p>
-                  </div>
-                  {unreadCount > 0 && (
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-[#FF6000] text-white flex items-center gap-1.5 self-start sm:self-auto">
-                      <Mail className="w-3.5 h-3.5" />
-                      <span>{unreadCount} Unread Message{unreadCount > 1 ? 's' : ''}</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* Filter and Search Bar */}
-                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                    <input
-                      type="text"
-                      value={messageSearch}
-                      onChange={(e) => setMessageSearch(e.target.value)}
-                      placeholder="Search messages by sender name, phone, order #, subject or text..."
-                      className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#FF6000] focus:border-transparent"
-                    />
+                    <p className="text-xs text-slate-500">
+                      Chat directly with registered customers in real time, view order tracking inquiries, and send instant notifications
+                    </p>
                   </div>
 
-                  <div className="flex items-center gap-1 overflow-x-auto p-0.5 bg-slate-100 rounded-xl text-xs font-bold shrink-0">
-                    <button
-                      onClick={() => setMessageFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                        messageFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      All ({messages.length})
-                    </button>
-                    <button
-                      onClick={() => setMessageFilter('unread')}
-                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                        messageFilter === 'unread' ? 'bg-white text-[#FF6000] shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Unread ({unreadCount})
-                    </button>
-                    <button
-                      onClick={() => setMessageFilter('read')}
-                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                        messageFilter === 'read' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Read
-                    </button>
-                    <button
-                      onClick={() => setMessageFilter('replied')}
-                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                        messageFilter === 'replied' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Replied
-                    </button>
-                  </div>
-                </div>
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <span className="px-3 py-1 rounded-full text-xs font-black bg-[#FF6000] text-white flex items-center gap-1.5 self-start sm:self-auto shadow-2xs">
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>{unreadCount} Unread</span>
+                      </span>
+                    )}
 
-                <div className="grid grid-cols-1 gap-3">
-                  {filteredMessages.length === 0 ? (
-                    <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
-                      <Mail className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                      <p className="text-sm font-bold text-slate-600">No messages match your search or filter.</p>
-                      <p className="text-xs text-slate-400 mt-1">Customer inquiries submitted through Contact Reach Market appear here in real-time.</p>
+                    {/* View Mode Toggle: Conversations vs Feed */}
+                    <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setMessageViewMode('conversations')}
+                        className={`px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                          messageViewMode === 'conversations' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Conversations ({conversationList.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMessageViewMode('feed')}
+                        className={`px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                          messageViewMode === 'feed' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        All Messages ({messages.length})
+                      </button>
                     </div>
-                  ) : (
-                    filteredMessages.map(msg => (
-                      <div key={msg.id} className={`p-5 rounded-2xl border bg-white shadow-2xs space-y-3 ${
-                        msg.status === 'unread' ? 'border-orange-300 ring-1 ring-orange-200' : 'border-slate-200'
-                      }`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-sm text-slate-900">{msg.name}</span>
-                              <span className="text-xs text-slate-500">({msg.email})</span>
-                              {msg.status === 'unread' && (
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#FF6000] text-white uppercase">
-                                  Unread
-                                </span>
-                              )}
-                              {msg.replyNote && (
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 uppercase">
-                                  Replied
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-slate-500 font-mono">
-                                Phone: {msg.phone || 'N/A'} {msg.orderNumber && `· Order #${msg.orderNumber}`}
-                              </span>
-                              {msg.phone && (
-                                <div className="flex items-center gap-1.5 ml-2">
-                                  <a
-                                    href={`https://wa.me/25${msg.phone.replace(/\D/g, '')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[10px] text-emerald-600 hover:underline font-bold inline-flex items-center gap-0.5"
-                                  >
-                                    <MessageCircle className="w-3 h-3" />
-                                    <span>WhatsApp</span>
-                                  </a>
-                                  <span className="text-slate-300">·</span>
-                                  <a
-                                    href={`tel:${msg.phone}`}
-                                    className="text-[10px] text-blue-600 hover:underline font-bold inline-flex items-center gap-0.5"
-                                  >
-                                    <Phone className="w-3 h-3" />
-                                    <span>Call</span>
-                                  </a>
+                  </div>
+                </div>
+
+                {/* VIEW 1: CONVERSATIONS & CHAT MANAGER */}
+                {messageViewMode === 'conversations' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-white rounded-3xl border border-slate-200 shadow-2xs p-4 min-h-[520px]">
+                    {/* Left Pane: Customer Threads List */}
+                    <div className="lg:col-span-5 border-b lg:border-b-0 lg:border-r border-slate-100 pr-0 lg:pr-4 flex flex-col space-y-3">
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          value={messageSearch}
+                          onChange={(e) => setMessageSearch(e.target.value)}
+                          placeholder="Search conversations by customer or order..."
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#FF6000]"
+                        />
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto space-y-2 max-h-[500px] pr-1">
+                        {conversationList.length === 0 ? (
+                          <div className="p-8 text-center text-xs text-slate-400">
+                            No conversations yet. Customer inquiries and chat messages will appear here.
+                          </div>
+                        ) : (
+                          conversationList
+                            .filter(c => {
+                              if (!messageSearch.trim()) return true;
+                              const q = messageSearch.toLowerCase();
+                              return (
+                                c.customerName.toLowerCase().includes(q) ||
+                                (c.customerEmail && c.customerEmail.toLowerCase().includes(q)) ||
+                                (c.customerPhone && c.customerPhone.includes(q)) ||
+                                c.orderNumbers.some(o => o.toLowerCase().includes(q)) ||
+                                c.lastMessage.toLowerCase().includes(q)
+                              );
+                            })
+                            .map(conv => {
+                              const isSelected = activeConversation?.customerId === conv.customerId;
+                              return (
+                                <div
+                                  key={conv.customerId}
+                                  onClick={() => setSelectedChatCustomerId(conv.customerId)}
+                                  className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-orange-50/70 border-[#FF6000] ring-1 ring-[#FF6000]/20'
+                                      : 'bg-slate-50/60 hover:bg-slate-100 border-slate-200/80'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-1 mb-1">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="font-extrabold text-xs text-slate-900 truncate">
+                                        {conv.customerName}
+                                      </span>
+                                      {conv.unreadCount > 0 && (
+                                        <span className="px-1.5 py-0.2 rounded-full bg-[#FF6000] text-white text-[9px] font-black shrink-0">
+                                          {conv.unreadCount} new
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 shrink-0 font-mono">
+                                      {new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                    </span>
+                                  </div>
+
+                                  <p className="text-[11px] text-slate-600 truncate font-medium">
+                                    {conv.lastSender === 'admin' ? <strong className="text-slate-800">You: </strong> : null}
+                                    {conv.lastMessage}
+                                  </p>
+
+                                  <div className="flex items-center gap-2 mt-2 pt-1 border-t border-slate-200/50 text-[10px] text-slate-400">
+                                    {conv.customerPhone && <span className="font-mono">{conv.customerPhone}</span>}
+                                    {conv.orderNumbers.length > 0 && (
+                                      <span className="font-mono font-bold bg-slate-200/70 text-slate-700 px-1.5 py-0.2 rounded">
+                                        Order #{conv.orderNumbers[0]}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                          <span className="text-[11px] font-mono text-slate-400">
-                            {new Date(msg.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-
-                        <div>
-                          <h4 className="font-bold text-xs text-slate-800 mb-1">{msg.subject}</h4>
-                          <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            {msg.message}
-                          </p>
-                        </div>
-
-                        {msg.replyNote && (
-                          <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-xs text-orange-950">
-                            <span className="font-bold block text-[11px]">Staff Reply Note (by {msg.repliedBy || 'Admin'}):</span>
-                            <p>{msg.replyNote}</p>
-                          </div>
+                              );
+                            })
                         )}
+                      </div>
+                    </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          {msg.status === 'unread' && (
+                    {/* Right Pane: Live Chat & Reply Composer */}
+                    <div className="lg:col-span-7 flex flex-col justify-between pl-0 lg:pl-2 min-h-[460px]">
+                      {activeConversation ? (
+                        <>
+                          {/* Chat Header for Selected Customer */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-black text-sm text-slate-900">
+                                  {activeConversation.customerName}
+                                </h3>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                  {activeConversation.messages.length} message(s)
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
+                                {activeConversation.customerPhone && (
+                                  <span className="font-mono font-medium">{activeConversation.customerPhone}</span>
+                                )}
+                                {activeConversation.customerEmail && (
+                                  <span>{activeConversation.customerEmail}</span>
+                                )}
+                                {activeConversation.customerPhone && (
+                                  <div className="flex items-center gap-2 ml-1">
+                                    <a
+                                      href={`https://wa.me/25${activeConversation.customerPhone.replace(/\D/g, '')}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-emerald-600 font-bold hover:underline inline-flex items-center gap-0.5 text-[10px]"
+                                    >
+                                      <MessageCircle className="w-3 h-3" />
+                                      <span>WhatsApp</span>
+                                    </a>
+                                    <span className="text-slate-300">·</span>
+                                    <a
+                                      href={`tel:${activeConversation.customerPhone}`}
+                                      className="text-blue-600 font-bold hover:underline inline-flex items-center gap-0.5 text-[10px]"
+                                    >
+                                      <Phone className="w-3 h-3" />
+                                      <span>Call</span>
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
                             <button
+                              type="button"
                               onClick={async () => {
-                                await api.adminUpdateMessage(msg.id, { status: 'read' });
-                                showToast('Marked as read');
+                                await api.adminMarkConversationRead(activeConversation.customerId);
+                                showToast('Marked thread as read');
                                 fetchAllData();
                               }}
-                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg cursor-pointer"
+                              className="text-[11px] px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg cursor-pointer self-start sm:self-auto"
                             >
                               Mark Read
                             </button>
-                          )}
-                          <button
-                            onClick={async () => {
-                              const note = prompt('Enter staff resolution or reply note for customer:');
-                              if (note) {
-                                await api.adminUpdateMessage(msg.id, { replyNote: note, status: 'read' });
-                                showToast('Reply logged and saved!');
-                                fetchAllData();
+                          </div>
+
+                          {/* Chat Messages Stream */}
+                          <div className="flex-1 overflow-y-auto space-y-3 max-h-[340px] pr-2 bg-slate-50/40 p-3 rounded-2xl border border-slate-100 mb-3">
+                            {activeConversation.messages.map(msg => {
+                              const isAdmin = msg.sender === 'admin';
+                              const isSystem = msg.sender === 'system' || msg.notificationType === 'order_update';
+
+                              if (isSystem) {
+                                return (
+                                  <div key={msg.id} className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-0.5 my-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-amber-900 text-[11px] flex items-center gap-1">
+                                        <Bell className="w-3 h-3 text-amber-600" />
+                                        <span>System Order Notification</span>
+                                      </span>
+                                      <span className="text-[10px] text-amber-600 font-mono">
+                                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-amber-800">{msg.message}</p>
+                                  </div>
+                                );
                               }
-                            }}
-                            className="px-3 py-1 bg-[#121316] hover:bg-black text-white font-bold text-xs rounded-lg cursor-pointer"
-                          >
-                            Add Reply Note
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (confirm(`Delete message from ${msg.name}? This will remove it from the database and Cloud Firestore.`)) {
-                                await api.adminDeleteMessage(msg.id);
-                                showToast('Message deleted');
-                                fetchAllData();
-                              }
-                            }}
-                            className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg cursor-pointer border border-rose-200"
-                            title="Delete Message"
-                          >
-                            Delete
-                          </button>
+
+                              return (
+                                <div
+                                  key={msg.id}
+                                  className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'}`}
+                                >
+                                  <div className="flex items-center gap-1.5 mb-0.5 px-1 text-[10px] text-slate-400">
+                                    <span className="font-bold text-slate-600">
+                                      {isAdmin ? (msg.senderName || 'Staff (Admin)') : activeConversation.customerName}
+                                    </span>
+                                    <span>•</span>
+                                    <span>
+                                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+
+                                  <div
+                                    className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed shadow-2xs ${
+                                      isAdmin
+                                        ? 'bg-[#121316] text-white rounded-tr-xs'
+                                        : 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs'
+                                    }`}
+                                  >
+                                    {msg.orderNumber && (
+                                      <div className={`text-[10px] font-bold mb-1 pb-1 border-b flex items-center gap-1 ${
+                                        isAdmin ? 'border-white/20 text-orange-300' : 'border-slate-100 text-[#FF6000]'
+                                      }`}>
+                                        <Package className="w-3 h-3" />
+                                        <span>Order #{msg.orderNumber}</span>
+                                      </div>
+                                    )}
+                                    <p className="whitespace-pre-wrap">{msg.message}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Quick Admin Reply Templates */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px]">
+                              <span className="text-slate-400 font-bold shrink-0">Quick reply:</span>
+                              {[
+                                'Payment verified! Your order is being packed.',
+                                'Rider is on the way with your package.',
+                                'Thank you for reaching out! We are on it.'
+                              ].map(tpl => (
+                                <button
+                                  key={tpl}
+                                  type="button"
+                                  onClick={() => setAdminChatReplyInput(tpl)}
+                                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-orange-50 hover:text-[#FF6000] text-slate-600 font-medium shrink-0 cursor-pointer text-[10px]"
+                                >
+                                  {tpl}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Reply Form */}
+                            <form onSubmit={handleSendAdminReply} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={adminChatReplyInput}
+                                onChange={(e) => setAdminChatReplyInput(e.target.value)}
+                                placeholder={`Reply directly to ${activeConversation.customerName}...`}
+                                className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#FF6000] focus:bg-white"
+                                disabled={sendingAdminChatReply}
+                              />
+                              <button
+                                type="submit"
+                                disabled={!adminChatReplyInput.trim() || sendingAdminChatReply}
+                                className="px-5 py-2.5 bg-[#FF6000] hover:bg-orange-600 text-white rounded-2xl font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors shadow-xs shrink-0"
+                              >
+                                {sendingAdminChatReply ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>Send Reply</span>
+                                  </>
+                                )}
+                              </button>
+                            </form>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center text-xs text-slate-400">
+                          Select a customer conversation from the left to view messages and reply.
                         </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW 2: FEED OF ALL INBOUND MESSAGES & SMS */}
+                {messageViewMode === 'feed' && (
+                  <div className="space-y-3">
+                    {/* Filter and Search Bar */}
+                    <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                      <div className="relative flex-1">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                        <input
+                          type="text"
+                          value={messageSearch}
+                          onChange={(e) => setMessageSearch(e.target.value)}
+                          placeholder="Search messages by sender name, phone, order #, subject or text..."
+                          className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#FF6000] focus:border-transparent"
+                        />
                       </div>
-                    ))
-                  )}
-                </div>
+
+                      <div className="flex items-center gap-1 overflow-x-auto p-0.5 bg-slate-100 rounded-xl text-xs font-bold shrink-0">
+                        <button
+                          onClick={() => setMessageFilter('all')}
+                          className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                            messageFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          All ({messages.length})
+                        </button>
+                        <button
+                          onClick={() => setMessageFilter('unread')}
+                          className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                            messageFilter === 'unread' ? 'bg-white text-[#FF6000] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Unread ({unreadCount})
+                        </button>
+                        <button
+                          onClick={() => setMessageFilter('read')}
+                          className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                            messageFilter === 'read' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Read
+                        </button>
+                        <button
+                          onClick={() => setMessageFilter('replied')}
+                          className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                            messageFilter === 'replied' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Replied
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      {filteredMessages.length === 0 ? (
+                        <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+                          <Mail className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                          <p className="text-sm font-bold text-slate-600">No messages match your search or filter.</p>
+                          <p className="text-xs text-slate-400 mt-1">Customer inquiries submitted through Contact Reach Market appear here in real-time.</p>
+                        </div>
+                      ) : (
+                        filteredMessages.map(msg => (
+                          <div key={msg.id} className={`p-5 rounded-2xl border bg-white shadow-2xs space-y-3 ${
+                            msg.status === 'unread' && msg.sender !== 'admin' ? 'border-orange-300 ring-1 ring-orange-200' : 'border-slate-200'
+                          }`}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-extrabold text-sm text-slate-900">{msg.name}</span>
+                                  <span className="text-xs text-slate-500">({msg.email})</span>
+                                  {msg.status === 'unread' && msg.sender !== 'admin' && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#FF6000] text-white uppercase">
+                                      Unread
+                                    </span>
+                                  )}
+                                  {msg.replyNote && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 uppercase">
+                                      Replied
+                                    </span>
+                                  )}
+                                  {msg.sender === 'admin' && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-900 text-white uppercase">
+                                      Admin Reply
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-slate-500 font-mono">
+                                    Phone: {msg.phone || 'N/A'} {msg.orderNumber && `· Order #${msg.orderNumber}`}
+                                  </span>
+                                  {msg.phone && (
+                                    <div className="flex items-center gap-1.5 ml-2">
+                                      <a
+                                        href={`https://wa.me/25${msg.phone.replace(/\D/g, '')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-emerald-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                      >
+                                        <MessageCircle className="w-3 h-3" />
+                                        <span>WhatsApp</span>
+                                      </a>
+                                      <span className="text-slate-300">·</span>
+                                      <a
+                                        href={`tel:${msg.phone}`}
+                                        className="text-[10px] text-blue-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                      >
+                                        <Phone className="w-3 h-3" />
+                                        <span>Call</span>
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-400">
+                                {new Date(msg.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className="font-bold text-xs text-slate-800 mb-1">{msg.subject}</h4>
+                              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                {msg.message}
+                              </p>
+                            </div>
+
+                            {msg.replyNote && (
+                              <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-xs text-orange-950">
+                                <span className="font-bold block text-[11px]">Staff Reply Note (by {msg.repliedBy || 'Admin'}):</span>
+                                <p>{msg.replyNote}</p>
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedChatCustomerId(msg.customerId || msg.email || msg.phone || msg.id);
+                                  setMessageViewMode('conversations');
+                                }}
+                                className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-lg cursor-pointer flex items-center gap-1"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                <span>Open Chat Thread</span>
+                              </button>
+
+                              {msg.status === 'unread' && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await api.adminUpdateMessage(msg.id, { status: 'read' });
+                                    showToast('Marked as read');
+                                    fetchAllData();
+                                  }}
+                                  className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg cursor-pointer"
+                                >
+                                  Mark Read
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (confirm(`Delete message from ${msg.name}? This will remove it from the database and Cloud Firestore.`)) {
+                                    await api.adminDeleteMessage(msg.id);
+                                    showToast('Message deleted');
+                                    fetchAllData();
+                                  }
+                                }}
+                                className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg cursor-pointer border border-rose-200"
+                                title="Delete Message"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}

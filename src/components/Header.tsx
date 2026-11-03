@@ -482,8 +482,8 @@ export const Header: React.FC<HeaderProps> = ({
             {buyerUser ? (
               <button
                 onClick={onOpenBuyerAccount}
-                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 text-slate-800 hover:text-[#FF6000] hover:bg-slate-50 rounded-xl transition-colors cursor-pointer border border-slate-200 text-xs font-bold"
-                title="Buyer Account"
+                className="relative flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 text-slate-800 hover:text-[#FF6000] hover:bg-slate-50 rounded-xl transition-colors cursor-pointer border border-slate-200 text-xs font-bold"
+                title="Customer Dashboard: Inbox & Order Tracking"
               >
                 <div className="w-6 h-6 rounded-full bg-orange-100 text-[#FF6000] flex items-center justify-center font-black text-xs">
                   {buyerUser.name.charAt(0).toUpperCase()}
@@ -491,6 +491,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline max-w-[100px] truncate">
                   {buyerUser.name.split(' ')[0]}
                 </span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse hidden sm:inline-block" title="Account Active" />
               </button>
             ) : (
               <button

@@ -2606,6 +2606,148 @@ async function runTests() {
     assert.strictEqual(refundData.order.status, 'Cancelled');
   });
 
+  // TEST 65: Customer Account – Inbox, Real-Time Admin Chat & Order Tracking
+  await test('Customer Account: Personal dashboard inbox, real-time admin chat, and order tracking sync', async () => {
+    // 1. Customer signs in
+    const testPhone = '0789998877';
+    const loginRes = await fetch(`${BASE_URL}/api/buyers/phone-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: testPhone,
+        name: 'Jean Claude (Kigali Shopper)',
+        email: 'jeanclaude.test@gmail.com'
+      })
+    });
+    assert.strictEqual(loginRes.status, 200, 'Buyer phone login should succeed');
+    const loginData = await loginRes.json();
+    assert(loginData.token, 'Should return buyer session token');
+    const buyerToken = loginData.token;
+    const buyerId = loginData.user.id;
+
+    // 2. Customer places an order while logged in
+    const orderRes = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${buyerToken}`
+      },
+      body: JSON.stringify({
+        customerName: 'Jean Claude (Kigali Shopper)',
+        customerPhone: testPhone,
+        customerEmail: 'jeanclaude.test@gmail.com',
+        deliveryType: 'delivery',
+        deliveryLocation: 'Gasabo, Kimironko',
+        deliveryAddress: 'Near Kimironko Market Gate 3',
+        items: [{ productId: 'kikuu-2908001', quantity: 1 }],
+        paymentMethod: 'MTN Mobile Money'
+      })
+    });
+    assert.strictEqual(orderRes.status, 201, 'Order placement should return 201');
+    const createdOrder = await orderRes.json();
+    assert(createdOrder.orderNumber, 'Order number must be generated');
+    assert.strictEqual(createdOrder.userId, buyerId, 'Order must link to registered buyer user ID');
+
+    // 3. Customer checks Order Tracking in personal dashboard
+    const buyerOrdersRes = await fetch(`${BASE_URL}/api/buyers/orders`, {
+      headers: { Authorization: `Bearer ${buyerToken}` }
+    });
+    assert.strictEqual(buyerOrdersRes.status, 200);
+    const buyerOrders = await buyerOrdersRes.json();
+    assert(buyerOrders.some((o: any) => o.orderNumber === createdOrder.orderNumber), 'Placed order must appear in customer order tracking');
+
+    // 4. Check initial order creation notification in Customer Inbox
+    const initialInboxRes = await fetch(`${BASE_URL}/api/buyers/messages`, {
+      headers: { Authorization: `Bearer ${buyerToken}` }
+    });
+    assert.strictEqual(initialInboxRes.status, 200);
+    const initialMessages = await initialInboxRes.json();
+    assert(initialMessages.length > 0, 'Customer inbox should receive order creation notification');
+    assert(initialMessages.some((m: any) => m.orderNumber === createdOrder.orderNumber), 'Notification must reference the order number');
+
+    // 5. Customer sends a real-time message to Admin about their order
+    const sendMsgRes = await fetch(`${BASE_URL}/api/buyers/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${buyerToken}`
+      },
+      body: JSON.stringify({
+        message: `Hello support! Could you confirm the expected delivery rider for my order #${createdOrder.orderNumber}?`,
+        orderNumber: createdOrder.orderNumber,
+        subject: `Delivery inquiry for #${createdOrder.orderNumber}`
+      })
+    });
+    assert.strictEqual(sendMsgRes.status, 201, 'Buyer message should be created');
+    const sentMsgData = await sendMsgRes.json();
+    assert.strictEqual(sentMsgData.data.sender, 'customer');
+
+    // 6. Admin checks conversations in Admin Dashboard
+    const adminConvRes = await fetch(`${BASE_URL}/api/admin/conversations`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(adminConvRes.status, 200);
+    const conversations = await adminConvRes.json();
+    const customerThread = conversations.find((c: any) => c.customerId === buyerId || c.customerPhone === testPhone);
+    assert(customerThread, 'Customer conversation thread must be visible to Admin');
+    assert(customerThread.unreadAdminCount > 0, 'Admin must see unread badge for new customer inquiry');
+
+    // 7. Admin replies directly to customer thread
+    const adminReplyRes = await fetch(`${BASE_URL}/api/admin/conversations/${encodeURIComponent(buyerId)}/reply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        message: 'Hello Jean Claude! Your order is being packed. Our dispatch rider Jean Paul (0781234567) will deliver it this afternoon.',
+        orderNumber: createdOrder.orderNumber
+      })
+    });
+    assert.strictEqual(adminReplyRes.status, 201, 'Admin reply should be posted');
+    const replyData = await adminReplyRes.json();
+    assert.strictEqual(replyData.data.sender, 'admin');
+
+    // 8. Customer receives Admin reply in real time in personal dashboard inbox
+    const updatedInboxRes = await fetch(`${BASE_URL}/api/buyers/messages`, {
+      headers: { Authorization: `Bearer ${buyerToken}` }
+    });
+    const updatedInbox = await updatedInboxRes.json();
+    const adminReplyInInbox = updatedInbox.find((m: any) => m.sender === 'admin' && m.message.includes('Jean Paul'));
+    assert(adminReplyInInbox, 'Customer inbox must contain the admin reply');
+
+    // 9. Customer marks inbox messages as read
+    const markReadRes = await fetch(`${BASE_URL}/api/buyers/messages/mark-read`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${buyerToken}` }
+    });
+    assert.strictEqual(markReadRes.status, 200);
+
+    // 10. Admin updates order delivery status to "Out for Delivery" with courier tracking
+    const updateOrderRes = await fetch(`${BASE_URL}/api/admin/orders/${createdOrder.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        deliveryStatus: 'Out for Delivery',
+        trackingNumber: 'RW-COURIER-9921',
+        trackingCarrier: 'Kigali Express Courier',
+        expectedDeliveryDate: '2026-11-04'
+      })
+    });
+    assert.strictEqual(updateOrderRes.status, 200);
+
+    // 11. Customer inbox receives automated real-time status update notification
+    const finalInboxRes = await fetch(`${BASE_URL}/api/buyers/messages`, {
+      headers: { Authorization: `Bearer ${buyerToken}` }
+    });
+    const finalInbox = await finalInboxRes.json();
+    const deliveryNotice = finalInbox.find((m: any) => m.notificationType === 'order_update' && m.message.includes('Out for Delivery'));
+    assert(deliveryNotice, 'Customer must receive real-time order delivery status update in inbox');
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');
