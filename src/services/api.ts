@@ -1,5 +1,5 @@
 import {
-  Product, Order, PaymentConfirmation, AppSettings, Category, OrderStatus,
+  Product, Order, PaymentConfirmation, AppSettings, Category, OrderStatus, OrderDeliveryStatus,
   VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority,
@@ -1325,9 +1325,30 @@ export const api = {
     return [];
   },
 
+  async adminGetOrdersSummary(): Promise<any> {
+    try {
+      const res = await fetch('/api/admin/orders/summary', {
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return null;
+  },
+
   async adminUpdateOrderStatus(orderId: string, data: {
     status?: OrderStatus;
+    deliveryStatus?: OrderDeliveryStatus;
     paymentStatus?: PaymentStatus;
+    trackingNumber?: string;
+    trackingCarrier?: string;
+    trackingUrl?: string;
+    expectedDeliveryDate?: string;
+    supplierName?: string;
+    supplierOrderRef?: string;
+    dispatchDate?: string;
     note?: string;
     assignedCourier?: string;
     courierPhone?: string;

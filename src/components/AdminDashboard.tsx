@@ -12,7 +12,7 @@ import {
   Database, Bell
 } from 'lucide-react';
 import {
-  Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
+  Product, Order, PaymentConfirmation, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
   PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   AdminUser, AdminRole, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority,
@@ -383,6 +383,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all');
+  const [orderDeliveryFilter, setOrderDeliveryFilter] = useState('all');
+  const [orderSupplierFilter, setOrderSupplierFilter] = useState('all');
+  const [orderDateFilter, setOrderDateFilter] = useState('all');
 
   // Product Row Selection & Bulk Actions
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -849,6 +852,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleOpenOrderDetail = (order: Order) => {
     setSelectedOrderModal(order);
+    const derivedSupplier = order.supplierName || (order.items?.[0]?.supplierName) || order.shopName || 'Contact Reach Market';
     setOrderEditForm({
       customerName: order.customerName,
       customerPhone: order.customerPhone,
@@ -861,11 +865,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       status: order.status,
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
+      deliveryStatus: order.deliveryStatus || 'Pending',
+      expectedDeliveryDate: order.expectedDeliveryDate || '',
+      supplierName: derivedSupplier,
+      supplierOrderRef: order.supplierOrderRef || '',
+      dispatchDate: order.dispatchDate || '',
       assignedCourier: order.assignedCourier || '',
       courierPhone: order.courierPhone || '',
       internalNotes: order.internalNotes || '',
       trackingNumber: order.trackingNumber || '',
-      trackingCarrier: order.trackingCarrier || ''
+      trackingCarrier: order.trackingCarrier || '',
+      trackingUrl: order.trackingUrl || ''
     });
   };
 
@@ -1623,19 +1633,97 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
   }, [products, productCatFilter, productShopFilter, productSearch]);
 
-  // Filtered Orders
+  // Unique Suppliers list for filter dropdown
+  const uniqueSuppliers = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach(o => {
+      if (o.supplierName) set.add(o.supplierName);
+      if (o.shopName) set.add(o.shopName);
+      (o.items || []).forEach(i => {
+        if (i.supplierName) set.add(i.supplierName);
+        if (i.shopName) set.add(i.shopName);
+      });
+    });
+    return Array.from(set).filter(Boolean).sort();
+  }, [orders]);
+
+  // Comprehensive Summary Statistics for Order Management
+  const orderSummaryStats = useMemo(() => {
+    const total = orders.length;
+    const pending = orders.filter(o => (o.deliveryStatus === 'Pending' || (!o.deliveryStatus && (o.status === 'New' || o.status === 'Awaiting Payment' || o.status === 'Payment Submitted')))).length;
+    const processing = orders.filter(o => (o.deliveryStatus === 'Processing' || (!o.deliveryStatus && (o.status === 'Preparing' || o.status === 'Processing' || o.status === 'Confirmed')))).length;
+    const awaitingShipment = orders.filter(o => o.deliveryStatus === 'Awaiting Shipment').length;
+    const shipped = orders.filter(o => (o.deliveryStatus === 'Shipped' || (!o.deliveryStatus && o.status === 'Ready for Delivery'))).length;
+    const inTransit = orders.filter(o => (o.deliveryStatus === 'In Transit' || o.deliveryStatus === 'Out for Delivery' || (!o.deliveryStatus && o.status === 'Out for Delivery'))).length;
+    const delivered = orders.filter(o => (o.deliveryStatus === 'Delivered' || (!o.deliveryStatus && (o.status === 'Delivered' || o.status === 'Completed')))).length;
+    const cancelled = orders.filter(o => (o.deliveryStatus === 'Cancelled' || (!o.deliveryStatus && o.status === 'Cancelled'))).length;
+    const failedDelivery = orders.filter(o => (o.deliveryStatus === 'Failed Delivery' || o.deliveryStatus === 'Returned' || (!o.deliveryStatus && o.status === 'Returned'))).length;
+    const delayed = orders.filter(o => {
+      if (o.deliveryStatus === 'Delivered' || o.deliveryStatus === 'Cancelled' || o.status === 'Delivered' || o.status === 'Cancelled') return false;
+      if (!o.expectedDeliveryDate) return false;
+      return new Date(o.expectedDeliveryDate).getTime() < Date.now();
+    }).length;
+    const missingTracking = orders.filter(o => {
+      if (o.deliveryStatus === 'Delivered' || o.deliveryStatus === 'Cancelled' || o.status === 'Cancelled') return false;
+      return !o.trackingNumber || !o.trackingNumber.trim();
+    }).length;
+
+    return { total, pending, processing, awaitingShipment, shipped, inTransit, delivered, cancelled, failedDelivery, delayed, missingTracking };
+  }, [orders]);
+
+  // Filtered Orders across 5 fields & 4 distinct filters
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
+      // 1. Delivery Status Filter
+      const effectiveDelivery = o.deliveryStatus || (o.status === 'Delivered' ? 'Delivered' : o.status === 'Out for Delivery' ? 'In Transit' : o.status === 'Preparing' ? 'Processing' : o.status === 'Cancelled' ? 'Cancelled' : 'Pending');
+      const matchDelivery = orderDeliveryFilter === 'all' || effectiveDelivery.toLowerCase() === orderDeliveryFilter.toLowerCase();
+
+      // 2. High-level status filter
       const matchStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+
+      // 3. Payment Status Filter
       const matchPay = orderPaymentFilter === 'all' || o.paymentStatus === orderPaymentFilter;
+
+      // 4. Supplier Filter
+      const orderSupplier = (o.supplierName || o.shopName || '').toLowerCase();
+      const hasItemSupplier = (o.items || []).some(i => (i.supplierName || i.shopName || '').toLowerCase().includes(orderSupplierFilter.toLowerCase()));
+      const matchSupplier = orderSupplierFilter === 'all' || orderSupplier.includes(orderSupplierFilter.toLowerCase()) || hasItemSupplier;
+
+      // 5. Order Date Filter
+      let matchDate = true;
+      if (orderDateFilter !== 'all') {
+        const orderTime = new Date(o.createdAt).getTime();
+        const now = Date.now();
+        if (orderDateFilter === 'today') {
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          matchDate = orderTime >= startOfDay.getTime();
+        } else if (orderDateFilter === '7days') {
+          matchDate = orderTime >= now - 7 * 24 * 60 * 60 * 1000;
+        } else if (orderDateFilter === '30days') {
+          matchDate = orderTime >= now - 30 * 24 * 60 * 60 * 1000;
+        } else if (orderDateFilter === 'this_month') {
+          const orderD = new Date(o.createdAt);
+          const currentD = new Date();
+          matchDate = orderD.getMonth() === currentD.getMonth() && orderD.getFullYear() === currentD.getFullYear();
+        }
+      }
+
+      // 6. Search across Order ID, Product Name, Customer Name, Customer Phone, Supplier Name
       const q = orderSearch.toLowerCase().trim();
       const matchQ = !q ||
         o.orderNumber.toLowerCase().includes(q) ||
+        o.id.toLowerCase().includes(q) ||
         o.customerName.toLowerCase().includes(q) ||
-        o.customerPhone.toLowerCase().includes(q);
-      return matchStatus && matchPay && matchQ;
+        o.customerPhone.toLowerCase().includes(q) ||
+        (o.supplierName && o.supplierName.toLowerCase().includes(q)) ||
+        (o.shopName && o.shopName.toLowerCase().includes(q)) ||
+        (o.trackingNumber && o.trackingNumber.toLowerCase().includes(q)) ||
+        (o.items || []).some(i => i.productName.toLowerCase().includes(q) || (i.supplierName && i.supplierName.toLowerCase().includes(q)));
+
+      return matchDelivery && matchStatus && matchPay && matchSupplier && matchDate && matchQ;
     });
-  }, [orders, orderStatusFilter, orderPaymentFilter, orderSearch]);
+  }, [orders, orderDeliveryFilter, orderStatusFilter, orderPaymentFilter, orderSupplierFilter, orderDateFilter, orderSearch]);
 
   // Handlers for Products
   const handleOpenAddProduct = () => {
@@ -2680,14 +2768,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Order Update
   const handleUpdateOrderStatus = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!orderStatusModal) return;
     try {
       const updated = await api.adminUpdateOrderStatus(orderStatusModal.id, {
         status: orderStatusModal.status,
+        deliveryStatus: orderStatusModal.deliveryStatus,
         paymentStatus: orderStatusModal.paymentStatus,
+        trackingNumber: orderStatusModal.trackingNumber,
+        trackingCarrier: orderStatusModal.trackingCarrier,
+        expectedDeliveryDate: orderStatusModal.expectedDeliveryDate,
+        supplierName: orderStatusModal.supplierName,
+        supplierOrderRef: orderStatusModal.supplierOrderRef,
+        dispatchDate: orderStatusModal.dispatchDate,
         assignedCourier: orderStatusModal.assignedCourier,
         courierPhone: orderStatusModal.courierPhone,
         internalNotes: orderStatusModal.internalNotes
@@ -4576,17 +4670,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* TAB 5: ORDERS & DELIVERIES */}
           {activeTab === 'orders' && (
-            <div className="space-y-5">
+            <div className="space-y-6">
+              {/* Header */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Orders & Delivery Management</h1>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Orders & Delivery Tracking Hub</h1>
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       Live Stream Active (No Reloading)
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500">Real-time incoming orders received live without reloading. Track shipments, manual supplier approvals, and assign couriers</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Real-time order pipeline and parcel delivery tracking. Manage suppliers, couriers, and customer notifications.
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
@@ -4602,59 +4699,340 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     title="Export eligible customer orders into the DSers order template"
                   >
                     <Download className="w-4 h-4 text-indigo-200" />
-                    <span>Export DSers Orders (CSV)</span>
+                    <span>Export DSers (CSV)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      try {
+                        const csvRows = [
+                          ['Order ID', 'Date', 'Customer Name', 'Customer Phone', 'Supplier', 'Payment Status', 'Delivery Status', 'Tracking Number', 'Expected Delivery Date', 'Total (FRW)'].join(',')
+                        ];
+                        filteredOrders.forEach(o => {
+                          const sup = o.supplierName || (o.items?.[0]?.supplierName) || o.shopName || 'Contact Reach Market';
+                          const trk = o.trackingNumber || 'Not Yet Available';
+                          const eta = o.expectedDeliveryDate || 'Not Yet Available';
+                          csvRows.push([
+                            `"${o.orderNumber}"`,
+                            `"${new Date(o.createdAt).toLocaleDateString()}"`,
+                            `"${(o.customerName || '').replace(/"/g, '""')}"`,
+                            `"${o.customerPhone || ''}"`,
+                            `"${sup.replace(/"/g, '""')}"`,
+                            `"${o.paymentStatus || 'Pending Payment'}"`,
+                            `"${o.deliveryStatus || o.status || 'Pending'}"`,
+                            `"${trk}"`,
+                            `"${eta}"`,
+                            o.totalAmount || 0
+                          ].join(','));
+                        });
+                        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.setAttribute('href', url);
+                        link.setAttribute('download', `contactreach_orders_${new Date().toISOString().slice(0, 10)}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        showToast(`Exported ${filteredOrders.length} orders to CSV successfully.`);
+                      } catch {
+                        showToast('Failed to export orders to CSV', 'error');
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Export filtered orders report as CSV"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                    <span>Export CSV</span>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('dsers')}
                     className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
-                    title="Open DSers & Supplier Fulfillment Tab for manual review and product mapping"
+                    title="Open DSers & Supplier Fulfillment Tab"
                   >
                     <Globe className="w-4 h-4 text-emerald-600" />
-                    <span>DSers Fulfillment Hub</span>
+                    <span>Fulfillment Hub</span>
                   </button>
                 </div>
               </div>
 
-              {/* Filters */}
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 flex flex-wrap gap-2.5 items-center justify-between text-xs">
-                <div className="flex-1 min-w-[200px] relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                    placeholder="Search by order CRM-..., name, or phone..."
-                    className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={orderStatusFilter}
-                    onChange={(e) => setOrderStatusFilter(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                  >
-                    <option value="all">All Order Statuses</option>
-                    <option value="New">New</option>
-                    <option value="Confirmed">Confirmed</option>
-                    <option value="Preparing">Preparing</option>
-                    <option value="Ready for Delivery">Ready for Delivery</option>
-                    <option value="Out for Delivery">Out for Delivery</option>
-                    <option value="Delivered">Delivered</option>
-                    <option value="Cancelled">Cancelled</option>
-                  </select>
+              {/* 7 SUMMARY COUNTERS */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5">
+                {/* 1. Total Orders */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderDeliveryFilter('all');
+                    setOrderStatusFilter('all');
+                  }}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    orderDeliveryFilter === 'all' && orderStatusFilter === 'all'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-900/20'
+                      : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Total Orders</span>
+                    <Package className="w-3.5 h-3.5 opacity-70" />
+                  </div>
+                  <div className="text-xl font-black mt-1 font-mono">{orderSummaryStats.total}</div>
+                  <div className="text-[10px] opacity-70 mt-0.5">All customer orders</div>
+                </button>
 
-                  <select
-                    value={orderPaymentFilter}
-                    onChange={(e) => setOrderPaymentFilter(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                  >
-                    <option value="all">All Payment Statuses</option>
-                    <option value="Paid">Paid</option>
-                    <option value="Pending Verification">Pending Verification</option>
-                    <option value="Pending Payment">Pending Payment</option>
-                    <option value="Failed">Failed</option>
-                  </select>
+                {/* 2. Pending Orders */}
+                <button
+                  type="button"
+                  onClick={() => setOrderDeliveryFilter(prev => prev === 'Pending' ? 'all' : 'Pending')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    orderDeliveryFilter === 'Pending'
+                      ? 'bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                      : 'bg-amber-50/60 hover:bg-amber-100/60 border-amber-200 text-amber-900 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Pending</span>
+                    <Clock className="w-3.5 h-3.5 opacity-70" />
+                  </div>
+                  <div className="text-xl font-black mt-1 font-mono">{orderSummaryStats.pending}</div>
+                  <div className="text-[10px] opacity-75 mt-0.5">Awaiting dispatch</div>
+                </button>
+
+                {/* 3. Processing Orders */}
+                <button
+                  type="button"
+                  onClick={() => setOrderDeliveryFilter(prev => prev === 'Processing' ? 'all' : 'Processing')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    orderDeliveryFilter === 'Processing'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-600/20'
+                      : 'bg-blue-50/60 hover:bg-blue-100/60 border-blue-200 text-blue-900 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Processing</span>
+                    <Layers className="w-3.5 h-3.5 opacity-70" />
+                  </div>
+                  <div className="text-xl font-black mt-1 font-mono">{orderSummaryStats.processing}</div>
+                  <div className="text-[10px] opacity-75 mt-0.5">Preparing / Supplier</div>
+                </button>
+
+                {/* 4. Shipped Orders */}
+                <button
+                  type="button"
+                  onClick={() => setOrderDeliveryFilter(prev => prev === 'Shipped' ? 'all' : 'Shipped')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    orderDeliveryFilter === 'Shipped'
+                      ? 'bg-cyan-600 text-white border-cyan-600 shadow-md ring-2 ring-cyan-600/20'
+                      : 'bg-cyan-50/60 hover:bg-cyan-100/60 border-cyan-200 text-cyan-900 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Shipped</span>
+                    <Truck className="w-3.5 h-3.5 opacity-70" />
+                  </div>
+                  <div className="text-xl font-black mt-1 font-mono">{orderSummaryStats.shipped}</div>
+                  <div className="text-[10px] opacity-75 mt-0.5">Dispatched to carrier</div>
+                </button>
+
+                {/* 5. In Transit Orders */}
+                <button
+                  type="button"
+                  onClick={() => setOrderDeliveryFilter(prev => prev === 'In Transit' ? 'all' : 'In Transit')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    orderDeliveryFilter === 'In Transit'
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-md ring-2 ring-purple-600/20'
+                      : 'bg-purple-50/60 hover:bg-purple-100/60 border-purple-200 text-purple-900 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">In Transit</span>
+                    <Truck className="w-3.5 h-3.5 opacity-70" />
+                  </div>
+                  <div className="text-xl font-black mt-1 font-mono">{orderSummaryStats.inTransit}</div>
+                  <div className="text-[10px] opacity-75 mt-0.5">On way / Out for delivery</div>
+                </button>
+
+                {/* 6. Delivered Orders */}
+                <button
+                  type="button"
+                  onClick={() => setOrderDeliveryFilter(prev => prev === 'Delivered' ? 'all' : 'Delivered')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    orderDeliveryFilter === 'Delivered'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/20'
+                      : 'bg-emerald-50/60 hover:bg-emerald-100/60 border-emerald-200 text-emerald-900 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Delivered</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 opacity-70" />
+                  </div>
+                  <div className="text-xl font-black mt-1 font-mono">{orderSummaryStats.delivered}</div>
+                  <div className="text-[10px] opacity-75 mt-0.5">Successfully completed</div>
+                </button>
+
+                {/* 7. Cancelled Orders */}
+                <button
+                  type="button"
+                  onClick={() => setOrderDeliveryFilter(prev => prev === 'Cancelled' ? 'all' : 'Cancelled')}
+                  className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                    orderDeliveryFilter === 'Cancelled'
+                      ? 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-600/20'
+                      : 'bg-rose-50/60 hover:bg-rose-100/60 border-rose-200 text-rose-900 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-75">Cancelled</span>
+                    <XCircle className="w-3.5 h-3.5 opacity-70" />
+                  </div>
+                  <div className="text-xl font-black mt-1 font-mono">{orderSummaryStats.cancelled}</div>
+                  <div className="text-[10px] opacity-75 mt-0.5">Void / Stock restored</div>
+                </button>
+              </div>
+
+              {/* Quick Operational Alerts Bar */}
+              {(orderSummaryStats.delayed > 0 || orderSummaryStats.missingTracking > 0) && (
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {orderSummaryStats.delayed > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setOrderSearch('delayed')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-800 font-bold hover:bg-rose-100 transition-colors cursor-pointer"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>{orderSummaryStats.delayed} Shipment(s) Delayed Past ETA</span>
+                    </button>
+                  )}
+                  {orderSummaryStats.missingTracking > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOrderDeliveryFilter('all');
+                        setOrderSearch('');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-bold hover:bg-amber-100 transition-colors cursor-pointer"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>{orderSummaryStats.missingTracking} Active Orders Awaiting Tracking Number</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* SEARCH & FILTERS CONTROLS */}
+              <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-2xs space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
+                  {/* Search: Order ID, Product, Customer, Phone, Supplier */}
+                  <div className="sm:col-span-2 relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      placeholder="Search Order ID, Product, Customer, Phone, Supplier..."
+                      className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-orange-500 font-medium"
+                    />
+                    {orderSearch && (
+                      <button
+                        onClick={() => setOrderSearch('')}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter: Delivery Status */}
+                  <div>
+                    <select
+                      value={orderDeliveryFilter}
+                      onChange={(e) => setOrderDeliveryFilter(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
+                    >
+                      <option value="all">All Delivery Statuses</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Processing">Processing</option>
+                      <option value="Awaiting Shipment">Awaiting Shipment</option>
+                      <option value="Shipped">Shipped</option>
+                      <option value="In Transit">In Transit</option>
+                      <option value="Out for Delivery">Out for Delivery</option>
+                      <option value="Delivered">Delivered</option>
+                      <option value="Cancelled">Cancelled</option>
+                      <option value="Failed Delivery">Failed Delivery</option>
+                      <option value="Returned">Returned</option>
+                    </select>
+                  </div>
+
+                  {/* Filter: Payment Status */}
+                  <div>
+                    <select
+                      value={orderPaymentFilter}
+                      onChange={(e) => setOrderPaymentFilter(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
+                    >
+                      <option value="all">All Payment Statuses</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Pending Verification">Pending Verification</option>
+                      <option value="Pending Payment">Pending Payment</option>
+                      <option value="Failed">Failed</option>
+                      <option value="Refunded">Refunded</option>
+                    </select>
+                  </div>
+
+                  {/* Filter: Supplier */}
+                  <div>
+                    <select
+                      value={orderSupplierFilter}
+                      onChange={(e) => setOrderSupplierFilter(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
+                    >
+                      <option value="all">All Suppliers</option>
+                      <option value="CJ Dropshipping">CJ Dropshipping</option>
+                      <option value="Alibaba">Alibaba Wholesale</option>
+                      {uniqueSuppliers.filter(s => s !== 'CJ Dropshipping' && s !== 'Alibaba').map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-100 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-500">Order Date:</span>
+                    <select
+                      value={orderDateFilter}
+                      onChange={(e) => setOrderDateFilter(e.target.value)}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-medium bg-slate-50"
+                    >
+                      <option value="all">All Time</option>
+                      <option value="today">Today</option>
+                      <option value="7days">Last 7 Days</option>
+                      <option value="30days">Last 30 Days</option>
+                      <option value="this_month">This Month</option>
+                    </select>
+
+                    <span className="text-slate-300">|</span>
+
+                    <span className="text-[11px] text-slate-500 font-semibold">
+                      Showing <strong>{filteredOrders.length}</strong> of <strong>{orders.length}</strong> orders
+                    </span>
+                  </div>
+
+                  {(orderSearch || orderDeliveryFilter !== 'all' || orderPaymentFilter !== 'all' || orderSupplierFilter !== 'all' || orderDateFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOrderSearch('');
+                        setOrderDeliveryFilter('all');
+                        setOrderPaymentFilter('all');
+                        setOrderSupplierFilter('all');
+                        setOrderDateFilter('all');
+                        setOrderStatusFilter('all');
+                      }}
+                      className="text-xs font-bold text-[#FF6000] hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Reset Filters</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -4683,13 +5061,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               )}
 
-              {/* Orders Table */}
+              {/* ORDERS & DELIVERY TRACKING TABLE (ALL 9 MANDATORY FIELDS) */}
               <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
-                        <th className="py-3 px-3 w-8">
+                      <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-black uppercase text-[10px] tracking-wider">
+                        <th className="py-3.5 px-3 w-8">
                           <input
                             type="checkbox"
                             checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
@@ -4703,162 +5081,277 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             className="rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
                           />
                         </th>
-                        <th className="py-3 px-3">Order #</th>
-                        <th className="py-3 px-3">Date</th>
-                        <th className="py-3 px-3">Customer & Contact</th>
-                        <th className="py-3 px-3">Delivery Destination</th>
-                        <th className="py-3 px-3">Total Amount</th>
-                        <th className="py-3 px-3">Payment</th>
-                        <th className="py-3 px-3">Status</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
+                        <th className="py-3.5 px-3">1. Order ID</th>
+                        <th className="py-3.5 px-3">2. Product Name & Image</th>
+                        <th className="py-3.5 px-3">3. Customer Name & Phone</th>
+                        <th className="py-3.5 px-3">4. Supplier Name</th>
+                        <th className="py-3.5 px-3">5. Payment Status</th>
+                        <th className="py-3.5 px-3">6. Order Date</th>
+                        <th className="py-3.5 px-3">7. Delivery Status</th>
+                        <th className="py-3.5 px-3">8. Tracking Number</th>
+                        <th className="py-3.5 px-3">9. Expected Delivery</th>
+                        <th className="py-3.5 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredOrders.map(ord => {
-                        const rawPhone = (ord.customerPhone || '').replace(/\D/g, '');
-                        const waLink = rawPhone.startsWith('250') ? `https://wa.me/${rawPhone}` : `https://wa.me/250${rawPhone}`;
+                      {filteredOrders.length === 0 ? (
+                        <tr>
+                          <td colSpan={11} className="py-12 text-center text-slate-400">
+                            <Package className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                            <p className="font-bold text-sm text-slate-600">No orders found matching criteria</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Try clearing filters or search terms</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredOrders.map(ord => {
+                          const primaryItem = ord.items?.[0];
+                          const remainingItemsCount = (ord.items?.length || 0) - 1;
+                          const rawPhone = (ord.customerPhone || '').replace(/\D/g, '');
+                          const waLink = rawPhone.startsWith('250') ? `https://wa.me/${rawPhone}` : `https://wa.me/250${rawPhone}`;
+                          const supplierDisplay = ord.supplierName || (primaryItem?.supplierName) || ord.shopName || 'Contact Reach Market';
+                          const effectiveDelivery = ord.deliveryStatus || (ord.status === 'Delivered' ? 'Delivered' : ord.status === 'Out for Delivery' ? 'In Transit' : ord.status === 'Preparing' ? 'Processing' : ord.status === 'Cancelled' ? 'Cancelled' : 'Pending');
 
-                        return (
-                          <tr key={ord.id} className="hover:bg-slate-50/60">
-                            <td className="py-3 px-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedOrderIds.includes(ord.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedOrderIds(prev => [...prev, ord.id]);
-                                  } else {
-                                    setSelectedOrderIds(prev => prev.filter(id => id !== ord.id));
-                                  }
-                                }}
-                                className="rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
-                              />
-                            </td>
-                            <td className="py-3 px-3 font-mono font-bold text-slate-900">
-                              <button
-                                onClick={() => handleOpenOrderDetail(ord)}
-                                className="hover:text-orange-600 hover:underline cursor-pointer text-left"
-                                title="Click to view full order details"
-                              >
-                                {ord.orderNumber}
-                              </button>
-                            </td>
-                            <td className="py-3 px-3 text-slate-500 font-mono text-[11px]">
-                              {new Date(ord.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className="font-bold text-slate-800 block">{ord.customerName}</span>
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                                <span>{ord.customerPhone}</span>
-                                {rawPhone.length >= 7 && (
-                                  <>
-                                    <a
-                                      href={waLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      title="Chat with customer on WhatsApp"
-                                      className="p-1 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                                    >
-                                      <MessageCircle className="w-3 h-3 text-emerald-600" />
-                                    </a>
-                                    <a
-                                      href={`tel:${ord.customerPhone}`}
-                                      title="Call customer"
-                                      className="p-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-                                    >
-                                      <Phone className="w-3 h-3 text-blue-600" />
-                                    </a>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 text-slate-600 max-w-xs truncate">
-                              {ord.deliveryAddress}
-                            </td>
-                            <td className="py-3 px-3 font-mono font-bold text-[#FF6000]">
-                              {ord.totalAmount.toLocaleString()} FRW
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                ord.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : ord.paymentStatus === 'Pending Verification' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
-                              }`}>
-                                {ord.paymentStatus}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className="font-semibold text-slate-800 block">{ord.status}</span>
-                              <span className={`inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                                ord.supplierApprovalStatus === 'Approved'
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                  : ord.supplierApprovalStatus === 'Submitted to Supplier'
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                  : ord.supplierApprovalStatus === 'Rejected'
-                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                  : 'bg-amber-100 text-amber-800 border border-amber-200'
-                              }`}>
-                                DSers: {ord.supplierApprovalStatus || 'Pending Review'}
-                              </span>
-                              {ord.trackingNumber ? (
-                                <div className="flex items-center gap-1 text-[10px] text-blue-700 font-mono font-bold mt-0.5" title={`${ord.trackingCarrier || 'Tracking'}: ${ord.trackingNumber}`}>
-                                  <Truck className="w-3 h-3 text-blue-600 shrink-0" />
-                                  <span className="truncate max-w-[100px]">{ord.trackingNumber}</span>
+                          return (
+                            <tr key={ord.id} className="hover:bg-slate-50/70 transition-colors">
+                              {/* Selection Checkbox */}
+                              <td className="py-3 px-3">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrderIds.includes(ord.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedOrderIds(prev => [...prev, ord.id]);
+                                    } else {
+                                      setSelectedOrderIds(prev => prev.filter(id => id !== ord.id));
+                                    }
+                                  }}
+                                  className="rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                />
+                              </td>
+
+                              {/* 1. Order ID */}
+                              <td className="py-3 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => handleOpenOrderDetail(ord)}
+                                    className="hover:text-orange-600 hover:underline cursor-pointer font-bold"
+                                    title="View full order details"
+                                  >
+                                    {ord.orderNumber}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(ord.orderNumber);
+                                      showToast(`Copied ${ord.orderNumber}`);
+                                    }}
+                                    className="text-slate-400 hover:text-slate-700"
+                                    title="Copy Order ID"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
                                 </div>
-                              ) : null}
-                              {ord.assignedCourier && (
-                                <span className="block text-[10px] text-slate-400">Courier: {ord.assignedCourier}</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
-                              {(() => {
-                                const pm = ord.paymentConfirmation || payments.find(p => p.orderNumber === ord.orderNumber);
-                                if (pm) {
-                                  return (
+                                <span className="text-[10px] text-slate-400 font-sans block mt-0.5">
+                                  {(ord.totalAmount || 0).toLocaleString()} FRW
+                                </span>
+                              </td>
+
+                              {/* 2. Product Name & Image */}
+                              <td className="py-3 px-3 min-w-[200px] max-w-[280px]">
+                                <div className="flex items-center gap-2.5">
+                                  {primaryItem?.imageUrl ? (
+                                    <img
+                                      src={primaryItem.imageUrl}
+                                      alt={primaryItem.productName}
+                                      className="w-10 h-10 rounded-xl object-cover border border-slate-200 bg-white shrink-0"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                                      <ShoppingBag className="w-4 h-4" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-slate-800 truncate" title={primaryItem?.productName || 'Order Items'}>
+                                      {primaryItem?.productName || 'Custom Marketplace Item'}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
+                                      <span>Qty: {primaryItem?.quantity || 1}</span>
+                                      {remainingItemsCount > 0 && (
+                                        <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                                          +{remainingItemsCount} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* 3. Customer Name & Phone */}
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span className="font-bold text-slate-800 block">{ord.customerName}</span>
+                                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                                  <span className="font-mono">{ord.customerPhone}</span>
+                                  {rawPhone.length >= 7 && (
+                                    <>
+                                      <a
+                                        href={waLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Chat with customer on WhatsApp"
+                                        className="p-1 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                      >
+                                        <MessageCircle className="w-3 h-3 text-emerald-600" />
+                                      </a>
+                                      <a
+                                        href={`tel:${ord.customerPhone}`}
+                                        title="Call customer"
+                                        className="p-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                                      >
+                                        <Phone className="w-3 h-3 text-blue-600" />
+                                      </a>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* 4. Supplier Name */}
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                                  {supplierDisplay}
+                                </span>
+                              </td>
+
+                              {/* 5. Payment Status */}
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                  ord.paymentStatus === 'Paid'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : ord.paymentStatus === 'Pending Verification'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : ord.paymentStatus === 'Failed'
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    : ord.paymentStatus === 'Refunded'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-orange-50 text-orange-800 border border-orange-200'
+                                }`}>
+                                  {ord.paymentStatus || 'Pending Payment'}
+                                </span>
+                              </td>
+
+                              {/* 6. Order Date */}
+                              <td className="py-3 px-3 text-slate-500 whitespace-nowrap text-[11px]">
+                                <span className="block font-medium text-slate-800">
+                                  {new Date(ord.createdAt).toLocaleDateString()}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </td>
+
+                              {/* 7. Delivery Status */}
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                                  effectiveDelivery === 'Delivered'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : (effectiveDelivery === 'Shipped' || effectiveDelivery === 'In Transit' || effectiveDelivery === 'Out for Delivery')
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                    : effectiveDelivery === 'Processing' || effectiveDelivery === 'Awaiting Shipment'
+                                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                    : effectiveDelivery === 'Cancelled'
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    : effectiveDelivery === 'Failed Delivery' || effectiveDelivery === 'Returned'
+                                    ? 'bg-red-100 text-red-800 border border-red-200'
+                                    : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                }`}>
+                                  {effectiveDelivery}
+                                </span>
+                              </td>
+
+                              {/* 8. Tracking Number */}
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                {ord.trackingNumber && ord.trackingNumber.trim() ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="flex flex-col">
+                                      <span className="font-mono font-bold text-blue-700 text-xs select-all">
+                                        {ord.trackingNumber}
+                                      </span>
+                                      {ord.trackingCarrier && (
+                                        <span className="text-[9px] text-slate-400 font-medium">
+                                          {ord.trackingCarrier}
+                                        </span>
+                                      )}
+                                    </div>
                                     <button
+                                      type="button"
                                       onClick={() => {
-                                        setVerifyModalPayment(pm);
-                                        setVerifyNotes('Verified with telecom statement');
+                                        navigator.clipboard.writeText(ord.trackingNumber || '');
+                                        showToast(`Copied tracking #${ord.trackingNumber}`);
                                       }}
-                                      className="px-2 py-1 bg-orange-50 border border-orange-200 text-[#FF6000] font-bold rounded-lg cursor-pointer text-[11px] hover:bg-orange-100 inline-flex items-center gap-1"
-                                      title="View submitted payment proof"
+                                      className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 cursor-pointer"
+                                      title="Copy tracking code"
                                     >
-                                      <ShieldCheck className="w-3.5 h-3.5" />
-                                      <span>Proof</span>
+                                      <Copy className="w-3 h-3" />
                                     </button>
-                                  );
-                                }
-                                return null;
-                              })()}
-                              <button
-                                onClick={() => handleOpenOrderDetail(ord)}
-                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg cursor-pointer text-[11px] border border-blue-200"
-                                title="View full line-items & edit order"
-                              >
-                                View / Edit
-                              </button>
-                              <button
-                                onClick={() => setOrderStatusModal(ord)}
-                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg cursor-pointer text-[11px]"
-                              >
-                                Status
-                              </button>
-                              <button
-                                onClick={() => setPrintableInvoiceOrder(ord)}
-                                title="Print Invoice"
-                                className="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
-                              >
-                                <FileText className="w-4 h-4 inline" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteSingleOrder(ord)}
-                                title="Delete Order"
-                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4 inline" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 italic font-medium text-[11px]">
+                                    Not Yet Available
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 9. Expected Delivery Date */}
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                {ord.expectedDeliveryDate && ord.expectedDeliveryDate.trim() ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span className="font-medium text-slate-800 text-[11px]">
+                                      {new Date(ord.expectedDeliveryDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 italic font-medium text-[11px]">
+                                    Not Yet Available
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                                <button
+                                  onClick={() => handleOpenOrderDetail(ord)}
+                                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg cursor-pointer text-[11px] border border-blue-200 transition-colors"
+                                  title="View full order details & delivery management"
+                                >
+                                  Manage
+                                </button>
+                                <button
+                                  onClick={() => setOrderStatusModal(ord)}
+                                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg cursor-pointer text-[11px] transition-colors"
+                                  title="Quick status update"
+                                >
+                                  Status
+                                </button>
+                                <button
+                                  onClick={() => setPrintableInvoiceOrder(ord)}
+                                  title="Print Packing Slip / Receipt"
+                                  className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                                >
+                                  <Printer className="w-4 h-4 inline" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSingleOrder(ord)}
+                                  title="Permanently Delete Order"
+                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4 inline" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -9424,6 +9917,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div>
+                <label className="block font-bold text-slate-700 mb-1">Delivery Status</label>
+                <select
+                  value={orderStatusModal.deliveryStatus || 'Pending'}
+                  onChange={(e) => setOrderStatusModal({ ...orderStatusModal, deliveryStatus: e.target.value as OrderDeliveryStatus })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold"
+                >
+                  <option value="Pending">Pending (Awaiting dispatch processing)</option>
+                  <option value="Processing">Processing (Supplier preparing items)</option>
+                  <option value="Awaiting Shipment">Awaiting Shipment (Packed & awaiting pickup)</option>
+                  <option value="Shipped">Shipped (Handed over to carrier)</option>
+                  <option value="In Transit">In Transit (On the way to Kigali / destination)</option>
+                  <option value="Out for Delivery">Out for Delivery (With local delivery rider)</option>
+                  <option value="Delivered">Delivered (Successfully handed to customer)</option>
+                  <option value="Cancelled">Cancelled (Order cancelled)</option>
+                  <option value="Failed Delivery">Failed Delivery (Attempted, recipient unavailable)</option>
+                  <option value="Returned">Returned (Item returned to sender/warehouse)</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block font-bold text-slate-700 mb-1">Payment Status</label>
                 <select
                   value={orderStatusModal.paymentStatus}
@@ -9436,6 +9949,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <option value="Failed">Failed</option>
                   <option value="Refunded">Refunded</option>
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tracking Number</label>
+                  <input
+                    type="text"
+                    value={orderStatusModal.trackingNumber || ''}
+                    onChange={(e) => setOrderStatusModal({ ...orderStatusModal, trackingNumber: e.target.value })}
+                    placeholder="e.g. RW-EXP-8291"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Carrier / Provider</label>
+                  <input
+                    type="text"
+                    value={orderStatusModal.trackingCarrier || ''}
+                    onChange={(e) => setOrderStatusModal({ ...orderStatusModal, trackingCarrier: e.target.value })}
+                    placeholder="e.g. DHL, FedEx, Local Moto"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Expected Delivery Date</label>
+                <input
+                  type="date"
+                  value={orderStatusModal.expectedDeliveryDate ? orderStatusModal.expectedDeliveryDate.slice(0, 10) : ''}
+                  onChange={(e) => setOrderStatusModal({ ...orderStatusModal, expectedDeliveryDate: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -11523,24 +12069,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Statuses and Courier Assignment */}
+                {/* Statuses and Delivery Management */}
                 <div>
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
-                    Order Status & Logistics Dispatch
+                    Order Status & Delivery Tracking
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Order Status</label>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Delivery Status</label>
+                      <select
+                        value={orderEditForm.deliveryStatus || 'Pending'}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, deliveryStatus: e.target.value as OrderDeliveryStatus })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      >
+                        <option value="Pending">Pending (Awaiting dispatch processing)</option>
+                        <option value="Processing">Processing (Supplier preparing items)</option>
+                        <option value="Awaiting Shipment">Awaiting Shipment (Packed & awaiting pickup)</option>
+                        <option value="Shipped">Shipped (Handed over to carrier)</option>
+                        <option value="In Transit">In Transit (On the way to destination)</option>
+                        <option value="Out for Delivery">Out for Delivery (With local delivery rider)</option>
+                        <option value="Delivered">Delivered (Successfully completed)</option>
+                        <option value="Cancelled">Cancelled (Order cancelled)</option>
+                        <option value="Failed Delivery">Failed Delivery (Attempted, unavailable)</option>
+                        <option value="Returned">Returned (Item returned to warehouse)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Order Pipeline Status</label>
                       <select
                         value={orderEditForm.status || 'Pending'}
                         onChange={e => setOrderEditForm({ ...orderEditForm, status: e.target.value as OrderStatus })}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
                       >
-                        <option value="Pending">Pending</option>
+                        <option value="New">New</option>
                         <option value="Confirmed">Confirmed</option>
-                        <option value="Processing">Processing</option>
-                        <option value="Ready for Pickup">Ready for Pickup</option>
-                        <option value="Dispatched">Dispatched</option>
+                        <option value="Preparing">Preparing</option>
+                        <option value="Ready for Delivery">Ready for Delivery</option>
+                        <option value="Out for Delivery">Out for Delivery</option>
                         <option value="Delivered">Delivered</option>
                         <option value="Cancelled">Cancelled</option>
                       </select>
@@ -11553,9 +12119,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onChange={e => setOrderEditForm({ ...orderEditForm, paymentStatus: e.target.value as PaymentStatus })}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
                       >
-                        <option value="Pending">Pending</option>
-                        <option value="Under Verification">Under Verification</option>
+                        <option value="Pending Payment">Pending Payment</option>
+                        <option value="Pending Verification">Pending Verification</option>
                         <option value="Paid">Paid</option>
+                        <option value="Failed">Failed</option>
                         <option value="Refunded">Refunded</option>
                       </select>
                     </div>
@@ -11566,6 +12133,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         type="text"
                         value={orderEditForm.paymentMethod || 'MTN Mobile Money'}
                         onChange={e => setOrderEditForm({ ...orderEditForm, paymentMethod: e.target.value as PaymentMethod })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Expected Delivery Date</label>
+                      <input
+                        type="date"
+                        value={orderEditForm.expectedDeliveryDate ? orderEditForm.expectedDeliveryDate.slice(0, 10) : ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, expectedDeliveryDate: e.target.value })}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Shipping Provider / Carrier</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.trackingCarrier || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, trackingCarrier: e.target.value })}
+                        placeholder="e.g. DHL, FedEx, Rwanda Post, Local Moto"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Tracking Number</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.trackingNumber || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, trackingNumber: e.target.value })}
+                        placeholder="e.g. RW-EXP-8291 (leave empty if not yet available)"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                      {!orderEditForm.trackingNumber && (
+                        <span className="text-[10px] text-slate-400 italic mt-0.5 block">
+                          Display status: "Not Yet Available"
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Carrier Tracking URL</label>
+                      <input
+                        type="url"
+                        value={orderEditForm.trackingUrl || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, trackingUrl: e.target.value })}
+                        placeholder="https://..."
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Supplier Dispatch & Logistics Information */}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                    Supplier Fulfillment & Dispatch Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Supplier Name</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.supplierName || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, supplierName: e.target.value })}
+                        placeholder="e.g. CJ Dropshipping, Alibaba, Fair View Shop"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Supplier Order Reference</label>
+                      <input
+                        type="text"
+                        value={orderEditForm.supplierOrderRef || ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, supplierOrderRef: e.target.value })}
+                        placeholder="e.g. CJ-PO-10294 or Cainiao ID"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Supplier Dispatch Date</label>
+                      <input
+                        type="date"
+                        value={orderEditForm.dispatchDate ? orderEditForm.dispatchDate.slice(0, 10) : ''}
+                        onChange={e => setOrderEditForm({ ...orderEditForm, dispatchDate: e.target.value })}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
                       />
                     </div>
@@ -11593,35 +12248,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Tracking Number / Carrier</label>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="text"
-                          value={orderEditForm.trackingNumber || ''}
-                          onChange={e => setOrderEditForm({ ...orderEditForm, trackingNumber: e.target.value })}
-                          placeholder="e.g. RW-EXP-928"
-                          className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
-                        />
-                        <input
-                          type="text"
-                          value={orderEditForm.trackingCarrier || ''}
-                          onChange={e => setOrderEditForm({ ...orderEditForm, trackingCarrier: e.target.value })}
-                          placeholder="Carrier"
-                          className="w-24 px-2 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2 md:col-span-3">
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Internal Admin Notes</label>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">Internal Staff Notes</label>
                       <input
                         type="text"
                         value={orderEditForm.internalNotes || ''}
                         onChange={e => setOrderEditForm({ ...orderEditForm, internalNotes: e.target.value })}
-                        placeholder="Private staff notes, customer call notes, etc."
+                        placeholder="Private administrative notes..."
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Audit Trail & Order History Timeline */}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                    Status History & Administrative Audit Trail
+                  </h4>
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 max-h-48 overflow-y-auto space-y-2">
+                    {(selectedOrderModal.statusHistory && selectedOrderModal.statusHistory.length > 0) ? (
+                      selectedOrderModal.statusHistory.map((h, i) => (
+                        <div key={i} className="p-2.5 rounded-xl bg-white border border-slate-200/80 text-xs flex items-start justify-between gap-3 shadow-2xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800">{h.status}</span>
+                              {h.deliveryStatus && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                                  Delivery: {h.deliveryStatus}
+                                </span>
+                              )}
+                              {h.paymentStatus && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  Payment: {h.paymentStatus}
+                                </span>
+                              )}
+                            </div>
+                            {h.note && <p className="text-[11px] text-slate-600 mt-1">{h.note}</p>}
+                            {h.updatedBy && (
+                              <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
+                                Updated by: {h.updatedBy}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                            {new Date(h.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">No previous status history recorded.</p>
+                    )}
                   </div>
                 </div>
 

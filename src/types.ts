@@ -19,6 +19,18 @@ export type OrderStatus =
   | 'Processing'
   | 'Completed';
 
+export type OrderDeliveryStatus =
+  | 'Pending'
+  | 'Processing'
+  | 'Awaiting Shipment'
+  | 'Shipped'
+  | 'In Transit'
+  | 'Out for Delivery'
+  | 'Delivered'
+  | 'Cancelled'
+  | 'Failed Delivery'
+  | 'Returned';
+
 export type PaymentStatus =
   | 'Awaiting Payment'
   | 'Payment Submitted'
@@ -242,6 +254,11 @@ export interface Order {
   shopName?: string;
   paymentStatus: PaymentStatus;
   status: OrderStatus;
+  deliveryStatus?: OrderDeliveryStatus;
+  expectedDeliveryDate?: string;
+  supplierName?: string;
+  supplierOrderRef?: string;
+  dispatchDate?: string;
   stockDeducted: boolean;
   paymentConfirmation?: PaymentConfirmation;
   assignedCourier?: string;
@@ -272,6 +289,7 @@ export interface Order {
   alibabaShippingMethod?: string;
   statusHistory: {
     status: OrderStatus;
+    deliveryStatus?: OrderDeliveryStatus;
     paymentStatus?: PaymentStatus;
     timestamp: string;
     note?: string;

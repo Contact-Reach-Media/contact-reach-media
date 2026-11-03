@@ -1365,6 +1365,9 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   }
 }
 
+// Set of explicitly revoked or logged-out tokens to guarantee instant revocation
+const revokedTokens = new Set<string>();
+
 // Middleware to authenticate admin token
 function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -1372,15 +1375,17 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: 'Unauthorized. Admin credentials required.' });
   }
   const token = authHeader.split(' ')[1];
+  if (revokedTokens.has(token)) {
+    return res.status(403).json({ error: 'Administrator account has been deactivated or session was revoked. Access denied.' });
+  }
+
   let session = db.adminTokens.get(token);
 
-  // Fallback: If client token was issued from authorized session or persistent admin user
-  if (!session && token) {
+  // Fallback: ONLY for initial test harness session or unauthenticated client bootstrap token
+  if (!session && token && !revokedTokens.has(token)) {
     const isRecognizedToken =
       token.startsWith('fb_client_token_') ||
-      token.startsWith('crm_admin_') ||
-      token === 'crm_admin_test_session' ||
-      token.length >= 24;
+      token === 'crm_admin_test_session';
 
     if (isRecognizedToken) {
       const fallbackOwner =
@@ -1420,12 +1425,18 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   if (liveAdmin) {
     if (!liveAdmin.active) {
       db.adminTokens.delete(token);
+      revokedTokens.add(token);
       saveDbToDisk();
       return res.status(403).json({ error: 'Administrator account has been deactivated. Access revoked.' });
     }
     session.user.role = liveAdmin.role;
     session.user.name = liveAdmin.name;
     session.user.active = liveAdmin.active;
+  } else if (session.user && session.user.active === false) {
+    db.adminTokens.delete(token);
+    revokedTokens.add(token);
+    saveDbToDisk();
+    return res.status(403).json({ error: 'Administrator account has been deactivated. Access revoked.' });
   }
 
   (req as any).adminUser = session.user;
@@ -2022,12 +2033,20 @@ app.post('/api/orders', (req: Request, res: Response) => {
     receiverName: primaryReceiverName,
     receiverDetails,
     shopName: primaryShopName,
+    supplierName: verifiedItems.map(i => {
+      const prod = db.products.find(p => p.id === i.productId);
+      if (prod?.source === 'cjdropshipping' || prod?.cjProductId) return 'CJ Dropshipping';
+      if (prod?.source === 'alibaba' || prod?.alibabaProductId) return 'Alibaba Wholesale';
+      return prod?.supplierName || i.supplierName || prod?.shopName || i.shopName;
+    }).filter(Boolean)[0] || primaryShopName || 'Contact Reach Market',
     paymentStatus: 'Pending Payment',
     status: 'New',
+    deliveryStatus: 'Pending',
     stockDeducted: false,
     statusHistory: [
       {
         status: 'New',
+        deliveryStatus: 'Pending',
         paymentStatus: 'Pending Payment',
         timestamp: new Date().toISOString(),
         note: hasCjItems
@@ -2124,8 +2143,13 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
       receiverName: order.receiverName,
       receiverDetails: order.receiverDetails,
       shopName: order.shopName,
+      supplierName: order.supplierName || (order.items?.[0]?.supplierName) || order.shopName || 'Contact Reach Market',
       paymentStatus: order.paymentStatus,
       status: order.status,
+      deliveryStatus: order.deliveryStatus || 'Pending',
+      expectedDeliveryDate: order.expectedDeliveryDate,
+      dispatchDate: order.dispatchDate,
+      supplierOrderRef: order.supplierOrderRef,
       stockDeducted: order.stockDeducted,
       assignedCourier: order.assignedCourier,
       courierPhone: order.courierPhone,
@@ -5602,7 +5626,7 @@ app.delete('/api/admin/shops/:id', requireAdminAuth, requireRole(['owner', 'admi
 // -------------------------------------------------------------
 
 app.get('/api/admin/orders', requireAdminAuth, (req: Request, res: Response) => {
-  const { status, paymentStatus, search, shop } = req.query;
+  const { status, paymentStatus, deliveryStatus, supplier, search, shop, dateRange } = req.query;
   let results = [...db.orders];
 
   if (status && status !== 'all') {
@@ -5613,42 +5637,148 @@ app.get('/api/admin/orders', requireAdminAuth, (req: Request, res: Response) => 
     results = results.filter(o => o.paymentStatus === paymentStatus);
   }
 
+  if (deliveryStatus && deliveryStatus !== 'all') {
+    results = results.filter(o => {
+      const ds = o.deliveryStatus || (o.status === 'Delivered' ? 'Delivered' : o.status === 'Out for Delivery' ? 'In Transit' : o.status === 'Preparing' ? 'Processing' : o.status === 'Cancelled' ? 'Cancelled' : 'Pending');
+      return ds.toLowerCase() === String(deliveryStatus).toLowerCase();
+    });
+  }
+
+  if (supplier && supplier !== 'all') {
+    const s = String(supplier).toLowerCase();
+    results = results.filter(o => {
+      const orderSupplier = (o.supplierName || o.shopName || '').toLowerCase();
+      const hasItemSupplier = (o.items || []).some(i => (i.supplierName || i.shopName || '').toLowerCase().includes(s));
+      return orderSupplier.includes(s) || hasItemSupplier;
+    });
+  }
+
   if (shop && shop !== 'all') {
     results = results.filter(o => o.shopName?.toLowerCase() === (shop as string).toLowerCase());
   }
 
+  if (dateRange && dateRange !== 'all') {
+    const now = Date.now();
+    if (dateRange === 'today') {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      results = results.filter(o => new Date(o.createdAt).getTime() >= startOfDay.getTime());
+    } else if (dateRange === '7days') {
+      const past7 = now - 7 * 24 * 60 * 60 * 1000;
+      results = results.filter(o => new Date(o.createdAt).getTime() >= past7);
+    } else if (dateRange === '30days') {
+      const past30 = now - 30 * 24 * 60 * 60 * 1000;
+      results = results.filter(o => new Date(o.createdAt).getTime() >= past30);
+    }
+  }
+
   if (search && typeof search === 'string') {
-    const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
     results = results.filter(o =>
       o.orderNumber.toLowerCase().includes(q) ||
+      o.id.toLowerCase().includes(q) ||
       o.customerName.toLowerCase().includes(q) ||
       o.customerPhone.toLowerCase().includes(q) ||
+      (o.supplierName && o.supplierName.toLowerCase().includes(q)) ||
+      (o.trackingNumber && o.trackingNumber.toLowerCase().includes(q)) ||
       o.deliveryAddress.toLowerCase().includes(q) ||
-      (o.deliveryLocation && o.deliveryLocation.toLowerCase().includes(q))
+      (o.deliveryLocation && o.deliveryLocation.toLowerCase().includes(q)) ||
+      (o.items || []).some(i => i.productName.toLowerCase().includes(q) || (i.supplierName && i.supplierName.toLowerCase().includes(q)))
     );
   }
 
   res.json(results);
 });
 
+// Admin Orders Summary Counters
+app.get('/api/admin/orders/summary', requireAdminAuth, (_req: Request, res: Response) => {
+  const all = db.orders;
+  const now = Date.now();
+
+  const summary = {
+    total: all.length,
+    pending: all.filter(o => (o.deliveryStatus === 'Pending' || (!o.deliveryStatus && (o.status === 'New' || o.status === 'Awaiting Payment' || o.status === 'Payment Submitted')))).length,
+    processing: all.filter(o => (o.deliveryStatus === 'Processing' || (!o.deliveryStatus && (o.status === 'Preparing' || o.status === 'Processing' || o.status === 'Confirmed')))).length,
+    awaitingShipment: all.filter(o => o.deliveryStatus === 'Awaiting Shipment').length,
+    shipped: all.filter(o => (o.deliveryStatus === 'Shipped' || (!o.deliveryStatus && o.status === 'Ready for Delivery'))).length,
+    inTransit: all.filter(o => (o.deliveryStatus === 'In Transit' || o.deliveryStatus === 'Out for Delivery' || (!o.deliveryStatus && o.status === 'Out for Delivery'))).length,
+    delivered: all.filter(o => (o.deliveryStatus === 'Delivered' || (!o.deliveryStatus && (o.status === 'Delivered' || o.status === 'Completed')))).length,
+    cancelled: all.filter(o => (o.deliveryStatus === 'Cancelled' || (!o.deliveryStatus && o.status === 'Cancelled'))).length,
+    failedDelivery: all.filter(o => (o.deliveryStatus === 'Failed Delivery' || o.deliveryStatus === 'Returned' || (!o.deliveryStatus && o.status === 'Returned'))).length,
+    delayed: all.filter(o => {
+      if (o.deliveryStatus === 'Delivered' || o.deliveryStatus === 'Cancelled' || o.status === 'Delivered' || o.status === 'Cancelled') return false;
+      if (!o.expectedDeliveryDate) return false;
+      return new Date(o.expectedDeliveryDate).getTime() < now;
+    }).length,
+    missingTracking: all.filter(o => {
+      if (o.deliveryStatus === 'Delivered' || o.deliveryStatus === 'Cancelled' || o.status === 'Cancelled') return false;
+      return !o.trackingNumber || !o.trackingNumber.trim();
+    }).length
+  };
+
+  res.json(summary);
+});
+
 app.patch('/api/admin/orders/:id/status', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const { status, paymentStatus, note, assignedCourier, courierPhone, internalNotes } = req.body;
-  const order = db.orders.find(o => o.id === req.params.id);
+  const {
+    status,
+    paymentStatus,
+    deliveryStatus,
+    trackingNumber,
+    trackingCarrier,
+    trackingUrl,
+    expectedDeliveryDate,
+    supplierName,
+    supplierOrderRef,
+    dispatchDate,
+    note,
+    assignedCourier,
+    courierPhone,
+    internalNotes
+  } = req.body;
+  const order = db.orders.find(o => o.id === req.params.id || o.orderNumber === req.params.id);
 
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   const previousStatus = order.status;
   const previousPaymentStatus = order.paymentStatus;
+  const previousDeliveryStatus = order.deliveryStatus;
 
   if (status) order.status = status as OrderStatus;
   if (paymentStatus) order.paymentStatus = paymentStatus as PaymentStatus;
+  if (deliveryStatus) {
+    order.deliveryStatus = deliveryStatus;
+    // Keep high-level order status in sync with delivery workflow
+    if (deliveryStatus === 'Delivered') {
+      order.status = 'Delivered';
+    } else if (deliveryStatus === 'In Transit' || deliveryStatus === 'Out for Delivery') {
+      if (order.status !== 'Delivered') order.status = 'Out for Delivery';
+    } else if (deliveryStatus === 'Shipped') {
+      if (order.status !== 'Delivered' && order.status !== 'Out for Delivery') order.status = 'Ready for Delivery';
+    } else if (deliveryStatus === 'Processing' || deliveryStatus === 'Awaiting Shipment') {
+      if (order.status === 'New') order.status = 'Preparing';
+    } else if (deliveryStatus === 'Cancelled') {
+      order.status = 'Cancelled';
+    }
+  }
+
+  if (trackingNumber !== undefined) {
+    order.trackingNumber = trackingNumber ? String(trackingNumber).trim() : undefined;
+    if (order.trackingNumber) order.trackingAddedAt = new Date().toISOString();
+  }
+  if (trackingCarrier !== undefined) order.trackingCarrier = trackingCarrier ? String(trackingCarrier).trim() : undefined;
+  if (trackingUrl !== undefined) order.trackingUrl = trackingUrl ? String(trackingUrl).trim() : undefined;
+  if (expectedDeliveryDate !== undefined) order.expectedDeliveryDate = expectedDeliveryDate ? String(expectedDeliveryDate).trim() : undefined;
+  if (supplierName !== undefined) order.supplierName = supplierName ? String(supplierName).trim() : undefined;
+  if (supplierOrderRef !== undefined) order.supplierOrderRef = supplierOrderRef ? String(supplierOrderRef).trim() : undefined;
+  if (dispatchDate !== undefined) order.dispatchDate = dispatchDate ? String(dispatchDate).trim() : undefined;
   if (assignedCourier !== undefined) order.assignedCourier = assignedCourier;
   if (courierPhone !== undefined) order.courierPhone = courierPhone;
   if (internalNotes !== undefined) order.internalNotes = internalNotes;
 
   // Stock deduction / restoration
-  if ((order.status === 'Cancelled' || order.paymentStatus === 'Refunded' || order.paymentStatus === 'Failed') && order.stockDeducted) {
+  if ((order.status === 'Cancelled' || order.paymentStatus === 'Refunded' || order.paymentStatus === 'Failed' || order.deliveryStatus === 'Cancelled') && order.stockDeducted) {
     for (const item of order.items) {
       const prod = db.products.find(p => p.id === item.productId);
       if (prod) {
@@ -5700,21 +5830,23 @@ app.patch('/api/admin/orders/:id/status', requireAdminAuth, requireRole(['owner'
     order.stockDeducted = true;
   }
 
+  order.statusHistory = order.statusHistory || [];
   order.statusHistory.push({
     status: order.status,
+    deliveryStatus: order.deliveryStatus,
     paymentStatus: order.paymentStatus,
     timestamp: new Date().toISOString(),
-    note: note || `Order status updated to "${order.status}" (Payment: "${order.paymentStatus}") by ${admin.name}.`,
+    note: note || `Order updated (Delivery: "${order.deliveryStatus || 'Pending'}", Payment: "${order.paymentStatus}") by ${admin.name}.`,
     updatedBy: admin.name
   });
 
-  logAudit(admin, 'ORDER_UPDATED', `Order #${order.orderNumber} updated to ${order.status} (${order.paymentStatus})`, 'order', order.id);
+  logAudit(admin, 'ORDER_UPDATED', `Order #${order.orderNumber} updated to Delivery: ${order.deliveryStatus || 'Pending'} (${order.paymentStatus})`, 'order', order.id);
   saveDbToDisk('order_status_updated', { order });
   saveToFirestoreAsync('orders', order.id, order);
   res.json(order);
 });
 
-// Update Entire Order Details (Edit Customer info, items, notes, courier, totals)
+// Update Entire Order Details (Edit Customer info, items, notes, courier, totals, delivery tracking)
 app.put('/api/admin/orders/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const order = db.orders.find(o => o.id === req.params.id || o.orderNumber === req.params.id);
@@ -5733,11 +5865,17 @@ app.put('/api/admin/orders/:id', requireAdminAuth, requireRole(['owner', 'admini
     status,
     paymentStatus,
     paymentMethod,
+    deliveryStatus,
+    expectedDeliveryDate,
+    supplierName,
+    supplierOrderRef,
+    dispatchDate,
     assignedCourier,
     courierPhone,
     internalNotes,
     trackingNumber,
     trackingCarrier,
+    trackingUrl,
     supplierApprovalStatus,
     items
   } = req.body;
@@ -5754,20 +5892,43 @@ app.put('/api/admin/orders/:id', requireAdminAuth, requireRole(['owner', 'admini
   if (status) order.status = status as OrderStatus;
   if (paymentStatus) order.paymentStatus = paymentStatus as PaymentStatus;
   if (paymentMethod) order.paymentMethod = paymentMethod;
+  if (deliveryStatus) {
+    order.deliveryStatus = deliveryStatus;
+    if (deliveryStatus === 'Delivered') {
+      order.status = 'Delivered';
+    } else if (deliveryStatus === 'In Transit' || deliveryStatus === 'Out for Delivery') {
+      if (order.status !== 'Delivered') order.status = 'Out for Delivery';
+    } else if (deliveryStatus === 'Shipped') {
+      if (order.status !== 'Delivered' && order.status !== 'Out for Delivery') order.status = 'Ready for Delivery';
+    } else if (deliveryStatus === 'Processing' || deliveryStatus === 'Awaiting Shipment') {
+      if (order.status === 'New') order.status = 'Preparing';
+    } else if (deliveryStatus === 'Cancelled') {
+      order.status = 'Cancelled';
+    }
+  }
+  if (expectedDeliveryDate !== undefined) order.expectedDeliveryDate = expectedDeliveryDate ? String(expectedDeliveryDate).trim() : undefined;
+  if (supplierName !== undefined) order.supplierName = supplierName ? String(supplierName).trim() : undefined;
+  if (supplierOrderRef !== undefined) order.supplierOrderRef = supplierOrderRef ? String(supplierOrderRef).trim() : undefined;
+  if (dispatchDate !== undefined) order.dispatchDate = dispatchDate ? String(dispatchDate).trim() : undefined;
   if (assignedCourier !== undefined) order.assignedCourier = assignedCourier;
   if (courierPhone !== undefined) order.courierPhone = courierPhone;
   if (internalNotes !== undefined) order.internalNotes = internalNotes;
-  if (trackingNumber !== undefined) order.trackingNumber = trackingNumber;
-  if (trackingCarrier !== undefined) order.trackingCarrier = trackingCarrier;
+  if (trackingNumber !== undefined) {
+    order.trackingNumber = trackingNumber ? String(trackingNumber).trim() : undefined;
+    if (order.trackingNumber) order.trackingAddedAt = new Date().toISOString();
+  }
+  if (trackingCarrier !== undefined) order.trackingCarrier = trackingCarrier ? String(trackingCarrier).trim() : undefined;
+  if (trackingUrl !== undefined) order.trackingUrl = trackingUrl ? String(trackingUrl).trim() : undefined;
   if (supplierApprovalStatus) order.supplierApprovalStatus = supplierApprovalStatus;
   if (Array.isArray(items) && items.length > 0) order.items = items;
 
   order.statusHistory = order.statusHistory || [];
   order.statusHistory.push({
     status: order.status,
+    deliveryStatus: order.deliveryStatus,
     paymentStatus: order.paymentStatus,
     timestamp: new Date().toISOString(),
-    note: `Order details updated by ${admin.name}.`,
+    note: `Order details and delivery tracking updated by ${admin.name}.`,
     updatedBy: admin.name
   });
 
@@ -6793,6 +6954,7 @@ app.patch('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (req
       for (const [token, session] of db.adminTokens.entries()) {
         if (session.user.id === user.id || session.user.email.toLowerCase() === user.email.toLowerCase()) {
           db.adminTokens.delete(token);
+          revokedTokens.add(token);
         }
       }
     }
@@ -6825,6 +6987,7 @@ app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (re
   for (const [token, session] of db.adminTokens.entries()) {
     if (session.user.id === removed.id || session.user.email.toLowerCase() === removed.email.toLowerCase()) {
       db.adminTokens.delete(token);
+      revokedTokens.add(token);
     }
   }
 
