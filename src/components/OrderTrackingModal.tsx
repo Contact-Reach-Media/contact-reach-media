@@ -9,6 +9,7 @@ import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
+import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface OrderTrackingModalProps {
   isOpen: boolean;
@@ -536,34 +537,40 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                   Ordered Items ({trackedOrder.items.length})
                 </h4>
                 <div className="space-y-2">
-                  {trackedOrder.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={item.imageUrl}
-                          alt={item.productName}
-                          referrerPolicy="no-referrer"
-                          className="w-10 h-10 rounded-lg object-cover bg-white"
-                        />
-                        <div>
-                          <div className="font-bold text-slate-800 line-clamp-1">{item.productName}</div>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
-                            <span>Qty: {item.quantity} × {item.price.toLocaleString()} FRW</span>
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.2 rounded">
-                              <Truck className="w-2.5 h-2.5 text-[#FF5500] shrink-0" />
-                              <span>To be shipped</span>
-                            </span>
+                  {trackedOrder.items.map((item, idx) => {
+                    const resolvedImg = getProductImageDueToProduct(item);
+                    return (
+                      <div
+                        key={idx}
+                        className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={resolvedImg}
+                            alt={item.productName}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = getProductImageDueToProduct(item);
+                            }}
+                            className="w-10 h-10 rounded-lg object-cover bg-white border border-slate-200 shrink-0"
+                          />
+                          <div>
+                            <div className="font-bold text-slate-800 line-clamp-1">{item.productName}</div>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
+                              <span>Qty: {item.quantity} × {item.price.toLocaleString()} FRW</span>
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.2 rounded">
+                                <Truck className="w-2.5 h-2.5 text-[#FF5500] shrink-0" />
+                                <span>To be shipped</span>
+                              </span>
+                            </div>
                           </div>
                         </div>
+                        <div className="font-bold text-slate-900 font-mono tabular-nums">
+                          {(item.price * item.quantity).toLocaleString()} FRW
+                        </div>
                       </div>
-                      <div className="font-bold text-slate-900 font-mono tabular-nums">
-                        {(item.price * item.quantity).toLocaleString()} FRW
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-3 p-3 bg-slate-50 rounded-xl space-y-1 text-xs">

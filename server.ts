@@ -367,13 +367,12 @@ function resolveProductImageDueToProduct(
   if (productsList && productsList.length > 0) {
     const match = productsList.find(p =>
       (item.productId && p.id === item.productId) ||
-      (p.name && p.name.toLowerCase() === name.toLowerCase())
+      (p.name && name && p.name.trim().toLowerCase() === name.toLowerCase())
     );
-    if (match?.imageUrl && !match.imageUrl.includes('logo.png')) {
-      const catUrl = match.imageUrl;
-      const catMismatched = (name.toLowerCase().includes('headphone') && (catUrl.includes('sneaker') || catUrl.includes('photo-1590658268037')));
-      if (!catMismatched) {
-        return catUrl;
+    if (match) {
+      const uploadedImg = (match.imageUrl || match.images?.[0] || '').trim();
+      if (uploadedImg && !uploadedImg.includes('logo.png')) {
+        return uploadedImg;
       }
     }
   }
@@ -2013,6 +2012,8 @@ app.post('/api/orders', (req: Request, res: Response) => {
       imageUrl: verifiedImg,
       variation: item.variation || undefined,
       sku: product.sku,
+      supplierName: product.supplierName || product.shopName || undefined,
+      shopName: product.shopName || undefined,
       aliExpressUrl: product.aliExpressUrl || product.supplierProductUrl || undefined,
       supplierVariant: product.supplierVariant || undefined,
       supplierSku: product.supplierSku || undefined,
@@ -2214,10 +2215,19 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
       deliveryType: order.deliveryType,
       deliveryLocation: order.deliveryLocation,
       deliveryAddress: order.deliveryAddress,
-      items: (order.items || []).map((it: any) => ({
-        ...it,
-        imageUrl: resolveProductImageDueToProduct(it, db.products)
-      })),
+      items: (order.items || []).map((it: any) => {
+        const match = db.products.find(p =>
+          (it.productId && p.id === it.productId) ||
+          (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
+        );
+        const properImg = resolveProductImageDueToProduct(it, db.products);
+        return {
+          ...it,
+          productName: match?.name || it.productName,
+          imageUrl: properImg,
+          image: properImg
+        };
+      }),
       subtotal: order.subtotal,
       discountAmount: order.discountAmount,
       deliveryFee: order.deliveryFee,
@@ -2245,8 +2255,24 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
     });
   }
 
-  // Admin gets full operational order record
-  res.json(order);
+  // Admin gets full operational order record with authentic uploaded product image & name
+  const resolvedAdminOrder = {
+    ...order,
+    items: (order.items || []).map((it: any) => {
+      const match = db.products.find(p =>
+        (it.productId && p.id === it.productId) ||
+        (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
+      );
+      const properImg = resolveProductImageDueToProduct(it, db.products);
+      return {
+        ...it,
+        productName: match?.name || it.productName,
+        imageUrl: properImg,
+        image: properImg
+      };
+    })
+  };
+  res.json(resolvedAdminOrder);
 });
 
 // Official Invoice Data
@@ -2255,8 +2281,25 @@ app.get('/api/orders/:orderNumber/invoice', (req: Request, res: Response) => {
   const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
+  const resolvedInvoiceOrder = {
+    ...order,
+    items: (order.items || []).map((it: any) => {
+      const match = db.products.find(p =>
+        (it.productId && p.id === it.productId) ||
+        (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
+      );
+      const properImg = resolveProductImageDueToProduct(it, db.products);
+      return {
+        ...it,
+        productName: match?.name || it.productName,
+        imageUrl: properImg,
+        image: properImg
+      };
+    })
+  };
+
   res.json({
-    order,
+    order: resolvedInvoiceOrder,
     company: {
       name: db.settings.companyName,
       marketName: db.settings.marketName,
@@ -5770,7 +5813,24 @@ app.get('/api/admin/orders', requireAdminAuth, (req: Request, res: Response) => 
     );
   }
 
-  res.json(results);
+  const resolvedResults = results.map(o => ({
+    ...o,
+    items: (o.items || []).map((it: any) => {
+      const match = db.products.find(p =>
+        (it.productId && p.id === it.productId) ||
+        (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
+      );
+      const properImg = resolveProductImageDueToProduct(it, db.products);
+      return {
+        ...it,
+        productName: match?.name || it.productName,
+        imageUrl: properImg,
+        image: properImg
+      };
+    })
+  }));
+
+  res.json(resolvedResults);
 });
 
 // Admin Orders Summary Counters

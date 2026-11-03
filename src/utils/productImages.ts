@@ -30,7 +30,7 @@ export const CANONICAL_PRODUCT_IMAGES: { match: RegExp; url: string }[] = [
 
 export function getProductImageDueToProduct(
   item?: { productName?: string; name?: string; imageUrl?: string; image?: string; productId?: string },
-  catalogProducts?: Array<{ id: string; name: string; imageUrl?: string }>
+  catalogProducts?: Array<{ id: string; name: string; imageUrl?: string; images?: string[] }>
 ): string {
   if (!item) {
     return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
@@ -40,26 +40,25 @@ export function getProductImageDueToProduct(
   const currentUrl = (item.imageUrl || item.image || '').trim();
   const isGenericLogo = !currentUrl || currentUrl === '/logo.png' || currentUrl === 'logo.png' || currentUrl.endsWith('/logo.png');
 
+  // 1. If catalogProducts provided, prioritize the original uploaded image in the admin panel
+  if (catalogProducts && catalogProducts.length > 0) {
+    const catalogMatch = catalogProducts.find(p =>
+      (item.productId && p.id === item.productId) ||
+      (p.name && name && p.name.trim().toLowerCase() === name.toLowerCase())
+    );
+    if (catalogMatch) {
+      const adminUploadedImg = (catalogMatch.imageUrl || catalogMatch.images?.[0] || '').trim();
+      if (adminUploadedImg && !adminUploadedImg.includes('logo.png')) {
+        return adminUploadedImg;
+      }
+    }
+  }
+
   // Check if currentUrl is obviously mismatched (e.g. headphone with sneaker image or honey image)
   const isMismatched =
     (name.toLowerCase().includes('headphone') && (currentUrl.includes('sneaker') || currentUrl.includes('photo-1590658268037'))) ||
     (name.toLowerCase().includes('speaker') && currentUrl.includes('sneaker')) ||
     (name.toLowerCase().includes('watch') && (currentUrl.includes('sneaker') || currentUrl.includes('honey')));
-
-  // 1. If catalogProducts provided, try matching to authoritative catalog
-  if (catalogProducts && catalogProducts.length > 0) {
-    const catalogMatch = catalogProducts.find(p =>
-      (item.productId && p.id === item.productId) ||
-      (p.name && p.name.toLowerCase() === name.toLowerCase())
-    );
-    if (catalogMatch?.imageUrl && !catalogMatch.imageUrl.includes('logo.png')) {
-      const catUrl = catalogMatch.imageUrl;
-      const catMismatched = (name.toLowerCase().includes('headphone') && (catUrl.includes('sneaker') || catUrl.includes('photo-1590658268037')));
-      if (!catMismatched) {
-        return catUrl;
-      }
-    }
-  }
 
   // 2. If currentUrl is valid, non-logo, non-mismatched, use it
   if (currentUrl && !isGenericLogo && !isMismatched) {
@@ -75,3 +74,21 @@ export function getProductImageDueToProduct(
 
   return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
 }
+
+export function getProductNameDueToProduct(
+  item?: { productName?: string; name?: string; productId?: string },
+  catalogProducts?: Array<{ id: string; name: string }>
+): string {
+  if (!item) return 'Product';
+  if (catalogProducts && catalogProducts.length > 0) {
+    const catalogMatch = catalogProducts.find(p =>
+      (item.productId && p.id === item.productId) ||
+      (p.name && (item.productName || item.name) && p.name.trim().toLowerCase() === (item.productName || item.name)!.trim().toLowerCase())
+    );
+    if (catalogMatch?.name) {
+      return catalogMatch.name;
+    }
+  }
+  return item.productName || item.name || 'Product';
+}
+

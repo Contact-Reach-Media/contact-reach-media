@@ -36,7 +36,7 @@ import {
 } from '../utils/spreadsheet.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
-import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { getProductImageDueToProduct, getProductNameDueToProduct } from '../utils/productImages.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -5161,11 +5161,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <td className="py-3 px-3 min-w-[200px] max-w-[280px]">
                                 {(() => {
                                   const resolvedImg = getProductImageDueToProduct(primaryItem, products);
+                                  const resolvedName = getProductNameDueToProduct(primaryItem, products);
                                   return (
                                     <div className="flex items-center gap-2.5">
                                       <img
                                         src={resolvedImg}
-                                        alt={primaryItem?.productName || 'Product'}
+                                        alt={resolvedName}
                                         className="w-10 h-10 rounded-xl object-cover border border-slate-200 bg-white shrink-0 shadow-2xs"
                                         referrerPolicy="no-referrer"
                                         onError={(e) => {
@@ -5173,19 +5174,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                         }}
                                       />
                                       <div className="min-w-0">
-                                        <p className="font-bold text-slate-800 truncate" title={primaryItem?.productName || 'Order Items'}>
-                                          {primaryItem?.productName || 'Custom Marketplace Item'}
+                                        <p className="font-bold text-slate-800 truncate" title={resolvedName}>
+                                          {resolvedName}
                                         </p>
-                                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
-                                      <span>Qty: {primaryItem?.quantity || 1}</span>
-                                      {remainingItemsCount > 0 && (
-                                        <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                                          +{remainingItemsCount} more
-                                        </span>
-                                      )}
+                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
+                                          <span>Qty: {primaryItem?.quantity || 1}</span>
+                                          {remainingItemsCount > 0 && (
+                                            <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                                              +{remainingItemsCount} more
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
+                                  );
+                                })()}
                               </td>
 
                               {/* 3. Customer Name & Phone */}
@@ -10079,21 +10082,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-bold text-slate-400">
                   <tr>
-                    <th className="p-3">Item Description</th>
+                    <th className="p-3">Product Name & Image</th>
                     <th className="p-3 text-center">Qty</th>
                     <th className="p-3 text-right">Unit Price</th>
                     <th className="p-3 text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {printableInvoiceOrder.items.map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="p-3 font-bold text-slate-800">{item.productName}</td>
-                      <td className="p-3 text-center font-mono">{item.quantity}</td>
-                      <td className="p-3 text-right font-mono">{item.price.toLocaleString()} FRW</td>
-                      <td className="p-3 text-right font-mono font-bold">{(item.price * item.quantity).toLocaleString()} FRW</td>
-                    </tr>
-                  ))}
+                  {printableInvoiceOrder.items.map((item, idx) => {
+                    const resolvedImg = getProductImageDueToProduct(item, products);
+                    const resolvedName = getProductNameDueToProduct(item, products);
+                    return (
+                      <tr key={idx}>
+                        <td className="p-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={resolvedImg}
+                              alt={resolvedName}
+                              className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = getProductImageDueToProduct(item);
+                              }}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-800 text-xs truncate max-w-xs">{resolvedName}</p>
+                              {(item.size || item.color || item.shopName) && (
+                                <p className="text-[10px] text-slate-400 font-mono">
+                                  {item.shopName ? `${item.shopName} · ` : ''}
+                                  {item.size ? `Size: ${item.size} ` : ''}
+                                  {item.color ? `Color: ${item.color}` : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3 text-center font-mono font-bold text-xs">{item.quantity}</td>
+                        <td className="p-3 text-right font-mono text-xs">{item.price.toLocaleString()} FRW</td>
+                        <td className="p-3 text-right font-mono font-bold text-xs text-slate-900">{(item.price * item.quantity).toLocaleString()} FRW</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -11941,36 +11970,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </span>
                 </div>
                 <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 bg-slate-50/50 overflow-hidden">
-                  {(selectedOrderModal.items || []).map((item, idx) => (
-                    <div key={idx} className="p-3 flex items-center justify-between gap-3 text-xs bg-white">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.productName} className="w-11 h-11 object-cover rounded-xl border border-slate-200 shrink-0" />
-                        ) : (
-                          <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                            <ShoppingBag className="w-5 h-5" />
+                  {(selectedOrderModal.items || []).map((item, idx) => {
+                    const resolvedImg = getProductImageDueToProduct(item, products);
+                    const resolvedName = getProductNameDueToProduct(item, products);
+                    return (
+                      <div key={idx} className="p-3 flex items-center justify-between gap-3 text-xs bg-white">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={resolvedImg}
+                            alt={resolvedName}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = getProductImageDueToProduct(item);
+                            }}
+                            className="w-11 h-11 object-cover rounded-xl border border-slate-200 shrink-0 bg-slate-50 shadow-2xs"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 truncate" title={resolvedName}>{resolvedName}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {item.shopName ? `Shop: ${item.shopName} · ` : ''}
+                              Unit: {item.price.toLocaleString()} FRW
+                              {item.size ? ` · Size: ${item.size}` : ''}
+                              {item.color ? ` · Color: ${item.color}` : ''}
+                            </p>
                           </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-900 truncate">{item.productName}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">
-                            {item.shopName ? `Shop: ${item.shopName} · ` : ''}
-                            Unit: {item.price.toLocaleString()} FRW
-                            {item.size ? ` · Size: ${item.size}` : ''}
-                            {item.color ? ` · Color: ${item.color}` : ''}
-                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-bold text-slate-900 block">
+                            Qty: {item.quantity}
+                          </span>
+                          <span className="font-mono font-bold text-[#FF6000] text-[11px]">
+                            {(item.price * item.quantity).toLocaleString()} FRW
+                          </span>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-mono font-bold text-slate-900 block">
-                          Qty: {item.quantity}
-                        </span>
-                        <span className="font-mono font-bold text-[#FF6000] text-[11px]">
-                          {(item.price * item.quantity).toLocaleString()} FRW
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
