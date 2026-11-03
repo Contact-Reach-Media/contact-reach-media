@@ -36,6 +36,18 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /paymentTransactions/{transactionId} {
+      allow read, write: if true;
+    }
+
+    match /deletedProducts/{docId} {
+      allow read, write: if true;
+    }
+
+    match /cjPendingProducts/{docId} {
+      allow read, write: if true;
+    }
+
     // Users and Customers: allow create, read, update, delete
     match /users/{userId} {
       allow read, write: if true;

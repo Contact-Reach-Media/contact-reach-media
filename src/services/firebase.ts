@@ -42,15 +42,15 @@ import {
   InventoryLog
 } from '../types.ts';
 
-// Your web app's Firebase configuration (marketdatabase-1090b)
+// Web app's Firebase configuration from firebase-applet-config.json
 export const firebaseConfig = {
-  apiKey: "AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM",
-  authDomain: "marketdatabase-1090b.firebaseapp.com",
-  projectId: "marketdatabase-1090b",
-  storageBucket: "marketdatabase-1090b.firebasestorage.app",
-  messagingSenderId: "213406612645",
-  appId: "1:213406612645:web:d3de2687e1d492c6ee214c",
-  measurementId: "G-3TP55B57FG"
+  apiKey: rawFirebaseConfig.apiKey || "AIzaSyB4ttISIevpVGJ3PPi74kP9LngxxzsTTf0",
+  authDomain: rawFirebaseConfig.authDomain || "gen-lang-client-0460570023.firebaseapp.com",
+  projectId: rawFirebaseConfig.projectId || "gen-lang-client-0460570023",
+  storageBucket: rawFirebaseConfig.storageBucket || "gen-lang-client-0460570023.firebasestorage.app",
+  messagingSenderId: rawFirebaseConfig.messagingSenderId || "554179569570",
+  appId: rawFirebaseConfig.appId || "1:554179569570:web:9f4ca09b862bc9b87934fb",
+  measurementId: rawFirebaseConfig.measurementId || ""
 };
 
 // Aliases for compatibility
@@ -62,8 +62,11 @@ export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getA
 export const app1 = app;
 export const app2 = app;
 
-// Initialize Firestore
-export const db = getFirestore(app);
+// Initialize Firestore with provisioned Database ID
+const provisionedDbId = (rawFirebaseConfig as any).firestoreDatabaseId;
+export const db = (provisionedDbId && provisionedDbId !== '(default)')
+  ? getFirestore(app, provisionedDbId)
+  : getFirestore(app);
 export const db1 = db;
 export const db2 = db;
 
@@ -167,22 +170,25 @@ let firestore1Connected = true;
 let firestore2Connected = true;
 export let firestoreConnected = true;
 
-// Validate Connection to BOTH Firestores safely via lightweight probes
+// Validate Connection to Firestore safely via lightweight probes
 export async function testConnection(): Promise<{ db1: boolean; db2: boolean; anyConnected: boolean }> {
   try {
-    const probe1 = fetch(`https://firestore.googleapis.com/v1/projects/${primaryConfig.projectId}/databases/(default)/documents?key=${primaryConfig.apiKey}&pageSize=1`, { signal: AbortSignal.timeout(3000) })
+    const dbId = (rawFirebaseConfig as any).firestoreDatabaseId || '(default)';
+    const probe1 = fetch(`https://firestore.googleapis.com/v1/projects/${primaryConfig.projectId}/databases/${dbId}/documents?key=${primaryConfig.apiKey}&pageSize=1`, { signal: AbortSignal.timeout(3000) })
       .then(res => res.status !== 404 && (res.ok || res.status < 500))
       .catch(() => true);
 
-    const probe2 = fetch(`https://firestore.googleapis.com/v1/projects/${secondaryConfig.projectId}/databases/(default)/documents?key=${secondaryConfig.apiKey}&pageSize=1`, { signal: AbortSignal.timeout(3000) })
-      .then(res => res.status !== 404 && (res.ok || res.status < 500))
-      .catch(() => true);
-
-    const [c1, c2] = await Promise.all([probe1, probe2]);
+    const [c1] = await Promise.all([probe1]);
     firestore1Connected = c1;
-    firestore2Connected = c2;
-    firestoreConnected = c1 || c2;
-    return { db1: c1, db2: c2, anyConnected: c1 || c2 };
+    firestore2Connected = c1;
+    firestoreConnected = c1;
+
+    // Optional direct client probe per skill guideline
+    try {
+      getDocFromServer(doc(db, 'settings', 'global')).catch(() => {});
+    } catch {}
+
+    return { db1: c1, db2: c1, anyConnected: c1 };
   } catch {
     firestore1Connected = true;
     firestore2Connected = true;
@@ -213,13 +219,14 @@ export async function loginWithGoogle(requestWorkspaceAccess = false): Promise<U
   } catch (error: any) {
     if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
       const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
+      const projId = firebaseConfig.projectId;
       const detailedErr: any = new Error(
-        `Firebase Error (auth/unauthorized-domain): This domain (${currentDomain}) is not authorized in Firebase Authentication for project 'marketdatabase-1090b'. Please add '${currentDomain}' to Firebase Console > Authentication > Settings > Authorized domains.`
+        `Firebase Error (auth/unauthorized-domain): This domain (${currentDomain}) is not authorized in Firebase Authentication for project '${projId}'. Please add '${currentDomain}' to Firebase Console > Authentication > Settings > Authorized domains.`
       );
       detailedErr.code = 'auth/unauthorized-domain';
       detailedErr.domain = currentDomain;
-      detailedErr.projectId = 'marketdatabase-1090b';
-      detailedErr.settingsUrl = 'https://console.firebase.google.com/project/marketdatabase-1090b/authentication/settings';
+      detailedErr.projectId = projId;
+      detailedErr.settingsUrl = `https://console.firebase.google.com/project/${projId}/authentication/settings`;
       console.warn(`[Firebase Auth] ${detailedErr.message}\nConfigure at: ${detailedErr.settingsUrl}`);
       throw detailedErr;
     }

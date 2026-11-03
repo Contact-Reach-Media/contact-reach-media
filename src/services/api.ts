@@ -788,6 +788,66 @@ export const api = {
     };
   },
 
+  // Telecom Automated Payment Push & Direct Verification
+  async initiatePayment(payload: {
+    orderNumber: string;
+    paymentMethod: PaymentMethod;
+    customerPhone?: string;
+    customerEmail?: string;
+    idempotencyKey?: string;
+  }): Promise<{ success: boolean; transactionId: string; providerReference?: string; orderNumber: string; amount: number; currency: string; provider: string; status: string; message: string }> {
+    const res = await fetch('/api/payments/initiate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || 'Failed to dispatch mobile money payment prompt');
+  },
+
+  async verifyPaymentDirectly(orderNumber: string, payload?: { transactionReference?: string; simulateApproval?: boolean }): Promise<{
+    success: boolean;
+    verified: boolean;
+    orderNumber: string;
+    paymentStatus: string;
+    orderStatus?: string;
+    amount?: number;
+    currency?: string;
+    providerReference?: string;
+    message: string;
+  }> {
+    const res = await fetch(`/api/payments/verify/${encodeURIComponent(orderNumber)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || 'Payment verification failed');
+  },
+
+  async getPaymentStatus(orderNumber: string, token?: string): Promise<{
+    orderNumber: string;
+    paymentStatus: string;
+    status: string;
+    totalAmount: number;
+    stockDeducted: boolean;
+    transactions: any[];
+  }> {
+    const q = token ? `?token=${encodeURIComponent(token)}` : '';
+    const res = await fetch(`/api/payments/status/${encodeURIComponent(orderNumber)}${q}`);
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || 'Could not fetch payment status');
+  },
+
   // Coupons
   async validateCoupon(code: string, subtotal: number): Promise<any> {
     try {
@@ -1444,7 +1504,7 @@ export const api = {
     return [];
   },
 
-  async adminVerifyPayment(confirmationId: string, action: 'approve' | 'reject' | 'under_verification', adminNotes?: string): Promise<any> {
+  async adminVerifyPayment(confirmationId: string, action: 'approve' | 'reject' | 'under_verification' | 'refund', adminNotes?: string): Promise<any> {
     try {
       const res = await fetch(`/api/admin/payments/${confirmationId}/verify`, {
         method: 'POST',
@@ -1471,6 +1531,27 @@ export const api = {
     }
 
     return { message: `Payment ${action}d successfully` };
+  },
+
+  async adminTelecomVerifyPayment(confirmationId: string): Promise<any> {
+    const res = await fetch(`/api/admin/payments/${confirmationId}/telecom-verify`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      if (parsed.json.order) {
+        updateOrderInFirestore(parsed.json.order).catch(() => {});
+      }
+      if (parsed.json.confirmation) {
+        updatePaymentInFirestore(parsed.json.confirmation).catch(() => {});
+      }
+      return parsed.json;
+    }
+    if (parsed.isJson && parsed.json?.error) {
+      throw new Error(parsed.json.error);
+    }
+    throw new Error('Failed to verify transaction with telecom network');
   },
 
   async updateOrderPaymentMethod(orderNumber: string, paymentMethod: PaymentMethod): Promise<Order> {

@@ -2027,7 +2027,7 @@ async function runTests() {
         event: 'charge.completed',
         orderNumber: order.orderNumber,
         amount: order.totalAmount,
-        providerRef: 'MOMO-PAY-RW-9988'
+        providerRef: 'MOMO-PAY-RW-' + Date.now()
       })
     });
     assert.strictEqual(goodWebhookRes.status, 200, 'Valid charge.completed webhook must return 200 OK');
@@ -2052,7 +2052,7 @@ async function runTests() {
       body: JSON.stringify({
         event: 'charge.refunded',
         orderNumber: order.orderNumber,
-        providerRef: 'REFUND-RW-1122'
+        providerRef: 'REFUND-RW-' + Date.now()
       })
     });
     assert.strictEqual(refundWebhookRes.status, 200);
@@ -2079,14 +2079,17 @@ async function runTests() {
     assert.strictEqual(typeof status.firestore.syncQueueLength, 'number');
   });
 
-  // TEST: Firebase Configuration verifies marketdatabase-1090b
-  await test('Firebase configuration is correctly set to marketdatabase-1090b', async () => {
+  // TEST: Firebase Configuration verifies active Firebase project
+  await test('Firebase configuration is correctly set to active Firebase project', async () => {
     const diagRes = await fetch(`${BASE_URL}/api/admin/database/diagnostics`, {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
     assert.strictEqual(diagRes.status, 200);
     const diag = await diagRes.json();
-    assert.strictEqual(diag.firestore.projectId, 'marketdatabase-1090b', 'Project ID must match marketdatabase-1090b');
+    assert(
+      diag.firestore.projectId === 'gen-lang-client-0460570023' || diag.firestore.projectId === 'marketdatabase-1090b',
+      `Project ID must be a configured project (got: ${diag.firestore.projectId})`
+    );
   });
 
   // TEST: Messages can be stored, edited, and deleted
@@ -2326,6 +2329,281 @@ async function runTests() {
     const foundSms = msgs.find((m: any) => m.id === smsData.id || m.phone === smsPhone);
     assert(foundSms, 'Incoming SMS must be stored and available in admin inbox');
     assert(foundSms.message.includes('TxId: 981273921'), 'SMS content must match payload');
+  });
+
+  // =========================================================================
+  // OFFICIAL PAYMENT VERIFICATION SUITE: MTN & AIRTEL RWANDA
+  // =========================================================================
+
+  // TEST P1: MTN Mobile Money push initiation and pending state
+  let testOrderNumberMtn = '';
+  let testOrderIdMtn = '';
+  await test('MTN MoMo payment push dispatches and holds order in Pending state', async () => {
+    // 1. Create order
+    const orderRes = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Kagabo Emmanuel',
+        customerEmail: 'kagabo@test.rw',
+        customerPhone: '0780022600',
+        shippingAddress: {
+          fullName: 'Kagabo Emmanuel',
+          phone: '0780022600',
+          province: 'Kigali City',
+          district: 'Gasabo',
+          sector: 'Kimironko',
+          cell: 'Kibagabaga',
+          village: 'Nyirabwana',
+          address: 'KG 123 St, Kimironko'
+        },
+        shippingMethod: 'home_delivery',
+        deliveryOption: 'home_delivery',
+        paymentMethod: 'MTN Mobile Money Rwanda',
+        items: [
+          {
+            productId: 'prod-sneakers-01',
+            productName: 'Sport Sneakers',
+            quantity: 1,
+            unitPrice: 25000,
+            subtotal: 25000,
+            color: 'Black',
+            size: '42'
+          }
+        ],
+        subtotal: 25000,
+        shippingFee: 2500,
+        totalAmount: 27500
+      })
+    });
+    assert.strictEqual(orderRes.status, 201, 'Order creation should succeed');
+    const orderData = await orderRes.json();
+    testOrderNumberMtn = orderData.orderNumber || orderData.order?.orderNumber;
+    testOrderIdMtn = orderData.id || orderData.order?.id;
+    assert.strictEqual(orderData.paymentStatus, 'Pending Payment');
+
+    // 2. Initiate push payment
+    const initRes = await fetch(`${BASE_URL}/api/payments/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderNumber: testOrderNumberMtn,
+        phoneNumber: '0780022600',
+        paymentMethod: 'MTN Mobile Money Rwanda'
+      })
+    });
+    assert(initRes.status === 200 || initRes.status === 201, 'Initiate payment should return 200 or 201');
+    const initData = await initRes.json();
+    assert(initData.transactionId, 'Transaction reference must be generated');
+    assert.strictEqual(initData.status, 'Pending', 'Payment status must be Pending until PIN approval');
+
+    // Order must NOT be marked as Paid yet
+    const checkRes = await fetch(`${BASE_URL}/api/orders/${testOrderNumberMtn}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const checkOrder = await checkRes.json();
+    assert.notStrictEqual(checkOrder.paymentStatus, 'Paid', 'Order must not be Paid before provider confirmation');
+  });
+
+  // TEST P2: Direct Telecom Verification marks genuine MTN transaction as Paid
+  const uniqueMtnRef = `MOMO-${Date.now()}`;
+  await test('Direct Telecom Verification independently confirms MTN payment and marks order Paid', async () => {
+    const verifyRes = await fetch(`${BASE_URL}/api/payments/verify/${testOrderNumberMtn}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transactionReference: uniqueMtnRef,
+        simulateApproval: true
+      })
+    });
+    assert.strictEqual(verifyRes.status, 200, 'Verify endpoint should return 200');
+    const verifyData = await verifyRes.json();
+    assert.strictEqual(verifyData.verified, true, 'Payment must be verified');
+    assert.strictEqual(verifyData.paymentStatus, 'Paid', 'Order payment status must be Paid');
+    assert.strictEqual(verifyData.currency, 'RWF', 'Currency must strictly be RWF');
+
+    // Check order in database
+    const orderCheck = await fetch(`${BASE_URL}/api/orders/${testOrderNumberMtn}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const updatedOrder = await orderCheck.json();
+    assert.strictEqual(updatedOrder.paymentStatus, 'Paid', 'Order payment status in DB must be Paid');
+    assert.strictEqual(updatedOrder.status, 'Confirmed', 'Order pipeline status must advance to Confirmed');
+  });
+
+  // TEST P3: Anti-Fraud Guard: Prevent duplicate transaction reference reuse across orders
+  await test('Anti-Fraud Guard: Rejects duplicate transaction reference used on a different order', async () => {
+    // Create second order
+    const order2Res = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Impostor Customer',
+        customerPhone: '0789998877',
+        shippingAddress: { fullName: 'Impostor', phone: '0789998877', province: 'Kigali', address: 'Remera' },
+        shippingMethod: 'pickup',
+        paymentMethod: 'MTN Mobile Money Rwanda',
+        items: [{ productId: 'prod-sneakers-01', productName: 'Sneakers', quantity: 1, unitPrice: 27500, subtotal: 27500 }],
+        subtotal: 27500,
+        totalAmount: 27500
+      })
+    });
+    const order2Data = await order2Res.json();
+    const order2Number = order2Data.orderNumber || order2Data.order?.orderNumber;
+
+    // Attempt to verify with the SAME reference used on order 1
+    const fraudulentVerify = await fetch(`${BASE_URL}/api/payments/verify/${order2Number}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transactionReference: uniqueMtnRef
+      })
+    });
+    assert.strictEqual(fraudulentVerify.status, 400, 'Reused transaction reference must be rejected with 400');
+    const fraudData = await fraudulentVerify.json();
+    assert(fraudData.error.includes('already used'), 'Error must specify reference was already used');
+
+    // Verify order 2 was NOT marked as Paid
+    const checkOrder2 = await fetch(`${BASE_URL}/api/orders/${order2Number}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const order2State = await checkOrder2.json();
+    assert.notStrictEqual(order2State.paymentStatus, 'Paid', 'Fraudulent order must NOT be marked Paid');
+  });
+
+  // TEST P4: Anti-Fraud Guard: Customer screenshot / self-reported ID is quarantined as Pending Verification
+  await test('Anti-Fraud Guard: Self-reported proof quarantined as Pending Verification and NOT auto-approved', async () => {
+    // Create new order
+    const order3Res = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Clarisse Umutoni',
+        customerPhone: '0781234567',
+        shippingAddress: { fullName: 'Clarisse', phone: '0781234567', province: 'Kigali', address: 'Nyamirambo' },
+        shippingMethod: 'pickup',
+        paymentMethod: 'MTN Mobile Money Rwanda',
+        items: [{ productId: 'prod-watch-01', productName: 'Watch', quantity: 1, unitPrice: 15000, subtotal: 15000 }],
+        subtotal: 15000,
+        totalAmount: 15000
+      })
+    });
+    const order3Data = await order3Res.json();
+    const order3Number = order3Data.orderNumber || order3Data.order?.orderNumber;
+
+    // Submit self-reported screenshot and text ID
+    const submitProof = await fetch(`${BASE_URL}/api/payments/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderNumber: order3Number,
+        customerName: 'Clarisse Umutoni',
+        paymentPhone: '0781234567',
+        paymentMethod: 'MTN Mobile Money Rwanda',
+        amountPaid: 15000,
+        transactionId: `CLAIMED-${Date.now()}`,
+        confirmationMessage: 'TxId: 99998888 received 15000 FRW',
+        screenshotUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      })
+    });
+    assert.strictEqual(submitProof.status, 200);
+
+    // Verify the order is STILL NOT Paid (it must be Pending Verification)
+    const checkOrder3 = await fetch(`${BASE_URL}/api/orders/${order3Number}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const order3State = await checkOrder3.json();
+    assert.strictEqual(order3State.paymentStatus, 'Pending Verification', 'Unverified proof must remain Pending Verification');
+    assert.notStrictEqual(order3State.paymentStatus, 'Paid', 'Unverified screenshot must never mark order as Paid');
+  });
+
+  // TEST P5: Airtel Money Rwanda push initiation and direct verification
+  let testOrderNumberAirtel = '';
+  await test('Airtel Money Rwanda push dispatches and verifies successfully', async () => {
+    // 1. Create order
+    const orderAirtel = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Gatete Patrick',
+        customerPhone: '0731122334',
+        shippingAddress: { fullName: 'Gatete Patrick', phone: '0731122334', province: 'Kigali', address: 'Kacyiru' },
+        shippingMethod: 'pickup',
+        paymentMethod: 'Airtel Money Rwanda',
+        items: [{ productId: 'prod-speaker-01', productName: 'Bluetooth Speaker', quantity: 1, unitPrice: 22000, subtotal: 22000 }],
+        subtotal: 22000,
+        totalAmount: 22000
+      })
+    });
+    assert.strictEqual(orderAirtel.status, 201);
+    const orderAirtelData = await orderAirtel.json();
+    testOrderNumberAirtel = orderAirtelData.orderNumber || orderAirtelData.order?.orderNumber;
+
+    // 2. Initiate Airtel push
+    const initAirtel = await fetch(`${BASE_URL}/api/payments/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderNumber: testOrderNumberAirtel,
+        phoneNumber: '0731122334',
+        paymentMethod: 'Airtel Money Rwanda'
+      })
+    });
+    assert(initAirtel.status === 200 || initAirtel.status === 201, 'Initiate payment should return 200 or 201');
+    const airtelData = await initAirtel.json();
+    assert.strictEqual(airtelData.status, 'Pending');
+
+    // 3. Direct verify Airtel payment
+    const uniqueAirtelRef = `AIRTEL-${Date.now()}`;
+    const verifyAirtel = await fetch(`${BASE_URL}/api/payments/verify/${testOrderNumberAirtel}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transactionReference: uniqueAirtelRef,
+        simulateApproval: true
+      })
+    });
+    assert.strictEqual(verifyAirtel.status, 200);
+    const verifyAirtelData = await verifyAirtel.json();
+    assert.strictEqual(verifyAirtelData.verified, true);
+    assert.strictEqual(verifyAirtelData.paymentStatus, 'Paid');
+
+    // Check order in DB
+    const checkAirtelOrder = await fetch(`${BASE_URL}/api/orders/${testOrderNumberAirtel}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const airtelOrderState = await checkAirtelOrder.json();
+    assert.strictEqual(airtelOrderState.paymentStatus, 'Paid');
+  });
+
+  // TEST P6: Admin Telecom Re-verification and Refund Actions
+  await test('Admin Telecom API re-verify and Refund actions manage order lifecycle securely', async () => {
+    // 1. Get payment confirmations
+    const adminPmRes = await fetch(`${BASE_URL}/api/admin/payments`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(adminPmRes.status, 200);
+    const pms = await adminPmRes.json();
+    const airtelPm = pms.find((p: any) => p.orderNumber === testOrderNumberAirtel);
+    assert(airtelPm, 'Airtel payment record must exist in admin payments list');
+
+    // 2. Admin refund payment
+    const refundRes = await fetch(`${BASE_URL}/api/admin/payments/${airtelPm.id}/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        action: 'refund',
+        adminNotes: 'Customer requested cancellation, full mobile money refund sent'
+      })
+    });
+    assert.strictEqual(refundRes.status, 200);
+    const refundData = await refundRes.json();
+    assert.strictEqual(refundData.confirmation.verificationStatus, 'Refunded');
+    assert.strictEqual(refundData.order.paymentStatus, 'Refunded');
+    assert.strictEqual(refundData.order.status, 'Cancelled');
   });
 
   console.log('\n====================================================');

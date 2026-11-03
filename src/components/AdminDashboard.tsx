@@ -83,8 +83,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
 
   // Toast feedback
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   };
@@ -399,6 +399,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [verifyNotes, setVerifyNotes] = useState('Verified with MTN/Airtel MoMo statement');
   const [zoomScreenshot, setZoomScreenshot] = useState<string | null>(null);
   const [printableInvoiceOrder, setPrintableInvoiceOrder] = useState<Order | null>(null);
+
+  // Payment Verification States & Filters
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'successful' | 'pending' | 'failed' | 'refunded'>('all');
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [telecomVerifyingId, setTelecomVerifyingId] = useState<string | null>(null);
 
   // Customer / Buyer Management States
   const [customerSearch, setCustomerSearch] = useState('');
@@ -2699,16 +2704,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Payment Verification
-  const handleVerifyPayment = async (action: 'approve' | 'reject' | 'under_verification', adminNotes: string, paymentId?: string) => {
+  const handleVerifyPayment = async (action: 'approve' | 'reject' | 'under_verification' | 'refund', adminNotes: string, paymentId?: string) => {
     const targetId = paymentId || verifyModalPayment?.id;
     if (!targetId) return;
     try {
       await api.adminVerifyPayment(targetId, action, adminNotes);
-      showToast(action === 'approve' ? 'Payment approved & marked Paid!' : action === 'under_verification' ? 'Payment set to Under Verification' : 'Payment rejected.');
+      showToast(
+        action === 'approve'
+          ? 'Payment approved & marked Paid!'
+          : action === 'refund'
+          ? 'Payment refunded & inventory restored.'
+          : action === 'under_verification'
+          ? 'Payment set to Under Verification'
+          : 'Payment rejected.'
+      );
       setVerifyModalPayment(null);
       fetchAllData();
     } catch (err: any) {
       showToast(err.message, 'error');
+    }
+  };
+
+  const handleTelecomReverify = async (paymentId: string) => {
+    try {
+      setTelecomVerifyingId(paymentId);
+      const res = await api.adminTelecomVerifyPayment(paymentId);
+      if (res.verified) {
+        showToast(res.message || 'Payment successfully verified directly with telecom network!', 'success');
+      } else {
+        showToast(res.message || 'Payment verification response received.', 'error');
+      }
+      fetchAllData();
+      if (verifyModalPayment?.id === paymentId) {
+        setVerifyModalPayment(null);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Telecom verification query failed', 'error');
+    } finally {
+      setTelecomVerifyingId(null);
     }
   };
 
@@ -4834,162 +4867,529 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
 
           {/* TAB 6: PAYMENT VERIFICATION */}
-          {activeTab === 'payments' && (
-            <div className="space-y-5">
-              <div>
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">Mobile Money & Payment Verification</h1>
-                <p className="text-xs text-slate-500">Audit customer payment submissions against telecom statements</p>
-              </div>
+          {activeTab === 'payments' && (() => {
+            const paymentStats = {
+              total: payments.length,
+              successful: payments.filter(pm => {
+                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+                return pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved' || ord?.paymentStatus === 'Paid';
+              }),
+              pending: payments.filter(pm => {
+                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+                const isSuccess = pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved' || ord?.paymentStatus === 'Paid';
+                return !isSuccess && (pm.verificationStatus === 'Pending Verification' || pm.verificationStatus === 'Under Verification' || pm.verificationStatus === 'Pending Review' || ord?.paymentStatus === 'Pending Payment' || ord?.paymentStatus === 'Pending Verification');
+              }),
+              failed: payments.filter(pm => {
+                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+                return pm.verificationStatus === 'Rejected' || pm.verificationStatus === 'Failed' || ord?.paymentStatus === 'Failed' || ord?.paymentStatus === 'Payment Rejected';
+              }),
+              refunded: payments.filter(pm => {
+                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+                return pm.verificationStatus === 'Refunded' || ord?.paymentStatus === 'Refunded';
+              })
+            };
 
-              <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-400 font-bold uppercase text-[10px]">
-                        <th className="py-3 px-4">Order #</th>
-                        <th className="py-3 px-3">Sender Phone</th>
-                        <th className="py-3 px-3">Method</th>
-                        <th className="py-3 px-3">Txn ID / Ref</th>
-                        <th className="py-3 px-3">Amount Paid</th>
-                        <th className="py-3 px-3">Proof (Screenshot / SMS)</th>
-                        <th className="py-3 px-3">Status</th>
-                        <th className="py-3 px-4 text-right">Verification</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {payments.map(pm => (
-                        <tr key={pm.id} className="hover:bg-slate-50/60">
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                            {pm.orderNumber}
-                          </td>
-                          <td className="py-3 px-3 font-bold text-slate-800 font-mono">
-                            {pm.paymentPhone}
-                          </td>
-                          <td className="py-3 px-3 font-semibold text-slate-600">
-                            {pm.paymentMethod}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="font-mono font-bold text-blue-600 block">{pm.transactionId}</span>
-                            {pm.flaggedSuspicious && (
-                              <span className="inline-flex items-center gap-0.5 mt-0.5 text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-300">
-                                ⚠️ Duplicate Txn
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3 font-mono font-bold text-slate-900">
-                            {pm.amountPaid.toLocaleString()} FRW
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {pm.screenshotUrl && (
-                                <button
-                                  type="button"
-                                  onClick={() => setZoomScreenshot(pm.screenshotUrl!)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-[10px] font-bold hover:bg-orange-100 transition-colors cursor-pointer"
-                                  title="Click to view payment screenshot"
-                                >
-                                  <ImageIcon className="w-3 h-3" />
-                                  <span>Screenshot</span>
-                                </button>
-                              )}
-                              {pm.confirmationMessage && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setVerifyModalPayment(pm);
-                                    setVerifyNotes('Verified with MTN/Airtel MoMo statement');
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold hover:bg-blue-100 transition-colors cursor-pointer"
-                                  title={pm.confirmationMessage}
-                                >
-                                  <FileText className="w-3 h-3" />
-                                  <span>SMS Text</span>
-                                </button>
-                              )}
-                              {!pm.screenshotUrl && !pm.confirmationMessage && (
-                                <span className="text-[10px] text-slate-400 italic">ID Only</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                              pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : pm.verificationStatus === 'Under Verification'
-                                ? 'bg-purple-100 text-purple-800'
-                                : pm.verificationStatus === 'Rejected'
-                                ? 'bg-rose-100 text-rose-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}>
-                              {pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved'
-                                ? 'Verified / Paid'
-                                : pm.verificationStatus}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                              {pm.verificationStatus !== 'Verified/Paid' && pm.verificationStatus !== 'Approved' ? (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setVerifyModalPayment(pm);
-                                      setVerifyNotes('Verified with MTN/Airtel statement');
-                                    }}
-                                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                    title="Review proof and verify"
-                                  >
-                                    Review
-                                  </button>
-                                  <button
-                                    onClick={() => handleVerifyPayment('approve', 'Verified with MTN/Airtel statement', pm.id)}
-                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                    title="Approve and mark Paid"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() => handleVerifyPayment('under_verification', 'Checking telecom bank records', pm.id)}
-                                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                    title="Mark Under Verification"
-                                  >
-                                    Audit
-                                  </button>
-                                  <button
-                                    onClick={() => handleVerifyPayment('reject', 'Transaction reference not found in telecom records', pm.id)}
-                                    className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg cursor-pointer text-[11px]"
-                                    title="Reject payment"
-                                  >
-                                    Reject
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setVerifyModalPayment(pm);
-                                    setVerifyNotes(pm.adminNotes || `Verified by ${pm.verifiedBy || 'Ruth'}`);
-                                  }}
-                                  className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline cursor-pointer"
-                                >
-                                  View Details
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleDeletePaymentConfirmation(pm)}
-                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                                title="Delete payment record"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
+            const totalSuccessfulFrw = paymentStats.successful.reduce((acc, pm) => acc + (pm.amountPaid || 0), 0);
+
+            const filteredPaymentsList = payments.filter(pm => {
+              const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+              const isSuccess = pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved' || ord?.paymentStatus === 'Paid';
+              const isPending = !isSuccess && (pm.verificationStatus === 'Pending Verification' || pm.verificationStatus === 'Under Verification' || pm.verificationStatus === 'Pending Review' || ord?.paymentStatus === 'Pending Payment' || ord?.paymentStatus === 'Pending Verification');
+              const isFailed = pm.verificationStatus === 'Rejected' || pm.verificationStatus === 'Failed' || ord?.paymentStatus === 'Failed' || ord?.paymentStatus === 'Payment Rejected';
+              const isRefunded = pm.verificationStatus === 'Refunded' || ord?.paymentStatus === 'Refunded';
+
+              if (paymentFilter === 'successful' && !isSuccess) return false;
+              if (paymentFilter === 'pending' && !isPending) return false;
+              if (paymentFilter === 'failed' && !isFailed) return false;
+              if (paymentFilter === 'refunded' && !isRefunded) return false;
+
+              if (paymentSearch.trim()) {
+                const q = paymentSearch.toLowerCase().trim();
+                const customerName = (ord?.customerName || pm.customerName || '').toLowerCase();
+                const phone = (ord?.customerPhone || pm.paymentPhone || '').toLowerCase();
+                const orderNum = (pm.orderNumber || ord?.orderNumber || '').toLowerCase();
+                const txnRef = (pm.transactionId || '').toLowerCase();
+                const method = (pm.paymentMethod || '').toLowerCase();
+                return customerName.includes(q) || phone.includes(q) || orderNum.includes(q) || txnRef.includes(q) || method.includes(q);
+              }
+
+              return true;
+            });
+
+            return (
+              <div className="space-y-5">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Mobile Money & Payment Verification</h1>
+                    <p className="text-xs text-slate-500">Official automated verification for MTN Mobile Money & Airtel Money Rwanda with strict anti-fraud reconciliation</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => fetchAllData()}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                      title="Refresh payments and orders"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stat Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div
+                    onClick={() => setPaymentFilter('all')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      paymentFilter === 'all' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">All Payments</div>
+                    <div className="text-xl font-black mt-1">{paymentStats.total}</div>
+                    <div className="text-[10px] opacity-75 mt-0.5">Total recorded</div>
+                  </div>
+
+                  <div
+                    onClick={() => setPaymentFilter('successful')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      paymentFilter === 'successful' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-emerald-50 text-emerald-950 border-emerald-200 hover:border-emerald-300'
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-85">Successful</div>
+                    <div className="text-xl font-black mt-1">{paymentStats.successful.length}</div>
+                    <div className="text-[10px] font-semibold opacity-90 mt-0.5">{totalSuccessfulFrw.toLocaleString()} FRW</div>
+                  </div>
+
+                  <div
+                    onClick={() => setPaymentFilter('pending')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      paymentFilter === 'pending' ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-amber-50 text-amber-950 border-amber-200 hover:border-amber-300'
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-85">Pending</div>
+                    <div className="text-xl font-black mt-1">{paymentStats.pending.length}</div>
+                    <div className="text-[10px] opacity-80 mt-0.5">Awaiting provider</div>
+                  </div>
+
+                  <div
+                    onClick={() => setPaymentFilter('failed')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      paymentFilter === 'failed' ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-rose-50 text-rose-950 border-rose-200 hover:border-rose-300'
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-85">Failed / Rejected</div>
+                    <div className="text-xl font-black mt-1">{paymentStats.failed.length}</div>
+                    <div className="text-[10px] opacity-80 mt-0.5">Declined or invalid</div>
+                  </div>
+
+                  <div
+                    onClick={() => setPaymentFilter('refunded')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      paymentFilter === 'refunded' ? 'bg-slate-700 text-white border-slate-700 shadow-sm' : 'bg-slate-50 text-slate-800 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-85">Refunded</div>
+                    <div className="text-xl font-black mt-1">{paymentStats.refunded.length}</div>
+                    <div className="text-[10px] opacity-80 mt-0.5">Returned to buyer</div>
+                  </div>
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                  {/* Category Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('all')}
+                      className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors shrink-0 ${
+                        paymentFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      All ({paymentStats.total})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('successful')}
+                      className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors shrink-0 ${
+                        paymentFilter === 'successful' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Successful ({paymentStats.successful.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('pending')}
+                      className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors shrink-0 ${
+                        paymentFilter === 'pending' ? 'bg-amber-500 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Pending ({paymentStats.pending.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('failed')}
+                      className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors shrink-0 ${
+                        paymentFilter === 'failed' ? 'bg-rose-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Failed ({paymentStats.failed.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('refunded')}
+                      className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer transition-colors shrink-0 ${
+                        paymentFilter === 'refunded' ? 'bg-slate-700 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Refunded ({paymentStats.refunded.length})
+                    </button>
+                  </div>
+
+                  {/* Search Input */}
+                  <div className="relative min-w-[240px]">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={paymentSearch}
+                      onChange={(e) => setPaymentSearch(e.target.value)}
+                      placeholder="Search order #, customer, phone, ref..."
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#FF6000]"
+                    />
+                    {paymentSearch && (
+                      <button
+                        onClick={() => setPaymentSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Payments Table */}
+                <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="py-3.5 px-4">Order ID & Date</th>
+                          <th className="py-3.5 px-3">Customer Contact</th>
+                          <th className="py-3.5 px-3">Product Details</th>
+                          <th className="py-3.5 px-3">Total Amount</th>
+                          <th className="py-3.5 px-3">Payment Method</th>
+                          <th className="py-3.5 px-3">Txn Reference</th>
+                          <th className="py-3.5 px-3">Payment Status</th>
+                          <th className="py-3.5 px-3">Order Status & Delivery</th>
+                          <th className="py-3.5 px-4 text-right">Verification & Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredPaymentsList.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="py-12 text-center text-slate-400">
+                              <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                              <p className="font-bold text-sm">No payment records matching criteria</p>
+                              <p className="text-xs text-slate-400 mt-0.5">Try adjusting the filter or search query</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredPaymentsList.map(pm => {
+                            const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+                            const customerName = ord?.customerName || pm.customerName || 'Customer';
+                            const customerPhone = ord?.customerPhone || pm.paymentPhone || '';
+                            const cleanPhone = customerPhone.replace(/\D/g, '');
+                            const isPaid = pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved' || ord?.paymentStatus === 'Paid';
+                            const isRefunded = pm.verificationStatus === 'Refunded' || ord?.paymentStatus === 'Refunded';
+                            const isFailed = pm.verificationStatus === 'Rejected' || pm.verificationStatus === 'Failed' || ord?.paymentStatus === 'Failed' || ord?.paymentStatus === 'Payment Rejected';
+                            const isPending = !isPaid && !isRefunded && !isFailed;
+                            const paymentDate = pm.verifiedAt || pm.submittedAt || ord?.createdAt || '';
+                            const isPickup = ord?.deliveryType === 'pickup' || ord?.deliveryAddress?.toLowerCase().includes('fair view plaza') || ord?.deliveryNotes?.toLowerCase().includes('pickup');
+
+                            return (
+                              <tr key={pm.id} className="hover:bg-slate-50/70 transition-colors">
+                                {/* 1. Order ID & Date */}
+                                <td className="py-3 px-4">
+                                  <button
+                                    type="button"
+                                    onClick={() => ord && setSelectedOrder(ord)}
+                                    className="font-mono font-black text-slate-900 hover:text-[#FF6000] underline cursor-pointer block text-left"
+                                    title="Click to view full order details"
+                                  >
+                                    #{pm.orderNumber}
+                                  </button>
+                                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                                    {paymentDate ? new Date(paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                                  </span>
+                                </td>
+
+                                {/* 2. Customer Name & Phone */}
+                                <td className="py-3 px-3">
+                                  <div className="font-bold text-slate-800">{customerName}</div>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <span className="font-mono text-[11px] text-slate-600">{customerPhone || 'No Phone'}</span>
+                                    {cleanPhone && (
+                                      <>
+                                        <a
+                                          href={`https://wa.me/250${cleanPhone.slice(-9)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="p-1 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                          title="Message on WhatsApp"
+                                        >
+                                          <MessageCircle className="w-3 h-3" />
+                                        </a>
+                                        <a
+                                          href={`tel:+250${cleanPhone.slice(-9)}`}
+                                          className="p-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                          title="Call phone"
+                                        >
+                                          <Phone className="w-3 h-3" />
+                                        </a>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* 3. Product Details */}
+                                <td className="py-3 px-3 max-w-[200px]">
+                                  {ord && ord.items && ord.items.length > 0 ? (
+                                    <div className="flex items-center gap-2">
+                                      {ord.items[0].imageUrl && (
+                                        <img
+                                          src={ord.items[0].imageUrl}
+                                          alt=""
+                                          className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                                        />
+                                      )}
+                                      <div className="truncate">
+                                        <p className="font-semibold text-slate-800 text-[11px] truncate" title={ord.items[0].productName}>
+                                          {ord.items[0].productName}
+                                        </p>
+                                        <span className="text-[10px] text-slate-500">
+                                          Qty: {ord.items[0].quantity}
+                                          {ord.items.length > 1 && ` (+${ord.items.length - 1} more)`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400 italic">Order items in record</span>
+                                  )}
+                                </td>
+
+                                {/* 4. Total Amount */}
+                                <td className="py-3 px-3">
+                                  <span className="font-mono font-black text-slate-900 text-xs block">
+                                    {(pm.amountPaid || ord?.totalAmount || 0).toLocaleString()} FRW
+                                  </span>
+                                  {ord?.deliveryFee !== undefined && ord.deliveryFee > 0 ? (
+                                    <span className="text-[9px] text-slate-500 font-semibold block">
+                                      Incl. {ord.deliveryFee.toLocaleString()} FRW delivery
+                                    </span>
+                                  ) : null}
+                                </td>
+
+                                {/* 5. Payment Method */}
+                                <td className="py-3 px-3">
+                                  <div className="flex items-center gap-1.5">
+                                    {pm.paymentMethod?.toLowerCase().includes('mtn') ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                        MTN MoMo
+                                      </span>
+                                    ) : pm.paymentMethod?.toLowerCase().includes('airtel') ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-red-100 text-red-900 border border-red-300">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
+                                        Airtel Money
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                                        {pm.paymentMethod || 'Mobile Money'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* 6. Transaction Reference */}
+                                <td className="py-3 px-3">
+                                  <span className="font-mono font-bold text-blue-700 block text-[11px] select-all">
+                                    {pm.transactionId || 'Awaiting Ref'}
+                                  </span>
+                                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                    {pm.verifiedDirectly ? (
+                                      <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-300">
+                                        <ShieldCheck className="w-2.5 h-2.5" />
+                                        Direct API
+                                      </span>
+                                    ) : null}
+                                    {pm.flaggedSuspicious && (
+                                      <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-300">
+                                        ⚠️ Duplicate
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* 7. Payment Status */}
+                                <td className="py-3 px-3">
+                                  {isPaid ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      PAID / CONFIRMED
+                                    </span>
+                                  ) : isRefunded ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                      REFUNDED
+                                    </span>
+                                  ) : isFailed ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                      <XCircle className="w-3 h-3 text-rose-600" />
+                                      FAILED
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                                      <Clock className="w-3 h-3 text-amber-600" />
+                                      PENDING
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* 8. Order Status & Delivery */}
+                                <td className="py-3 px-3">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-1">
+                                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                                        ord?.status === 'Delivered'
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : ord?.status === 'Out for Delivery'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : ord?.status === 'Confirmed'
+                                          ? 'bg-purple-100 text-purple-800'
+                                          : ord?.status === 'Cancelled'
+                                          ? 'bg-rose-100 text-rose-800'
+                                          : 'bg-slate-100 text-slate-700'
+                                      }`}>
+                                        {ord?.status || 'Processing'}
+                                      </span>
+                                    </div>
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-600">
+                                      {isPickup ? (
+                                        <>
+                                          <MapPin className="w-2.5 h-2.5 text-orange-600 shrink-0" />
+                                          <span className="font-semibold text-orange-700">Fair View Plaza Pickup</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Truck className="w-2.5 h-2.5 text-blue-600 shrink-0" />
+                                          <span className="font-semibold text-blue-700">Home Delivery</span>
+                                        </>
+                                      )}
+                                    </span>
+                                    {ord && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setOrderStatusModal(ord)}
+                                        className="text-[10px] text-left text-slate-500 hover:text-slate-800 font-bold underline cursor-pointer mt-0.5"
+                                      >
+                                        Update Delivery / Status
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* 9. Verification & Actions */}
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                    {/* Direct Telecom API Verification Button */}
+                                    {!isPaid && (
+                                      <button
+                                        type="button"
+                                        disabled={telecomVerifyingId === pm.id}
+                                        onClick={() => handleTelecomReverify(pm.id)}
+                                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer shadow-xs disabled:opacity-50"
+                                        title="Directly query MTN or Airtel Rwanda server API to confirm this transaction"
+                                      >
+                                        {telecomVerifyingId === pm.id ? (
+                                          <>
+                                            <RefreshCw className="w-3 h-3 animate-spin" />
+                                            <span>Checking...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ShieldCheck className="w-3 h-3" />
+                                            <span>Verify API</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
+
+                                    {/* Proof Review Modal */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setVerifyModalPayment(pm);
+                                        setVerifyNotes(`Verified with telecom records by ${currentUser?.name || 'Ruth'}`);
+                                      }}
+                                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer text-[10px]"
+                                      title="Review payment details & proof"
+                                    >
+                                      Review
+                                    </button>
+
+                                    {/* Quick Approve if Pending */}
+                                    {!isPaid && !isRefunded && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleVerifyPayment('approve', 'Verified with MTN/Airtel telecom records', pm.id)}
+                                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer text-[10px]"
+                                          title="Manually approve and confirm payment"
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleVerifyPayment('reject', 'Transaction reference not found on telecom statement', pm.id)}
+                                          className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg cursor-pointer text-[10px]"
+                                          title="Reject payment"
+                                        >
+                                          Reject
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {/* Refund Button for Paid Payments */}
+                                    {isPaid && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleVerifyPayment('refund', 'Mobile Money refund processed by admin', pm.id)}
+                                        className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg cursor-pointer text-[10px]"
+                                        title="Mark payment as refunded and restore stock"
+                                      >
+                                        Refund
+                                      </button>
+                                    )}
+
+                                    {/* Delete Payment Record */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeletePaymentConfirmation(pm)}
+                                      className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                      title="Delete payment record"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 7: INVENTORY & STOCK LOGS */}
           {activeTab === 'inventory' && (
@@ -10175,6 +10575,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Close
                 </button>
 
+                {/* Direct Telecom Provider API Query */}
+                <button
+                  type="button"
+                  disabled={telecomVerifyingId === verifyModalPayment.id}
+                  onClick={() => handleTelecomReverify(verifyModalPayment.id)}
+                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  title="Query MTN or Airtel server directly to verify this reference"
+                >
+                  {telecomVerifyingId === verifyModalPayment.id ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Checking Telecom API...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Verify with Telecom API</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   type="button"
                   onClick={() => handleVerifyPayment('under_verification', verifyNotes, verifyModalPayment.id)}
@@ -10190,6 +10611,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 >
                   Reject Payment
                 </button>
+
+                {(verifyModalPayment.verificationStatus === 'Verified/Paid' || verifyModalPayment.verificationStatus === 'Approved') && (
+                  <button
+                    type="button"
+                    onClick={() => handleVerifyPayment('refund', verifyNotes, verifyModalPayment.id)}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+                  >
+                    Refund Payment
+                  </button>
+                )}
 
                 <button
                   type="button"

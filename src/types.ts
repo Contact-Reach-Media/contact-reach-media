@@ -57,9 +57,14 @@ export interface PaymentTransaction {
   provider: 'MTN Mobile Money' | 'Airtel Money' | 'Bank Card' | 'Direct Gateway';
   status: 'Pending' | 'Successful' | 'Failed' | 'Cancelled' | 'Expired' | 'Refunded';
   providerTransactionId?: string;
+  financialTransactionId?: string;
   idempotencyKey?: string;
   checkoutUrl?: string;
   failureReason?: string;
+  verifiedDirectly?: boolean;
+  verifiedAt?: string;
+  telecomStatus?: string;
+  signatureVerified?: boolean;
   metadata?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
@@ -294,6 +299,8 @@ export interface PaymentConfirmation {
     | 'Verified/Paid'
     | 'Approved'
     | 'Rejected'
+    | 'Failed'
+    | 'Refunded'
     | 'Pending Review';
   adminNotes?: string;
   isDuplicateTxn?: boolean;
@@ -302,6 +309,9 @@ export interface PaymentConfirmation {
   suspiciousReason?: string;
   customerNotified?: boolean;
   notificationMessage?: string;
+  verifiedDirectly?: boolean;
+  telecomVerified?: boolean;
+  telecomReference?: string;
 }
 
 export interface PaymentMethodConfig {
