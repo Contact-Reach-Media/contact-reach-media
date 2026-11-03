@@ -323,6 +323,75 @@ function logAudit(admin: { name?: string; role?: string } | undefined | null, ac
 }
 
 // -------------------------------------------------------------
+// PRODUCT-SPECIFIC IMAGE RESOLUTION HELPER
+// Ensures orders always display real, matching product images
+// -------------------------------------------------------------
+const CANONICAL_PRODUCT_IMAGES: { match: RegExp; url: string }[] = [
+  { match: /speaker|soundbar|audio box|loudspeaker/i, url: 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&auto=format&fit=crop&q=80' },
+  { match: /headphone|earphone|airpod|earbud|headset/i, url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80' },
+  { match: /watch|smartwatch|amasaha|fitness tracker|clock/i, url: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=600&auto=format&fit=crop&q=80' },
+  { match: /sneaker|running shoe|athletic shoe|street sneaker|sport sneaker|canvas shoe/i, url: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?w=600&auto=format&fit=crop&q=80' },
+  { match: /dress shoe|leather shoe|oxford|formal shoe/i, url: 'https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=600&auto=format&fit=crop&q=80' },
+  { match: /sandal|heel|flip flop|slide/i, url: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&auto=format&fit=crop&q=80' },
+  { match: /honey|ubuki/i, url: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600&auto=format&fit=crop&q=80' },
+  { match: /printer|pos|receipt|thermal/i, url: 'https://s.alicdn.com/@sc04/kf/H3600b8fe09a2403f95437e03c3fe0b43v.jpg?avif=close&webp=close' },
+  { match: /serum|vitamin c|skincare|facial|cream|lotion|beauty/i, url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80' },
+  { match: /crossbody|bag|backpack|wallet|purse|tote|handbag/i, url: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&auto=format&fit=crop&q=80' },
+  { match: /sunglass|eyewear|glasses|polarized/i, url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=600&auto=format&fit=crop&q=80' },
+  { match: /cable|charger|adapter|usb-c|lightning/i, url: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=600&auto=format&fit=crop&q=80' },
+  { match: /mouse|keyboard|trackpad|gaming mouse/i, url: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=600&auto=format&fit=crop&q=80' },
+  { match: /laptop stand|aluminum stand|holder/i, url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&auto=format&fit=crop&q=80' },
+  { match: /webcam|camera/i, url: 'https://images.unsplash.com/photo-1587826080692-f439cd0b70da?w=600&auto=format&fit=crop&q=80' },
+  { match: /blender|juicer|smoothie/i, url: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=600&auto=format&fit=crop&q=80' },
+  { match: /robot|toy|stem/i, url: 'https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=600&auto=format&fit=crop&q=80' },
+  { match: /baby carrier|carrier/i, url: 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80' }
+];
+
+function resolveProductImageDueToProduct(
+  item?: { productName?: string; name?: string; imageUrl?: string; image?: string; productId?: string },
+  catalogProducts?: Product[]
+): string {
+  if (!item) {
+    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
+  }
+
+  const name = (item.productName || item.name || '').trim();
+  const currentUrl = (item.imageUrl || item.image || '').trim();
+  const isGenericLogo = !currentUrl || currentUrl === '/logo.png' || currentUrl === 'logo.png' || currentUrl.endsWith('/logo.png');
+  const isMismatched =
+    (name.toLowerCase().includes('headphone') && (currentUrl.includes('sneaker') || currentUrl.includes('photo-1590658268037'))) ||
+    (name.toLowerCase().includes('speaker') && currentUrl.includes('sneaker')) ||
+    (name.toLowerCase().includes('watch') && (currentUrl.includes('sneaker') || currentUrl.includes('honey')));
+
+  const productsList = catalogProducts || db.products;
+  if (productsList && productsList.length > 0) {
+    const match = productsList.find(p =>
+      (item.productId && p.id === item.productId) ||
+      (p.name && p.name.toLowerCase() === name.toLowerCase())
+    );
+    if (match?.imageUrl && !match.imageUrl.includes('logo.png')) {
+      const catUrl = match.imageUrl;
+      const catMismatched = (name.toLowerCase().includes('headphone') && (catUrl.includes('sneaker') || catUrl.includes('photo-1590658268037')));
+      if (!catMismatched) {
+        return catUrl;
+      }
+    }
+  }
+
+  if (currentUrl && !isGenericLogo && !isMismatched) {
+    return currentUrl;
+  }
+
+  for (const entry of CANONICAL_PRODUCT_IMAGES) {
+    if (entry.match.test(name)) {
+      return entry.url;
+    }
+  }
+
+  return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
+}
+
+// -------------------------------------------------------------
 // REAL-TIME DATABASE SYNCHRONIZATION & SSE BROADCASTER
 // -------------------------------------------------------------
 const sseClients = new Set<Response>();
@@ -510,7 +579,15 @@ function loadDbFromDisk() {
           ...o,
           receiverDetails: (o.receiverDetails === '078002' || (o.paymentMethod === 'MTN Merchant Code' && o.receiverDetails !== '2328354'))
             ? '2328354'
-            : (o.receiverDetails === '078002260' || o.receiverDetails === '23283542600' ? '0780022600' : o.receiverDetails)
+            : (o.receiverDetails === '078002260' || o.receiverDetails === '23283542600' ? '0780022600' : o.receiverDetails),
+          items: Array.isArray(o.items) ? o.items.map((it: any) => {
+            const properImg = resolveProductImageDueToProduct(it, db.products);
+            return {
+              ...it,
+              imageUrl: properImg,
+              image: properImg
+            };
+          }) : []
         }));
       }
       if (parsed.paymentConfirmations && Array.isArray(parsed.paymentConfirmations)) db.paymentConfirmations = parsed.paymentConfirmations;
@@ -1870,6 +1947,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
 
       if (!product) {
         const prodName = (item as any).title || (item as any).productName || (item as any).name || (targetPId.startsWith('prod-') ? targetPId.replace(/^prod-/, '').replace(/-/g, ' ') : 'Marketplace Item');
+        const fallbackProductImg = resolveProductImageDueToProduct({ productName: prodName, image: (item as any).image, imageUrl: (item as any).imageUrl }, db.products);
         const createdProd: Product = {
           id: targetPId,
           name: prodName,
@@ -1877,7 +1955,8 @@ app.post('/api/orders', (req: Request, res: Response) => {
           price: Math.max(0, Number((item as any).price) || 15000),
           category: 'fashion',
           stock: 50,
-          imageUrl: (item as any).image || (item as any).imageUrl || '/logo.png',
+          imageUrl: fallbackProductImg,
+          images: [fallbackProductImg],
           status: 'Available',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -1925,12 +2004,13 @@ app.post('/api/orders', (req: Request, res: Response) => {
     const unitPrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price;
     calculatedSubtotal += unitPrice * qty;
 
+    const verifiedImg = resolveProductImageDueToProduct({ productName: product.name, productId: product.id, imageUrl: product.imageUrl }, db.products);
     verifiedItems.push({
       productId: product.id,
       productName: product.name,
       price: unitPrice,
       quantity: qty,
-      imageUrl: product.imageUrl,
+      imageUrl: verifiedImg,
       variation: item.variation || undefined,
       sku: product.sku,
       aliExpressUrl: product.aliExpressUrl || product.supplierProductUrl || undefined,
@@ -2134,7 +2214,10 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
       deliveryType: order.deliveryType,
       deliveryLocation: order.deliveryLocation,
       deliveryAddress: order.deliveryAddress,
-      items: order.items,
+      items: (order.items || []).map((it: any) => ({
+        ...it,
+        imageUrl: resolveProductImageDueToProduct(it, db.products)
+      })),
       subtotal: order.subtotal,
       discountAmount: order.discountAmount,
       deliveryFee: order.deliveryFee,

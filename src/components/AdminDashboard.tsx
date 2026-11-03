@@ -36,6 +36,7 @@ import {
 } from '../utils/spreadsheet.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
+import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -5158,23 +5159,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                               {/* 2. Product Name & Image */}
                               <td className="py-3 px-3 min-w-[200px] max-w-[280px]">
-                                <div className="flex items-center gap-2.5">
-                                  {primaryItem?.imageUrl ? (
-                                    <img
-                                      src={primaryItem.imageUrl}
-                                      alt={primaryItem.productName}
-                                      className="w-10 h-10 rounded-xl object-cover border border-slate-200 bg-white shrink-0"
-                                      referrerPolicy="no-referrer"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
-                                      <ShoppingBag className="w-4 h-4" />
-                                    </div>
-                                  )}
-                                  <div className="min-w-0">
-                                    <p className="font-bold text-slate-800 truncate" title={primaryItem?.productName || 'Order Items'}>
-                                      {primaryItem?.productName || 'Custom Marketplace Item'}
-                                    </p>
+                                {(() => {
+                                  const resolvedImg = getProductImageDueToProduct(primaryItem, products);
+                                  return (
+                                    <div className="flex items-center gap-2.5">
+                                      <img
+                                        src={resolvedImg}
+                                        alt={primaryItem?.productName || 'Product'}
+                                        className="w-10 h-10 rounded-xl object-cover border border-slate-200 bg-white shrink-0 shadow-2xs"
+                                        referrerPolicy="no-referrer"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).src = getProductImageDueToProduct(primaryItem);
+                                        }}
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="font-bold text-slate-800 truncate" title={primaryItem?.productName || 'Order Items'}>
+                                          {primaryItem?.productName || 'Custom Marketplace Item'}
+                                        </p>
                                     <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
                                       <span>Qty: {primaryItem?.quantity || 1}</span>
                                       {remainingItemsCount > 0 && (
