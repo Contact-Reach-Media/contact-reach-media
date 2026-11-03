@@ -1093,6 +1093,11 @@ async function syncWithFirestore() {
           }
         }
         db.products = uniqueMerged;
+        // Synchronize any local products not yet in Cloud Firestore
+        const fsIds = new Set(fsProds.map(p => p.id));
+        uniqueMerged.filter(p => !fsIds.has(p.id)).forEach(prod => {
+          saveToFirestoreAsync('products', prod.id, prod);
+        });
       } else {
         db.products
           .filter(p => !db.deletedRecordIds?.includes(p.id) && (!p.sku || !db.deletedRecordIds?.includes(p.sku)))
