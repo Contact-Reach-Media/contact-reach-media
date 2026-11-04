@@ -25,7 +25,6 @@ import { ContactSection } from './components/ContactSection.tsx';
 import { Footer } from './components/Footer.tsx';
 import { AdminLoginModal } from './components/AdminLoginModal.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
-import { HeroCarousel } from './components/HeroCarousel.tsx';
 import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
 import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
 import { MaintenancePage } from './components/MaintenancePage.tsx';
@@ -1046,18 +1045,7 @@ export default function App() {
       ) : (
         /* VIEW: HOMEPAGE (Exact match to Screenshots 1, 2, 3, 4, 5) */
         <main className="flex-1">
-          {/* 1. TOP ADVERTISEMENT HERO CAROUSEL (Matching exact design, phone tracking graphic, and animation from screenshot) */}
-          <HeroCarousel
-            currentLang={currentLang}
-            onNavigateShop={() => {
-              setSelectedCategory('all');
-              handleNavigate('shop');
-            }}
-            onNavigateHowToBuy={() => handleNavigate('how-to-buy')}
-            onShowToast={showToast}
-          />
-
-          {/* 2. CATEGORIES HORIZONTAL SLIDER (Matching Screenshot 2: "Ibyiciro bihari" - 13 Departments) */}
+          {/* CATEGORIES HORIZONTAL SLIDER (Matching Screenshot 2: "Ibyiciro bihari" - 13 Departments) */}
           <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-6">
             <div className="flex items-center justify-between mb-4">
               <div>
