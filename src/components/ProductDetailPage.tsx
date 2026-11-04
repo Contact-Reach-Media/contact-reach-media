@@ -730,7 +730,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             {activeTab === 'video' && isValidYouTubeUrl(product.youtubeUrl || '') && (
               <div className="aspect-video w-full rounded-2xl overflow-hidden border border-slate-200 shadow-md">
                 <iframe
-                  src={getYouTubeEmbedUrl(product.youtubeUrl!)}
+                  src={getYouTubeEmbedUrl(product.youtubeUrl!) || undefined}
                   title={`${product.name} Video`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen

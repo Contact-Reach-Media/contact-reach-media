@@ -104,6 +104,7 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
         orderNumber: activeOrder.orderNumber,
         customerName: activeOrder.customerName,
         customerPhone: activeOrder.customerPhone,
+        paymentPhone: activeOrder.customerPhone || '',
         paymentMethod: activeOrder.paymentMethod,
         amountPaid: activeOrder.totalAmount,
         transactionId: transactionId.trim() || undefined,

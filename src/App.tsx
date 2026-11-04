@@ -33,6 +33,16 @@ import { MaintenancePage } from './components/MaintenancePage.tsx';
 import { NotFoundPage } from './components/NotFoundPage.tsx';
 import { SignInPage } from './components/SignInPage.tsx';
 import { PWAInstallBanner } from './components/PWAInstallBanner.tsx';
+import { ProductModal } from './components/ProductModal.tsx';
+import { CartDrawer } from './components/CartDrawer.tsx';
+import { CheckoutModal } from './components/CheckoutModal.tsx';
+import { PaymentConfirmationModal } from './components/PaymentConfirmationModal.tsx';
+import { OrderTrackingModal } from './components/OrderTrackingModal.tsx';
+import { AdminLoginModal } from './components/AdminLoginModal.tsx';
+import { PWAInstallModal } from './components/PWAInstallModal.tsx';
+import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
+import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
+import { CategoryMegaMenu } from './components/CategoryMegaMenu.tsx';
 import { MAIN_CATEGORY_DEFINITIONS } from './data/categoryStructure.ts';
 
 
@@ -258,6 +268,18 @@ export default function App() {
 
   // Buyer Account & Authentication
   const [buyerUser, setBuyerUser] = useState<CustomerUser | null>(null);
+
+  // Modal Dialog States
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
+  const [isTrackingOpen, setIsTrackingOpen] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
+  const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
+  const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
+  const [isBuyerAuthOpen, setIsBuyerAuthOpen] = useState(false);
+  const [isBuyerAccountOpen, setIsBuyerAccountOpen] = useState(false);
 
   // Product quantity display limit for "Reba ibindi"
   const [visibleRecommendedCount, setVisibleRecommendedCount] = useState(20);
@@ -1455,7 +1477,7 @@ export default function App() {
             }
           }}
           initialOrderNumber={trackingOrderNumber}
-          onOpenConfirmation={(order) => {
+          onOpenConfirmation={(order: Order) => {
             setConfirmationOrder(order);
             setIsConfirmationOpen(true);
           }}
@@ -1475,7 +1497,7 @@ export default function App() {
               window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
             }
           }}
-          onLoginSuccess={(user) => {
+          onLoginSuccess={(user?: any) => {
             setIsAdminLoggedIn(true);
             setActiveView('admin');
             if (pendingAdminAction === 'upload-product') {
@@ -1633,7 +1655,7 @@ export default function App() {
       <BuyerAuthModal
         isOpen={isBuyerAuthOpen}
         onClose={() => setIsBuyerAuthOpen(false)}
-        onSuccess={(user) => {
+        onSuccess={(user: CustomerUser) => {
           setBuyerUser(user);
           setIsBuyerAuthOpen(false);
           showToast(
@@ -1661,11 +1683,11 @@ export default function App() {
                 : 'Mwasohotse muri konti'
             );
           }}
-          onTrackOrder={(orderRef) => {
+          onTrackOrder={(orderRef: string) => {
             setTrackingOrderNumber(orderRef);
             setIsTrackingOpen(true);
           }}
-          onOpenPaymentConfirmation={(order) => {
+          onOpenPaymentConfirmation={(order: Order) => {
             setConfirmationOrder(order);
             setIsConfirmationOpen(true);
           }}
@@ -1680,7 +1702,7 @@ export default function App() {
         isOpen={isCategoryMegaMenuOpen}
         onClose={() => setIsCategoryMegaMenuOpen(false)}
         selectedCategory={selectedCategory}
-        onSelectCategory={(mainId, subId, tag) => {
+        onSelectCategory={(mainId: string, subId?: string | null, tag?: string) => {
           setSelectedCategory(mainId);
           setSelectedSubCategory(subId || null);
           if (tag) setSearchQuery(tag);

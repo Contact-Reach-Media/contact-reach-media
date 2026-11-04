@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, ShieldAlert, KeyRound, ArrowRight, ShieldCheck, CheckCircle2, HelpCircle, Copy, ExternalLink, Sparkles } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { loginWithGoogle } from '../services/firebase.ts';
+import { loginWithGoogle, firebaseConfig } from '../services/firebase.ts';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onLoginSuccess
 }) => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +137,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                         Firebase Authorized Domain Setup Required
                       </div>
                       <p className="text-slate-600 leading-relaxed text-xs">
-                        Google Sign-In requires your current preview domain to be registered in your Firebase project (<strong>marketdatabase-1090b</strong>).
+                        Google Sign-In requires your current preview domain to be registered in your Firebase project (<strong>{firebaseConfig.projectId}</strong>).
                       </p>
                       
                       {/* Domain Copy Box */}
@@ -159,14 +159,14 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
                       {/* 3 Step Instructions */}
                       <ol className="list-decimal list-inside space-y-1 text-slate-700 text-[11px] pt-1">
-                        <li>Open Firebase Console for <strong>marketdatabase-1090b</strong></li>
+                        <li>Open Firebase Console for <strong>{firebaseConfig.projectId}</strong></li>
                         <li>Navigate to <strong>Authentication &rarr; Settings &rarr; Authorized domains</strong></li>
                         <li>Click <strong>Add domain</strong>, paste the domain above, and click <strong>Save</strong></li>
                       </ol>
 
                       <div className="pt-2 flex flex-wrap items-center gap-2">
                         <a
-                          href="https://console.firebase.google.com/project/marketdatabase-1090b/authentication/settings"
+                          href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs"
@@ -223,22 +223,44 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 </div>
               </div>
 
-              {/* Quick Fill for Platform Owner */}
-              <div className="p-2.5 rounded-xl bg-orange-50/80 border border-orange-200 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-slate-800 truncate">Thierry Maniriho (Owner)</p>
-                  <p className="text-[10px] text-slate-500 font-mono truncate">manirihothierry11@gmail.com</p>
+              {/* Quick Fill for Primary System Owner (contactreachmedialimited@gmail.com) */}
+              <div className="space-y-2 mb-4">
+                <div className="p-3 rounded-2xl bg-orange-50 border-2 border-orange-300/80 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#FF6000]" />
+                      <p className="text-xs font-black text-slate-900 truncate">ContactReach Media Ltd (Owner)</p>
+                    </div>
+                    <p className="text-[11px] text-[#FF6000] font-mono font-bold truncate mt-0.5">contactreachmedialimited@gmail.com</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('contactreachmedialimited@gmail.com');
+                      setPassword('CRM@2026');
+                    }}
+                    className="px-3.5 py-1.5 bg-[#FF6000] hover:bg-orange-600 text-white text-xs font-black rounded-xl shadow-xs transition-transform active:scale-95 shrink-0 cursor-pointer"
+                  >
+                    Auto-Fill
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('manirihothierry11@gmail.com');
-                    setPassword('CRM@2026');
-                  }}
-                  className="px-2.5 py-1 bg-white hover:bg-orange-100 text-[#FF6000] text-[11px] font-bold rounded-lg border border-orange-200 shadow-2xs transition-colors shrink-0 cursor-pointer"
-                >
-                  Auto-Fill
-                </button>
+
+                <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-700 truncate">Thierry Maniriho (Platform Owner)</p>
+                    <p className="text-[10px] text-slate-500 font-mono truncate">manirihocoss@gmail.com</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('manirihocoss@gmail.com');
+                      setPassword('CRM@2026');
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-bold rounded-lg border border-slate-300 transition-colors shrink-0 cursor-pointer"
+                  >
+                    Auto-Fill
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -252,8 +274,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="admin@domain.com"
-                      autoComplete="username"
+                      placeholder="contactreachmedialimited@gmail.com"
+                      autoComplete="email"
                       className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500 bg-slate-50/50"
                     />
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />

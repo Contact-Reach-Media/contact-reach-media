@@ -1406,7 +1406,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       window.addEventListener('online', handleReSyncOnVisible);
     }
 
-    // 3. Live Firestore onSnapshot listeners for instant push updates (marketdatabase-1090b)
+    // 3. Live Firestore onSnapshot listeners for instant push updates (gen-lang-client-0460570023)
     const unsubs: (() => void)[] = [];
     if (db) {
       try {

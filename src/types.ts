@@ -132,6 +132,7 @@ export interface Product {
   imageUrl: string;
   images?: string[];
   videoUrl?: string; // YouTube video link or embed URL
+  youtubeUrl?: string; // YouTube video link alias
   shopName?: string;
   shopId?: string;
   receiverName?: string;
@@ -224,6 +225,7 @@ export interface CartItem {
   product: Product;
   quantity: number;
   selectedVariation?: { [key: string]: string };
+  variation?: Record<string, any> | string;
 }
 
 export interface OrderItem {
@@ -234,7 +236,7 @@ export interface OrderItem {
   supplierName?: string;
   quantity: number;
   imageUrl: string;
-  variation?: string;
+  variation?: string | Record<string, any>;
   sku?: string;
   shopName?: string;
   size?: string;

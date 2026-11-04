@@ -90,6 +90,7 @@ export function getProductSelectionBreakdown(
     deliveryFee,
     unitShippingCost,
     totalShippingCost,
+    estimatedShippingCost: totalShippingCost,
     grandTotal,
     stockStatusLabel: isOutOfStock
       ? 'Out of Stock - Ordered from Supplier'
@@ -110,6 +111,7 @@ export interface CartCostBreakdown {
   shippingCost: number;
   discountAmount: number;
   grandTotal: number;
+  totalAmount: number;
   hasOutOfStockItems: boolean;
   outOfStockCount: number;
   inStockCount: number;
@@ -206,6 +208,7 @@ export function calculateCartBreakdown(
     shippingCost,
     discountAmount: appliedDiscount,
     grandTotal,
+    totalAmount: grandTotal,
     hasOutOfStockItems: outOfStockCount > 0,
     outOfStockCount,
     inStockCount,

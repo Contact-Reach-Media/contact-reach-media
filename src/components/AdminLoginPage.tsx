@@ -16,7 +16,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   onLoginSuccess,
   onNavigateHome
 }) => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +55,12 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
         throw new Error('Could not retrieve verified Google email.');
       }
       const token = await user.getIdToken();
-      const res = await api.adminFirebaseLogin(token, user.email);
+      const res = await api.adminFirebaseLogin({
+        idToken: token,
+        email: user.email,
+        displayName: user.displayName,
+        uid: user.uid
+      });
       if (res && res.token && res.admin) {
         onLoginSuccess(res.admin, res.token);
       } else {
