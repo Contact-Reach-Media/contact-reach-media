@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShoppingBag, Search, Sparkles, Truck, ShieldCheck, CreditCard,
   MessageCircle, Heart, Star, ChevronRight, ChevronLeft, ArrowRight,
@@ -619,8 +619,21 @@ export default function App() {
   // Categories list for home slider
   const [catScrollIndex, setCatScrollIndex] = useState(0);
 
-  // Products subsets matching Screenshot 2, 3, 4
-  const recentProducts = products.slice(0, 10);
+  // Recent Arrivals: strictly 3 products that are new
+  const recentProducts = useMemo(() => {
+    // 1. Priority: Available products explicitly flagged as isNewArrival, sorted newest first
+    const newItems = products.filter(p => p.isNewArrival && p.status === 'Available');
+    if (newItems.length >= 3) {
+      return [...newItems]
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, 3);
+    }
+
+    // 2. Fallback: available products sorted by creation timestamp descending
+    const available = products.filter(p => p.status === 'Available');
+    const sorted = [...available].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return sorted.slice(0, 3);
+  }, [products]);
   const recommendedProducts = products.slice(0, visibleRecommendedCount);
 
   // Maintenance mode detection for non-admin visitors
@@ -1144,13 +1157,18 @@ export default function App() {
             </section>
           ) : (
             <>
-              {/* RECENT ARRIVALS */}
+              {/* RECENT ARRIVALS - STRICTLY 3 NEW PRODUCTS */}
               {recentProducts.length > 0 && (
                 <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-6">
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">
-                    {t.recentArrivals || (currentLang === 'en' ? 'Recent Arrivals' : 'Ibije vuba')}
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                      {t.recentArrivals || (currentLang === 'en' ? 'Recent Arrivals' : 'Ibije vuba')}
+                    </h2>
+                    <span className="text-xs text-slate-500 font-bold bg-slate-100 px-2.5 py-1 rounded-full">
+                      3 {currentLang === 'en' ? 'New Products' : 'Bishya'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
                     {recentProducts.map((product) => (
                       <ProductCard
                         key={product.id}

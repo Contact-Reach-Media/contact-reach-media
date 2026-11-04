@@ -60,6 +60,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             -{discountPercent}%
           </span>
         )}
+        {product.isNewArrival && (
+          <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs tracking-tight uppercase">
+            New
+          </span>
+        )}
         {product.source === 'alibaba' && (
           <span className="bg-gradient-to-r from-orange-600 to-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs tracking-tight">
             Alibaba Verified
