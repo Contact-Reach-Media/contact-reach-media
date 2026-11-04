@@ -210,7 +210,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       const orderPayload = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail?.trim() || buyerUser?.email || undefined,
+        customerEmail: buyerUser?.email || undefined,
         userId: buyerUser?.id || undefined,
         deliveryType: selectedLocationId === 'pickup' ? ('pickup' as const) : ('delivery' as const),
         deliveryLocation: selectedLocationName,

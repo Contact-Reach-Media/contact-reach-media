@@ -9,7 +9,7 @@ import {
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders, SlidersHorizontal,
   Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles,
-  Database, Bell
+  Database, Bell, MessageSquare
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
@@ -37,6 +37,7 @@ import {
 import { compressImageFile } from '../utils/imageCompress.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct, getProductNameDueToProduct } from '../utils/productImages.ts';
+import { AdminCategoriesManager } from './AdminCategoriesManager.tsx';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -1909,7 +1910,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       discountPercent: numPercent,
       discountPrice: finalDiscountPrice,
       category: prodForm.category,
+      mainCategoryId: categories.find(c => c.id === prodForm.category)?.parentId || prodForm.category,
+      categoryName: categories.find(c => c.id === prodForm.category)?.nameEn || prodForm.category,
       subcategory: prodForm.subcategory.trim() || undefined,
+      subCategoryId: prodForm.subcategory.trim() || undefined,
+      subCategoryName: categories.find(c => c.id === prodForm.subcategory)?.nameEn || (prodForm.subcategory.trim() || undefined),
       stock: Math.max(0, parseInt(String(prodForm.stock), 10) || 0),
       imageUrl: finalPrimaryImage,
       images: imagesList,
@@ -4265,97 +4270,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* TAB 3: CATEGORIES */}
           {activeTab === 'categories' && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-xl font-black text-slate-900 tracking-tight">Categories & Subcategories</h1>
-                  <p className="text-xs text-slate-500">Organize products into customer-facing departments</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setEditingCategory(null);
-                    setCatNameEn('');
-                    setCatNameRw('');
-                    setCatIcon('Tag');
-                    setCatDesc('');
-                    setCategoryModalOpen(true);
-                  }}
-                  className="px-4 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-2xl shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>New Category</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {categories.map(cat => {
-                  const prodCount = products.filter(p => p.category === cat.id).length;
-                  const coverImg = getCategoryCoverImage(cat, products);
-                  return (
-                    <div key={cat.id} className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3 flex flex-col justify-between">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
-                            <img
-                              src={coverImg}
-                              alt={cat.nameEn}
-                              className="w-full h-full object-cover"
-                            />
-                            {cat.imageUrl && (
-                              <span className="absolute bottom-0 right-0 bg-[#FF6000] text-white px-1 py-0.2 rounded-tl text-[8px] font-black">
-                                Custom
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1">
-                              <h3 className="font-extrabold text-sm text-slate-900 truncate">{cat.nameEn}</h3>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700 shrink-0">
-                                {prodCount} items
-                              </span>
-                            </div>
-                            <span className="text-xs text-slate-500 block truncate">{cat.nameRw}</span>
-                            <span className="text-[10px] text-slate-400 block mt-0.5">
-                              {cat.imageUrl ? '🎨 Custom Image' : '⚡ Auto product image'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {cat.description && (
-                          <p className="text-xs text-slate-500 line-clamp-2">{cat.description}</p>
-                        )}
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                        <span className="text-[10px] font-mono text-slate-400">ID: {cat.id}</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingCategory(cat);
-                              setCatNameEn(cat.nameEn);
-                              setCatNameRw(cat.nameRw);
-                              setCatIcon(cat.icon || 'Tag');
-                              setCatDesc(cat.description || '');
-                              setCatImageUrl(cat.imageUrl || '');
-                              setCategoryModalOpen(true);
-                            }}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold"
-                          >
-                            Edit & Image
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCategory(cat.id)}
-                            className="text-rose-600 hover:text-rose-800 font-bold px-2 py-1"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <AdminCategoriesManager
+              categories={categories}
+              products={products}
+              onRefresh={() => {
+                fetchAllData();
+                onRefreshPublicData();
+              }}
+              showToast={showToast}
+            />
           )}
 
           {/* TAB 4: SAVED SHOPS */}
@@ -9733,16 +9656,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Category *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Main Department *</label>
                   <select
                     value={prodForm.category}
-                    onChange={(e) => setProdForm({ ...prodForm, category: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-semibold"
+                    onChange={(e) => {
+                      const newCat = e.target.value;
+                      const subs = categories.filter(c => c.parentId === newCat);
+                      setProdForm({
+                        ...prodForm,
+                        category: newCat,
+                        subcategory: subs[0]?.id || ''
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-xs bg-white focus:ring-2 focus:ring-orange-500"
                   >
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.nameEn} ({c.nameRw})</option>
+                    {categories.filter(c => c.level === 1 || !c.parentId).map(c => (
+                      <option key={c.id} value={c.id}>{c.nameEn} ({c.nameRw || ''})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Subcategory</label>
+                  <select
+                    value={prodForm.subcategory}
+                    onChange={(e) => setProdForm({ ...prodForm, subcategory: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-xs bg-white focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="">-- No Subcategory --</option>
+                    {categories.filter(c => c.parentId === prodForm.category).map(sub => (
+                      <option key={sub.id} value={sub.id}>{sub.nameEn}</option>
                     ))}
                   </select>
                 </div>

@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ShoppingBag, Search, Phone, ShieldCheck, Heart, Menu, X,
   Globe, Camera, Smartphone, MoreVertical, Instagram, Facebook, Youtube,
-  ExternalLink, Tag, User, ChevronDown, Check, Coins
+  ExternalLink, Tag, User, ChevronDown, Check, Coins, Grid
 } from 'lucide-react';
 import { Language, translations, SUPPORTED_LANGUAGES, LanguageOption } from '../translations.ts';
 import { CurrencyCode, SUPPORTED_CURRENCIES, CurrencyOption } from '../utils/currency.ts';
 import { Product, CustomerUser } from '../types.ts';
+import { MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
 
 interface HeaderProps {
   currentLang: Language;
@@ -30,6 +31,9 @@ interface HeaderProps {
   onOpenBuyerAccount?: () => void;
   isAdminLoggedIn?: boolean;
   onOpenUploadProduct?: () => void;
+  onOpenCategoriesMenu?: () => void;
+  selectedCategory?: string;
+  onSelectCategory?: (mainCatId: string, subCatId?: string, searchTag?: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -53,7 +57,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBuyerAuth,
   onOpenBuyerAccount,
   isAdminLoggedIn = false,
-  onOpenUploadProduct
+  onOpenUploadProduct,
+  onOpenCategoriesMenu,
+  selectedCategory = 'all',
+  onSelectCategory
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -715,6 +722,22 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{t.getMobileApp || 'Save App to Home Screen'}</span>
             </button>
 
+            {/* Categories Quick Button in Mobile Drawer */}
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (onOpenCategoriesMenu) onOpenCategoriesMenu();
+                else onNavigate('shop');
+              }}
+              className="w-full flex items-center justify-between py-2.5 px-3 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#FF6000] font-black text-xs border border-orange-200 shadow-2xs transition-all active:scale-98 cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Grid className="w-4 h-4" />
+                <span>{currentLang === 'en' ? 'Browse All 13 Categories' : 'Reba Ibyiciro Byose (13)'}</span>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
             <div className="relative">
               <input
                 type="text"
@@ -731,6 +754,63 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* 3. KIKUU-STYLE CATEGORY NAVIGATION STRIP */}
+      <div className="bg-slate-50/90 border-b border-slate-200/80 px-4 sm:px-8 py-1.5 shadow-2xs">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3 overflow-hidden">
+          {/* Left: "All Categories" Dropdown Trigger Button */}
+          <button
+            onClick={() => {
+              if (onOpenCategoriesMenu) onOpenCategoriesMenu();
+            }}
+            className="flex items-center gap-2 bg-[#FF6000] hover:bg-[#E54D00] text-white px-3 py-1.5 rounded-xl font-black text-xs shadow-xs transition-transform active:scale-95 cursor-pointer shrink-0"
+            title="Open Complete 13 Categories Directory"
+          >
+            <Grid className="w-4 h-4" />
+            <span className="whitespace-nowrap">{currentLang === 'en' ? 'All Categories' : 'Ibyiciro Byose'}</span>
+            <span className="bg-black/20 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">13</span>
+            <ChevronDown className="w-3 h-3 text-white/80" />
+          </button>
+
+          {/* Center: Horizontal Scroll of the 13 Exact Main Categories */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 flex-1 min-w-0">
+            <button
+              onClick={() => {
+                if (onSelectCategory) onSelectCategory('all');
+                else onNavigate('shop');
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer shrink-0 ${
+                selectedCategory === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              {currentLang === 'en' ? 'All Products' : 'Byose'}
+            </button>
+
+            {MAIN_CATEGORY_DEFINITIONS.map((cat) => {
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    if (onSelectCategory) onSelectCategory(cat.id);
+                    else onNavigate('shop');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-orange-100 text-[#FF6000] font-black border border-orange-300 shadow-2xs'
+                      : 'text-slate-700 hover:text-[#FF6000] hover:bg-orange-50/60'
+                  }`}
+                  title={`${cat.name} (${cat.nameRw})`}
+                >
+                  <span className="truncate">{currentLang === 'en' ? cat.name : cat.nameRw}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </header>
   );

@@ -18,6 +18,11 @@ import {
   collection as firestoreCollection
 } from 'firebase/firestore/lite';
 import { initialProducts, initialCategories, initialSettings, initialShops } from './src/data/initialData.ts';
+import {
+  MAIN_CATEGORY_DEFINITIONS,
+  generateFlatCategoryRecords,
+  mapProductToCategoryHierarchy
+} from './src/data/categoryStructure.ts';
 import * as XLSX from 'xlsx';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
@@ -34,23 +39,55 @@ import { PRODUCTS_200_CATALOG } from './src/data/products200Feed.ts';
 import { calculateAlibabaShipping, calculateAlibabaLandedPricing } from './src/utils/alibabaShipping.ts';
 import { calculateLandedCostAndSellingPrice } from './src/utils/pricing.ts';
 
-// Universal category normalizer mapping arbitrary labels & subcategories to canonical store slugs
+// Universal category normalizer mapping arbitrary labels, subcategories & legacy IDs to the 13 canonical categories
 export function normalizeCategoryId(rawCategory?: string, name?: string): string {
   const combined = (String(rawCategory || '') + ' ' + String(name || '')).toLowerCase();
   const c = String(rawCategory || '').toLowerCase().trim();
 
-  if (['amasaha', 'watches & jewelry', 'watches', 'jewelry'].includes(c) || combined.includes('watch') || combined.includes('earring') || combined.includes('ring') || combined.includes('bracelet') || combined.includes('necklace')) return 'amasaha';
-  if (['hair-beauty', 'beauty & cosmetics', 'beauty & personal care', 'salon', 'makeup', 'skincare'].includes(c) || combined.includes('beauty') || combined.includes('hair') || combined.includes('cosmetic') || combined.includes('serum') || combined.includes('lotion')) return 'hair-beauty';
-  if (['amatara', 'lighting & gadgets', 'lighting', 'lights', 'lamps'].includes(c) || combined.includes('light') || combined.includes('lamp') || combined.includes('led') || combined.includes('bulb')) return 'amatara';
-  if (['abana', 'kids & toys', 'kids', 'toys', 'baby'].includes(c) || combined.includes('toy') || combined.includes('baby') || combined.includes('kid')) return 'abana';
-  if (['ibikapu', 'bags & luggage', 'bags and fashion accessories', 'bags', 'backpacks'].includes(c) || combined.includes('bag') || combined.includes('backpack') || combined.includes('luggage') || combined.includes('purse')) return 'ibikapu';
-  if (['sports', 'sports & fitness', 'fitness', 'gym'].includes(c) || combined.includes('sport') || combined.includes('fitness') || combined.includes('cycling') || combined.includes('yoga')) return 'sports';
-  if (['books', 'books & office', 'school, office and business supplies', 'office', 'stationery'].includes(c) || combined.includes('book') || combined.includes('office') || combined.includes('stationery') || combined.includes('printer')) return 'books';
-  if (['supermarket', 'supermarket & food', 'grocery', 'food'].includes(c) || combined.includes('food') || combined.includes('honey') || combined.includes('grocery')) return 'supermarket';
-  if (['impano', 'gifts & home decor', 'cat-1792741088062', 'cat-1792740994917'].includes(c) || combined.includes('gift') || combined.includes('decor') || combined.includes('kitchen') || combined.includes('stove') || combined.includes('cutting board') || combined.includes('art') || combined.includes('flask')) return 'impano';
-  if (['fashion', 'fashion & apparel', 'fashion-shoes', 'shoes', 'clothing'].includes(c) || combined.includes('shoe') || combined.includes('cloth') || combined.includes('apparel') || combined.includes('sneaker') || combined.includes('dress') || combined.includes('shirt') || combined.includes('jacket') || combined.includes('hoodie')) return 'fashion';
-  if (['electronics', 'electronics & tv', 'tech accessories & smart gadgets', 'electronic'].includes(c) || combined.includes('electr') || combined.includes('tech') || combined.includes('gadget') || combined.includes('cable') || combined.includes('earbud') || combined.includes('headphone') || combined.includes('charger')) return 'electronics';
-  return 'electronics';
+  // If already one of the 13 exact canonical category IDs, return directly
+  const exactMatch = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === c);
+  if (exactMatch) return exactMatch.id;
+
+  // Automobile Accessory & Tools
+  if (['automobile-accessory-tools', 'auto', 'car', 'cars', 'automotive', 'vehicle', 'tools'].includes(c) || combined.includes('motorcycle') || combined.includes('helmet') || combined.includes('obd') || combined.includes('dashcam') || combined.includes('wrench') || combined.includes('diagnostic')) return 'automobile-accessory-tools';
+
+  // Computer & Office
+  if (['computer-office', 'books', 'books & office', 'computer', 'office', 'stationery'].includes(c) || combined.includes('keyboard') || combined.includes('mouse') || combined.includes('laptop') || combined.includes('printer') || combined.includes('scanner') || combined.includes('pos') || combined.includes('paper')) return 'computer-office';
+
+  // Phones & Tel
+  if (['phones-tel', 'phones', 'phone', 'telephone', 'tel'].includes(c) || combined.includes('smartphone') || combined.includes('iphone') || combined.includes('samsung phone') || combined.includes('charger') || combined.includes('screen protector') || combined.includes('phone case') || combined.includes('power bank')) return 'phones-tel';
+
+  // Hair
+  if (['hair', 'wigs', 'human-hair', 'lace-wig'].includes(c) || combined.includes('wig') || combined.includes('lace frontal') || combined.includes('hair extension') || combined.includes('braid') || combined.includes('human hair') || combined.includes('hair curl') || combined.includes('lace closure')) return 'hair';
+
+  // Weddings
+  if (['weddings', 'wedding', 'bridal', 'marriage'].includes(c) || combined.includes('wedding') || combined.includes('bridal') || combined.includes('wedding gown') || combined.includes('tuxedo') || combined.includes('veil')) return 'weddings';
+
+  // Shoes
+  if (['shoes', 'footwear', 'fashion-shoes'].includes(c) || combined.includes('sneaker') || combined.includes('shoe') || combined.includes('loafers') || combined.includes('heels') || combined.includes('sandal') || combined.includes('boots') || combined.includes('oxford')) return 'shoes';
+
+  // Luggage & Bags
+  if (['luggage-bags', 'ibikapu', 'bags & luggage', 'bags and fashion accessories', 'bags', 'backpacks', 'luggage'].includes(c) || combined.includes('backpack') || combined.includes('handbag') || combined.includes('suitcase') || combined.includes('crossbody') || combined.includes('wallet') || combined.includes('purse') || combined.includes('clutch')) return 'luggage-bags';
+
+  // Watch & Jewelry
+  if (['watch-jewelry', 'amasaha', 'watches & jewelry', 'watches', 'jewelry'].includes(c) || combined.includes('watch') || combined.includes('earring') || combined.includes('ring') || combined.includes('bracelet') || combined.includes('necklace') || combined.includes('anklet')) return 'watch-jewelry';
+
+  // Kids & Toys
+  if (['kids-toys', 'abana', 'kids & toys', 'kids', 'toys', 'baby'].includes(c) || combined.includes('toy') || combined.includes('baby') || combined.includes('kid') || combined.includes('stroller') || combined.includes('puzzle') || combined.includes('lego')) return 'kids-toys';
+
+  // Beauty
+  if (['beauty', 'hair-beauty', 'beauty & cosmetics', 'beauty & personal care', 'salon', 'makeup', 'skincare'].includes(c) || combined.includes('serum') || combined.includes('cream') || combined.includes('lipstick') || combined.includes('cosmetic') || combined.includes('makeup') || combined.includes('mascara') || combined.includes('lotion')) return 'beauty';
+
+  // Home & Appliances
+  if (['home-appliances', 'amatara', 'lighting & gadgets', 'lighting', 'lights', 'lamps', 'impano', 'gifts & home decor', 'supermarket', 'supermarket & food', 'kitchen', 'home'].includes(c) || combined.includes('lamp') || combined.includes('light') || combined.includes('led') || combined.includes('blender') || combined.includes('appliance') || combined.includes('bedding') || combined.includes('curtain') || combined.includes('cookware') || combined.includes('pot') || combined.includes('knife')) return 'home-appliances';
+
+  // Clothing
+  if (['clothing', 'fashion', 'fashion & apparel', 'apparel', 'clothes'].includes(c) || combined.includes('cloth') || combined.includes('apparel') || combined.includes('dress') || combined.includes('shirt') || combined.includes('jacket') || combined.includes('hoodie') || combined.includes('trouser') || combined.includes('pant') || combined.includes('sportswear') || combined.includes('jersey')) return 'clothing';
+
+  // Electronics (catch-all for gadgets, smart tech, speakers, audio, camera)
+  if (['electronics', 'electronics & tv', 'tech accessories & smart gadgets', 'electronic'].includes(c) || combined.includes('speaker') || combined.includes('audio') || combined.includes('camera') || combined.includes('earbud') || combined.includes('headphone') || combined.includes('bluetooth') || combined.includes('cable')) return 'electronics';
+
+  return 'clothing';
 }
 
 
@@ -560,17 +597,41 @@ function loadDbFromDisk() {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       if (parsed.products && Array.isArray(parsed.products)) {
-        db.products = parsed.products.map((p: any) => ({
-          ...p,
-          merchantCode: (!p.merchantCode || p.merchantCode === '078002' || p.merchantCode === '23283542600') ? '2328354' : p.merchantCode,
-          receiverPhone: (!p.receiverPhone || p.receiverPhone === '078002260' || p.receiverPhone === '23283542600') ? '0780022600' : p.receiverPhone
-        }));
+        db.products = parsed.products.map((p: any) => {
+          const normCat = normalizeCategoryId(p.category, p.name);
+          let mainCategoryId = p.mainCategoryId;
+          let subCategoryId = p.subCategoryId;
+          let categoryName = p.categoryName;
+          let subCategoryName = p.subCategoryName;
+
+          if (!mainCategoryId || !subCategoryId || !categoryName) {
+            const mapped = mapProductToCategoryHierarchy(p);
+            mainCategoryId = mapped.mainCategoryId;
+            subCategoryId = mapped.subCategoryId;
+            categoryName = mapped.categoryName;
+            subCategoryName = mapped.subCategoryName;
+          }
+
+          return {
+            ...p,
+            category: normCat,
+            mainCategoryId,
+            subCategoryId,
+            categoryName,
+            subCategoryName,
+            merchantCode: (!p.merchantCode || p.merchantCode === '078002' || p.merchantCode === '23283542600') ? '2328354' : p.merchantCode,
+            receiverPhone: (!p.receiverPhone || p.receiverPhone === '078002260' || p.receiverPhone === '23283542600') ? '0780022600' : p.receiverPhone
+          };
+        });
       }
       if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
       if (parsed.categories && Array.isArray(parsed.categories)) {
-        const existingIds = new Set(parsed.categories.map((c: any) => c.id));
-        const missingInitial = initialCategories.filter(c => !existingIds.has(c.id));
-        db.categories = [...parsed.categories, ...missingInitial];
+        const canonicalIds = new Set(initialCategories.map(c => c.id));
+        const customCategories = parsed.categories.filter((c: any) => !canonicalIds.has(c.id));
+        // Keep canonical 13 categories fresh with subcategories, plus any admin custom categories
+        db.categories = [...initialCategories, ...customCategories];
+      } else {
+        db.categories = [...initialCategories];
       }
       if (parsed.shops && Array.isArray(parsed.shops)) db.shops = parsed.shops;
       if (parsed.orders && Array.isArray(parsed.orders)) {
@@ -1687,12 +1748,55 @@ app.get('/api/exchange-rates', async (req: Request, res: Response) => {
 app.get('/api/categories', (req: Request, res: Response) => {
   // Update itemCount dynamically based on live products with normalized categories
   const activeCategories = db.categories
-    .filter(c => c.isActive !== false)
+    .filter(c => c.isActive !== false && c.active !== false)
     .map(c => {
-      const count = db.products.filter(p => normalizeCategoryId(p.category, p.name) === c.id && p.status !== 'Hidden').length;
+      const isMain = !c.parentId || c.level === 1;
+      const count = isMain
+        ? db.products.filter(p => (p.mainCategoryId === c.id || normalizeCategoryId(p.category, p.name) === c.id) && p.status !== 'Hidden').length
+        : db.products.filter(p => (p.subCategoryId === c.id || (p.subCategoryName && p.subCategoryName.toLowerCase() === c.nameEn.toLowerCase())) && p.status !== 'Hidden').length;
       return { ...c, itemCount: count };
     });
   res.json(activeCategories);
+});
+
+// Category Tree Endpoint (returns 13 Main Categories with nested subcategories & product counts)
+app.get('/api/categories/tree', (req: Request, res: Response) => {
+  const tree = MAIN_CATEGORY_DEFINITIONS.map(main => {
+    const mainProductCount = db.products.filter(p =>
+      (p.mainCategoryId === main.id || normalizeCategoryId(p.category, p.name) === main.id) && p.status !== 'Hidden'
+    ).length;
+
+    const subcategoriesWithCounts = main.subcategories.map(sub => {
+      const subId = `${main.id}-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+      const subCount = db.products.filter(p =>
+        (p.subCategoryId === subId || (p.subCategoryName && p.subCategoryName.toLowerCase() === sub.name.toLowerCase())) &&
+        p.status !== 'Hidden'
+      ).length;
+
+      return {
+        id: subId,
+        name: sub.name,
+        slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+        items: sub.items,
+        itemCount: subCount
+      };
+    });
+
+    return {
+      id: main.id,
+      name: main.name,
+      nameRw: main.nameRw,
+      slug: main.id,
+      icon: main.icon,
+      image: main.image,
+      description: main.description,
+      sortOrder: main.sortOrder,
+      itemCount: mainProductCount,
+      subcategories: subcategoriesWithCounts
+    };
+  });
+
+  res.json(tree);
 });
 
 // -------------------------------------------------------------
@@ -1721,16 +1825,25 @@ app.get('/api/products', (req: Request, res: Response) => {
     syncProductsFromFirebase('both').catch(() => {});
   }
 
-  const { category, subcategory, search, featured, shopId, shopName, minPrice, maxPrice, inStock, sort } = req.query;
+  const { category, subcategory, mainCategoryId, subCategoryId, search, featured, shopId, shopName, minPrice, maxPrice, inStock, sort } = req.query;
   let filtered = db.products.filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected');
 
-  if (category && category !== 'all') {
-    const targetCat = normalizeCategoryId(String(category));
-    filtered = filtered.filter(p => normalizeCategoryId(p.category, p.name) === targetCat);
+  // Filter by main category
+  const targetMain = (mainCategoryId && mainCategoryId !== 'all') ? String(mainCategoryId) : (category && category !== 'all' ? normalizeCategoryId(String(category)) : null);
+  if (targetMain) {
+    filtered = filtered.filter(p => p.mainCategoryId === targetMain || normalizeCategoryId(p.category, p.name) === targetMain);
   }
 
-  if (subcategory && subcategory !== 'all') {
-    filtered = filtered.filter(p => p.subcategory === subcategory);
+  // Filter by subcategory
+  const targetSub = (subCategoryId && subCategoryId !== 'all') ? String(subCategoryId) : (subcategory && subcategory !== 'all' ? String(subcategory) : null);
+  if (targetSub) {
+    const cleanSub = targetSub.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    filtered = filtered.filter(p => {
+      const pSubId = (p.subCategoryId || '').toLowerCase();
+      const pSubName = (p.subCategoryName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const pLegacySub = (p.subcategory || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      return pSubId === cleanSub || pSubId.endsWith(`-${cleanSub}`) || pSubName === cleanSub || pLegacySub === cleanSub;
+    });
   }
 
   if (shopId) {
@@ -5720,7 +5833,10 @@ app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUC
 
 app.get('/api/admin/categories', requireAdminAuth, (req: Request, res: Response) => {
   const categoriesWithCounts = db.categories.map(c => {
-    const count = db.products.filter(p => p.category === c.id).length;
+    const isMain = !c.parentId || c.level === 1;
+    const count = isMain
+      ? db.products.filter(p => p.mainCategoryId === c.id || p.category === c.id).length
+      : db.products.filter(p => p.subCategoryId === c.id || (p.subCategoryName && p.subCategoryName.toLowerCase() === c.nameEn.toLowerCase())).length;
     return { ...c, itemCount: count };
   });
   res.json(categoriesWithCounts);
@@ -5728,28 +5844,59 @@ app.get('/api/admin/categories', requireAdminAuth, (req: Request, res: Response)
 
 app.post('/api/admin/categories', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const { nameEn, nameRw, icon, description, subcategories, imageUrl } = req.body;
-  if (!nameEn || !nameRw) return res.status(400).json({ error: 'English and Kinyarwanda category names are required.' });
+  const { nameEn, nameRw, icon, description, subcategories, imageUrl, parentId, level, sortOrder } = req.body;
+  if (!nameEn || !nameEn.trim()) return res.status(400).json({ error: 'Category name is required.' });
 
-  const id = nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const rawSlug = nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const id = parentId ? `${parentId}-${rawSlug}` : rawSlug;
+
   if (db.categories.some(c => c.id === id)) {
-    return res.status(400).json({ error: 'A category with this identifier already exists.' });
+    return res.status(400).json({ error: `A category with identifier "${id}" already exists.` });
   }
 
+  const isSubcategory = Boolean(parentId);
   const newCat: Category = {
     id,
     nameEn: nameEn.trim(),
-    nameRw: nameRw.trim(),
-    icon: icon || 'Tag',
+    nameRw: (nameRw && nameRw.trim()) || nameEn.trim(),
+    icon: icon || (isSubcategory ? 'Folder' : 'Tag'),
+    slug: rawSlug,
+    parentId: parentId || null,
+    level: level || (isSubcategory ? 2 : 1),
+    sortOrder: sortOrder || (isSubcategory ? 10 : db.categories.filter(c => !c.parentId).length + 1),
     description: description?.trim(),
     imageUrl: imageUrl ? imageUrl.trim() : undefined,
     subcategories: Array.isArray(subcategories) ? subcategories : [],
     isActive: true,
-    itemCount: 0
+    active: true,
+    itemCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
   db.categories.push(newCat);
-  logAudit(admin, 'CATEGORY_CREATED', `Created category "${newCat.nameEn}" (${newCat.id})`, 'category', newCat.id);
+
+  // If subcategory, also register in parent's subcategories list
+  if (parentId) {
+    const parent = db.categories.find(c => c.id === parentId);
+    if (parent) {
+      parent.subcategories = parent.subcategories || [];
+      if (!parent.subcategories.includes(newCat.nameEn)) {
+        parent.subcategories.push(newCat.nameEn);
+      }
+      parent.subcategoriesList = parent.subcategoriesList || [];
+      if (!parent.subcategoriesList.some(s => s.id === newCat.id)) {
+        parent.subcategoriesList.push({
+          id: newCat.id,
+          name: newCat.nameEn,
+          slug: newCat.slug || rawSlug
+        });
+      }
+      saveToFirestoreAsync('categories', parent.id, parent);
+    }
+  }
+
+  logAudit(admin, 'CATEGORY_CREATED', `Created ${isSubcategory ? 'subcategory' : 'main category'} "${newCat.nameEn}" (${newCat.id})`, 'category', newCat.id);
   saveDbToDisk();
   saveToFirestoreAsync('categories', newCat.id, newCat);
   res.status(201).json(newCat);
@@ -5760,40 +5907,314 @@ app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN
   const cat = db.categories.find(c => c.id === req.params.id);
   if (!cat) return res.status(404).json({ error: 'Category not found' });
 
+  const oldNameEn = cat.nameEn;
   Object.assign(cat, req.body);
+  cat.updatedAt = new Date().toISOString();
+
   if (req.body.imageUrl !== undefined) {
     cat.imageUrl = req.body.imageUrl ? req.body.imageUrl.trim() : undefined;
   }
+
+  // If subcategory name changed, update linked products and parent
+  if (req.body.nameEn && req.body.nameEn !== oldNameEn) {
+    if (cat.parentId) {
+      const parent = db.categories.find(c => c.id === cat.parentId);
+      if (parent && parent.subcategories) {
+        parent.subcategories = parent.subcategories.map(s => s === oldNameEn ? cat.nameEn : s);
+      }
+      if (parent && parent.subcategoriesList) {
+        parent.subcategoriesList = parent.subcategoriesList.map(s => s.id === cat.id ? { ...s, name: cat.nameEn } : s);
+      }
+      // Update linked products
+      db.products.forEach(p => {
+        if (p.subCategoryId === cat.id || p.subCategoryName === oldNameEn) {
+          p.subCategoryName = cat.nameEn;
+          saveToFirestoreAsync('products', p.id, p);
+        }
+      });
+    } else {
+      // Main category name changed: update products
+      db.products.forEach(p => {
+        if (p.mainCategoryId === cat.id || p.category === cat.id) {
+          p.categoryName = cat.nameEn;
+          saveToFirestoreAsync('products', p.id, p);
+        }
+      });
+    }
+  }
+
   logAudit(admin, 'CATEGORY_UPDATED', `Updated category "${cat.nameEn}" (${cat.id})`, 'category', cat.id);
   saveDbToDisk();
   saveToFirestoreAsync('categories', cat.id, cat);
   res.json(cat);
 });
 
-app.delete('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+// Move subcategory between main categories
+app.patch('/api/admin/categories/:id/move', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const catId = req.params.id;
+  const subcatId = req.params.id;
+  const { newParentId } = req.body;
 
-  // Prevent accidental deletion if products are linked
-  const linkedProducts = db.products.filter(p => p.category === catId);
-  if (linkedProducts.length > 0) {
-    return res.status(400).json({
-      error: `Cannot delete category "${catId}" because ${linkedProducts.length} product(s) are currently assigned to it. Please reassign the products first.`
+  if (!newParentId) return res.status(400).json({ error: 'New parent category ID is required.' });
+
+  const subcat = db.categories.find(c => c.id === subcatId);
+  if (!subcat) return res.status(404).json({ error: 'Subcategory not found.' });
+
+  const newParent = db.categories.find(c => c.id === newParentId);
+  if (!newParent) return res.status(404).json({ error: 'Target parent category not found.' });
+
+  const oldParentId = subcat.parentId;
+  if (oldParentId) {
+    const oldParent = db.categories.find(c => c.id === oldParentId);
+    if (oldParent) {
+      if (oldParent.subcategories) {
+        oldParent.subcategories = oldParent.subcategories.filter(s => s !== subcat.nameEn);
+      }
+      if (oldParent.subcategoriesList) {
+        oldParent.subcategoriesList = oldParent.subcategoriesList.filter(s => s.id !== subcat.id);
+      }
+      saveToFirestoreAsync('categories', oldParent.id, oldParent);
+    }
+  }
+
+  // Update subcategory parent
+  subcat.parentId = newParent.id;
+  subcat.updatedAt = new Date().toISOString();
+
+  // Add to new parent
+  newParent.subcategories = newParent.subcategories || [];
+  if (!newParent.subcategories.includes(subcat.nameEn)) {
+    newParent.subcategories.push(subcat.nameEn);
+  }
+  newParent.subcategoriesList = newParent.subcategoriesList || [];
+  if (!newParent.subcategoriesList.some(s => s.id === subcat.id)) {
+    newParent.subcategoriesList.push({
+      id: subcat.id,
+      name: subcat.nameEn,
+      slug: subcat.slug || subcat.id
     });
   }
 
-  const index = db.categories.findIndex(c => c.id === catId);
-  if (index === -1) return res.status(404).json({ error: 'Category not found' });
+  // Update linked products to point to new main category
+  let updatedCount = 0;
+  db.products.forEach(p => {
+    if (p.subCategoryId === subcat.id) {
+      p.mainCategoryId = newParent.id;
+      p.category = newParent.id;
+      p.categoryName = newParent.nameEn;
+      p.updatedAt = new Date().toISOString();
+      updatedCount++;
+      saveToFirestoreAsync('products', p.id, p);
+    }
+  });
 
-  const removed = db.categories.splice(index, 1)[0];
+  logAudit(
+    admin,
+    'SUBCATEGORY_MOVED',
+    `Moved subcategory "${subcat.nameEn}" from "${oldParentId || 'root'}" to "${newParent.nameEn}" (${updatedCount} products updated)`,
+    'category',
+    subcat.id
+  );
+
+  saveDbToDisk();
+  saveToFirestoreAsync('categories', subcat.id, subcat);
+  saveToFirestoreAsync('categories', newParent.id, newParent);
+
+  res.json({
+    success: true,
+    message: `Subcategory "${subcat.nameEn}" successfully moved to "${newParent.nameEn}". ${updatedCount} product(s) updated.`,
+    subcategory: subcat,
+    newParent,
+    updatedProductCount: updatedCount
+  });
+});
+
+// Delete category with accidental deletion protection & optional product reassignment
+app.delete('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const catId = req.params.id;
+  const reassignTo = (req.body?.reassignTo || req.query.reassignTo) as string | undefined;
+
+  const targetCategory = db.categories.find(c => c.id === catId);
+  if (!targetCategory) return res.status(404).json({ error: 'Category not found.' });
+
+  // Find linked products
+  const linkedProducts = db.products.filter(p =>
+    p.mainCategoryId === catId || p.subCategoryId === catId || p.category === catId
+  );
+
+  if (linkedProducts.length > 0) {
+    if (!reassignTo) {
+      return res.status(400).json({
+        error: `Cannot delete category "${targetCategory.nameEn}" because ${linkedProducts.length} product(s) belong to it. Please reassign the products first.`,
+        productCount: linkedProducts.length,
+        requiresReassignment: true
+      });
+    }
+
+    // Reassign products to replacement category
+    const replacementCat = db.categories.find(c => c.id === reassignTo);
+    if (!replacementCat) {
+      return res.status(400).json({ error: `Replacement category "${reassignTo}" does not exist.` });
+    }
+
+    linkedProducts.forEach(p => {
+      if (replacementCat.parentId) {
+        // Replacement is a subcategory
+        p.subCategoryId = replacementCat.id;
+        p.subCategoryName = replacementCat.nameEn;
+        p.mainCategoryId = replacementCat.parentId;
+        const main = db.categories.find(c => c.id === replacementCat.parentId);
+        if (main) {
+          p.category = main.id;
+          p.categoryName = main.nameEn;
+        }
+      } else {
+        // Replacement is a main category
+        p.mainCategoryId = replacementCat.id;
+        p.category = replacementCat.id;
+        p.categoryName = replacementCat.nameEn;
+      }
+      p.updatedAt = new Date().toISOString();
+      saveToFirestoreAsync('products', p.id, p);
+    });
+  }
+
+  // Remove subcategory from parent's list if it was a subcategory
+  if (targetCategory.parentId) {
+    const parent = db.categories.find(c => c.id === targetCategory.parentId);
+    if (parent) {
+      if (parent.subcategories) {
+        parent.subcategories = parent.subcategories.filter(s => s !== targetCategory.nameEn);
+      }
+      if (parent.subcategoriesList) {
+        parent.subcategoriesList = parent.subcategoriesList.filter(s => s.id !== targetCategory.id);
+      }
+      saveToFirestoreAsync('categories', parent.id, parent);
+    }
+  }
+
+  // Also delete child subcategories if deleting a main category
+  const childSubcats = db.categories.filter(c => c.parentId === catId);
+  childSubcats.forEach(child => {
+    deleteFromFirestoreAsync('categories', child.id);
+  });
+  db.categories = db.categories.filter(c => c.parentId !== catId && c.id !== catId);
+
   db.deletedRecordIds = db.deletedRecordIds || [];
   if (!db.deletedRecordIds.includes(catId)) {
     db.deletedRecordIds.push(catId);
   }
-  logAudit(admin, 'CATEGORY_DELETED', `Deleted category "${removed.nameEn}"`, 'category', catId);
+
+  logAudit(
+    admin,
+    'CATEGORY_DELETED',
+    `Deleted category "${targetCategory.nameEn}" (${catId})${linkedProducts.length > 0 ? ` [Reassigned ${linkedProducts.length} products to ${reassignTo}]` : ''}`,
+    'category',
+    catId
+  );
+
   saveDbToDisk();
   deleteFromFirestoreAsync('categories', catId);
-  res.json({ message: 'Category removed successfully', removed });
+
+  res.json({
+    message: `Category "${targetCategory.nameEn}" removed successfully.${linkedProducts.length > 0 ? ` ${linkedProducts.length} product(s) were reassigned.` : ''}`,
+    removed: targetCategory,
+    reassignedCount: linkedProducts.length
+  });
+});
+
+// Reassign products between categories
+app.post('/api/admin/categories/reassign-products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { productIds, targetMainCategoryId, targetSubCategoryId } = req.body;
+
+  if (!Array.isArray(productIds) || productIds.length === 0) {
+    return res.status(400).json({ error: 'Product IDs array is required.' });
+  }
+  if (!targetMainCategoryId) {
+    return res.status(400).json({ error: 'Target main category ID is required.' });
+  }
+
+  const targetMain = db.categories.find(c => c.id === targetMainCategoryId) || MAIN_CATEGORY_DEFINITIONS.find(m => m.id === targetMainCategoryId);
+  if (!targetMain) {
+    return res.status(404).json({ error: 'Target main category not found.' });
+  }
+
+  const targetMainName = (targetMain as any).name || (targetMain as any).nameEn || targetMainCategoryId;
+  const targetSub = targetSubCategoryId ? db.categories.find(c => c.id === targetSubCategoryId) : undefined;
+  const targetSubName = targetSub?.nameEn || targetSubCategoryId || undefined;
+
+  let count = 0;
+  const idsSet = new Set(productIds);
+  db.products.forEach(p => {
+    if (idsSet.has(p.id)) {
+      p.mainCategoryId = targetMain.id;
+      p.category = targetMain.id;
+      p.categoryName = targetMainName;
+      if (targetSubCategoryId) {
+        p.subCategoryId = targetSubCategoryId;
+        p.subCategoryName = targetSubName;
+        p.subcategory = targetSubName;
+      }
+      p.updatedAt = new Date().toISOString();
+      count++;
+      saveToFirestoreAsync('products', p.id, p);
+    }
+  });
+
+  saveDbToDisk();
+  logAudit(admin, 'PRODUCTS_REASSIGNED', `Reassigned ${count} products to ${targetMainName}${targetSubName ? ` > ${targetSubName}` : ''}`, 'product', 'batch');
+
+  res.json({
+    success: true,
+    message: `Successfully reassigned ${count} product(s) to ${targetMainName}${targetSubName ? ` > ${targetSubName}` : ''}.`,
+    count
+  });
+});
+
+// Auto-map all existing products to the 13 category hierarchy
+app.post('/api/admin/categories/auto-map-all', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  let mappedCount = 0;
+  let lowConfidenceCount = 0;
+  const lowConfidenceItems: { id: string; name: string; suggestedCategory: string; suggestedSubcategory: string }[] = [];
+
+  db.products.forEach(p => {
+    const mapped = mapProductToCategoryHierarchy(p);
+    p.mainCategoryId = mapped.mainCategoryId;
+    p.subCategoryId = mapped.subCategoryId;
+    p.categoryName = mapped.categoryName;
+    p.subCategoryName = mapped.subCategoryName;
+    p.category = mapped.mainCategoryId;
+    p.subcategory = mapped.subCategoryName;
+    p.updatedAt = new Date().toISOString();
+    mappedCount++;
+
+    if (mapped.confidence === 'low') {
+      lowConfidenceCount++;
+      lowConfidenceItems.push({
+        id: p.id,
+        name: p.name,
+        suggestedCategory: mapped.categoryName,
+        suggestedSubcategory: mapped.subCategoryName
+      });
+    }
+
+    saveToFirestoreAsync('products', p.id, p);
+  });
+
+  saveDbToDisk();
+  logAudit(admin, 'CATEGORIES_AUTO_MAPPED', `Ran intelligent auto-mapping across ${mappedCount} products (${lowConfidenceCount} low confidence items for review)`);
+
+  res.json({
+    success: true,
+    message: `Intelligent category auto-mapping completed for all ${mappedCount} products.`,
+    totalProducts: db.products.length,
+    mappedCount,
+    lowConfidenceCount,
+    lowConfidenceItems: lowConfidenceItems.slice(0, 50)
+  });
 });
 
 // -------------------------------------------------------------

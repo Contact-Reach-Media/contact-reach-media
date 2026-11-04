@@ -33,6 +33,8 @@ import { NotFoundPage } from './components/NotFoundPage.tsx';
 import { SignInPage } from './components/SignInPage.tsx';
 import { PWAInstallModal } from './components/PWAInstallModal.tsx';
 import { PWAInstallBanner } from './components/PWAInstallBanner.tsx';
+import { CategoryMegaMenu } from './components/CategoryMegaMenu.tsx';
+import { MAIN_CATEGORY_DEFINITIONS } from './data/categoryStructure.ts';
 
 
 const SUPPORTED_LANG_CODES: Language[] = ['en', 'fr', 'rw', 'sw', 'es', 'pt', 'ar', 'zh', 'de', 'hi'];
@@ -219,6 +221,8 @@ export default function App() {
 
   // Filtering & Catalog
   const [selectedCategory, setSelectedCategory] = useState<string>(initialRoute.category);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [isCategoryMegaMenuOpen, setIsCategoryMegaMenuOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>(initialRoute.search);
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
@@ -570,13 +574,26 @@ export default function App() {
 
   // Filtered & Sorted Products
   const filteredProducts = products.filter(p => {
-    const matchCategory = selectedCategory === 'all' || p.category === selectedCategory;
+    const matchCategory =
+      selectedCategory === 'all' ||
+      p.category === selectedCategory ||
+      p.mainCategoryId === selectedCategory ||
+      (p.category && p.category.toLowerCase() === selectedCategory.toLowerCase());
+
+    const matchSubCategory =
+      !selectedSubCategory ||
+      p.subCategoryId === selectedSubCategory ||
+      (p.subCategoryName && p.subCategoryName.toLowerCase() === selectedSubCategory.toLowerCase()) ||
+      (p.subcategory && p.subcategory.toLowerCase() === selectedSubCategory.toLowerCase());
+
     const matchSearch =
       !searchQuery.trim() ||
       p.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
       p.description.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-      p.category.toLowerCase().includes(searchQuery.toLowerCase().trim());
-    return matchCategory && matchSearch;
+      p.category.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+      (p.subCategoryName && p.subCategoryName.toLowerCase().includes(searchQuery.toLowerCase().trim()));
+
+    return matchCategory && matchSubCategory && matchSearch;
   });
 
   const sortedProducts = [...filteredProducts].sort((a, b) => {
@@ -706,6 +723,14 @@ export default function App() {
         onOpenBuyerAccount={() => setIsBuyerAccountOpen(true)}
         isAdminLoggedIn={isAdminLoggedIn}
         onOpenUploadProduct={() => handleNavigate('admin-upload')}
+        onOpenCategoriesMenu={() => setIsCategoryMegaMenuOpen(true)}
+        selectedCategory={selectedCategory}
+        onSelectCategory={(mainId: string, subId?: string, tag?: string) => {
+          setSelectedCategory(mainId);
+          setSelectedSubCategory(subId || null);
+          if (tag) setSearchQuery(tag);
+          handleNavigate('shop');
+        }}
       />
 
       {/* VIEW: ADMIN DASHBOARD */}
@@ -865,11 +890,61 @@ export default function App() {
             </div>
           </div>
 
-          {/* Category Filter Buttons */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none">
+          {/* Active Breadcrumb & Hierarchy Status */}
+          {selectedCategory !== 'all' && (
+            <div className="bg-orange-50/70 border border-orange-100 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-slate-600">
+                <button
+                  onClick={() => {
+                    setSelectedCategory('all');
+                    setSelectedSubCategory(null);
+                  }}
+                  className="font-bold hover:text-[#FF6000] cursor-pointer"
+                >
+                  All Products
+                </button>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-extrabold text-slate-900">
+                  {MAIN_CATEGORY_DEFINITIONS.find(m => m.id === selectedCategory)?.name || selectedCategory}
+                </span>
+                {selectedSubCategory && (
+                  <>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="font-bold text-[#FF6000] bg-white px-2 py-0.5 rounded-md border border-orange-200">
+                      {selectedSubCategory}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsCategoryMegaMenuOpen(true)}
+                  className="text-[11px] font-bold text-[#FF6000] hover:underline cursor-pointer"
+                >
+                  Browse All 13 Categories &rarr;
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCategory('all');
+                    setSelectedSubCategory(null);
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-[11px] font-bold border border-slate-200 cursor-pointer"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 13 Main Category Filter Strip */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
             <button
-              onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+              onClick={() => {
+                setSelectedCategory('all');
+                setSelectedSubCategory(null);
+              }}
+              className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 selectedCategory === 'all'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -877,20 +952,61 @@ export default function App() {
             >
               {t.allProducts || 'All Products'} ({products.length})
             </button>
-            {categories.map((c) => (
+            {MAIN_CATEGORY_DEFINITIONS.map((c) => {
+              const isSelected = selectedCategory === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setSelectedCategory(c.id);
+                    setSelectedSubCategory(null);
+                  }}
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-[#FF6000] text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>{currentLang === 'en' ? c.name : c.nameRw}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Subcategory Pills when a Main Department is active */}
+          {selectedCategory !== 'all' && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-4 mb-5 scrollbar-none animate-in fade-in duration-150">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+                Subcategories:
+              </span>
               <button
-                key={c.id}
-                onClick={() => setSelectedCategory(c.id)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                  selectedCategory === c.id
-                    ? 'bg-[#FF6000] text-white shadow-xs'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                onClick={() => setSelectedSubCategory(null)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  !selectedSubCategory
+                    ? 'bg-[#FF6000] text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {getCategoryTitle(c.id, currentLang) || (currentLang === 'en' ? c.nameEn : c.nameRw)}
+                All {MAIN_CATEGORY_DEFINITIONS.find(m => m.id === selectedCategory)?.name}
               </button>
-            ))}
-          </div>
+              {(MAIN_CATEGORY_DEFINITIONS.find(m => m.id === selectedCategory)?.subcategories || []).map((sub) => {
+                const isSubActive = selectedSubCategory === sub.name || selectedSubCategory === `${selectedCategory}-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+                return (
+                  <button
+                    key={sub.name}
+                    onClick={() => setSelectedSubCategory(sub.name)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                      isSubActive
+                        ? 'bg-[#FF6000] text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {sub.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* 6-Column Dense Grid matching Screenshot 6 */}
           {sortedProducts.length === 0 ? (
@@ -941,46 +1057,65 @@ export default function App() {
             onShowToast={showToast}
           />
 
-          {/* 2. CATEGORIES HORIZONTAL SLIDER (Matching Screenshot 2: "Ibyiciro bihari") */}
+          {/* 2. CATEGORIES HORIZONTAL SLIDER (Matching Screenshot 2: "Ibyiciro bihari" - 13 Departments) */}
           <section className="max-w-[1440px] mx-auto px-4 sm:px-8 py-6">
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">
-              {t.categories || 'Categories'}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                  {t.categories || (currentLang === 'en' ? 'Categories' : 'Ibyiciro bihari')}
+                </h2>
+                <span className="text-xs text-slate-500 font-medium">
+                  {currentLang === 'en' ? 'Explore all 13 product departments' : 'Reba ibyiciro byose uko ari 13'}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsCategoryMegaMenuOpen(true)}
+                className="text-xs font-bold text-[#FF6000] hover:text-[#e05500] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>{currentLang === 'en' ? 'All 13 Departments' : 'Ibyiciro Byose (13)'}</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
 
             <div className="relative">
-              <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-none">
-                {categories.map((cat) => (
+              <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto pb-2 scrollbar-none">
+                {MAIN_CATEGORY_DEFINITIONS.map((cat, idx) => (
                   <button
                     key={cat.id}
                     onClick={() => {
                       setSelectedCategory(cat.id);
+                      setSelectedSubCategory(null);
                       handleNavigate('shop');
                     }}
-                    className="w-36 h-36 bg-white hover:bg-orange-50/50 rounded-2xl border border-slate-200/90 p-3 flex flex-col items-center justify-between shrink-0 transition-all duration-200 hover:shadow-xs cursor-pointer group"
+                    className="w-32 sm:w-36 h-36 bg-white hover:bg-orange-50/50 rounded-2xl border border-slate-200/90 p-2.5 sm:p-3 flex flex-col items-center justify-between shrink-0 transition-all duration-200 hover:shadow-xs cursor-pointer group"
                   >
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center">
+                    <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
                       <img
-                        src={categoryImages[cat.id] || categoryImages.impano}
-                        alt={cat.nameRw}
-                        className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+                        src={cat.image}
+                        alt={cat.name}
+                        className="w-full h-full object-cover rounded-lg group-hover:scale-110 transition-transform duration-300"
+                        loading={idx < 6 ? 'eager' : 'lazy'}
                       />
                     </div>
-                    <span className="text-xs font-bold text-slate-800 group-hover:text-[#FF6000] transition-colors text-center px-1 truncate max-w-full">
-                      {getCategoryTitle(cat.id, currentLang) || (currentLang === 'en' ? cat.nameEn : cat.nameRw)}
-                    </span>
+                    <div className="text-center w-full px-1">
+                      <span className="text-xs font-bold text-slate-800 group-hover:text-[#FF6000] transition-colors block truncate">
+                        {currentLang === 'en' ? cat.name : cat.nameRw}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium block">
+                        {cat.subcategories.length} subcategories
+                      </span>
+                    </div>
                   </button>
                 ))}
 
-                {/* Arrow Button to scroll/view more (Matching Screenshot 2) */}
+                {/* Arrow Button to open full 13 departments mega menu */}
                 <button
-                  onClick={() => {
-                    setSelectedCategory('all');
-                    handleNavigate('shop');
-                  }}
-                  className="w-10 h-10 rounded-full bg-white border border-slate-300 shadow-xs flex items-center justify-center text-slate-700 hover:text-[#FF6000] shrink-0 hover:bg-slate-50 transition-colors cursor-pointer ml-1"
+                  onClick={() => setIsCategoryMegaMenuOpen(true)}
+                  className="w-11 h-11 rounded-full bg-white border border-slate-300 shadow-xs flex items-center justify-center text-slate-700 hover:text-[#FF6000] shrink-0 hover:bg-slate-50 transition-colors cursor-pointer ml-1 group"
                   aria-label="View more categories"
+                  title="Explore All Categories"
                 >
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
                 </button>
               </div>
             </div>
@@ -1513,6 +1648,20 @@ export default function App() {
           exchangeRates={exchangeRates}
         />
       )}
+
+      {/* 12. Full-Screen KiKUU-Inspired Category Mega Menu */}
+      <CategoryMegaMenu
+        isOpen={isCategoryMegaMenuOpen}
+        onClose={() => setIsCategoryMegaMenuOpen(false)}
+        selectedCategory={selectedCategory}
+        onSelectCategory={(mainId, subId, tag) => {
+          setSelectedCategory(mainId);
+          setSelectedSubCategory(subId || null);
+          if (tag) setSearchQuery(tag);
+          handleNavigate('shop');
+        }}
+        currentLang={currentLang}
+      />
     </div>
   );
 }

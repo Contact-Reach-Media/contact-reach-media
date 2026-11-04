@@ -1,5 +1,6 @@
 import { Product, Category, AppSettings, VendorShop } from '../types.ts';
 import { PRODUCTS_200_CATALOG } from './products200Feed.ts';
+import { generateFlatCategoryRecords } from './categoryStructure.ts';
 
 export const initialSettings: AppSettings = {
   "companyName": "ContactReach Media Ltd",
@@ -155,107 +156,7 @@ export const initialSettings: AppSettings = {
   "maintenanceUpdatedAt": "2026-10-27T10:06:55.907Z"
 };
 
-export const initialCategories: Category[] = [
-  {
-    "id": "hair-beauty",
-    "nameEn": "Beauty & Cosmetics",
-    "nameRw": "Ubwiza",
-    "icon": "Sparkles",
-    "description": "Salon supplies, cosmetics, hair care, and personal wellness.",
-    "itemCount": 11,
-    "isActive": true
-  },
-  {
-    "id": "electronics",
-    "nameEn": "Electronics & TV",
-    "nameRw": "Ibyuma",
-    "icon": "Tv",
-    "description": "Smartphones, TV accessories, audio devices, computer gear, and gadgets.",
-    "itemCount": 16,
-    "isActive": true
-  },
-  {
-    "id": "fashion",
-    "nameEn": "Fashion & Apparel",
-    "nameRw": "Imyenda",
-    "icon": "Shirt",
-    "description": "Clothing, sneakers, shoes, bags, and modern Rwandan & international styles.",
-    "itemCount": 14,
-    "isActive": true
-  },
-  {
-    "id": "amatara",
-    "nameEn": "Lighting & Gadgets",
-    "nameRw": "Amatara",
-    "icon": "Lightbulb",
-    "description": "Home lighting, LED strips, rechargeable lamps, and decor.",
-    "itemCount": 8,
-    "isActive": true
-  },
-  {
-    "id": "impano",
-    "nameEn": "Gifts & Home Decor",
-    "nameRw": "Impano",
-    "icon": "Gift",
-    "description": "Curated gift hampers, decorative accents, traditional Rwandan crafts, and kitchen accessories.",
-    "itemCount": 18,
-    "isActive": true
-  },
-  {
-    "id": "abana",
-    "nameEn": "Kids & Toys",
-    "nameRw": "Abana",
-    "icon": "Baby",
-    "description": "Educational toys, kids essentials, clothing, shoes, and baby care.",
-    "itemCount": 10,
-    "isActive": true
-  },
-  {
-    "id": "amasaha",
-    "nameEn": "Watches & Jewelry",
-    "nameRw": "Amasaha",
-    "icon": "Watch",
-    "description": "Wristwatches, necklaces, bracelets, rings, and fashion jewelry.",
-    "itemCount": 6,
-    "isActive": true
-  },
-  {
-    "id": "ibikapu",
-    "nameEn": "Bags & Luggage",
-    "nameRw": "Ibikapu",
-    "icon": "Briefcase",
-    "description": "Backpacks, handbags, travel luggage, and laptop cases.",
-    "itemCount": 10,
-    "isActive": true
-  },
-  {
-    "id": "sports",
-    "nameEn": "Sports & Fitness",
-    "nameRw": "Imikino",
-    "icon": "Dumbbell",
-    "description": "Workout accessories, activewear, bicycles, and fitness gear.",
-    "itemCount": 2,
-    "isActive": true
-  },
-  {
-    "id": "books",
-    "nameEn": "Books & Office",
-    "nameRw": "Ibitabo",
-    "icon": "BookOpen",
-    "description": "School materials, stationery, books, executive chairs, and office supplies.",
-    "itemCount": 1,
-    "isActive": true
-  },
-  {
-    "id": "supermarket",
-    "nameEn": "Supermarket & Food",
-    "nameRw": "Isoko Rusange",
-    "icon": "ShoppingBag",
-    "description": "Natural honey, grocery items, provisions, and pantry goods.",
-    "itemCount": 1,
-    "isActive": true
-  }
-];
+export const initialCategories: Category[] = generateFlatCategoryRecords();
 
 export const initialShops: VendorShop[] = [
   {

@@ -54,12 +54,18 @@
         "nameEn": { "type": "string", "maxLength": 100 },
         "nameRw": { "type": "string", "maxLength": 100 },
         "icon": { "type": "string", "maxLength": 64 },
+        "slug": { "type": "string", "maxLength": 100 },
+        "parentId": { "type": "string", "maxLength": 64 },
+        "level": { "type": "number" },
+        "sortOrder": { "type": "number" },
         "description": { "type": "string", "maxLength": 500 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
         "subcategories": { "type": "array" },
         "isActive": { "type": "boolean" },
+        "active": { "type": "boolean" },
         "itemCount": { "type": "number" }
       },
-      "required": ["id", "nameEn", "nameRw"]
+      "required": ["id", "nameEn"]
     },
     "Shop": {
       "title": "Shop",

@@ -124,6 +124,10 @@ export interface Product {
   promoEndDate?: string;
   category: string;
   subcategory?: string;
+  mainCategoryId?: string;
+  subCategoryId?: string;
+  categoryName?: string;
+  subCategoryName?: string;
   stock: number;
   imageUrl: string;
   images?: string[];
@@ -183,17 +187,33 @@ export interface Product {
   history?: { timestamp: string; action: string; user?: string }[];
 }
 
+export interface CategorySubItem {
+  id: string;
+  name: string;
+  slug: string;
+  items?: string[];
+}
+
 export interface Category {
   id: string;
   nameEn: string;
   nameRw: string;
   icon: string;
+  slug?: string;
+  parentId?: string | null;
+  level?: 1 | 2 | 3;
   description?: string;
   imageUrl?: string; // Custom category image URL set by admin or uploaded
   subcategories?: string[];
+  subcategoriesList?: CategorySubItem[];
   isActive?: boolean;
+  active?: boolean;
   order?: number;
+  sortOrder?: number;
   itemCount?: number;
+  keywords?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CartItem {

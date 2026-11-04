@@ -590,10 +590,7 @@ export const api = {
       const timer = setTimeout(() => controller.abort(), 20000);
       const res = await fetch('/api/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getBuyerAuthHeaders()
-        },
+        headers: getBuyerAuthHeaders(),
         body: JSON.stringify(orderPayload),
         signal: controller.signal
       });
@@ -1975,14 +1972,72 @@ export const api = {
     return updated;
   },
 
-  async adminDeleteCategory(id: string): Promise<void> {
+  async getCategoriesTree(): Promise<any[]> {
     try {
-      const res = await fetch(`/api/admin/categories/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      if (res.ok) return;
+      const res = await fetch('/api/categories/tree');
+      const parsed = await safeParseResponse<any[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
     } catch {}
+    return [];
+  },
+
+  async adminMoveCategory(id: string, newParentId: string): Promise<any> {
+    const res = await fetch(`/api/admin/categories/${encodeURIComponent(id)}/move`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ newParentId })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || 'Failed to move subcategory');
+  },
+
+  async adminDeleteCategory(id: string, reassignTo?: string): Promise<{ message: string; reassignedCount?: number }> {
+    const q = reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : '';
+    const res = await fetch(`/api/admin/categories/${encodeURIComponent(id)}${q}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+      body: reassignTo ? JSON.stringify({ reassignTo }) : undefined
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson) {
+      return parsed.json;
+    }
+    const err: any = new Error(parsed.json?.error || 'Failed to delete category');
+    if (parsed.json?.requiresReassignment) {
+      err.requiresReassignment = true;
+      err.productCount = parsed.json.productCount;
+    }
+    throw err;
+  },
+
+  async adminReassignProducts(productIds: string[], targetMainCategoryId: string, targetSubCategoryId?: string): Promise<any> {
+    const res = await fetch('/api/admin/categories/reassign-products', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ productIds, targetMainCategoryId, targetSubCategoryId })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || 'Failed to reassign products');
+  },
+
+  async adminAutoMapCategories(): Promise<any> {
+    const res = await fetch('/api/admin/categories/auto-map-all', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || 'Failed to auto-map categories');
   },
 
   // Shops
@@ -2850,10 +2905,7 @@ export const api = {
   async buyerSendMessage(payload: { message: string; subject?: string; orderNumber?: string }): Promise<AdminMessage> {
     const res = await fetch('/api/buyers/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getBuyerAuthHeaders()
-      },
+      headers: getBuyerAuthHeaders(),
       body: JSON.stringify(payload)
     });
     const parsed = await safeParseResponse<{ message: string; data: AdminMessage }>(res);
@@ -2902,10 +2954,7 @@ export const api = {
   async adminReplyToConversation(customerId: string, payload: { message: string; orderNumber?: string; subject?: string }): Promise<AdminMessage> {
     const res = await fetch(`/api/admin/conversations/${encodeURIComponent(customerId)}/reply`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
     const parsed = await safeParseResponse<{ message: string; data: AdminMessage }>(res);
