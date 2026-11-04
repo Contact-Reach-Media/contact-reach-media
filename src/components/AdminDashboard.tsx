@@ -453,6 +453,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     isBestSeller: boolean;
     sizes: string;
     colors: string;
+    storage: string;
+    specifications: string;
+    packagingInfo: string;
     videoUrl: string; // YouTube video link or Shorts description
   }>({
     name: '',
@@ -483,6 +486,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     isBestSeller: false,
     sizes: '',
     colors: '',
+    storage: '',
+    specifications: '',
+    packagingInfo: '',
     videoUrl: ''
   });
 
@@ -1765,6 +1771,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       isBestSeller: false,
       sizes: '',
       colors: '',
+      storage: '',
+      specifications: '',
+      packagingInfo: '',
       videoUrl: ''
     });
     setNewImageLink('');
@@ -1815,6 +1824,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       isBestSeller: Boolean(p.isBestSeller),
       sizes: p.variations?.find(v => v.name.toLowerCase() === 'size')?.options.join(', ') || '',
       colors: p.variations?.find(v => v.name.toLowerCase() === 'color')?.options.join(', ') || '',
+      storage: p.storage || p.variations?.find(v => v.name.toLowerCase().includes('storage') || v.name.toLowerCase().includes('capacity'))?.options.join(', ') || '',
+      specifications: p.specifications || '',
+      packagingInfo: p.packagingInfo || '',
       videoUrl: p.videoUrl || ''
     });
     setNewImageLink('');
@@ -1829,7 +1841,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       showToast('Please enter a product title and select a category.', 'error');
       return;
     }
-    const cleanDescription = prodForm.description.trim() || `${prodForm.name.trim()} - High quality product available on ContactReach Market with express delivery across Rwanda.`;
+    const cleanDescription = prodForm.description.trim();
 
     const variations: ProductVariation[] = [];
     if (prodForm.sizes.trim()) {
@@ -1842,6 +1854,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       variations.push({
         name: 'Color',
         options: prodForm.colors.split(',').map(c => c.trim()).filter(Boolean)
+      });
+    }
+    if (prodForm.storage.trim()) {
+      variations.push({
+        name: 'Storage',
+        options: prodForm.storage.split(',').map(s => s.trim()).filter(Boolean)
       });
     }
 
@@ -1931,6 +1949,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       isNewArrival: prodForm.isNewArrival,
       isBestSeller: prodForm.isBestSeller,
       variations: variations.length > 0 ? variations : undefined,
+      storage: prodForm.storage.trim() || undefined,
+      specifications: prodForm.specifications.trim() || undefined,
+      packagingInfo: prodForm.packagingInfo.trim() || undefined,
       videoUrl: prodForm.videoUrl.trim() || undefined
     };
 
@@ -10024,39 +10045,71 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 })()}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Available Sizes (comma separated)</label>
+                  <label className="block font-bold text-slate-700 mb-1 text-xs">Available Sizes (optional)</label>
                   <input
                     type="text"
                     value={prodForm.sizes}
                     onChange={(e) => setProdForm({ ...prodForm, sizes: e.target.value })}
-                    placeholder="e.g. S, M, L, XL, 38, 40, 42"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
+                    placeholder="e.g. S, M, L, XL, 38, 40"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Available Colors (comma separated)</label>
+                  <label className="block font-bold text-slate-700 mb-1 text-xs">Available Colors (optional)</label>
                   <input
                     type="text"
                     value={prodForm.colors}
                     onChange={(e) => setProdForm({ ...prodForm, colors: e.target.value })}
                     placeholder="e.g. Black, White, Navy Blue"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 text-xs">Storage / Capacity (optional)</label>
+                  <input
+                    type="text"
+                    value={prodForm.storage}
+                    onChange={(e) => setProdForm({ ...prodForm, storage: e.target.value })}
+                    placeholder="e.g. 64GB, 128GB, 256GB"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Product Description *</label>
+                <label className="block font-bold text-slate-700 mb-1 text-xs">Product Description (optional - hidden if empty)</label>
                 <textarea
-                  rows={4}
-                  required
+                  rows={3}
                   value={prodForm.description}
                   onChange={(e) => setProdForm({ ...prodForm, description: e.target.value })}
-                  placeholder="Comprehensive specifications, materials, and usage details..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
+                  placeholder="Comprehensive description. If left empty, the Description tab is automatically hidden from customers..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 text-xs">Attributes & Specifications (optional - hidden if empty)</label>
+                  <textarea
+                    rows={3}
+                    value={prodForm.specifications}
+                    onChange={(e) => setProdForm({ ...prodForm, specifications: e.target.value })}
+                    placeholder="Technical specifications, materials, certifications, power rating... If left empty, this section is hidden."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 text-xs">Supplier & Packaging Details (optional - hidden if empty)</label>
+                  <textarea
+                    rows={3}
+                    value={prodForm.packagingInfo}
+                    onChange={(e) => setProdForm({ ...prodForm, packagingInfo: e.target.value })}
+                    placeholder="Box contents, parcel dimensions, packaging notes... If left empty, this section is hidden."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
+                  />
+                </div>
               </div>
 
               {/* YouTube Video Description Link */}

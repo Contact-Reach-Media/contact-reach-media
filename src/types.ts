@@ -150,6 +150,10 @@ export interface Product {
   reviewsCount?: number;
   unit?: string;
   shippingCost?: number; // Calculated shipping cost: 1500 + (cost * 10) / 100
+  specifications?: string;
+  storage?: string;
+  packagingInfo?: string;
+  attributes?: Record<string, string> | { label: string; value: string }[];
   // CJ Dropshipping & Supplier Cost Automation & Google Drive & Alibaba
   source?: 'local' | 'cjdropshipping' | 'googledrive' | 'alibaba';
   cjProductId?: string;

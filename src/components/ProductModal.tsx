@@ -66,56 +66,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     return product.imageUrl ? [product.imageUrl] : [];
   }, [product]);
 
-  // Ensure EVERY product has authentic style details / variations (Matching Images 1, 2 & 3)
+  // Customer-facing variations: strictly use genuine variations provided by admin (e.g. Color, Storage, Size).
+  // If the admin leaves Color, Storage, or any variation empty, it is hidden automatically.
   const effectiveVariations: ProductVariation[] = useMemo(() => {
-    if (!product) return [];
-    if (product.variations && product.variations.length > 0) {
-      return product.variations;
-    }
-
-    // Category-specific authentic variation generation
-    const cat = (product.category || '').toLowerCase();
-    const nameLower = product.name.toLowerCase();
-
-    if (cat === 'amatara' || nameLower.includes('solar') || nameLower.includes('light')) {
-      return [
-        { name: 'Model & Power', options: ['300W High Lumen', '500W Commercial', '800W Pro Radar Edition'] },
-        { name: 'Color Temp', options: ['6500K Cool White', '4000K Natural White'] }
-      ];
-    }
-    if (cat === 'hair-beauty' || nameLower.includes('brush') || nameLower.includes('pen') || nameLower.includes('nail')) {
-      return [
-        { name: 'Color', options: ['Pink', 'Sky Blue', 'Matte Black', 'Emerald Green', 'Teal Blue'] }
-      ];
-    }
-    if (cat === 'amasaha' || nameLower.includes('watch')) {
-      return [
-        { name: 'Color', options: ['Midnight Black', 'Rose Gold', 'Silver Steel', 'Leather Brown'] }
-      ];
-    }
-    if (cat === 'ibikapu' || nameLower.includes('bag') || nameLower.includes('leather') || nameLower.includes('case')) {
-      return [
-        { name: 'Color', options: ['Brown', 'Black', 'Dark Tan'] }
-      ];
-    }
-    if (cat === 'fashion' || nameLower.includes('shirt') || nameLower.includes('shoes') || nameLower.includes('dress')) {
-      return [
-        { name: 'Color', options: ['Classic Black', 'Pure White', 'Navy Blue', 'Wine Red'] },
-        { name: 'Size', options: ['M (Medium)', 'L (Large)', 'XL (Extra Large)'] }
-      ];
-    }
-    if (cat === 'electronics') {
-      return [
-        { name: 'Color', options: ['Obsidian Black', 'Titanium Gray', 'Pearl White'] },
-        { name: 'Storage / Spec', options: ['Standard 64GB', 'Pro Max 128GB'] }
-      ];
-    }
-
-    // Default universal style variations
-    return [
-      { name: 'Color', options: ['Classic Black', 'Premium Brown', 'Modern Gray'] },
-      { name: 'Style', options: ['Standard Edition', 'Pro Package'] }
-    ];
+    if (!product || !product.variations || !Array.isArray(product.variations)) return [];
+    return product.variations.filter(
+      v => v && typeof v.name === 'string' && v.name.trim().length > 0 && Array.isArray(v.options) && v.options.length > 0
+    );
   }, [product]);
 
   // Synchronize state on product change
@@ -261,24 +218,92 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     }
   };
 
-  // Structured Key Attributes (Matching Image 1 & 2)
-  const keyAttributes = [
-    { label: 'handle material', value: product.brand?.includes('Solar') ? 'Aluminum Alloy' : 'Plastic / Ergonomic' },
-    { label: 'brush / core material', value: product.category === 'hair-beauty' ? 'Silicone / Kolinsky' : 'Stainless / Monocrystalline' },
-    { label: 'Application', value: 'professional tools / daily use' },
-    { label: 'Material', value: 'High-Grade ABS / Alloy' },
-    { label: 'Packing', value: '1PC Retail Box' },
-    { label: 'Feature', value: 'Soft, High Durability, Tested' },
-    { label: 'Style', value: 'Modern Commercial' },
-    { label: 'Shade / Finish', value: selectedVariations['Color'] || 'Standard Finish' },
-    { label: 'place of origin', value: product.alibabaSupplierLocation || 'China (Zhejiang / Guangdong)' },
-    { label: 'model number', value: product.sku || `NHM-${product.id.slice(-6).toUpperCase()}` },
-    { label: 'brand name', value: product.brand || 'ContactReach Market Verified' }
-  ];
+  // Authentic Attributes & Specifications: only extracted from genuine product data
+  const structuredAttributes = useMemo(() => {
+    const list: { label: string; value: string }[] = [];
+    if (product.brand && product.brand.trim() && product.brand !== 'ContactReach Market Verified') {
+      list.push({ label: 'Brand', value: product.brand.trim() });
+    }
+    if (product.sku && product.sku.trim()) {
+      list.push({ label: 'SKU / Model', value: product.sku.trim() });
+    }
+    if (product.unit && product.unit.trim()) {
+      list.push({ label: 'Unit', value: product.unit.trim() });
+    }
+    if (product.attributes) {
+      if (Array.isArray(product.attributes)) {
+        product.attributes.forEach((attr: any) => {
+          if (attr && attr.label && attr.value) {
+            list.push({ label: String(attr.label), value: String(attr.value) });
+          }
+        });
+      } else if (typeof product.attributes === 'object') {
+        Object.entries(product.attributes).forEach(([key, val]) => {
+          if (val) list.push({ label: key, value: String(val) });
+        });
+      }
+    }
+    return list;
+  }, [product]);
 
-  const packageDimensions = product.alibabaDimensionsCm || { length: 22, width: 8, height: 2 };
-  const grossWeight = product.alibabaWeightKg || 0.15;
-  const shippingFeeRwf = product.alibabaShippingCostRwf || 20808;
+  // Has genuine attributes & specifications
+  const hasAttributesAndSpecs = Boolean(
+    (product.specifications && product.specifications.trim().length > 0) ||
+    structuredAttributes.length > 0
+  );
+
+  // Has genuine description
+  const hasDescription = Boolean(
+    product.description && product.description.trim().length > 0
+  );
+
+  // Has genuine supplier details
+  const hasSupplier = Boolean(
+    (product.supplierName && product.supplierName.trim().length > 0) ||
+    (product.alibabaSupplierName && product.alibabaSupplierName.trim().length > 0) ||
+    (product.shopName && product.shopName.trim().length > 0 &&
+      product.shopName !== 'Yangjiang Boyuan Trading Co., Ltd.' &&
+      product.shopName !== 'Alibaba Dropshipping' &&
+      product.shopName !== 'ContactReach Market')
+  );
+
+  // Has genuine packaging details
+  const hasPackaging = Boolean(
+    (product.packagingInfo && product.packagingInfo.trim().length > 0) ||
+    (product.alibabaDimensionsCm && (product.alibabaDimensionsCm.length > 0 || product.alibabaDimensionsCm.width > 0)) ||
+    (product.alibabaWeightKg && product.alibabaWeightKg > 0)
+  );
+
+  const hasSupplierPackaging = hasSupplier || hasPackaging;
+
+  // Available tabs: strictly include tabs that have information
+  const availableTabs = useMemo(() => {
+    const tabs: { id: 'attributes' | 'description' | 'supplier' | 'reviews' | 'video'; label: string }[] = [];
+    if (hasAttributesAndSpecs) {
+      tabs.push({ id: 'attributes', label: 'Attributes & Specifications' });
+    }
+    if (hasDescription) {
+      tabs.push({ id: 'description', label: 'Description' });
+    }
+    if (hasSupplierPackaging) {
+      tabs.push({ id: 'supplier', label: 'Supplier & Packaging' });
+    }
+    if (product.videoUrl && isValidYouTubeUrl(product.videoUrl)) {
+      tabs.push({ id: 'video', label: 'Video Demo' });
+    }
+    tabs.push({ id: 'reviews', label: `Reviews (${reviews.length})` });
+    return tabs;
+  }, [hasAttributesAndSpecs, hasDescription, hasSupplierPackaging, product.videoUrl, reviews.length]);
+
+  // Sync activeTab if current active tab is no longer available
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.some(t => t.id === activeTab)) {
+      setActiveTab(availableTabs[0].id);
+    }
+  }, [availableTabs, activeTab]);
+
+  const packageDimensions = product.alibabaDimensionsCm;
+  const grossWeight = product.alibabaWeightKg;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 lg:p-6 animate-in fade-in duration-200">
@@ -396,51 +421,38 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 </div>
               </div>
 
-              {/* Verified Supplier Vetting Card (Matching Image 1) */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-orange-100 text-[#f95700] flex items-center justify-center font-black text-[10px]">
-                      CRM
+              {/* Verified Supplier Vetting Card (Only if supplier info is present) */}
+              {hasSupplier && (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-orange-100 text-[#f95700] flex items-center justify-center font-black text-[10px]">
+                        CRM
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-slate-900 leading-tight">
+                          {product.supplierName || product.alibabaSupplierName || product.shopName}
+                        </p>
+                        {product.location && (
+                          <p className="text-[10px] text-slate-400">
+                            {product.location}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-extrabold text-slate-900 leading-tight">
-                        {product.shopName && product.shopName !== 'Yangjiang Boyuan Trading Co., Ltd.' && product.shopName !== 'Alibaba Dropshipping' ? product.shopName : 'ContactReach Market'}
-                      </p>
-                      <p className="text-[10px] text-slate-400">
-                        Built by ContactReach Market
-                      </p>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200">
+                      Verified
+                    </span>
+                  </div>
+
+                  {product.receiverPhone && (
+                    <div className="text-[11px] text-slate-600 pt-1 border-t border-slate-200/60">
+                      <span className="text-slate-400">Contact: </span>
+                      <span className="font-bold">{product.receiverPhone}</span>
                     </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200">
-                    Verified
-                  </span>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-4 gap-2 pt-1 border-t border-slate-200/60 text-center text-[10px]">
-                  <div>
-                    <span className="font-black text-slate-900 block">4.8/5</span>
-                    <span className="text-slate-400 text-[9px]">Rating</span>
-                  </div>
-                  <div>
-                    <span className="font-black text-slate-900 block">&le; 2h</span>
-                    <span className="text-slate-400 text-[9px]">Response</span>
-                  </div>
-                  <div>
-                    <span className="font-black text-slate-900 block">&ge; 96%</span>
-                    <span className="text-slate-400 text-[9px]">On-time</span>
-                  </div>
-                  <div>
-                    <span className="font-black text-slate-900 block">14%</span>
-                    <span className="text-slate-400 text-[9px]">Reorder</span>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-slate-500 space-y-0.5 pt-1">
-                  <p>✓ Minor customization &amp; Drawing-based customization</p>
-                  <p>✓ Main markets: Rwanda (Kigali Hub), East Africa, United States</p>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* MIDDLE & RIGHT: Details, Wholesale Pricing & Variation Selector (7 cols) */}
@@ -535,58 +547,60 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 </p>
               </div>
 
-              {/* COLOR & STYLE VARIATION SELECTOR (Matching Image 1 & 3) */}
-              <div className="space-y-4">
-                {effectiveVariations.map((v, vIdx) => {
-                  const selectedVal = selectedVariations[v.name] || v.options[0];
-                  return (
-                    <div key={vIdx} className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-800">
-                          {v.name}: <span className="font-black text-[#f95700] capitalize">{selectedVal}</span>
-                        </span>
-                        <span className="text-[11px] text-slate-400">Select variations and quantity</span>
-                      </div>
+              {/* VARIATIONS SELECTOR (Only displayed if admin provided Color, Storage, Size, etc.) */}
+              {effectiveVariations.length > 0 && (
+                <div className="space-y-4">
+                  {effectiveVariations.map((v, vIdx) => {
+                    const selectedVal = selectedVariations[v.name] || v.options[0];
+                    return (
+                      <div key={vIdx} className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-800">
+                            {v.name}: <span className="font-black text-[#f95700] capitalize">{selectedVal}</span>
+                          </span>
+                          <span className="text-[11px] text-slate-400">Select options and quantity</span>
+                        </div>
 
-                      {/* Swatches (Thumbnails if images available, otherwise pill buttons) */}
-                      <div className="flex flex-wrap gap-2.5">
-                        {v.options.map((opt, oIdx) => {
-                          const isSelected = selectedVal === opt;
-                          const thumbImg = galleryImages[oIdx] || galleryImages[0];
+                        {/* Swatches (Thumbnails if images available, otherwise pill buttons) */}
+                        <div className="flex flex-wrap gap-2.5">
+                          {v.options.map((opt, oIdx) => {
+                            const isSelected = selectedVal === opt;
+                            const thumbImg = galleryImages[oIdx] || galleryImages[0];
 
-                          return (
-                            <button
-                              key={oIdx}
-                              type="button"
-                              onClick={() => handleSelectVariation(v.name, opt, oIdx)}
-                              className={`group relative flex items-center gap-2 p-1.5 rounded-xl border-2 transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'border-[#f95700] ring-2 ring-orange-200 bg-orange-50/50 shadow-2xs'
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
-                              }`}
-                            >
-                              {/* Swatch thumbnail image */}
-                              {thumbImg && (
-                                <img
-                                  src={thumbImg}
-                                  alt={opt}
-                                  className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
-                                />
-                              )}
-                              <span className={`text-xs font-bold px-1.5 ${isSelected ? 'text-[#f95700]' : 'text-slate-700'}`}>
-                                {opt}
-                              </span>
-                              {isSelected && (
-                                <span className="w-2 h-2 rounded-full bg-[#f95700] mr-1" />
-                              )}
-                            </button>
-                          );
-                        })}
+                            return (
+                              <button
+                                key={oIdx}
+                                type="button"
+                                onClick={() => handleSelectVariation(v.name, opt, oIdx)}
+                                className={`group relative flex items-center gap-2 p-1.5 rounded-xl border-2 transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'border-[#f95700] ring-2 ring-orange-200 bg-orange-50/50 shadow-2xs'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                                }`}
+                              >
+                                {/* Swatch thumbnail image */}
+                                {thumbImg && (
+                                  <img
+                                    src={thumbImg}
+                                    alt={opt}
+                                    className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                                  />
+                                )}
+                                <span className={`text-xs font-bold px-1.5 ${isSelected ? 'text-[#f95700]' : 'text-slate-700'}`}>
+                                  {opt}
+                                </span>
+                                {isSelected && (
+                                  <span className="w-2 h-2 rounded-full bg-[#f95700] mr-1" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Quantity Selector & Live Total */}
               <div className="flex items-center gap-4 pt-1">
@@ -802,167 +816,120 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
           {/* LOWER SECTION: Key Attributes Table, Description, Reviews (Matching Image 1 & 2) */}
           <div className="pt-6 border-t border-slate-200 space-y-6">
-            {/* Tabs Header */}
-            <div className="flex items-center gap-6 border-b border-slate-200 text-xs font-bold overflow-x-auto pb-3">
-              <button
-                type="button"
-                onClick={() => setActiveTab('attributes')}
-                className={`cursor-pointer pb-2 relative whitespace-nowrap ${
-                  activeTab === 'attributes' ? 'text-[#f95700] font-black' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Attributes & Specifications
-                {activeTab === 'attributes' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#f95700] rounded-full" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('description')}
-                className={`cursor-pointer pb-2 relative whitespace-nowrap ${
-                  activeTab === 'description' ? 'text-[#f95700] font-black' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Description
-                {activeTab === 'description' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#f95700] rounded-full" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('supplier')}
-                className={`cursor-pointer pb-2 relative whitespace-nowrap ${
-                  activeTab === 'supplier' ? 'text-[#f95700] font-black' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Supplier & Packaging
-                {activeTab === 'supplier' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#f95700] rounded-full" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('reviews')}
-                className={`cursor-pointer pb-2 relative whitespace-nowrap ${
-                  activeTab === 'reviews' ? 'text-[#f95700] font-black' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Reviews ({reviews.length})
-                {activeTab === 'reviews' && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#f95700] rounded-full" />
-                )}
-              </button>
-            </div>
-
-            {/* TAB 1: KEY ATTRIBUTES & SPECIFICATIONS TABLE (Matching Image 1 & 2) */}
-            {activeTab === 'attributes' && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 mb-3 uppercase tracking-wider">
-                    Key attributes
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 border border-slate-200 rounded-2xl overflow-hidden text-xs">
-                    {keyAttributes.map((attr, idx) => (
-                      <div
-                        key={idx}
-                        className={`flex items-center border-b border-slate-200 last:border-b-0 ${
-                          idx % 2 === 0 ? 'md:border-r border-slate-200' : ''
-                        }`}
-                      >
-                        <span className="w-1/3 py-2.5 px-4 bg-slate-50 text-slate-500 font-bold capitalize">
-                          {attr.label}
-                        </span>
-                        <span className="w-2/3 py-2.5 px-4 font-semibold text-slate-900">
-                          {attr.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Packaging and Delivery (Matching Image 2) */}
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 mb-3 uppercase tracking-wider">
-                    Packaging and delivery
-                  </h3>
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
-                      <div className="p-3.5 space-y-1">
-                        <span className="text-[11px] text-slate-400 block font-medium">Selling Units</span>
-                        <span className="font-bold text-slate-900">Single item ({product.unit || 'Piece'})</span>
-                      </div>
-                      <div className="p-3.5 space-y-1">
-                        <span className="text-[11px] text-slate-400 block font-medium">Single package size</span>
-                        <span className="font-bold text-slate-900 font-mono">
-                          {packageDimensions.length} &times; {packageDimensions.width} &times; {packageDimensions.height} cm
-                        </span>
-                      </div>
-                      <div className="p-3.5 space-y-1">
-                        <span className="text-[11px] text-slate-400 block font-medium">Single gross weight</span>
-                        <span className="font-bold text-slate-900 font-mono">{grossWeight} kg</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* At a glance (Matching Image 1) */}
-                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 text-xs space-y-2">
-                  <h4 className="font-black text-amber-950 flex items-center gap-1.5">
-                    <Info className="w-4 h-4 text-amber-600" />
-                    At a glance
-                  </h4>
-                  <ul className="list-disc list-inside space-y-1 text-slate-700">
-                    <li><strong className="text-slate-900">Kolinsky / Professional Grade:</strong> High quality resilient materials for long operational lifespan and ergonomic usage.</li>
-                    <li><strong className="text-slate-900">Precision Construction:</strong> Crimped ferrule and reinforced assembly prevents shedding and maintains shape over time.</li>
-                    <li><strong className="text-slate-900">Alibaba Trade Assurance:</strong> 100% dispatch and parcel inspection verified prior to Kigali air cargo flight.</li>
-                  </ul>
-                </div>
+            {/* Tabs Header - Only displays tabs that actually have information */}
+            {availableTabs.length > 0 && (
+              <div className="flex items-center gap-6 border-b border-slate-200 text-xs font-bold overflow-x-auto pb-3">
+                {availableTabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`cursor-pointer pb-2 relative whitespace-nowrap ${
+                      activeTab === tab.id ? 'text-[#f95700] font-black' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                    {activeTab === tab.id && (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#f95700] rounded-full" />
+                    )}
+                  </button>
+                ))}
               </div>
             )}
 
-            {/* TAB 2: UNMODIFIED ORIGINAL DESCRIPTION */}
-            {activeTab === 'description' && (
+            {/* TAB 1: ATTRIBUTES & SPECIFICATIONS (Only displayed if admin provided information) */}
+            {activeTab === 'attributes' && hasAttributesAndSpecs && (
+              <div className="space-y-6">
+                {structuredAttributes.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 mb-3 uppercase tracking-wider">
+                      Product Attributes
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 border border-slate-200 rounded-2xl overflow-hidden text-xs">
+                      {structuredAttributes.map((attr, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex items-center border-b border-slate-200 last:border-b-0 ${
+                            idx % 2 === 0 ? 'md:border-r border-slate-200' : ''
+                          }`}
+                        >
+                          <span className="w-1/3 py-2.5 px-4 bg-slate-50 text-slate-500 font-bold capitalize">
+                            {attr.label}
+                          </span>
+                          <span className="w-2/3 py-2.5 px-4 font-semibold text-slate-900">
+                            {attr.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {product.specifications && product.specifications.trim().length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 mb-3 uppercase tracking-wider">
+                      Specifications & Details
+                    </h3>
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 whitespace-pre-wrap leading-relaxed text-xs">
+                      {product.specifications}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: DESCRIPTION (Only displayed if non-empty) */}
+            {activeTab === 'description' && hasDescription && (
               <div className="space-y-4 text-xs">
-                <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-mono whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+                <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
                   {product.description}
                 </div>
               </div>
             )}
 
-            {/* TAB 3: SUPPLIER & PACKAGING */}
-            {activeTab === 'supplier' && (
+            {/* TAB 3: SUPPLIER & PACKAGING (Only displayed if non-empty) */}
+            {activeTab === 'supplier' && hasSupplierPackaging && (
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <h4 className="font-black text-slate-900 flex items-center gap-1.5">
-                      <Store className="w-4 h-4 text-[#f95700]" />
-                      Verified Store & Sourcing
-                    </h4>
-                    <p className="font-bold text-slate-800">{product.shopName && product.shopName !== 'Yangjiang Boyuan Trading Co., Ltd.' && product.shopName !== 'Alibaba Dropshipping' ? product.shopName : 'ContactReach Market'}</p>
-                    <p className="text-slate-500">Built by ContactReach Market</p>
-                    <p className="text-[11px] text-emerald-700 font-semibold pt-1">
-                      ✓ Direct verified supplier quality inspection &amp; warranty
-                    </p>
-                  </div>
+                  {hasSupplier && (
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-slate-900 flex items-center gap-1.5">
+                        <Store className="w-4 h-4 text-[#f95700]" />
+                        Supplier & Store Information
+                      </h4>
+                      <p className="font-bold text-slate-800">
+                        {product.supplierName || product.alibabaSupplierName || product.shopName}
+                      </p>
+                      {product.location && (
+                        <p className="text-slate-500">Location: {product.location}</p>
+                      )}
+                      {product.receiverPhone && (
+                        <p className="text-slate-500">Contact: {product.receiverPhone}</p>
+                      )}
+                    </div>
+                  )}
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <h4 className="font-black text-slate-900 flex items-center gap-1.5">
-                      <Truck className="w-4 h-4 text-purple-600" />
-                      Rwanda Freight Routing
-                    </h4>
-                    <p className="text-slate-700">
-                      Destination: <strong className="text-slate-900">Kigali International Airport (KGL) Hub</strong>
-                    </p>
-                    <p className="text-slate-700">
-                      Customs Clearance: <strong className="text-slate-900">Gikondo MAGERWA Customs Station</strong>
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Dispatched directly via official Alibaba Air Express consolidators.
-                    </p>
-                  </div>
+                  {hasPackaging && (
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-slate-900 flex items-center gap-1.5">
+                        <Package className="w-4 h-4 text-purple-600" />
+                        Packaging Information
+                      </h4>
+                      {product.packagingInfo && (
+                        <p className="text-slate-700 whitespace-pre-wrap">{product.packagingInfo}</p>
+                      )}
+                      {packageDimensions && (packageDimensions.length > 0 || packageDimensions.width > 0) && (
+                        <p className="text-slate-700">
+                          Package Dimensions: <strong className="font-mono text-slate-900">{packageDimensions.length} &times; {packageDimensions.width} &times; {packageDimensions.height} cm</strong>
+                        </p>
+                      )}
+                      {grossWeight !== undefined && grossWeight > 0 && (
+                        <p className="text-slate-700">
+                          Gross Weight: <strong className="font-mono text-slate-900">{grossWeight} kg</strong>
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
