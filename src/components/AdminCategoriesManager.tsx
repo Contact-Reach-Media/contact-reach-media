@@ -288,7 +288,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
   }, [mainCategories, subcategoriesByParent, searchQuery]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full min-w-0">
       {/* 1. TOP HEADER & METRICS */}
       <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-100">

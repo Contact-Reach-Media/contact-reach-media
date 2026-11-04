@@ -62,7 +62,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   adminUsersCount
 }) => {
   return (
-    <aside className="w-full md:w-64 bg-white border-r border-slate-200/80 p-3 sm:p-4 shrink-0 flex flex-col justify-between">
+    <aside className="w-full md:w-64 md:min-w-[16rem] md:max-w-[16rem] shrink-0 bg-white border-r border-slate-200/80 p-3 sm:p-4 flex flex-col justify-between">
       <div className="space-y-4">
         {/* SECTION 1: OPERATIONS */}
         <div>

@@ -743,49 +743,53 @@ export default function App() {
             </div>
           )}
 
-          {/* In-App PWA Install Banner */}
-          <PWAInstallBanner
-            onOpenModal={() => setIsAppDownloadOpen(true)}
-            currentLang={currentLang}
-          />
+          {/* In-App PWA Install Banner (Only on customer-facing storefront) */}
+          {!(activeView === 'admin' && isAdminLoggedIn) && (
+            <PWAInstallBanner
+              onOpenModal={() => setIsAppDownloadOpen(true)}
+              currentLang={currentLang}
+            />
+          )}
 
-          {/* Main Header */}
-          <Header
-            currentLang={currentLang}
-            onLanguageChange={setCurrentLang}
-            currentCurrency={currentCurrency}
-            onCurrencyChange={setCurrentCurrency}
-            activeView={activeView}
-            onNavigate={(view) => handleNavigate(view)}
-        cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
-        onOpenCart={() => setIsCartOpen(true)}
-        onOpenSearch={() => {
-          handleNavigate('shop');
-          window.scrollTo({ top: 300, behavior: 'smooth' });
-        }}
-        onOpenMobileAppModal={() => setIsAppDownloadOpen(true)}
-        wishlistCount={wishlist.length}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={() => {
-          handleNavigate('shop');
-        }}
-        products={products}
-        onSelectProduct={(p) => handleSelectProduct(p)}
-        buyerUser={buyerUser}
-        onOpenBuyerAuth={() => handleNavigate('login')}
-        onOpenBuyerAccount={() => setIsBuyerAccountOpen(true)}
-        isAdminLoggedIn={isAdminLoggedIn}
-        onOpenUploadProduct={() => handleNavigate('admin-upload')}
-        onOpenCategoriesMenu={() => setIsCategoryMegaMenuOpen(true)}
-        selectedCategory={selectedCategory}
-        onSelectCategory={(mainId: string, subId?: string, tag?: string) => {
-          setSelectedCategory(mainId);
-          setSelectedSubCategory(subId || null);
-          if (tag) setSearchQuery(tag);
-          handleNavigate('shop');
-        }}
-      />
+          {/* Main Storefront Header (Hidden when inside Admin Portal) */}
+          {!(activeView === 'admin' && isAdminLoggedIn) && (
+            <Header
+              currentLang={currentLang}
+              onLanguageChange={setCurrentLang}
+              currentCurrency={currentCurrency}
+              onCurrencyChange={setCurrentCurrency}
+              activeView={activeView}
+              onNavigate={(view) => handleNavigate(view)}
+              cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
+              onOpenCart={() => setIsCartOpen(true)}
+              onOpenSearch={() => {
+                handleNavigate('shop');
+                window.scrollTo({ top: 300, behavior: 'smooth' });
+              }}
+              onOpenMobileAppModal={() => setIsAppDownloadOpen(true)}
+              wishlistCount={wishlist.length}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onSearchSubmit={() => {
+                handleNavigate('shop');
+              }}
+              products={products}
+              onSelectProduct={(p) => handleSelectProduct(p)}
+              buyerUser={buyerUser}
+              onOpenBuyerAuth={() => handleNavigate('login')}
+              onOpenBuyerAccount={() => setIsBuyerAccountOpen(true)}
+              isAdminLoggedIn={isAdminLoggedIn}
+              onOpenUploadProduct={() => handleNavigate('admin-upload')}
+              onOpenCategoriesMenu={() => setIsCategoryMegaMenuOpen(true)}
+              selectedCategory={selectedCategory}
+              onSelectCategory={(mainId: string, subId?: string, tag?: string) => {
+                setSelectedCategory(mainId);
+                setSelectedSubCategory(subId || null);
+                if (tag) setSearchQuery(tag);
+                handleNavigate('shop');
+              }}
+            />
+          )}
 
       {/* VIEW: ADMIN DASHBOARD */}
       {activeView === 'admin' ? (
@@ -802,6 +806,7 @@ export default function App() {
             onRefreshPublicData={refreshAllData}
             initialTab={adminInitialTab as any}
             autoOpenAddProduct={autoOpenAddProduct}
+            onNavigateToStorefront={() => handleNavigate('home')}
           />
         ) : (
           <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 py-16 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white text-center">
@@ -1352,34 +1357,38 @@ export default function App() {
         </main>
       )}
 
-      {/* FLOATING WHATSAPP SUPPORT TAB (Matching exact design on right edge of all screenshots!) */}
-      <div className="fixed bottom-6 right-0 z-40">
-        <a
-          href={`https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
-            'Hello ContactReach Support, I would like assistance with products on ContactReach Market.'
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-white border-y border-l border-slate-200 text-slate-700 hover:text-emerald-600 rounded-l-2xl shadow-xl py-2 px-3 flex flex-col items-center gap-1 transition-transform hover:-translate-x-1"
-          title="Ubufasha kuri WhatsApp"
-        >
-          <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xs">
-            <MessageCircle className="w-3.5 h-3.5 fill-current" />
-          </div>
-          <span className="text-[10px] font-extrabold tracking-wider [writing-mode:vertical-rl] rotate-180">
-            Ubufasha
-          </span>
-        </a>
-      </div>
+      {/* FLOATING WHATSAPP SUPPORT TAB (Only for public storefront customers) */}
+      {!(activeView === 'admin' && isAdminLoggedIn) && (
+        <div className="fixed bottom-6 right-0 z-40">
+          <a
+            href={`https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
+              'Hello ContactReach Support, I would like assistance with products on ContactReach Market.'
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white border-y border-l border-slate-200 text-slate-700 hover:text-emerald-600 rounded-l-2xl shadow-xl py-2 px-3 flex flex-col items-center gap-1 transition-transform hover:-translate-x-1"
+            title="Ubufasha kuri WhatsApp"
+          >
+            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xs">
+              <MessageCircle className="w-3.5 h-3.5 fill-current" />
+            </div>
+            <span className="text-[10px] font-extrabold tracking-wider [writing-mode:vertical-rl] rotate-180">
+              Ubufasha
+            </span>
+          </a>
+        </div>
+      )}
 
-      {/* Footer */}
-      <Footer
-        settings={settings}
-        currentLang={currentLang}
-        onNavigate={(view) => handleNavigate(view)}
-        onOpenAdmin={() => handleNavigate('admin')}
-        onRequestProduct={() => setIsRequestProductOpen(true)}
-      />
+      {/* Footer (Only on public storefront) */}
+      {!(activeView === 'admin' && isAdminLoggedIn) && (
+        <Footer
+          settings={settings}
+          currentLang={currentLang}
+          onNavigate={(view) => handleNavigate(view)}
+          onOpenAdmin={() => handleNavigate('admin')}
+          onRequestProduct={() => setIsRequestProductOpen(true)}
+        />
+      )}
       </>
       )}
 

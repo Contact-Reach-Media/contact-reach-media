@@ -46,6 +46,7 @@ interface AdminDashboardProps {
   onRefreshPublicData: () => void;
   initialTab?: TabType;
   autoOpenAddProduct?: boolean;
+  onNavigateToStorefront?: () => void;
 }
 
 type TabType =
@@ -74,7 +75,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   categories: initialPropCategories,
   onRefreshPublicData,
   initialTab,
-  autoOpenAddProduct
+  autoOpenAddProduct,
+  onNavigateToStorefront
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
   const [loading, setLoading] = useState(true);
@@ -3098,15 +3100,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="hidden sm:inline">Upload Product</span>
             <span className="sm:hidden">Upload</span>
           </button>
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 transition-colors"
+          <button
+            onClick={() => {
+              if (onNavigateToStorefront) {
+                onNavigateToStorefront();
+              } else {
+                window.location.href = '/';
+              }
+            }}
+            className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 transition-colors cursor-pointer"
+            title="Switch to customer storefront view"
           >
             <span>Storefront</span>
             <ExternalLink className="w-3.5 h-3.5 text-orange-400" />
-          </a>
+          </button>
           <button
             onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/40 text-rose-300 hover:bg-rose-900/50 hover:text-rose-100 text-xs font-bold transition-colors cursor-pointer border border-rose-800/40"
@@ -3152,7 +3159,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Main Admin Area */}
-      <div className="flex-1 flex flex-col md:flex-row max-w-[1600px] w-full mx-auto">
+      <div className="flex-1 flex flex-col md:flex-row w-full max-w-[1720px] mx-auto min-w-0">
         {/* Left Sidebar Navigation */}
         <AdminSidebar
           activeTab={activeTab}
@@ -3173,7 +3180,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         />
 
         {/* Content Body Area */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
+        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden">
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
