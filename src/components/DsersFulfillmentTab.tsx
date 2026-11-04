@@ -1535,7 +1535,10 @@ export const DsersFulfillmentTab: React.FC<DsersFulfillmentTabProps> = ({
                   {viewingOrder.items.map((it, idx) => {
                     const prod = products.find(p => p.id === it.productId);
                     const mappedUrl = it.aliExpressUrl || prod?.aliExpressUrl || prod?.supplierProductUrl;
-                    const variant = it.supplierVariant || prod?.supplierVariant || it.variation;
+                    const rawVariant = it.supplierVariant || prod?.supplierVariant || it.variation;
+                    const variantStr = typeof rawVariant === 'object' && rawVariant !== null
+                      ? Object.entries(rawVariant).map(([k, v]) => `${k}: ${v}`).join(', ')
+                      : (rawVariant ? String(rawVariant) : '');
 
                     return (
                       <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
@@ -1549,7 +1552,7 @@ export const DsersFulfillmentTab: React.FC<DsersFulfillmentTabProps> = ({
                             <span className="font-bold text-slate-900 block line-clamp-1">{it.productName}</span>
                             <div className="text-[11px] text-slate-500">
                               Qty: {it.quantity} × {it.price.toLocaleString()} FRW
-                              {variant && <span className="ml-1 text-slate-700">({variant})</span>}
+                              {variantStr && <span className="ml-1 text-slate-700">({variantStr})</span>}
                             </div>
                             {mappedUrl ? (
                               <a

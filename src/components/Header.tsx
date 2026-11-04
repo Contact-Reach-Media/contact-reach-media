@@ -756,7 +756,7 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* 3. KIKUU-STYLE CATEGORY NAVIGATION STRIP */}
+      {/* 3. CONTACT REACH CATEGORY NAVIGATION STRIP */}
       <div className="bg-slate-50/90 border-b border-slate-200/80 px-3 sm:px-8 py-1.5 shadow-2xs w-full">
         <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-2 sm:gap-3 overflow-hidden w-full min-w-0">
           {/* Left: "All Categories" Dropdown Trigger Button */}

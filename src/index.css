@@ -152,14 +152,33 @@ button {
 /* 4. Fluid Width & Auto-Scaling Layout Containers */
 .container,
 section,
-main,
 header,
-footer,
-nav,
-aside {
+footer {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* Bulletproof Admin Portal Responsive Layout Architecture */
+.admin-sidebar {
+  width: 16rem !important;
+  min-width: 16rem !important;
+  max-width: 16rem !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.admin-main-content {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.admin-main-content h1,
+.admin-main-content h2,
+.admin-main-content h3 {
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
 }
 
 /* Desktop max-width constraints safely clamped to 100% viewport width */
@@ -281,39 +300,6 @@ h1, h2, h3, h4, h5, h6, p, span, a, label, li, td, th {
   /* Categories slider touch scrolling momentum */
   .scrollbar-none {
     scroll-padding: 0.5rem;
-  }
-
-  /* Admin Portal Mobile Navigation Optimization */
-  aside[class*="md:w-64"] {
-    width: 100% !important;
-    border-right: none !important;
-    border-bottom: 1px solid #e2e8f0;
-    padding: 0.5rem !important;
-  }
-  aside[class*="md:w-64"] > div:first-child {
-    display: flex !important;
-    overflow-x: auto !important;
-    gap: 0.375rem !important;
-    padding-bottom: 0.25rem !important;
-    scrollbar-width: none !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-  aside[class*="md:w-64"] > div:first-child::-webkit-scrollbar {
-    display: none !important;
-  }
-  aside[class*="md:w-64"] > div:first-child > div:first-child {
-    display: none !important;
-  }
-  aside[class*="md:w-64"] > div:first-child > button {
-    flex-shrink: 0 !important;
-    width: auto !important;
-    white-space: nowrap !important;
-    padding: 0.4rem 0.75rem !important;
-    font-size: 0.75rem !important;
-    border-radius: 0.75rem !important;
-  }
-  aside[class*="md:w-64"] > div:last-child {
-    display: none !important;
   }
 }
 

@@ -1895,7 +1895,13 @@ async function runTests() {
     assert(prods.length > 50, 'Catalog should contain products');
 
     // Verify all returned products have canonical categories
-    const validSlugs = new Set(['electronics', 'fashion', 'hair-beauty', 'amatara', 'impano', 'abana', 'amasaha', 'ibikapu', 'sports', 'books', 'supermarket']);
+    const validSlugs = new Set([
+      'clothing', 'shoes', 'luggage-bags', 'watch-jewelry', 'kids-toys',
+      'home-appliances', 'beauty', 'weddings', 'hair', 'phones-tel',
+      'electronics', 'computer-office', 'automobile-accessory-tools',
+      'fashion', 'hair-beauty', 'amatara', 'impano', 'abana', 'amasaha',
+      'ibikapu', 'sports', 'books', 'supermarket'
+    ]);
     for (const p of prods) {
       assert(validSlugs.has(p.category), `Product ${p.id} category "${p.category}" must be a canonical slug`);
     }

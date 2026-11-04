@@ -259,7 +259,7 @@ export const Footer: React.FC<FooterProps> = ({
             </button>
             <span>|</span>
             <button
-              onClick={() => setLegalModal({
+              onClick={() => setLegalModal(legalModal?.title === t.termsConditions ? null : {
                 title: t.termsConditions,
                 content: 'ContactReach Market provides genuine products with official MTN Mobile Money and Airtel verification by Ruth. All deliveries are coordinated directly in Kigali and provincial centers.'
               })}
@@ -270,24 +270,19 @@ export const Footer: React.FC<FooterProps> = ({
           </div>
         </div>
 
-        {/* Legal Info Dialog */}
+        {/* Legal Info Inline Section */}
         {legalModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl max-w-md w-full p-6 space-y-3 shadow-2xl">
-              <div className="flex items-center gap-2.5">
-                <img src="/logo.png" alt="ContactReach Market" className="w-8 h-8 rounded-full border border-slate-700" />
-                <h4 className="font-bold text-base">{legalModal.title}</h4>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">{legalModal.content}</p>
-              <div className="flex justify-end pt-2">
-                <button
-                  onClick={() => setLegalModal(null)}
-                  className="px-4 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
+          <div className="mt-4 p-4 bg-slate-900 border border-slate-800 rounded-2xl text-xs text-slate-300 space-y-2 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-white text-sm">{legalModal.title}</span>
+              <button
+                onClick={() => setLegalModal(null)}
+                className="text-slate-400 hover:text-white text-xs underline cursor-pointer"
+              >
+                Hide
+              </button>
             </div>
+            <p className="leading-relaxed">{legalModal.content}</p>
           </div>
         )}
       </div>

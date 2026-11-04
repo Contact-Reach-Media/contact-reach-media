@@ -14,24 +14,35 @@ import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './uti
 
 import { Header } from './components/Header.tsx';
 import { ProductCard } from './components/ProductCard.tsx';
+import { ProductDetailPage } from './components/ProductDetailPage.tsx';
+import { CartPage } from './components/CartPage.tsx';
+import { CheckoutPage } from './components/CheckoutPage.tsx';
+import { PaymentPage } from './components/PaymentPage.tsx';
+import { OrderTrackingPage } from './components/OrderTrackingPage.tsx';
+import { CustomerAccountPage } from './components/CustomerAccountPage.tsx';
+import { AdminLoginPage } from './components/AdminLoginPage.tsx';
+import { VendorApplicationPage } from './components/VendorApplicationPage.tsx';
+import { AppDownloadPage } from './components/AppDownloadPage.tsx';
+import { CategoriesPage } from './components/CategoriesPage.tsx';
+import { HowToBuySection } from './components/HowToBuySection.tsx';
+import { ShopsSection } from './components/ShopsSection.tsx';
+import { ContactSection } from './components/ContactSection.tsx';
+import { Footer } from './components/Footer.tsx';
+import { AdminDashboard } from './components/AdminDashboard.tsx';
+import { MaintenancePage } from './components/MaintenancePage.tsx';
+import { NotFoundPage } from './components/NotFoundPage.tsx';
+import { SignInPage } from './components/SignInPage.tsx';
+import { PWAInstallBanner } from './components/PWAInstallBanner.tsx';
 import { ProductModal } from './components/ProductModal.tsx';
 import { CartDrawer } from './components/CartDrawer.tsx';
 import { CheckoutModal } from './components/CheckoutModal.tsx';
 import { PaymentConfirmationModal } from './components/PaymentConfirmationModal.tsx';
 import { OrderTrackingModal } from './components/OrderTrackingModal.tsx';
-import { HowToBuySection } from './components/HowToBuySection.tsx';
-import { ShopsSection } from './components/ShopsSection.tsx';
-import { ContactSection } from './components/ContactSection.tsx';
-import { Footer } from './components/Footer.tsx';
 import { AdminLoginModal } from './components/AdminLoginModal.tsx';
-import { AdminDashboard } from './components/AdminDashboard.tsx';
+import { AdminGatewayCard } from './components/AdminGatewayCard.tsx';
+import { PWAInstallModal } from './components/PWAInstallModal.tsx';
 import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
 import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
-import { MaintenancePage } from './components/MaintenancePage.tsx';
-import { NotFoundPage } from './components/NotFoundPage.tsx';
-import { SignInPage } from './components/SignInPage.tsx';
-import { PWAInstallModal } from './components/PWAInstallModal.tsx';
-import { PWAInstallBanner } from './components/PWAInstallBanner.tsx';
 import { CategoryMegaMenu } from './components/CategoryMegaMenu.tsx';
 import { MAIN_CATEGORY_DEFINITIONS } from './data/categoryStructure.ts';
 
@@ -73,6 +84,8 @@ function parseRouteFromLocation() {
     view = 'how-to-buy';
   } else if (rawPath === '/contact' || rawPath === '/support' || rawPath === '/about') {
     view = 'contact';
+  } else if (rawPath === '/admin/login') {
+    view = 'admin-login';
   } else if (rawPath === '/admin' || rawPath === '/dashboard') {
     view = 'admin';
   } else if (rawPath === '/orders' || rawPath === '/track' || rawPath === '/track-order') {
@@ -81,17 +94,27 @@ function parseRouteFromLocation() {
     view = 'login';
   } else if (rawPath === '/register' || rawPath === '/signup') {
     view = 'register';
-  } else if (rawPath === '/cart') {
+  } else if (rawPath === '/cart' || rawPath === '/bag' || rawPath === '/basket') {
     view = 'cart';
-  } else if (rawPath === '/vendor' || rawPath === '/sell') {
+  } else if (rawPath === '/checkout' || rawPath === '/buy') {
+    view = 'checkout';
+  } else if (rawPath === '/payment' || rawPath === '/order-confirmed' || rawPath === '/pay') {
+    view = 'payment';
+  } else if (rawPath === '/account' || rawPath === '/profile' || rawPath === '/my-account') {
+    view = 'account';
+  } else if (rawPath === '/categories' || rawPath === '/departments') {
+    view = 'categories';
+  } else if (rawPath === '/vendor' || rawPath === '/sell' || rawPath === '/supplier') {
     view = 'vendor';
+  } else if (rawPath === '/download' || rawPath === '/app' || rawPath === '/install') {
+    view = 'download';
   } else if (rawPath === '/upload' || rawPath === '/upload-product' || rawPath === '/add-product') {
     view = 'admin-upload';
   } else if (rawPath === '/404' || rawPath === '/not-found') {
     view = '404';
   } else if (rawPath.startsWith('/product/') || rawPath.startsWith('/p/')) {
     productId = window.location.pathname.replace(/^\/(?:product|p)\//i, '').trim();
-    view = 'shop';
+    view = 'product';
   } else if (rawPath.startsWith('/category/')) {
     category = window.location.pathname.replace(/^\/category\//i, '').trim() || 'all';
     view = 'shop';
@@ -225,22 +248,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>(initialRoute.search);
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
-  // Modals
+  // Active selected entities
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(() => {
     if (initialRoute.productId) {
       return initialProducts.find(p => p.id === initialRoute.productId) || null;
     }
     return null;
   });
-  const [isCartOpen, setIsCartOpen] = useState(initialRoute.view === 'cart');
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [confirmationOrder, setConfirmationOrder] = useState<Order | null>(null);
-  const [isTrackingOpen, setIsTrackingOpen] = useState(
-    initialRoute.view === 'track-order' || Boolean(initialRoute.orderRef)
-  );
-  const [trackingOrderNumber, setTrackingOrderNumber] = useState(initialRoute.orderRef);
-  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [trackingOrderNumber, setTrackingOrderNumber] = useState<string>(initialRoute.orderRef || '');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const token = api.getAdminToken();
@@ -250,12 +266,19 @@ export default function App() {
   const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'products' | 'orders' | 'inventory' | 'settings'>('overview');
   const [autoOpenAddProduct, setAutoOpenAddProduct] = useState(initialRoute.view === 'admin-upload');
   const [pendingAdminAction, setPendingAdminAction] = useState<string | null>(initialRoute.view === 'admin-upload' ? 'upload-product' : null);
-  const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
-  const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
-  const [isSellerModalOpen, setIsSellerModalOpen] = useState(initialRoute.view === 'vendor');
 
   // Buyer Account & Authentication
   const [buyerUser, setBuyerUser] = useState<CustomerUser | null>(null);
+
+  // Modal Dialog States
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
+  const [isTrackingOpen, setIsTrackingOpen] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
+  const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
+  const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
   const [isBuyerAuthOpen, setIsBuyerAuthOpen] = useState(false);
   const [isBuyerAccountOpen, setIsBuyerAccountOpen] = useState(false);
 
@@ -273,102 +296,122 @@ export default function App() {
   };
 
   // Synchronized navigation pushing URL path without reload
-  const handleNavigate = (view: string, push = true) => {
+  const handleNavigate = (view: string, params?: { productId?: string; orderRef?: string; replace?: boolean; push?: boolean }) => {
     let targetPath = '/';
+    let resolvedView = view;
+
     if (view === 'shop') targetPath = '/shop';
     else if (view === 'shops') targetPath = '/shops';
     else if (view === 'how-to-buy') targetPath = '/how-to-buy';
     else if (view === 'contact') targetPath = '/contact';
-    else if (view === 'track-order' || view === 'orders') targetPath = '/orders';
-    else if (view === 'admin') targetPath = '/admin';
+    else if (view === 'cart') targetPath = '/cart';
+    else if (view === 'checkout') targetPath = '/checkout';
+    else if (view === 'payment') {
+      const ref = params?.orderRef || confirmationOrder?.orderNumber || trackingOrderNumber || '';
+      targetPath = ref ? `/payment?order=${encodeURIComponent(ref)}` : '/payment';
+      if (ref) setTrackingOrderNumber(ref);
+    }
+    else if (view === 'track-order' || view === 'orders') {
+      resolvedView = 'track-order';
+      const ref = params?.orderRef || trackingOrderNumber || '';
+      targetPath = ref ? `/orders?ref=${encodeURIComponent(ref)}` : '/orders';
+      if (ref) setTrackingOrderNumber(ref);
+    }
     else if (view === 'login') targetPath = '/login';
     else if (view === 'register') targetPath = '/register';
-    else if (view === 'cart') targetPath = '/cart';
-    else if (view === 'vendor') targetPath = '/vendor';
-    else if (view === '404') targetPath = '/404';
-
-    if (view === 'cart') {
-      setIsCartOpen(true);
-      if (push && window.location.pathname !== targetPath) {
-        window.history.pushState({ view: 'cart' }, '', targetPath);
-      }
-      return;
+    else if (view === 'account') {
+      targetPath = '/account';
     }
-
-    if (view === 'vendor') {
-      setIsSellerModalOpen(true);
-      if (push && window.location.pathname !== targetPath) {
-        window.history.pushState({ view: 'vendor' }, '', targetPath);
+    else if (view === 'admin-login') targetPath = '/admin/login';
+    else if (view === 'admin') {
+      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+      if (!isAuth) {
+        resolvedView = 'admin-login';
+        targetPath = '/admin/login';
+      } else {
+        targetPath = '/admin';
       }
-      return;
     }
-
-    if (view === 'admin-upload' || view === 'upload-product') {
+    else if (view === 'vendor' || view === 'sell') {
+      resolvedView = 'vendor';
+      targetPath = '/vendor';
+    }
+    else if (view === 'download' || view === 'app') {
+      resolvedView = 'download';
+      targetPath = '/download';
+    }
+    else if (view === 'categories') {
+      targetPath = '/categories';
+    }
+    else if (view === 'admin-upload' || view === 'upload-product') {
       const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
       if (isAuth) {
         setIsAdminLoggedIn(true);
         setAdminInitialTab('products');
         setAutoOpenAddProduct(true);
-        setActiveView('admin');
-        if (push && window.location.pathname !== '/admin') {
-          window.history.pushState({ view: 'admin' }, '', '/admin');
-        }
+        resolvedView = 'admin';
+        targetPath = '/admin';
       } else {
         setPendingAdminAction('upload-product');
-        setIsAdminLoginOpen(true);
+        resolvedView = 'admin-login';
+        targetPath = '/admin/login';
       }
-      return;
     }
-
-    if (view === 'admin') {
-      setActiveView('admin');
-      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
-      if (isAuth) {
-        setIsAdminLoggedIn(true);
-        if (push && window.location.pathname !== targetPath) {
-          window.history.pushState({ view: 'admin' }, '', targetPath);
-        }
+    else if (view === 'product') {
+      const pId = params?.productId || selectedProduct?.id;
+      if (pId) {
+        targetPath = `/product/${encodeURIComponent(pId)}`;
+        const found = products.find(p => p.id === pId);
+        if (found) setSelectedProduct(found);
       } else {
-        setIsAdminLoginOpen(true);
-        if (push && window.location.pathname !== targetPath) {
-          window.history.pushState({ view: 'admin' }, '', targetPath);
-        }
+        targetPath = '/shop';
+        resolvedView = 'shop';
       }
-      return;
+    }
+    else if (view === '404') targetPath = '/404';
+
+    const shouldPush = params?.push !== false;
+    if (typeof window !== 'undefined') {
+      if (params?.replace) {
+        window.history.replaceState({ view: resolvedView, ...params }, '', targetPath);
+      } else if (shouldPush && (window.location.pathname + window.location.search) !== targetPath) {
+        window.history.pushState({ view: resolvedView, ...params }, '', targetPath);
+      }
     }
 
-    if (view === 'track-order' || view === 'orders') {
-      setIsTrackingOpen(true);
-      if (push && window.location.pathname !== targetPath) {
-        window.history.pushState({ view: 'orders' }, '', targetPath);
-      }
-      return;
-    }
-
-    if (push && window.location.pathname !== targetPath) {
-      window.history.pushState({ view }, '', targetPath);
-    }
-    setActiveView(view);
+    setActiveView(resolvedView);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Direct product selector with deep-link URL push & replace
-  const handleSelectProduct = (product: Product | null, push = true) => {
+  const handleSelectProduct = (product: Product | null) => {
     setSelectedProduct(product);
     if (product) {
-      if (push && typeof window !== 'undefined') {
-        const targetPath = `/product/${product.id}`;
-        if (window.location.pathname !== targetPath) {
-          window.history.pushState({ productId: product.id }, '', targetPath);
-        }
-      }
+      handleNavigate('product', { productId: product.id });
     } else {
-      if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/product/') || window.location.pathname.startsWith('/p/'))) {
-        const fallbackPath = activeView === 'home' ? '/' : `/${activeView}`;
-        window.history.replaceState({ view: activeView }, '', fallbackPath);
-      }
+      handleNavigate('shop');
     }
   };
+
+  // Browser back/forward popstate listener
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = parseRouteFromLocation();
+      setActiveView(route.view);
+      if (route.productId) {
+        const found = products.find(p => p.id === route.productId);
+        if (found) setSelectedProduct(found);
+      }
+      if (route.orderRef) {
+        setTrackingOrderNumber(route.orderRef);
+      }
+      if (route.category) {
+        setSelectedCategory(route.category);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [products]);
 
   // Initial Data Fetch
   const refreshAllData = async () => {
@@ -701,49 +744,53 @@ export default function App() {
             </div>
           )}
 
-          {/* In-App PWA Install Banner */}
-          <PWAInstallBanner
-            onOpenModal={() => setIsAppDownloadOpen(true)}
-            currentLang={currentLang}
-          />
+          {/* In-App PWA Install Banner (Only on customer-facing storefront) */}
+          {!(activeView === 'admin' && isAdminLoggedIn) && (
+            <PWAInstallBanner
+              onOpenModal={() => setIsAppDownloadOpen(true)}
+              currentLang={currentLang}
+            />
+          )}
 
-          {/* Main Header */}
-          <Header
-            currentLang={currentLang}
-            onLanguageChange={setCurrentLang}
-            currentCurrency={currentCurrency}
-            onCurrencyChange={setCurrentCurrency}
-            activeView={activeView}
-            onNavigate={(view) => handleNavigate(view)}
-        cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
-        onOpenCart={() => setIsCartOpen(true)}
-        onOpenSearch={() => {
-          handleNavigate('shop');
-          window.scrollTo({ top: 300, behavior: 'smooth' });
-        }}
-        onOpenMobileAppModal={() => setIsAppDownloadOpen(true)}
-        wishlistCount={wishlist.length}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={() => {
-          handleNavigate('shop');
-        }}
-        products={products}
-        onSelectProduct={(p) => handleSelectProduct(p)}
-        buyerUser={buyerUser}
-        onOpenBuyerAuth={() => handleNavigate('login')}
-        onOpenBuyerAccount={() => setIsBuyerAccountOpen(true)}
-        isAdminLoggedIn={isAdminLoggedIn}
-        onOpenUploadProduct={() => handleNavigate('admin-upload')}
-        onOpenCategoriesMenu={() => setIsCategoryMegaMenuOpen(true)}
-        selectedCategory={selectedCategory}
-        onSelectCategory={(mainId: string, subId?: string, tag?: string) => {
-          setSelectedCategory(mainId);
-          setSelectedSubCategory(subId || null);
-          if (tag) setSearchQuery(tag);
-          handleNavigate('shop');
-        }}
-      />
+          {/* Main Storefront Header (Hidden when inside Admin Portal) */}
+          {!(activeView === 'admin' && isAdminLoggedIn) && (
+            <Header
+              currentLang={currentLang}
+              onLanguageChange={setCurrentLang}
+              currentCurrency={currentCurrency}
+              onCurrencyChange={setCurrentCurrency}
+              activeView={activeView}
+              onNavigate={(view) => handleNavigate(view)}
+              cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
+              onOpenCart={() => setIsCartOpen(true)}
+              onOpenSearch={() => {
+                handleNavigate('shop');
+                window.scrollTo({ top: 300, behavior: 'smooth' });
+              }}
+              onOpenMobileAppModal={() => setIsAppDownloadOpen(true)}
+              wishlistCount={wishlist.length}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onSearchSubmit={() => {
+                handleNavigate('shop');
+              }}
+              products={products}
+              onSelectProduct={(p) => handleSelectProduct(p)}
+              buyerUser={buyerUser}
+              onOpenBuyerAuth={() => handleNavigate('login')}
+              onOpenBuyerAccount={() => setIsBuyerAccountOpen(true)}
+              isAdminLoggedIn={isAdminLoggedIn}
+              onOpenUploadProduct={() => handleNavigate('admin-upload')}
+              onOpenCategoriesMenu={() => setIsCategoryMegaMenuOpen(true)}
+              selectedCategory={selectedCategory}
+              onSelectCategory={(mainId: string, subId?: string, tag?: string) => {
+                setSelectedCategory(mainId);
+                setSelectedSubCategory(subId || null);
+                if (tag) setSearchQuery(tag);
+                handleNavigate('shop');
+              }}
+            />
+          )}
 
       {/* VIEW: ADMIN DASHBOARD */}
       {activeView === 'admin' ? (
@@ -760,34 +807,17 @@ export default function App() {
             onRefreshPublicData={refreshAllData}
             initialTab={adminInitialTab as any}
             autoOpenAddProduct={autoOpenAddProduct}
+            onNavigateToStorefront={() => handleNavigate('home')}
           />
         ) : (
-          <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 py-16 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-xl shadow-orange-500/20 mb-6">
-              <ShieldCheck className="w-8 h-8 text-white" />
-            </div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-semibold mb-4">
-              <span>ADMIN GATEWAY</span>
-            </div>
-            <h2 className="text-3xl font-black mb-3">ContactReach Admin Portal</h2>
-            <p className="text-slate-400 max-w-md text-sm mb-6">
-              Restricted management area for verified platform owners, catalog managers, and customer support operators.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button
-                onClick={() => setIsAdminLoginOpen(true)}
-                className="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-600/30 transition hover:scale-105 cursor-pointer"
-              >
-                Sign In with Admin Credentials
-              </button>
-              <button
-                onClick={() => handleNavigate('home')}
-                className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm border border-slate-700 transition cursor-pointer"
-              >
-                Return to Storefront
-              </button>
-            </div>
-          </div>
+          <AdminGatewayCard
+            onSuccess={(user) => {
+              setIsAdminLoggedIn(true);
+              setActiveView('admin');
+              showToast(`Welcome Administrator ${user?.name || ''}`);
+            }}
+            onReturnHome={() => handleNavigate('home')}
+          />
         )
       ) : activeView === 'login' || activeView === 'register' ? (
         /* VIEW: BUYER SIGN IN / REGISTER FULL SCREEN (Exact match to image_027b1349.png) */
@@ -1310,34 +1340,38 @@ export default function App() {
         </main>
       )}
 
-      {/* FLOATING WHATSAPP SUPPORT TAB (Matching exact design on right edge of all screenshots!) */}
-      <div className="fixed bottom-6 right-0 z-40">
-        <a
-          href={`https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
-            'Hello ContactReach Support, I would like assistance with products on ContactReach Market.'
-          )}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-white border-y border-l border-slate-200 text-slate-700 hover:text-emerald-600 rounded-l-2xl shadow-xl py-2 px-3 flex flex-col items-center gap-1 transition-transform hover:-translate-x-1"
-          title="Ubufasha kuri WhatsApp"
-        >
-          <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xs">
-            <MessageCircle className="w-3.5 h-3.5 fill-current" />
-          </div>
-          <span className="text-[10px] font-extrabold tracking-wider [writing-mode:vertical-rl] rotate-180">
-            Ubufasha
-          </span>
-        </a>
-      </div>
+      {/* FLOATING WHATSAPP SUPPORT TAB (Only for public storefront customers) */}
+      {!(activeView === 'admin' && isAdminLoggedIn) && (
+        <div className="fixed bottom-6 right-0 z-40">
+          <a
+            href={`https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
+              'Hello ContactReach Support, I would like assistance with products on ContactReach Market.'
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white border-y border-l border-slate-200 text-slate-700 hover:text-emerald-600 rounded-l-2xl shadow-xl py-2 px-3 flex flex-col items-center gap-1 transition-transform hover:-translate-x-1"
+            title="Ubufasha kuri WhatsApp"
+          >
+            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xs">
+              <MessageCircle className="w-3.5 h-3.5 fill-current" />
+            </div>
+            <span className="text-[10px] font-extrabold tracking-wider [writing-mode:vertical-rl] rotate-180">
+              Ubufasha
+            </span>
+          </a>
+        </div>
+      )}
 
-      {/* Footer */}
-      <Footer
-        settings={settings}
-        currentLang={currentLang}
-        onNavigate={(view) => handleNavigate(view)}
-        onOpenAdmin={() => handleNavigate('admin')}
-        onRequestProduct={() => setIsRequestProductOpen(true)}
-      />
+      {/* Footer (Only on public storefront) */}
+      {!(activeView === 'admin' && isAdminLoggedIn) && (
+        <Footer
+          settings={settings}
+          currentLang={currentLang}
+          onNavigate={(view) => handleNavigate(view)}
+          onOpenAdmin={() => handleNavigate('admin')}
+          onRequestProduct={() => setIsRequestProductOpen(true)}
+        />
+      )}
       </>
       )}
 
@@ -1435,7 +1469,7 @@ export default function App() {
             }
           }}
           initialOrderNumber={trackingOrderNumber}
-          onOpenConfirmation={(order) => {
+          onOpenConfirmation={(order: Order) => {
             setConfirmationOrder(order);
             setIsConfirmationOpen(true);
           }}
@@ -1455,7 +1489,7 @@ export default function App() {
               window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
             }
           }}
-          onLoginSuccess={(user) => {
+          onLoginSuccess={(user?: any) => {
             setIsAdminLoggedIn(true);
             setActiveView('admin');
             if (pendingAdminAction === 'upload-product') {
@@ -1613,7 +1647,7 @@ export default function App() {
       <BuyerAuthModal
         isOpen={isBuyerAuthOpen}
         onClose={() => setIsBuyerAuthOpen(false)}
-        onSuccess={(user) => {
+        onSuccess={(user: CustomerUser) => {
           setBuyerUser(user);
           setIsBuyerAuthOpen(false);
           showToast(
@@ -1641,11 +1675,11 @@ export default function App() {
                 : 'Mwasohotse muri konti'
             );
           }}
-          onTrackOrder={(orderRef) => {
+          onTrackOrder={(orderRef: string) => {
             setTrackingOrderNumber(orderRef);
             setIsTrackingOpen(true);
           }}
-          onOpenPaymentConfirmation={(order) => {
+          onOpenPaymentConfirmation={(order: Order) => {
             setConfirmationOrder(order);
             setIsConfirmationOpen(true);
           }}
@@ -1655,12 +1689,12 @@ export default function App() {
         />
       )}
 
-      {/* 12. Full-Screen KiKUU-Inspired Category Mega Menu */}
+      {/* 12. Contact Reach Category Mega Menu */}
       <CategoryMegaMenu
         isOpen={isCategoryMegaMenuOpen}
         onClose={() => setIsCategoryMegaMenuOpen(false)}
         selectedCategory={selectedCategory}
-        onSelectCategory={(mainId, subId, tag) => {
+        onSelectCategory={(mainId: string, subId?: string | null, tag?: string) => {
           setSelectedCategory(mainId);
           setSelectedSubCategory(subId || null);
           if (tag) setSearchQuery(tag);
