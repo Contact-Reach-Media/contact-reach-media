@@ -856,7 +856,7 @@ export default function App() {
 
             <div className="flex flex-wrap items-center gap-3">
               {/* Search Bar */}
-              <div className="relative min-w-[240px]">
+              <div className="relative w-full sm:w-auto flex-1 sm:flex-initial min-w-0 sm:min-w-[240px]">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
@@ -1150,7 +1150,7 @@ export default function App() {
                   <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">
                     {t.recentArrivals || (currentLang === 'en' ? 'Recent Arrivals' : 'Ibije vuba')}
                   </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                     {recentProducts.map((product) => (
                       <ProductCard
                         key={product.id}
@@ -1175,7 +1175,7 @@ export default function App() {
                   <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">
                     {t.recommendedForYou || (currentLang === 'en' ? 'Recommended for You' : 'Ibindi Ukunda')}
                   </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                     {recommendedProducts.map((product) => (
                       <ProductCard
                         key={product.id}

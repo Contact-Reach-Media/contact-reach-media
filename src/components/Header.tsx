@@ -129,8 +129,8 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 w-full shadow-xs bg-white">
       {/* 1. TOP NOTICE / HELPLINE ORANGE BAR */}
-      <div className="bg-[#FF6000] text-white text-xs py-1.5 px-4 sm:px-8 border-b border-orange-600/30">
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-[#FF6000] text-white text-xs py-1.5 px-3 sm:px-8 border-b border-orange-600/30">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-2 sm:gap-3 flex-wrap w-full min-w-0">
           {/* Left: Help Line & Administrator top entry */}
           <div className="flex items-center gap-2.5">
             <a
@@ -313,13 +313,13 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* 2. MAIN HEADER NAVIGATION BAR */}
-      <div className="px-4 sm:px-8 py-3 bg-white border-b border-slate-200">
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-4 lg:gap-8">
+      <div className="px-3 sm:px-8 py-2.5 sm:py-3 bg-white border-b border-slate-200">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-2 sm:gap-4 lg:gap-8 w-full min-w-0">
           {/* Logo / Brand Zone */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer"
+              className="lg:hidden p-1.5 text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer shrink-0"
               aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -327,20 +327,20 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => onNavigate('home')}
-              className="flex items-center gap-2.5 group text-left cursor-pointer"
+              className="flex items-center gap-2 sm:gap-2.5 group text-left cursor-pointer min-w-0"
             >
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-slate-200/90 shadow-2xs group-hover:scale-105 transition-transform shrink-0 bg-white flex items-center justify-center p-0.5">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-slate-200/90 shadow-2xs group-hover:scale-105 transition-transform shrink-0 bg-white flex items-center justify-center p-0.5">
                 <img
                   src="/logo.png"
                   alt="ContactReach Market Logo"
                   className="w-full h-full object-contain rounded-full"
                 />
               </div>
-              <div className="flex flex-col">
-                <span className="font-black text-lg sm:text-xl tracking-tight text-slate-900 leading-none">
+              <div className="flex flex-col min-w-0">
+                <span className="font-black text-base sm:text-xl tracking-tight text-slate-900 leading-none truncate">
                   ContactReach <span className="text-[#FF6000]">Market</span>
                 </span>
-                <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">
+                <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider mt-0.5 truncate">
                   by ContactReach Media
                 </span>
               </div>
@@ -757,8 +757,8 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* 3. KIKUU-STYLE CATEGORY NAVIGATION STRIP */}
-      <div className="bg-slate-50/90 border-b border-slate-200/80 px-4 sm:px-8 py-1.5 shadow-2xs">
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3 overflow-hidden">
+      <div className="bg-slate-50/90 border-b border-slate-200/80 px-3 sm:px-8 py-1.5 shadow-2xs w-full">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-2 sm:gap-3 overflow-hidden w-full min-w-0">
           {/* Left: "All Categories" Dropdown Trigger Button */}
           <button
             onClick={() => {
