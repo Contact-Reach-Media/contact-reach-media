@@ -1655,7 +1655,7 @@ export default function App() {
         />
       )}
 
-      {/* 12. Full-Screen KiKUU-Inspired Category Mega Menu */}
+      {/* 12. Contact Reach Category Mega Menu */}
       <CategoryMegaMenu
         isOpen={isCategoryMegaMenuOpen}
         onClose={() => setIsCategoryMegaMenuOpen(false)}

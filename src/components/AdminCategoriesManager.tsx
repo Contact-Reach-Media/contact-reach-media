@@ -295,7 +295,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#FF6000] text-xs font-black uppercase tracking-wider">
-                KiKUU Rwanda Hierarchy
+                Contact Reach Department Directory
               </span>
               <span className="text-xs font-bold text-slate-500">
                 13 Official Departments

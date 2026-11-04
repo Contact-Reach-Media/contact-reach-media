@@ -98,7 +98,7 @@ export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
               <h2 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
                 <span>{currentLang === 'en' ? 'All 13 Product Categories' : 'Ibyiciro Byose (13)'}</span>
                 <span className="text-[10px] bg-orange-500/30 text-orange-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-orange-400/30">
-                  KiKUU Style
+                  Contact Reach Direct
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400 hidden sm:block">

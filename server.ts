@@ -1831,7 +1831,12 @@ app.get('/api/products', (req: Request, res: Response) => {
   // Filter by main category
   const targetMain = (mainCategoryId && mainCategoryId !== 'all') ? String(mainCategoryId) : (category && category !== 'all' ? normalizeCategoryId(String(category)) : null);
   if (targetMain) {
-    filtered = filtered.filter(p => p.mainCategoryId === targetMain || normalizeCategoryId(p.category, p.name) === targetMain);
+    filtered = filtered.filter(p => {
+      const canonicalCat = (p.mainCategoryId && MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId))
+        ? p.mainCategoryId
+        : normalizeCategoryId(p.category, p.name);
+      return canonicalCat === targetMain;
+    });
   }
 
   // Filter by subcategory
@@ -1893,7 +1898,9 @@ app.get('/api/products', (req: Request, res: Response) => {
 
   const sanitized = filtered.map(p => ({
     ...p,
-    category: normalizeCategoryId(p.category, p.name)
+    category: (p.mainCategoryId && MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId))
+      ? p.mainCategoryId
+      : normalizeCategoryId(p.category, p.name)
   }));
   res.json(sanitized);
 });
