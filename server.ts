@@ -4280,7 +4280,7 @@ app.post('/api/buyers/logout', (req: Request, res: Response) => {
 // ADMIN AUTHENTICATION & SESSIONS
 // -------------------------------------------------------------
 
-app.post('/api/auth/login', (req: Request, res: Response) => {
+app.post(['/api/auth/login', '/api/admin/login'], (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });

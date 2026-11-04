@@ -2,7 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard, Package, FolderTree, Store, ShoppingBag, CreditCard,
   Layers, Users, Mail, AlertTriangle, Tag, FileText, Settings, Shield,
-  Globe, RefreshCw, DollarSign, ShieldCheck
+  Globe, RefreshCw, DollarSign, ShieldCheck, X
 } from 'lucide-react';
 
 export type TabType =
@@ -42,6 +42,7 @@ interface AdminSidebarProps {
   pendingSuppliersCount: number;
   pendingPayoutsCount: number;
   adminUsersCount: number;
+  onCloseMobile?: () => void;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -59,11 +60,29 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   customersCount,
   pendingSuppliersCount,
   pendingPayoutsCount,
-  adminUsersCount
+  adminUsersCount,
+  onCloseMobile
 }) => {
+  const handleTabClick = (tab: TabType) => {
+    setActiveTab(tab);
+    if (onCloseMobile) onCloseMobile();
+  };
+
   return (
-    <aside className="w-full md:w-64 md:min-w-[16rem] md:max-w-[16rem] shrink-0 bg-white border-r border-slate-200/80 p-3 sm:p-4 flex flex-col justify-between">
+    <aside className="admin-sidebar w-64 min-w-[16rem] max-w-[16rem] shrink-0 bg-white border-r border-slate-200/80 p-3 sm:p-4 flex flex-col justify-between overflow-y-auto">
       <div className="space-y-4">
+        {onCloseMobile && (
+          <div className="lg:hidden flex items-center justify-between pb-2 border-b border-slate-100">
+            <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider">Navigation Menu</span>
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {/* SECTION 1: OPERATIONS */}
         <div>
           <div className="px-3 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
@@ -72,7 +91,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <div className="space-y-0.5">
             <button
               type="button"
-              onClick={() => setActiveTab('overview')}
+              onClick={() => handleTabClick('overview')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'overview'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -87,7 +106,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('orders')}
+              onClick={() => handleTabClick('orders')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'orders'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -114,7 +133,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('payments')}
+              onClick={() => handleTabClick('payments')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'payments'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -134,7 +153,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('customers')}
+              onClick={() => handleTabClick('customers')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'customers'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -154,7 +173,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('messages')}
+              onClick={() => handleTabClick('messages')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'messages'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -174,7 +193,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('problems')}
+              onClick={() => handleTabClick('problems')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'problems'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -202,7 +221,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <div className="space-y-0.5">
             <button
               type="button"
-              onClick={() => setActiveTab('products')}
+              onClick={() => handleTabClick('products')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'products'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -222,7 +241,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('categories')}
+              onClick={() => handleTabClick('categories')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'categories'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -242,7 +261,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('inventory')}
+              onClick={() => handleTabClick('inventory')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'inventory'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -262,7 +281,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('shops')}
+              onClick={() => handleTabClick('shops')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'shops'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -290,7 +309,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <div className="space-y-0.5">
             <button
               type="button"
-              onClick={() => setActiveTab('suppliers')}
+              onClick={() => handleTabClick('suppliers')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'suppliers'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -310,7 +329,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('payouts')}
+              onClick={() => handleTabClick('payouts')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'payouts'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -330,7 +349,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('alibaba')}
+              onClick={() => handleTabClick('alibaba')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'alibaba'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -345,7 +364,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('cjdropshipping')}
+              onClick={() => handleTabClick('cjdropshipping')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'cjdropshipping'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -360,7 +379,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('dsers')}
+              onClick={() => handleTabClick('dsers')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'dsers'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -383,7 +402,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <div className="space-y-0.5">
             <button
               type="button"
-              onClick={() => setActiveTab('coupons')}
+              onClick={() => handleTabClick('coupons')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'coupons'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -398,7 +417,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('audit')}
+              onClick={() => handleTabClick('audit')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'audit'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -413,7 +432,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('team')}
+              onClick={() => handleTabClick('team')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'team'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'
@@ -433,7 +452,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('settings')}
+              onClick={() => handleTabClick('settings')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'settings'
                   ? 'bg-[#FF6000] text-white shadow-xs font-bold'

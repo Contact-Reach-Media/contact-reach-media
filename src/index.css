@@ -152,14 +152,33 @@ button {
 /* 4. Fluid Width & Auto-Scaling Layout Containers */
 .container,
 section,
-main,
 header,
-footer,
-nav,
-aside {
+footer {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* Bulletproof Admin Portal Responsive Layout Architecture */
+.admin-sidebar {
+  width: 16rem !important;
+  min-width: 16rem !important;
+  max-width: 16rem !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.admin-main-content {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.admin-main-content h1,
+.admin-main-content h2,
+.admin-main-content h3 {
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
 }
 
 /* Desktop max-width constraints safely clamped to 100% viewport width */
