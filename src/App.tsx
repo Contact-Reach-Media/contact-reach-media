@@ -14,25 +14,25 @@ import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './uti
 
 import { Header } from './components/Header.tsx';
 import { ProductCard } from './components/ProductCard.tsx';
-import { ProductModal } from './components/ProductModal.tsx';
-import { CartDrawer } from './components/CartDrawer.tsx';
-import { CheckoutModal } from './components/CheckoutModal.tsx';
-import { PaymentConfirmationModal } from './components/PaymentConfirmationModal.tsx';
-import { OrderTrackingModal } from './components/OrderTrackingModal.tsx';
+import { ProductDetailPage } from './components/ProductDetailPage.tsx';
+import { CartPage } from './components/CartPage.tsx';
+import { CheckoutPage } from './components/CheckoutPage.tsx';
+import { PaymentPage } from './components/PaymentPage.tsx';
+import { OrderTrackingPage } from './components/OrderTrackingPage.tsx';
+import { CustomerAccountPage } from './components/CustomerAccountPage.tsx';
+import { AdminLoginPage } from './components/AdminLoginPage.tsx';
+import { VendorApplicationPage } from './components/VendorApplicationPage.tsx';
+import { AppDownloadPage } from './components/AppDownloadPage.tsx';
+import { CategoriesPage } from './components/CategoriesPage.tsx';
 import { HowToBuySection } from './components/HowToBuySection.tsx';
 import { ShopsSection } from './components/ShopsSection.tsx';
 import { ContactSection } from './components/ContactSection.tsx';
 import { Footer } from './components/Footer.tsx';
-import { AdminLoginModal } from './components/AdminLoginModal.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
-import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
-import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
 import { MaintenancePage } from './components/MaintenancePage.tsx';
 import { NotFoundPage } from './components/NotFoundPage.tsx';
 import { SignInPage } from './components/SignInPage.tsx';
-import { PWAInstallModal } from './components/PWAInstallModal.tsx';
 import { PWAInstallBanner } from './components/PWAInstallBanner.tsx';
-import { CategoryMegaMenu } from './components/CategoryMegaMenu.tsx';
 import { MAIN_CATEGORY_DEFINITIONS } from './data/categoryStructure.ts';
 
 
@@ -73,6 +73,8 @@ function parseRouteFromLocation() {
     view = 'how-to-buy';
   } else if (rawPath === '/contact' || rawPath === '/support' || rawPath === '/about') {
     view = 'contact';
+  } else if (rawPath === '/admin/login') {
+    view = 'admin-login';
   } else if (rawPath === '/admin' || rawPath === '/dashboard') {
     view = 'admin';
   } else if (rawPath === '/orders' || rawPath === '/track' || rawPath === '/track-order') {
@@ -81,17 +83,27 @@ function parseRouteFromLocation() {
     view = 'login';
   } else if (rawPath === '/register' || rawPath === '/signup') {
     view = 'register';
-  } else if (rawPath === '/cart') {
+  } else if (rawPath === '/cart' || rawPath === '/bag' || rawPath === '/basket') {
     view = 'cart';
-  } else if (rawPath === '/vendor' || rawPath === '/sell') {
+  } else if (rawPath === '/checkout' || rawPath === '/buy') {
+    view = 'checkout';
+  } else if (rawPath === '/payment' || rawPath === '/order-confirmed' || rawPath === '/pay') {
+    view = 'payment';
+  } else if (rawPath === '/account' || rawPath === '/profile' || rawPath === '/my-account') {
+    view = 'account';
+  } else if (rawPath === '/categories' || rawPath === '/departments') {
+    view = 'categories';
+  } else if (rawPath === '/vendor' || rawPath === '/sell' || rawPath === '/supplier') {
     view = 'vendor';
+  } else if (rawPath === '/download' || rawPath === '/app' || rawPath === '/install') {
+    view = 'download';
   } else if (rawPath === '/upload' || rawPath === '/upload-product' || rawPath === '/add-product') {
     view = 'admin-upload';
   } else if (rawPath === '/404' || rawPath === '/not-found') {
     view = '404';
   } else if (rawPath.startsWith('/product/') || rawPath.startsWith('/p/')) {
     productId = window.location.pathname.replace(/^\/(?:product|p)\//i, '').trim();
-    view = 'shop';
+    view = 'product';
   } else if (rawPath.startsWith('/category/')) {
     category = window.location.pathname.replace(/^\/category\//i, '').trim() || 'all';
     view = 'shop';
@@ -225,22 +237,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>(initialRoute.search);
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
-  // Modals
+  // Active selected entities
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(() => {
     if (initialRoute.productId) {
       return initialProducts.find(p => p.id === initialRoute.productId) || null;
     }
     return null;
   });
-  const [isCartOpen, setIsCartOpen] = useState(initialRoute.view === 'cart');
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [confirmationOrder, setConfirmationOrder] = useState<Order | null>(null);
-  const [isTrackingOpen, setIsTrackingOpen] = useState(
-    initialRoute.view === 'track-order' || Boolean(initialRoute.orderRef)
-  );
-  const [trackingOrderNumber, setTrackingOrderNumber] = useState(initialRoute.orderRef);
-  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [trackingOrderNumber, setTrackingOrderNumber] = useState<string>(initialRoute.orderRef || '');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const token = api.getAdminToken();
@@ -250,14 +255,9 @@ export default function App() {
   const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'products' | 'orders' | 'inventory' | 'settings'>('overview');
   const [autoOpenAddProduct, setAutoOpenAddProduct] = useState(initialRoute.view === 'admin-upload');
   const [pendingAdminAction, setPendingAdminAction] = useState<string | null>(initialRoute.view === 'admin-upload' ? 'upload-product' : null);
-  const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
-  const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
-  const [isSellerModalOpen, setIsSellerModalOpen] = useState(initialRoute.view === 'vendor');
 
   // Buyer Account & Authentication
   const [buyerUser, setBuyerUser] = useState<CustomerUser | null>(null);
-  const [isBuyerAuthOpen, setIsBuyerAuthOpen] = useState(false);
-  const [isBuyerAccountOpen, setIsBuyerAccountOpen] = useState(false);
 
   // Product quantity display limit for "Reba ibindi"
   const [visibleRecommendedCount, setVisibleRecommendedCount] = useState(20);
@@ -273,102 +273,122 @@ export default function App() {
   };
 
   // Synchronized navigation pushing URL path without reload
-  const handleNavigate = (view: string, push = true) => {
+  const handleNavigate = (view: string, params?: { productId?: string; orderRef?: string; replace?: boolean; push?: boolean }) => {
     let targetPath = '/';
+    let resolvedView = view;
+
     if (view === 'shop') targetPath = '/shop';
     else if (view === 'shops') targetPath = '/shops';
     else if (view === 'how-to-buy') targetPath = '/how-to-buy';
     else if (view === 'contact') targetPath = '/contact';
-    else if (view === 'track-order' || view === 'orders') targetPath = '/orders';
-    else if (view === 'admin') targetPath = '/admin';
+    else if (view === 'cart') targetPath = '/cart';
+    else if (view === 'checkout') targetPath = '/checkout';
+    else if (view === 'payment') {
+      const ref = params?.orderRef || confirmationOrder?.orderNumber || trackingOrderNumber || '';
+      targetPath = ref ? `/payment?order=${encodeURIComponent(ref)}` : '/payment';
+      if (ref) setTrackingOrderNumber(ref);
+    }
+    else if (view === 'track-order' || view === 'orders') {
+      resolvedView = 'track-order';
+      const ref = params?.orderRef || trackingOrderNumber || '';
+      targetPath = ref ? `/orders?ref=${encodeURIComponent(ref)}` : '/orders';
+      if (ref) setTrackingOrderNumber(ref);
+    }
     else if (view === 'login') targetPath = '/login';
     else if (view === 'register') targetPath = '/register';
-    else if (view === 'cart') targetPath = '/cart';
-    else if (view === 'vendor') targetPath = '/vendor';
-    else if (view === '404') targetPath = '/404';
-
-    if (view === 'cart') {
-      setIsCartOpen(true);
-      if (push && window.location.pathname !== targetPath) {
-        window.history.pushState({ view: 'cart' }, '', targetPath);
-      }
-      return;
+    else if (view === 'account') {
+      targetPath = '/account';
     }
-
-    if (view === 'vendor') {
-      setIsSellerModalOpen(true);
-      if (push && window.location.pathname !== targetPath) {
-        window.history.pushState({ view: 'vendor' }, '', targetPath);
+    else if (view === 'admin-login') targetPath = '/admin/login';
+    else if (view === 'admin') {
+      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+      if (!isAuth) {
+        resolvedView = 'admin-login';
+        targetPath = '/admin/login';
+      } else {
+        targetPath = '/admin';
       }
-      return;
     }
-
-    if (view === 'admin-upload' || view === 'upload-product') {
+    else if (view === 'vendor' || view === 'sell') {
+      resolvedView = 'vendor';
+      targetPath = '/vendor';
+    }
+    else if (view === 'download' || view === 'app') {
+      resolvedView = 'download';
+      targetPath = '/download';
+    }
+    else if (view === 'categories') {
+      targetPath = '/categories';
+    }
+    else if (view === 'admin-upload' || view === 'upload-product') {
       const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
       if (isAuth) {
         setIsAdminLoggedIn(true);
         setAdminInitialTab('products');
         setAutoOpenAddProduct(true);
-        setActiveView('admin');
-        if (push && window.location.pathname !== '/admin') {
-          window.history.pushState({ view: 'admin' }, '', '/admin');
-        }
+        resolvedView = 'admin';
+        targetPath = '/admin';
       } else {
         setPendingAdminAction('upload-product');
-        setIsAdminLoginOpen(true);
+        resolvedView = 'admin-login';
+        targetPath = '/admin/login';
       }
-      return;
     }
-
-    if (view === 'admin') {
-      setActiveView('admin');
-      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
-      if (isAuth) {
-        setIsAdminLoggedIn(true);
-        if (push && window.location.pathname !== targetPath) {
-          window.history.pushState({ view: 'admin' }, '', targetPath);
-        }
+    else if (view === 'product') {
+      const pId = params?.productId || selectedProduct?.id;
+      if (pId) {
+        targetPath = `/product/${encodeURIComponent(pId)}`;
+        const found = products.find(p => p.id === pId);
+        if (found) setSelectedProduct(found);
       } else {
-        setIsAdminLoginOpen(true);
-        if (push && window.location.pathname !== targetPath) {
-          window.history.pushState({ view: 'admin' }, '', targetPath);
-        }
+        targetPath = '/shop';
+        resolvedView = 'shop';
       }
-      return;
+    }
+    else if (view === '404') targetPath = '/404';
+
+    const shouldPush = params?.push !== false;
+    if (typeof window !== 'undefined') {
+      if (params?.replace) {
+        window.history.replaceState({ view: resolvedView, ...params }, '', targetPath);
+      } else if (shouldPush && (window.location.pathname + window.location.search) !== targetPath) {
+        window.history.pushState({ view: resolvedView, ...params }, '', targetPath);
+      }
     }
 
-    if (view === 'track-order' || view === 'orders') {
-      setIsTrackingOpen(true);
-      if (push && window.location.pathname !== targetPath) {
-        window.history.pushState({ view: 'orders' }, '', targetPath);
-      }
-      return;
-    }
-
-    if (push && window.location.pathname !== targetPath) {
-      window.history.pushState({ view }, '', targetPath);
-    }
-    setActiveView(view);
+    setActiveView(resolvedView);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Direct product selector with deep-link URL push & replace
-  const handleSelectProduct = (product: Product | null, push = true) => {
+  const handleSelectProduct = (product: Product | null) => {
     setSelectedProduct(product);
     if (product) {
-      if (push && typeof window !== 'undefined') {
-        const targetPath = `/product/${product.id}`;
-        if (window.location.pathname !== targetPath) {
-          window.history.pushState({ productId: product.id }, '', targetPath);
-        }
-      }
+      handleNavigate('product', { productId: product.id });
     } else {
-      if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/product/') || window.location.pathname.startsWith('/p/'))) {
-        const fallbackPath = activeView === 'home' ? '/' : `/${activeView}`;
-        window.history.replaceState({ view: activeView }, '', fallbackPath);
-      }
+      handleNavigate('shop');
     }
   };
+
+  // Browser back/forward popstate listener
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = parseRouteFromLocation();
+      setActiveView(route.view);
+      if (route.productId) {
+        const found = products.find(p => p.id === route.productId);
+        if (found) setSelectedProduct(found);
+      }
+      if (route.orderRef) {
+        setTrackingOrderNumber(route.orderRef);
+      }
+      if (route.category) {
+        setSelectedCategory(route.category);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [products]);
 
   // Initial Data Fetch
   const refreshAllData = async () => {
