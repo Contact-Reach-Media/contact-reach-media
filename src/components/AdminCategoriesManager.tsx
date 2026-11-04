@@ -288,14 +288,14 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
   }, [mainCategories, subcategoriesByParent, searchQuery]);
 
   return (
-    <div className="space-y-6 w-full max-w-full min-w-0">
+    <div className="space-y-6">
       {/* 1. TOP HEADER & METRICS */}
       <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#FF6000] text-xs font-black uppercase tracking-wider">
-                Contact Reach Department Directory
+                KiKUU Rwanda Hierarchy
               </span>
               <span className="text-xs font-bold text-slate-500">
                 13 Official Departments

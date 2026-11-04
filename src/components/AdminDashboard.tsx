@@ -38,7 +38,6 @@ import { compressImageFile } from '../utils/imageCompress.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct, getProductNameDueToProduct } from '../utils/productImages.ts';
 import { AdminCategoriesManager } from './AdminCategoriesManager.tsx';
-import { AdminSidebar } from './AdminSidebar.tsx';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -46,7 +45,6 @@ interface AdminDashboardProps {
   onRefreshPublicData: () => void;
   initialTab?: TabType;
   autoOpenAddProduct?: boolean;
-  onNavigateToStorefront?: () => void;
 }
 
 type TabType =
@@ -75,8 +73,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   categories: initialPropCategories,
   onRefreshPublicData,
   initialTab,
-  autoOpenAddProduct,
-  onNavigateToStorefront
+  autoOpenAddProduct
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
   const [loading, setLoading] = useState(true);
@@ -1408,7 +1405,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       window.addEventListener('online', handleReSyncOnVisible);
     }
 
-    // 3. Live Firestore onSnapshot listeners for instant push updates (gen-lang-client-0460570023)
+    // 3. Live Firestore onSnapshot listeners for instant push updates (marketdatabase-1090b)
     const unsubs: (() => void)[] = [];
     if (db) {
       try {
@@ -3100,20 +3097,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="hidden sm:inline">Upload Product</span>
             <span className="sm:hidden">Upload</span>
           </button>
-          <button
-            onClick={() => {
-              if (onNavigateToStorefront) {
-                onNavigateToStorefront();
-              } else {
-                window.location.href = '/';
-              }
-            }}
-            className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 transition-colors cursor-pointer"
-            title="Switch to customer storefront view"
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 transition-colors"
           >
             <span>Storefront</span>
             <ExternalLink className="w-3.5 h-3.5 text-orange-400" />
-          </button>
+          </a>
           <button
             onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/40 text-rose-300 hover:bg-rose-900/50 hover:text-rose-100 text-xs font-bold transition-colors cursor-pointer border border-rose-800/40"
@@ -3159,28 +3151,361 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Main Admin Area */}
-      <div className="flex-1 flex flex-col md:flex-row w-full max-w-[1720px] mx-auto min-w-0">
+      <div className="flex-1 flex flex-col md:flex-row max-w-[1600px] w-full mx-auto">
         {/* Left Sidebar Navigation */}
-        <AdminSidebar
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          productsCount={products.length}
-          categoriesCount={categories.length}
-          shopsCount={shops.length}
-          newOrdersCount={orders.filter(o => o.status === 'New').length}
-          totalOrdersCount={orders.length}
-          pendingVerificationsCount={stats.pendingVerifications}
-          lowStockCount={stats.lowStockCount}
-          unreadMessagesCount={messages.filter(m => m.status === 'unread').length}
-          unresolvedProblemsCount={stats.unresolvedProblemsCount}
-          customersCount={customers.length}
-          pendingSuppliersCount={supplierApplications.filter(a => a.status === 'Pending').length}
-          pendingPayoutsCount={supplierPayouts.filter(p => p.status === 'Pending').length}
-          adminUsersCount={adminUsers.length}
-        />
+        <aside className="w-full md:w-64 bg-white border-r border-slate-200/80 p-3 sm:p-4 shrink-0 flex flex-col justify-between">
+          <div className="space-y-1">
+            <div className="px-3 py-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+              Management Portal
+            </div>
+
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'overview' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Overview & Analytics</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'products' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Package className="w-4 h-4" />
+                <span>Products Catalog</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {products.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('categories')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'categories' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FolderTree className="w-4 h-4" />
+                <span>Categories</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'categories' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {categories.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('shops')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'shops' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Store className="w-4 h-4" />
+                <span>Saved Shops</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'shops' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {shops.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('suppliers')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'suppliers' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Store className="w-4 h-4 text-amber-500" />
+                <span>Supplier Onboarding</span>
+              </div>
+              {supplierApplications.filter(a => a.status === 'Pending').length > 0 ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black bg-amber-500 text-white animate-pulse">
+                  {supplierApplications.filter(a => a.status === 'Pending').length}
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  activeTab === 'suppliers' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {supplierApplications.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('payouts')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'payouts' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <DollarSign className="w-4 h-4 text-emerald-500" />
+                <span>Supplier Payouts</span>
+              </div>
+              {supplierPayouts.filter(p => p.status === 'Pending').length > 0 ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black bg-emerald-600 text-white animate-pulse">
+                  {supplierPayouts.filter(p => p.status === 'Pending').length}
+                </span>
+              ) : (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  activeTab === 'payouts' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {supplierPayouts.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('alibaba')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'alibaba' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 text-orange-500" />
+                <span>Alibaba Wholesale</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'alibaba' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700'
+              }`}>
+                {products.filter(p => p.source === 'alibaba').length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('cjdropshipping')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'cjdropshipping' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <RefreshCw className="w-4 h-4 text-purple-600" />
+                <span>CJ Dropshipping</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'cjdropshipping' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700'
+              }`}>
+                {products.filter(p => p.source === 'cjdropshipping').length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('dsers')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'dsers' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 text-emerald-600" />
+                <span>DSers & Fulfillment</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {orders.filter(o => o.status !== 'Cancelled' && (o.supplierApprovalStatus || 'Pending Review') === 'Pending Review').length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold bg-amber-500 text-white animate-pulse" title="Orders awaiting manual approval">
+                    {orders.filter(o => o.status !== 'Cancelled' && (o.supplierApprovalStatus || 'Pending Review') === 'Pending Review').length}
+                  </span>
+                )}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  activeTab === 'dsers' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {products.filter(p => Boolean(p.aliExpressUrl || p.supplierProductUrl)).length}/{products.length}
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'orders' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShoppingBag className="w-4 h-4" />
+                <span>Orders & Delivery</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {orders.filter(o => o.status === 'New').length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black bg-rose-500 text-white animate-pulse" title="New live orders">
+                    {orders.filter(o => o.status === 'New').length} New
+                  </span>
+                )}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                  activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {orders.length}
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'payments' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <CreditCard className="w-4 h-4" />
+                <span>Payment Verification</span>
+              </div>
+              {stats.pendingVerifications > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-rose-500 text-white animate-pulse" title="Pending mobile money / SMS verifications">
+                  {stats.pendingVerifications} Pending
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'inventory' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4" />
+                <span>Inventory & Stock</span>
+              </div>
+              {stats.lowStockCount > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black bg-amber-500 text-white">
+                  {stats.lowStockCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('messages')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'messages' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Mail className="w-4 h-4" />
+                <span>Messages & SMS</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {messages.filter(m => m.status === 'unread').length > 0 ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-[#FF6000] text-white animate-pulse" title="Unread messages & SMS">
+                    {messages.filter(m => m.status === 'unread').length} Unread
+                  </span>
+                ) : (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                    activeTab === 'messages' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {messages.length}
+                  </span>
+                )}
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('problems')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'problems' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Problems & Reports</span>
+              </div>
+              {stats.unresolvedProblemsCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-black bg-rose-600 text-white">
+                  {stats.unresolvedProblemsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('customers')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'customers' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Users className="w-4 h-4" />
+                <span>Customers</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'customers' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {customers.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('coupons')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'coupons' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Tag className="w-4 h-4" />
+                <span>Coupons & Promos</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'audit' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Audit Logs</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('team')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'team' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-4 h-4" />
+                <span>Team & Roles</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'team' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {adminUsers.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'settings' ? 'bg-[#FF6000] text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Settings className="w-4 h-4" />
+                <span>Business Settings</span>
+              </div>
+            </button>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 mt-4 text-[11px] text-slate-400 space-y-1">
+            <p className="font-semibold text-slate-600">ContactReach Media Ltd</p>
+            <p>Support: 0780022600</p>
+            <p>Receiver: Ruth (0780022600)</p>
+          </div>
+        </aside>
 
         {/* Content Body Area */}
-        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">

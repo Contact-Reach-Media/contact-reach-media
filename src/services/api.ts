@@ -579,7 +579,7 @@ export const api = {
     deliveryLocation?: string;
     deliveryAddress: string;
     deliveryNotes?: string;
-    items: { productId: string; quantity: number; variation?: string | Record<string, any> }[];
+    items: { productId: string; quantity: number; variation?: string }[];
     shippingCost?: number;
     paymentMethod: PaymentMethod;
     couponCode?: string;
@@ -4674,48 +4674,6 @@ export const api = {
   async syncAllMessagesToFirestore(): Promise<{ count: number; failed: number }> {
     const messages = await this.adminGetMessages();
     return batchSaveMessagesToFirestore(messages);
-  },
-
-  // Aliases for Buyer & Supplier APIs
-  async getBuyerOrders(): Promise<Order[]> {
-    return this.buyerGetOrders();
-  },
-
-  async getBuyerMessages(): Promise<AdminMessage[]> {
-    return this.buyerGetMessages();
-  },
-
-  async updateBuyerProfile(data: { name?: string; email?: string; phone?: string; deliveryAddress?: string }): Promise<CustomerUser> {
-    return this.buyerUpdateProfile(data);
-  },
-
-  async sendBuyerMessage(payloadOrMessage: string | { message: string; subject?: string; orderNumber?: string }): Promise<AdminMessage> {
-    if (typeof payloadOrMessage === 'string') {
-      return this.buyerSendMessage({ message: payloadOrMessage });
-    }
-    return this.buyerSendMessage(payloadOrMessage);
-  },
-
-  async applyAsSupplier(payload: {
-    shopName?: string;
-    businessName?: string;
-    ownerName: string;
-    phone: string;
-    email?: string;
-    city?: string;
-    location?: string;
-    category: string;
-    description?: string;
-  }): Promise<{ message: string; application: any }> {
-    return this.submitSupplierApplication({
-      businessName: payload.businessName || payload.shopName || 'Supplier Store',
-      ownerName: payload.ownerName,
-      phone: payload.phone,
-      email: payload.email,
-      location: payload.location || payload.city || 'Kigali, Rwanda',
-      category: payload.category,
-      description: payload.description
-    });
   }
 };
 

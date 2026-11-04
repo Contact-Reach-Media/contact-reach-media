@@ -5,13 +5,10 @@
  */
 export function compressImageFile(
   file: File,
-  maxWidthOrOptions: number | { maxWidth?: number; maxHeight?: number; quality?: number } = 1200,
+  maxWidth: number = 1200,
   maxHeight: number = 1200,
   quality: number = 0.82
 ): Promise<string> {
-  const maxWidth = typeof maxWidthOrOptions === 'object' ? (maxWidthOrOptions.maxWidth ?? 1200) : maxWidthOrOptions;
-  const targetMaxHeight = typeof maxWidthOrOptions === 'object' ? (maxWidthOrOptions.maxHeight ?? 1200) : maxHeight;
-  const targetQuality = typeof maxWidthOrOptions === 'object' ? (maxWidthOrOptions.quality ?? 0.82) : quality;
   return new Promise((resolve) => {
     if (file.type === 'image/svg+xml') {
       const reader = new FileReader();
@@ -33,13 +30,13 @@ export function compressImageFile(
         let width = img.width;
         let height = img.height;
 
-        if (width > maxWidth || height > targetMaxHeight) {
+        if (width > maxWidth || height > maxHeight) {
           if (width > height) {
             height = Math.round((height * maxWidth) / width);
             width = maxWidth;
           } else {
-            width = Math.round((width * targetMaxHeight) / height);
-            height = targetMaxHeight;
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
           }
         }
 
@@ -52,7 +49,7 @@ export function compressImageFile(
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        const compressed = canvas.toDataURL('image/jpeg', targetQuality);
+        const compressed = canvas.toDataURL('image/jpeg', quality);
         resolve(compressed);
       };
       img.onerror = () => resolve(dataUrl);

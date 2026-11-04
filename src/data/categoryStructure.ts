@@ -26,7 +26,8 @@ export interface CategorySubNode {
   keywords?: string[];
 }
 
-export interface MainCategoryDefinition {
+// 13 EXACT MAIN CATEGORIES AS SPECIFIED BY USER
+export const MAIN_CATEGORY_DEFINITIONS: {
   id: string;
   name: string;
   nameRw: string;
@@ -39,10 +40,7 @@ export interface MainCategoryDefinition {
     items: string[];
     keywords?: string[];
   }[];
-}
-
-// 13 EXACT MAIN CATEGORIES AS SPECIFIED BY USER
-export const MAIN_CATEGORY_DEFINITIONS: MainCategoryDefinition[] = [
+}[] = [
   {
     id: 'clothing',
     name: 'Clothing',
