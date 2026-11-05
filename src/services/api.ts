@@ -4716,6 +4716,39 @@ export const api = {
       category: payload.category,
       description: payload.description
     });
+  },
+
+  // Supabase Database Integration
+  async getSupabaseStatus(): Promise<{ success: boolean; config: any; isConnected: boolean; message?: string }> {
+    const res = await fetch('/api/admin/supabase/status', {
+      headers: getAuthHeaders()
+    });
+    return res.json();
+  },
+
+  async testSupabaseConnection(): Promise<{ success: boolean; message: string; tableExists?: boolean; details?: any }> {
+    const res = await fetch('/api/admin/supabase/test', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return res.json();
+  },
+
+  async syncAllOrdersToSupabase(): Promise<{ success: boolean; message: string; syncedCount: number; failedCount: number }> {
+    const res = await fetch('/api/admin/supabase/sync-all', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return res.json();
+  },
+
+  async updateSupabaseConfig(config: any): Promise<{ success: boolean; config: any }> {
+    const res = await fetch('/api/admin/supabase/config', {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(config)
+    });
+    return res.json();
   }
 };
 

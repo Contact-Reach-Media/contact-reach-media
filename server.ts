@@ -4,6 +4,7 @@ process.env.DISABLE_HMR = 'true';
 
 import express, { Request, Response, NextFunction } from 'express';
 import { createServer as createViteServer } from 'vite';
+import { createClient as initSupabaseClient, SupabaseClient } from '@supabase/supabase-js';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -566,7 +567,10 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
         saveToFirestoreAsync('settings', 'global', db.settings);
       } else if (payload) {
         if (payload.product?.id) saveToFirestoreAsync('products', payload.product.id, payload.product);
-        if (payload.order?.id) saveToFirestoreAsync('orders', payload.order.id, payload.order);
+        if (payload.order?.id) {
+          saveToFirestoreAsync('orders', payload.order.id, payload.order);
+          saveOrderToSupabase(payload.order).catch(() => {});
+        }
         if (payload.payment?.id) saveToFirestoreAsync('paymentConfirmations', payload.payment.id, payload.payment);
         if (payload.message?.id) saveToFirestoreAsync('messages', payload.message.id, payload.message);
         if (payload.problem?.id) saveToFirestoreAsync('customerProblems', payload.problem.id, payload.problem);
@@ -711,6 +715,10 @@ function loadDbFromDisk() {
           dsersConfig: {
             ...initialSettings.dsersConfig,
             ...(parsed.settings.dsersConfig || {})
+          },
+          supabaseConfig: {
+            ...initialSettings.supabaseConfig,
+            ...(parsed.settings.supabaseConfig || {})
           }
         };
       }
@@ -2333,6 +2341,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
 
   saveDbToDisk('order_created', { order: newOrder });
   saveToFirestoreAsync('orders', newOrder.id, newOrder);
+  saveOrderToSupabase(newOrder).catch(() => {});
 
   return res.status(201).json(newOrder);
   } catch (err: any) {
@@ -9508,6 +9517,355 @@ app.post('/api/admin/dsers/test-connection', requireAdminAuth, async (req: Reque
       ...current,
       apiKey: keyToUse.length > 8 ? `${keyToUse.slice(0, 4)}••••••••${keyToUse.slice(-4)}` : '••••••••',
       hasCredentials: true
+    }
+  });
+});
+
+// -------------------------------------------------------------
+// SUPABASE POSTGRESQL DATABASE & CHECKOUT ORDER PERSISTENCE
+// Project: Contact-Reach-Media's Project (snasyjifdrvbcjekiqyh)
+// -------------------------------------------------------------
+const SUPABASE_DEFAULT_URL = 'https://snasyjifdrvbcjekiqyh.supabase.co';
+const SUPABASE_DEFAULT_ANON_KEY = 'sb_publishable_OjFoAKe3zgUtd20dPQEwEA_Z25-mgT-';
+const SUPABASE_DEFAULT_PROJECT_ID = 'snasyjifdrvbcjekiqyh';
+const SUPABASE_DEFAULT_PROJECT_NAME = "Contact-Reach-Media's Project";
+
+let cachedSupabaseClient: SupabaseClient | null = null;
+let cachedSupabaseUrl = '';
+let cachedSupabaseKey = '';
+
+function getSupabaseClient(): SupabaseClient | null {
+  const rawUrl = (process.env.SUPABASE_URL || db.settings?.supabaseConfig?.projectUrl || SUPABASE_DEFAULT_URL).trim();
+  const url = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+  const key = (process.env.SUPABASE_ANON_KEY || db.settings?.supabaseConfig?.anonKey || SUPABASE_DEFAULT_ANON_KEY).trim();
+
+  if (!url || !key) return null;
+
+  if (cachedSupabaseClient && cachedSupabaseUrl === url && cachedSupabaseKey === key) {
+    return cachedSupabaseClient;
+  }
+
+  try {
+    cachedSupabaseClient = initSupabaseClient(url, key, {
+      auth: { persistSession: false }
+    });
+    cachedSupabaseUrl = url;
+    cachedSupabaseKey = key;
+    return cachedSupabaseClient;
+  } catch (err) {
+    console.warn('[Supabase] Failed to initialize client:', err);
+    return null;
+  }
+}
+
+function formatOrderForSupabase(order: Order) {
+  return {
+    id: order.id,
+    order_number: order.orderNumber,
+    customer_name: order.customerName,
+    customer_phone: order.customerPhone,
+    customer_email: order.customerEmail || null,
+    delivery_type: order.deliveryType || 'delivery',
+    delivery_location: order.deliveryLocation || null,
+    delivery_address: order.deliveryAddress || null,
+    delivery_notes: order.deliveryNotes || null,
+    items: order.items || [],
+    subtotal: order.subtotal || 0,
+    delivery_fee: order.deliveryFee || 0,
+    shipping_cost: order.shippingCost || 0,
+    total_amount: order.totalAmount || 0,
+    payment_method: order.paymentMethod,
+    payment_status: order.paymentStatus || 'Pending Payment',
+    delivery_status: order.deliveryStatus || 'Pending',
+    status: order.status || 'New',
+    tracking_number: order.trackingNumber || null,
+    tracking_token: order.trackingToken || null,
+    coupon_code: order.couponCode || null,
+    discount_amount: order.discountAmount || 0,
+    supplier_name: order.supplierName || null,
+    shop_name: order.shopName || null,
+    raw_checkout_data: order,
+    created_at: order.createdAt || new Date().toISOString(),
+    updated_at: order.updatedAt || new Date().toISOString()
+  };
+}
+
+async function saveOrderToSupabase(order: Order): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return { success: false, error: 'Supabase client not initialized' };
+    }
+
+    const tableName = db.settings?.supabaseConfig?.tableName || 'orders';
+    const payload = formatOrderForSupabase(order);
+
+    const { error } = await supabase.from(tableName).upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      const errMsg = error.message || String(error);
+      if (error.code === 'PGRST205' || errMsg.includes('Could not find the table')) {
+        console.warn(`[Supabase] Table '${tableName}' does not exist yet. Please run supabase_schema.sql in Supabase SQL editor.`);
+      } else {
+        console.warn('[Supabase] Error saving order:', errMsg);
+      }
+      if (db.settings?.supabaseConfig) {
+        db.settings.supabaseConfig.lastError = errMsg;
+      }
+      return { success: false, error: errMsg };
+    }
+
+    if (!db.settings.supabaseConfig) {
+      db.settings.supabaseConfig = {
+        enabled: true,
+        projectUrl: SUPABASE_DEFAULT_URL,
+        anonKey: SUPABASE_DEFAULT_ANON_KEY,
+        projectId: SUPABASE_DEFAULT_PROJECT_ID,
+        projectName: SUPABASE_DEFAULT_PROJECT_NAME,
+        tableName: 'orders',
+        autoSyncOrders: true,
+        isConnected: true,
+        connectionStatus: 'connected'
+      };
+    }
+
+    db.settings.supabaseConfig.isConnected = true;
+    db.settings.supabaseConfig.connectionStatus = 'connected';
+    db.settings.supabaseConfig.lastSyncAt = new Date().toISOString();
+    db.settings.supabaseConfig.lastError = undefined;
+    db.settings.supabaseConfig.syncedOrdersCount = (db.settings.supabaseConfig.syncedOrdersCount || 0) + 1;
+    saveDbToDisk('supabase_order_synced');
+
+    console.log(`[Supabase] Order #${order.orderNumber} successfully stored in Supabase table '${tableName}'!`);
+    return { success: true };
+  } catch (err: any) {
+    console.warn('[Supabase] Exception syncing order:', err.message || err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+// 1. Get Supabase Status
+app.get('/api/admin/supabase/status', requireAdminAuth, async (req: Request, res: Response) => {
+  const cfg = db.settings?.supabaseConfig || {
+    enabled: true,
+    projectUrl: SUPABASE_DEFAULT_URL,
+    anonKey: SUPABASE_DEFAULT_ANON_KEY,
+    projectId: SUPABASE_DEFAULT_PROJECT_ID,
+    projectName: SUPABASE_DEFAULT_PROJECT_NAME,
+    tableName: 'orders',
+    autoSyncOrders: true,
+    isConnected: false,
+    connectionStatus: 'unconfigured'
+  };
+
+  const supabase = getSupabaseClient();
+  let tableExists = false;
+  let isConnected = false;
+  let errorMsg: string | undefined = undefined;
+
+  if (supabase) {
+    try {
+      const { error } = await supabase.from(cfg.tableName || 'orders').select('id').limit(1);
+      if (!error) {
+        tableExists = true;
+        isConnected = true;
+      } else {
+        errorMsg = error.message;
+        if (error.code === 'PGRST205' || error.message.includes('Could not find the table')) {
+          tableExists = false;
+          isConnected = true;
+        }
+      }
+    } catch (e: any) {
+      errorMsg = e.message;
+    }
+  }
+
+  res.json({
+    success: true,
+    isConnected,
+    tableExists,
+    message: tableExists
+      ? `Connected to Supabase table '${cfg.tableName || 'orders'}'`
+      : isConnected
+      ? `Connected to Supabase project '${cfg.projectName || SUPABASE_DEFAULT_PROJECT_NAME}'. Table '${cfg.tableName || 'orders'}' needs to be created.`
+      : errorMsg || 'Unable to connect to Supabase endpoint',
+    config: {
+      ...cfg,
+      anonKey: cfg.anonKey ? `${cfg.anonKey.slice(0, 10)}••••••••${cfg.anonKey.slice(-6)}` : '',
+      totalWebsiteOrders: db.orders.length
+    }
+  });
+});
+
+// 2. Test Supabase Connection
+app.post('/api/admin/supabase/test', requireAdminAuth, async (req: Request, res: Response) => {
+  const cfg = db.settings?.supabaseConfig || initialSettings.supabaseConfig!;
+  const supabase = getSupabaseClient();
+
+  if (!supabase) {
+    return res.status(400).json({
+      success: false,
+      tableExists: false,
+      message: 'Failed to initialize Supabase client. Check project URL and API key.'
+    });
+  }
+
+  try {
+    const tableName = cfg.tableName || 'orders';
+    const { error } = await supabase.from(tableName).select('id').limit(1);
+
+    if (error) {
+      const errMsg = error.message || String(error);
+      if (error.code === 'PGRST205' || errMsg.includes('Could not find the table')) {
+        cfg.isConnected = true;
+        cfg.connectionStatus = 'connected';
+        cfg.lastError = `Table '${tableName}' not found in public schema.`;
+        db.settings.supabaseConfig = cfg;
+        saveDbToDisk('supabase_tested');
+        return res.json({
+          success: false,
+          tableExists: false,
+          message: `Connected to Supabase project, but table '${tableName}' does not exist yet. Please run the SQL schema script in your Supabase SQL editor.`
+        });
+      }
+
+      cfg.lastError = errMsg;
+      db.settings.supabaseConfig = cfg;
+      saveDbToDisk('supabase_tested');
+      return res.status(400).json({
+        success: false,
+        tableExists: false,
+        message: `Supabase returned error: ${errMsg}`
+      });
+    }
+
+    cfg.isConnected = true;
+    cfg.connectionStatus = 'connected';
+    cfg.lastConnectedAt = new Date().toISOString();
+    cfg.lastError = undefined;
+    db.settings.supabaseConfig = cfg;
+    saveDbToDisk('supabase_tested');
+
+    return res.json({
+      success: true,
+      tableExists: true,
+      message: `Successfully connected to Supabase table '${tableName}'! Auto-sync is active.`
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      tableExists: false,
+      message: err.message || 'Connection test failed'
+    });
+  }
+});
+
+// 3. Sync all website orders to Supabase
+app.post('/api/admin/supabase/sync-all', requireAdminAuth, async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const supabase = getSupabaseClient();
+
+  if (!supabase) {
+    return res.status(400).json({
+      success: false,
+      message: 'Supabase client not initialized. Check project URL and API key.'
+    });
+  }
+
+  const tableName = db.settings?.supabaseConfig?.tableName || 'orders';
+  const total = db.orders.length;
+  let synced = 0;
+  let failed = 0;
+  let lastError = '';
+
+  const batchSize = 25;
+  for (let i = 0; i < db.orders.length; i += batchSize) {
+    const chunk = db.orders.slice(i, i + batchSize);
+    const payloads = chunk.map(formatOrderForSupabase);
+
+    try {
+      const { error } = await supabase.from(tableName).upsert(payloads, { onConflict: 'id' });
+      if (error) {
+        lastError = error.message;
+        failed += chunk.length;
+        if (error.code === 'PGRST205' || error.message.includes('Could not find the table')) {
+          return res.status(400).json({
+            success: false,
+            tableExists: false,
+            message: `Table '${tableName}' does not exist yet in Supabase. Please run supabase_schema.sql in Supabase SQL editor first!`,
+            syncedCount: 0,
+            failedCount: total
+          });
+        }
+      } else {
+        synced += chunk.length;
+      }
+    } catch (e: any) {
+      lastError = e.message;
+      failed += chunk.length;
+    }
+  }
+
+  if (db.settings.supabaseConfig) {
+    db.settings.supabaseConfig.lastSyncAt = new Date().toISOString();
+    db.settings.supabaseConfig.syncedOrdersCount = synced;
+    if (synced > 0) {
+      db.settings.supabaseConfig.isConnected = true;
+      db.settings.supabaseConfig.connectionStatus = 'connected';
+      db.settings.supabaseConfig.lastError = undefined;
+    }
+  }
+  saveDbToDisk('supabase_orders_synced');
+  logAudit(admin, 'SUPABASE_SYNC_ALL', `Synchronized ${synced}/${total} website orders to Supabase table '${tableName}'`, 'supabase', 'orders');
+
+  return res.json({
+    success: synced > 0,
+    syncedCount: synced,
+    failedCount: failed,
+    totalOrders: total,
+    message: synced > 0
+      ? `Successfully synchronized ${synced} website order(s) to Supabase database table '${tableName}'!`
+      : `Failed to sync orders: ${lastError || 'Unknown error'}`
+  });
+});
+
+// 4. Update Supabase config
+app.put('/api/admin/supabase/config', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const current = db.settings.supabaseConfig || {
+    enabled: true,
+    projectUrl: SUPABASE_DEFAULT_URL,
+    anonKey: SUPABASE_DEFAULT_ANON_KEY,
+    projectId: SUPABASE_DEFAULT_PROJECT_ID,
+    projectName: SUPABASE_DEFAULT_PROJECT_NAME,
+    tableName: 'orders',
+    autoSyncOrders: true,
+  };
+
+  const { projectUrl, anonKey, tableName, autoSyncOrders, enabled } = req.body;
+
+  if (projectUrl) current.projectUrl = String(projectUrl).trim();
+  if (anonKey && !anonKey.includes('••••')) current.anonKey = String(anonKey).trim();
+  if (tableName) current.tableName = String(tableName).trim();
+  if (autoSyncOrders !== undefined) current.autoSyncOrders = Boolean(autoSyncOrders);
+  if (enabled !== undefined) current.enabled = Boolean(enabled);
+
+  // Invalidate client cache
+  cachedSupabaseClient = null;
+  cachedSupabaseUrl = '';
+  cachedSupabaseKey = '';
+
+  db.settings.supabaseConfig = current;
+  saveDbToDisk('supabase_config_updated');
+  logAudit(admin, 'SUPABASE_CONFIG_UPDATED', `Updated Supabase database configuration`, 'system_config', 'supabase');
+
+  res.json({
+    success: true,
+    message: 'Supabase configuration updated successfully.',
+    config: {
+      ...current,
+      anonKey: current.anonKey ? `${current.anonKey.slice(0, 10)}••••••••${current.anonKey.slice(-6)}` : ''
     }
   });
 });

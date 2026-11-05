@@ -161,16 +161,38 @@ footer {
 
 /* Bulletproof Admin Portal Responsive Layout Architecture */
 .admin-sidebar {
-  width: 16rem !important;
-  min-width: 16rem !important;
-  max-width: 16rem !important;
-  flex-shrink: 0 !important;
   box-sizing: border-box !important;
+}
+
+@media (min-width: 1024px) {
+  .admin-sidebar:not(.admin-sidebar-collapsed) {
+    width: 16rem !important;
+    min-width: 16rem !important;
+    max-width: 16rem !important;
+    flex-shrink: 0 !important;
+  }
+  .admin-sidebar.admin-sidebar-collapsed {
+    width: 4.5rem !important;
+    min-width: 4.5rem !important;
+    max-width: 4.5rem !important;
+    flex-shrink: 0 !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .admin-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex-shrink: 1 !important;
+  }
 }
 
 .admin-main-content {
   flex: 1 1 0% !important;
   min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
   box-sizing: border-box !important;
 }
 

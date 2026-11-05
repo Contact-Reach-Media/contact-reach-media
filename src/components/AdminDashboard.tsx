@@ -9,7 +9,7 @@ import {
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders, SlidersHorizontal,
   Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles,
-  Database, Bell, MessageSquare
+  Database, Bell, MessageSquare, Sidebar as SidebarIcon, LayoutGrid
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
@@ -39,6 +39,8 @@ import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts
 import { getProductImageDueToProduct, getProductNameDueToProduct } from '../utils/productImages.ts';
 import { AdminCategoriesManager } from './AdminCategoriesManager.tsx';
 import { AdminSidebar } from './AdminSidebar.tsx';
+import { AdminSmallTabsBar } from './AdminSmallTabsBar.tsx';
+import { SupabaseSyncModal } from './SupabaseSyncModal.tsx';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -79,6 +81,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onNavigateToStorefront
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
+  const [adminNavMode, setAdminNavMode] = useState<'tabs' | 'sidebar'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('crm_admin_nav_mode');
+      if (saved === 'tabs' || saved === 'sidebar') return saved;
+    }
+    return 'tabs';
+  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('crm_admin_sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+
+  const handleSetNavMode = (mode: 'tabs' | 'sidebar') => {
+    setAdminNavMode(mode);
+    try {
+      localStorage.setItem('crm_admin_nav_mode', mode);
+    } catch {}
+  };
+
+  const handleToggleSidebarCollapse = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('crm_admin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(getStoredAdminUser());
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
@@ -426,6 +459,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
   const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState<{
     name: string;
@@ -3015,6 +3049,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="hidden sm:inline">Firebase Sync</span>
           </button>
 
+          {/* Quick Supabase Database Integration Button */}
+          <button
+            onClick={() => setIsSupabaseModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/25 text-emerald-300 hover:bg-emerald-600/35 text-xs font-bold transition-colors cursor-pointer border border-emerald-500/40 shadow-xs"
+            title="Supabase Database: store checkout data, test connection & sync orders (snasyjifdrvbcjekiqyh)"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Supabase DB</span>
+          </button>
+
           {/* Live Real-Time Database Sync Status Indicator (Visible on all devices) */}
           <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[10px] sm:text-[11px] font-bold shadow-2xs">
             <span className={`w-2 h-2 rounded-full ${isRealtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
@@ -3088,6 +3132,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-orange-500' : ''}`} />
           </button>
+          {/* Quick View Switcher: Small Tabs vs Sidebar Mode */}
+          <button
+            onClick={() => handleSetNavMode(adminNavMode === 'tabs' ? 'sidebar' : 'tabs')}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all cursor-pointer border border-slate-700 shadow-2xs"
+            title={adminNavMode === 'tabs' ? "Switch to Sidebar navigation view" : "Switch to compact Small Tabs view"}
+          >
+            {adminNavMode === 'tabs' ? (
+              <>
+                <SidebarIcon className="w-3.5 h-3.5 text-orange-400" />
+                <span className="hidden md:inline">Sidebar Mode</span>
+                <span className="md:hidden">Sidebar</span>
+              </>
+            ) : (
+              <>
+                <LayoutGrid className="w-3.5 h-3.5 text-orange-400" />
+                <span className="hidden md:inline">Small Tabs</span>
+                <span className="md:hidden">Tabs</span>
+              </>
+            )}
+          </button>
           <button
             onClick={() => {
               setActiveTab('products');
@@ -3158,10 +3222,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Main Admin Area */}
-      <div className="flex-1 flex flex-col md:flex-row w-full max-w-[1720px] mx-auto min-w-0">
-        {/* Left Sidebar Navigation */}
-        <AdminSidebar
+      {/* Small Tabs Bar: Rendered when in 'tabs' mode, or on screens < 1024px to completely eliminate sidebar crushing */}
+      {adminNavMode === 'tabs' ? (
+        <AdminSmallTabsBar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           productsCount={products.length}
@@ -3177,10 +3240,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           pendingSuppliersCount={supplierApplications.filter(a => a.status === 'Pending').length}
           pendingPayoutsCount={supplierPayouts.filter(p => p.status === 'Pending').length}
           adminUsersCount={adminUsers.length}
+          onSwitchToSidebar={() => handleSetNavMode('sidebar')}
+          showSidebarToggle={true}
         />
+      ) : (
+        <div className="lg:hidden">
+          <AdminSmallTabsBar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            productsCount={products.length}
+            categoriesCount={categories.length}
+            shopsCount={shops.length}
+            newOrdersCount={orders.filter(o => o.status === 'New').length}
+            totalOrdersCount={orders.length}
+            pendingVerificationsCount={stats.pendingVerifications}
+            lowStockCount={stats.lowStockCount}
+            unreadMessagesCount={messages.filter(m => m.status === 'unread').length}
+            unresolvedProblemsCount={stats.unresolvedProblemsCount}
+            customersCount={customers.length}
+            pendingSuppliersCount={supplierApplications.filter(a => a.status === 'Pending').length}
+            pendingPayoutsCount={supplierPayouts.filter(p => p.status === 'Pending').length}
+            adminUsersCount={adminUsers.length}
+            onSwitchToSidebar={() => handleSetNavMode('sidebar')}
+            showSidebarToggle={false}
+          />
+        </div>
+      )}
 
-        {/* Content Body Area */}
-        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden">
+      {/* Main Admin Area: Uses full width flex container with proper breakpoint */}
+      <div className={`flex-1 flex ${adminNavMode === 'sidebar' ? 'flex-col lg:flex-row' : 'flex-col'} w-full max-w-[1720px] mx-auto min-w-0`}>
+        {/* Left Sidebar Navigation: only mounted in sidebar mode on lg+ screens */}
+        {adminNavMode === 'sidebar' && (
+          <div className="hidden lg:block shrink-0">
+            <AdminSidebar
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              productsCount={products.length}
+              categoriesCount={categories.length}
+              shopsCount={shops.length}
+              newOrdersCount={orders.filter(o => o.status === 'New').length}
+              totalOrdersCount={orders.length}
+              pendingVerificationsCount={stats.pendingVerifications}
+              lowStockCount={stats.lowStockCount}
+              unreadMessagesCount={messages.filter(m => m.status === 'unread').length}
+              unresolvedProblemsCount={stats.unresolvedProblemsCount}
+              customersCount={customers.length}
+              pendingSuppliersCount={supplierApplications.filter(a => a.status === 'Pending').length}
+              pendingPayoutsCount={supplierPayouts.filter(p => p.status === 'Pending').length}
+              adminUsersCount={adminUsers.length}
+              isCollapsed={sidebarCollapsed}
+              onToggleCollapse={handleToggleSidebarCollapse}
+              onSwitchToTabs={() => handleSetNavMode('tabs')}
+            />
+          </div>
+        )}
+
+        {/* Content Body Area: Full-width container with admin-main-content */}
+        <main className="admin-main-content flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden">
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
@@ -4376,6 +4492,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <Globe className="w-4 h-4 text-emerald-600" />
                     <span>Fulfillment Hub</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsSupabaseModalOpen(true)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Open Supabase PostgreSQL database sync & schema tools"
+                  >
+                    <Database className="w-4 h-4 text-emerald-200" />
+                    <span>Supabase DB</span>
                   </button>
                 </div>
               </div>
@@ -7234,7 +7359,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                   {/* Local Storage Status */}
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 flex flex-col justify-between">
                     <div className="space-y-1.5">
@@ -7265,6 +7390,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <Wrench className={`w-3.5 h-3.5 ${repairingDb ? 'animate-spin' : ''}`} />
                       <span>{repairingDb ? 'Verifying & Repairing...' : 'Run Diagnostics & Fix'}</span>
                     </button>
+                  </div>
+
+                  {/* Supabase PostgreSQL Database (Checkout Orders) */}
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-300 space-y-2 flex flex-col justify-between shadow-2xs">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-950 flex items-center gap-1.5 text-xs">
+                          <Database className="w-3.5 h-3.5 text-emerald-600" />
+                          Supabase Database
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Orders Sync
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-emerald-900 space-y-1">
+                        <div>Project: <strong className="font-mono">Contact-Reach-Media's Project</strong></div>
+                        <div>Target Table: <strong className="font-mono text-emerald-700">public.orders</strong></div>
+                        <div>Auto-Sync: <strong className="text-emerald-700">Active on Checkout</strong></div>
+                        <p className="text-[10px] text-emerald-700 leading-tight">
+                          Sync checkout data, items & delivery details to PostgreSQL.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsSupabaseModalOpen(true)}
+                        className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <Database className="w-3.5 h-3.5" />
+                        <span>Supabase Manager & SQL</span>
+                      </button>
+                      <a
+                        href="https://supabase.com/dashboard/project/snasyjifdrvbcjekiqyh/sql/new"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full py-1.5 px-3 bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-50 font-bold rounded-xl text-[11px] transition-colors flex items-center justify-center gap-1"
+                      >
+                        <span>Open Supabase SQL</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   </div>
 
                   {/* Firebase Firestore Status */}
@@ -12589,6 +12757,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onProductsUpdated={() => {
           fetchAllData(true);
           onRefreshPublicData();
+        }}
+        showToast={showToast}
+      />
+
+      {/* Supabase Database & Orders Sync Modal */}
+      <SupabaseSyncModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        settings={settings}
+        orders={orders}
+        onRefreshData={() => {
+          fetchAllData(false);
         }}
         showToast={showToast}
       />

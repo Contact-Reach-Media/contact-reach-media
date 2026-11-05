@@ -153,6 +153,17 @@ export const initialSettings: AppSettings = {
     "autoFulfillApprovedOrders": false,
     "defaultShippingCarrier": "AliExpress Standard Shipping"
   },
+  "supabaseConfig": {
+    "enabled": true,
+    "projectUrl": "https://snasyjifdrvbcjekiqyh.supabase.co",
+    "anonKey": "sb_publishable_OjFoAKe3zgUtd20dPQEwEA_Z25-mgT-",
+    "projectId": "snasyjifdrvbcjekiqyh",
+    "projectName": "Contact-Reach-Media's Project",
+    "tableName": "orders",
+    "autoSyncOrders": true,
+    "isConnected": true,
+    "connectionStatus": "connected"
+  },
   "maintenanceUpdatedAt": "2026-10-27T10:06:55.907Z"
 };
 
