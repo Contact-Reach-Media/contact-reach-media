@@ -221,13 +221,13 @@ export async function loginWithGoogle(requestWorkspaceAccess = false): Promise<U
       const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
       const projId = firebaseConfig.projectId;
       const detailedErr: any = new Error(
-        `Google Sign-In popup is restricted on temporary cloud preview domains. Please use Administrator Email & Password (or Phone) to sign in directly.`
+        `Firebase Error (auth/unauthorized-domain): This domain (${currentDomain}) is not authorized in Firebase Authentication for project '${projId}'. Please add '${currentDomain}' to Firebase Console > Authentication > Settings > Authorized domains.`
       );
       detailedErr.code = 'auth/unauthorized-domain';
       detailedErr.domain = currentDomain;
       detailedErr.projectId = projId;
       detailedErr.settingsUrl = `https://console.firebase.google.com/project/${projId}/authentication/settings`;
-      console.warn(`[Firebase Auth] ${detailedErr.message}`);
+      console.warn(`[Firebase Auth] ${detailedErr.message}\nConfigure at: ${detailedErr.settingsUrl}`);
       throw detailedErr;
     }
 

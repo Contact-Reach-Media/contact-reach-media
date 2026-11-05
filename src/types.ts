@@ -253,7 +253,6 @@ export interface Order {
   orderNumber: string; // e.g. CRM-78291
   trackingToken?: string; // Secure unguessable token for tracking
   createdAt: string;
-  updatedAt?: string;
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
@@ -418,24 +417,6 @@ export interface AppSettings {
   alibabaConfig?: AlibabaConfig;
   // DSers & AliExpress Supplier Fulfillment Integration
   dsersConfig?: DsersConfig;
-  // Supabase Database Integration
-  supabaseConfig?: SupabaseConfig;
-}
-
-export interface SupabaseConfig {
-  enabled: boolean;
-  projectUrl: string;
-  anonKey: string;
-  projectId?: string;
-  projectName?: string;
-  tableName: string;
-  autoSyncOrders?: boolean;
-  isConnected?: boolean;
-  connectionStatus?: 'connected' | 'disconnected' | 'error' | 'unconfigured';
-  lastConnectedAt?: string;
-  lastSyncAt?: string;
-  lastError?: string;
-  syncedOrdersCount?: number;
 }
 
 export interface DsersConfig {
