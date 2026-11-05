@@ -16,7 +16,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   onLoginSuccess,
   onNavigateHome
 }) => {
-  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +158,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contactreachmedialimited@gmail.com"
+                  placeholder="admin@contactreachmarket.com"
                   required
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs"
                 />

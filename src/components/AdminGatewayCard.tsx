@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Mail, Lock, ArrowRight, ShieldAlert, Sparkles, Copy, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, ArrowRight, ShieldAlert } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { loginWithGoogle, firebaseConfig } from '../services/firebase.ts';
+import { loginWithGoogle } from '../services/firebase.ts';
 
 interface AdminGatewayCardProps {
   onSuccess: (adminUser: any) => void;
@@ -12,12 +12,10 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
   onSuccess,
   onReturnHome
 }) => {
-  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
-  const [password, setPassword] = useState('CRM@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
-  const [copiedDomain, setCopiedDomain] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +38,6 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
 
   const handleGoogleSignIn = async () => {
     setError(null);
-    setUnauthorizedDomain(null);
     setLoading(true);
     try {
       const fbUser = await loginWithGoogle();
@@ -56,13 +53,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
       });
       onSuccess(res.admin);
     } catch (err: any) {
-      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
-        const domain = err.domain || (typeof window !== 'undefined' ? window.location.hostname : '');
-        setUnauthorizedDomain(domain);
-        setError('This domain is not in your Firebase Authorized Domains list.');
-      } else {
-        setError(err.message || 'Google authentication failed. Please make sure your account is an authorized administrator.');
-      }
+      setError(err.message || 'Google authentication failed. Please make sure your account is an authorized administrator.');
     } finally {
       setLoading(false);
     }
@@ -85,61 +76,8 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
           </p>
         </div>
 
-        {/* Quick Fill Credentials Banner */}
-        <div className="mb-5 p-3 rounded-2xl bg-orange-950/40 border border-orange-600/40 flex items-center justify-between gap-3 text-xs">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-bold text-orange-300">Default Owner Account</span>
-            </div>
-            <p className="text-[11px] text-slate-300 font-mono truncate mt-0.5">contactreachmedialimited@gmail.com</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('contactreachmedialimited@gmail.com');
-              setPassword('CRM@2026');
-            }}
-            className="px-3 py-1 bg-orange-600 hover:bg-orange-500 text-white text-[11px] font-black rounded-xl shadow-xs transition-transform active:scale-95 shrink-0 cursor-pointer flex items-center gap-1"
-          >
-            <Sparkles className="w-3 h-3 text-amber-300" />
-            <span>Fill CRM@2026</span>
-          </button>
-        </div>
-
-        {/* Unauthorized Domain Explanatory Card */}
-        {unauthorizedDomain && (
-          <div className="mb-4 p-4 rounded-2xl bg-amber-950/50 border border-amber-600/50 text-slate-200 text-xs shadow-xs">
-            <div className="flex items-start gap-2.5">
-              <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-2">
-                <div className="font-extrabold text-amber-300 text-xs">
-                  Firebase Authorized Domain Setup Required
-                </div>
-                <p className="text-slate-300 text-[11px] leading-relaxed">
-                  Google Sign-In requires this preview domain in Firebase ({firebaseConfig.projectId}).
-                </p>
-                <div className="flex items-center justify-between gap-2 p-2 bg-black/40 rounded-xl border border-slate-700 font-mono text-[10px]">
-                  <span className="truncate">{unauthorizedDomain}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(unauthorizedDomain);
-                      setCopiedDomain(true);
-                      setTimeout(() => setCopiedDomain(false), 2500);
-                    }}
-                    className="px-2 py-0.5 bg-amber-600 text-white font-bold rounded-lg shrink-0 text-[10px]"
-                  >
-                    {copiedDomain ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Error Alert */}
-        {error && !unauthorizedDomain && (
+        {error && (
           <div className="mb-4 p-3 rounded-xl bg-rose-950/50 border border-rose-600/60 text-rose-300 text-xs flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>{error}</span>
@@ -183,7 +121,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="contactreachmedialimited@gmail.com"
+                placeholder="admin@contactreachmarket.com"
                 className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none"
               />
               <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -200,7 +138,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="CRM@2026"
+                placeholder="••••••••••••"
                 className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none"
               />
               <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
