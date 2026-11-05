@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Mail, Lock, ArrowRight, ShieldAlert, Phone, Database } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, ArrowRight, ShieldAlert, Phone } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { loginWithGoogle } from '../services/firebase.ts';
 
@@ -99,19 +99,8 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight">ContactReach Admin Portal</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Sign in with authorized credentials. All accounts & sign-ins are recorded in Supabase.
+            Sign in with your authorized administrator credentials.
           </p>
-        </div>
-
-        {/* Supabase Indicator */}
-        <div className="mb-5 px-3 py-2 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between text-xs text-emerald-300">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="font-bold text-[11px]">Supabase Database Connected</span>
-          </div>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-900/80 text-emerald-200 border border-emerald-700">
-            snasyjifdrvbcjekiqyh
-          </span>
         </div>
 
         {/* Error Alert */}

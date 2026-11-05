@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, ShieldAlert, KeyRound, ArrowRight, ShieldCheck, CheckCircle2, HelpCircle, Phone, Database } from 'lucide-react';
+import { X, Lock, Mail, ShieldAlert, KeyRound, ArrowRight, ShieldCheck, CheckCircle2, HelpCircle, Phone } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { loginWithGoogle } from '../services/firebase.ts';
 
@@ -147,20 +147,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         <div className="p-6">
           {!showForgot ? (
             <>
-              {/* Supabase Connection Badge */}
-              <div className="mb-4 px-3 py-2 rounded-2xl bg-emerald-50 border border-emerald-200/90 flex items-center justify-between text-xs text-emerald-950 shadow-2xs">
-                <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <span className="font-black text-[11px] text-emerald-900 block leading-tight">Supabase Accounts Active</span>
-                    <span className="text-[10px] text-emerald-700">All sign-ins & accounts sync to PostgreSQL</span>
-                  </div>
-                </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
-                  snasyjifdrvbcjekiqyh
-                </span>
-              </div>
-
               {/* Error Alert */}
               {error && (
                 <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-start gap-2 leading-relaxed">
@@ -369,7 +355,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               <div className="mt-5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-slate-400" />
-                  Protected by 24h JWT Session & Supabase Audit Trail
+                  Protected by 24h JWT Session & Security Audit Trail
                 </span>
               </div>
             </>

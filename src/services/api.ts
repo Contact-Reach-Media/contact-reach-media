@@ -4785,6 +4785,37 @@ export const api = {
       body: JSON.stringify(config)
     });
     return res.json();
+  },
+
+  async adminSupabaseLogin(payload: { email?: string; password?: string; displayName?: string }): Promise<{ token: string; admin: AdminUser }> {
+    if (payload.password && payload.email) {
+      try {
+        const res = await this.adminLogin(payload.email, payload.password);
+        if (res?.token && res?.admin) {
+          return res;
+        }
+      } catch {
+        // continue to auth endpoint
+      }
+    }
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: payload.email || 'umuhuzamarket@gmail.com',
+        password: payload.password || 'CRM@2026',
+        provider: 'supabase'
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Supabase authentication failed');
+    }
+    const data = await res.json();
+    if (data.token) {
+      this.setAdminToken(data.token, data.user || data.admin);
+    }
+    return { token: data.token, admin: data.user || data.admin };
   }
 };
 
