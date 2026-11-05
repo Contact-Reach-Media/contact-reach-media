@@ -1117,6 +1117,34 @@ export const api = {
     throw new Error('Invalid administrator credentials. Please verify your email and password.');
   },
 
+  async adminPhoneLogin(phone: string, password: string): Promise<{ token: string; admin: any }> {
+    const cleanPhone = phone.trim();
+
+    try {
+      const res = await fetch('/api/auth/staff-phone-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, password })
+      });
+      const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
+
+      if (res.ok && parsed.isJson && parsed.json?.token) {
+        setAdminToken(parsed.json.token, parsed.json.admin);
+        return { token: parsed.json.token, admin: parsed.json.admin };
+      }
+
+      if (parsed.isJson && parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
+        throw err;
+      }
+    }
+
+    throw new Error('Invalid staff credentials. Please check your phone number and password/PIN.');
+  },
+
   async adminFirebaseLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
     const cleanEmail = (user.email || '').trim();
 
@@ -4736,6 +4764,14 @@ export const api = {
 
   async syncAllOrdersToSupabase(): Promise<{ success: boolean; message: string; syncedCount: number; failedCount: number }> {
     const res = await fetch('/api/admin/supabase/sync-all', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return res.json();
+  },
+
+  async syncAllAccountsToSupabase(): Promise<{ success: boolean; message: string; syncedCount: number; failedCount: number; totalAccounts: number }> {
+    const res = await fetch('/api/admin/supabase/sync-accounts', {
       method: 'POST',
       headers: getAuthHeaders()
     });

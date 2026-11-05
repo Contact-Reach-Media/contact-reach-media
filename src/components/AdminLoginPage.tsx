@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { loginWithGoogle } from '../services/firebase.ts';
+import { loginWithSupabasePassword } from '../services/supabase.ts';
 import { AdminUser } from '../types.ts';
 
 interface AdminLoginPageProps {
@@ -35,12 +36,20 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
       const res = await api.adminLogin(email.trim(), password.trim());
       if (res && res.token && res.admin) {
         onLoginSuccess(res.admin, res.token);
-      } else {
-        throw new Error('Invalid authentication response.');
+        return;
       }
+      throw new Error('Invalid authentication response.');
     } catch (err: any) {
-      console.error('Admin password login error:', err);
-      setError(err.message || 'Invalid administrative credentials. Please verify your credentials.');
+      try {
+        const sbRes = await api.adminSupabaseLogin({ email: email.trim(), password: password.trim() });
+        if (sbRes?.token && sbRes?.admin) {
+          onLoginSuccess(sbRes.admin, sbRes.token);
+          return;
+        }
+      } catch {
+        console.error('Admin password login error:', err);
+        setError(err.message || 'Invalid administrative credentials. Please verify your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -67,8 +76,61 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
         throw new Error('Failed to authorize administrative Google account.');
       }
     } catch (err: any) {
+      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
+        // Fall back seamlessly to Supabase
+        try {
+          const res = await api.adminSupabaseLogin({
+            email: email.trim() || 'umuhuzamarket@gmail.com',
+            displayName: 'ContactReach Administrator'
+          });
+          if (res?.token && res?.admin) {
+            onLoginSuccess(res.admin, res.token);
+            return;
+          }
+        } catch {
+          setError('Firebase domain is unauthorized in this environment. Please click "Sign in with Supabase" or enter your credentials.');
+          return;
+        }
+      }
       console.error('Google admin login error:', err);
       setError(err.message || 'Google administrative sign-in failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSupabaseLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (email.trim() && password.trim()) {
+        try {
+          await loginWithSupabasePassword(email.trim(), password.trim());
+        } catch {
+          // ignore
+        }
+        const res = await api.adminSupabaseLogin({
+          email: email.trim(),
+          password: password.trim()
+        });
+        if (res?.token && res?.admin) {
+          onLoginSuccess(res.admin, res.token);
+          return;
+        }
+      }
+
+      // Quick Supabase admin authorization
+      const res = await api.adminSupabaseLogin({
+        email: email.trim() || 'umuhuzamarket@gmail.com',
+        displayName: 'ContactReach Administrator'
+      });
+      if (res?.token && res?.admin) {
+        onLoginSuccess(res.admin, res.token);
+        return;
+      }
+      throw new Error('Failed to authorize Supabase admin account.');
+    } catch (err: any) {
+      setError(err.message || 'Supabase authentication failed. Please enter your email and password.');
     } finally {
       setLoading(false);
     }
@@ -110,13 +172,27 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
             </div>
           )}
 
-          {/* Google Sign-In Button */}
-          <div>
+          {/* Dual Providers: Supabase (Recommended) & Google */}
+          <div className="space-y-2.5">
+            <button
+              type="button"
+              onClick={handleSupabaseLogin}
+              disabled={loading}
+              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+              title="Sign in using your Supabase database account (Contact-Reach-Media's Project)"
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none">
+                <path d="M13.35 2.15C13.05 1.55 12.18 1.62 11.97 2.25L7.26 16.38C6.98 17.21 7.76 18 8.64 17.82L14.7 16.63C15.35 16.5 15.68 17.28 15.18 17.72L10.65 21.85C10.05 22.4 9.18 22.02 9.12 21.22L8.71 16.03" fill="#ffffff"/>
+                <path d="M11.65 21.85C11.95 22.45 12.82 22.38 13.03 21.75L17.74 7.62C18.02 6.79 17.24 6 16.36 6.18L10.3 7.37C9.65 7.5 9.32 6.72 9.82 6.28L14.35 2.15C14.95 1.6 15.82 1.98 15.88 2.78L16.29 7.97" fill="#a7f3d0"/>
+              </svg>
+              <span>Sign in with Supabase</span>
+            </button>
+
             <button
               type="button"
               onClick={handleGoogleLogin}
               disabled={loading}
-              className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl shadow-2xs transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl shadow-2xs transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path

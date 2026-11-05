@@ -68,4 +68,66 @@ CREATE POLICY "Allow public update orders" ON public.orders
     USING (true)
     WITH CHECK (true);
 
--- Done! Your Supabase database is now 100% ready to receive all checkout orders!
+-- 5. Create accounts table (stores all admin, owner, staff, and customer accounts)
+CREATE TABLE IF NOT EXISTS public.accounts (
+    id TEXT PRIMARY KEY,
+    email TEXT,
+    phone TEXT,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'buyer', -- 'owner', 'administrator', 'product_manager', 'shop_manager', 'courier', 'buyer'
+    auth_provider TEXT NOT NULL DEFAULT 'email', -- 'email', 'google', 'phone', 'supabase'
+    status TEXT NOT NULL DEFAULT 'Active',
+    last_sign_in_at TIMESTAMPTZ DEFAULT NOW(),
+    sign_in_count INTEGER DEFAULT 1,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for fast account retrieval
+CREATE INDEX IF NOT EXISTS idx_accounts_email ON public.accounts (email);
+CREATE INDEX IF NOT EXISTS idx_accounts_phone ON public.accounts (phone);
+CREATE INDEX IF NOT EXISTS idx_accounts_role ON public.accounts (role);
+
+-- Enable RLS for accounts
+ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public all accounts" ON public.accounts;
+CREATE POLICY "Allow public all accounts" ON public.accounts
+    FOR ALL
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
+
+-- 6. Create sign_ins table (audit history of every sign-in across all methods)
+CREATE TABLE IF NOT EXISTS public.sign_ins (
+    id TEXT PRIMARY KEY,
+    account_id TEXT,
+    email TEXT,
+    phone TEXT,
+    name TEXT,
+    role TEXT,
+    sign_in_method TEXT NOT NULL, -- 'email_password', 'google', 'phone', 'supabase'
+    ip_address TEXT,
+    user_agent TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    details JSONB DEFAULT '{}'::jsonb
+);
+
+-- Indexes for sign_in audit logs
+CREATE INDEX IF NOT EXISTS idx_sign_ins_account_id ON public.sign_ins (account_id);
+CREATE INDEX IF NOT EXISTS idx_sign_ins_email ON public.sign_ins (email);
+CREATE INDEX IF NOT EXISTS idx_sign_ins_timestamp ON public.sign_ins (timestamp DESC);
+
+-- Enable RLS for sign_ins
+ALTER TABLE public.sign_ins ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public all sign_ins" ON public.sign_ins;
+CREATE POLICY "Allow public all sign_ins" ON public.sign_ins
+    FOR ALL
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
+
+-- Done! Your Supabase database is now 100% configured for orders, accounts, and sign-ins!

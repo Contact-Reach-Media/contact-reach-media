@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Database, Check, Copy, ExternalLink, RefreshCw, AlertCircle,
-  CheckCircle2, X, Shield, ArrowRight, Table, Server
+  CheckCircle2, X, Shield, ArrowRight, Table, Server, Users
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { AppSettings, Order } from '../types.ts';
@@ -77,6 +77,64 @@ CREATE POLICY "Allow public update orders" ON public.orders
     FOR UPDATE
     TO anon, authenticated
     USING (true)
+    WITH CHECK (true);
+
+-- 5. Create accounts table (stores all admin, owner, staff, and customer accounts)
+CREATE TABLE IF NOT EXISTS public.accounts (
+    id TEXT PRIMARY KEY,
+    email TEXT,
+    phone TEXT,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'buyer',
+    auth_provider TEXT NOT NULL DEFAULT 'email',
+    status TEXT NOT NULL DEFAULT 'Active',
+    last_sign_in_at TIMESTAMPTZ DEFAULT NOW(),
+    sign_in_count INTEGER DEFAULT 1,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_accounts_email ON public.accounts (email);
+CREATE INDEX IF NOT EXISTS idx_accounts_phone ON public.accounts (phone);
+CREATE INDEX IF NOT EXISTS idx_accounts_role ON public.accounts (role);
+
+ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public all accounts" ON public.accounts;
+CREATE POLICY "Allow public all accounts" ON public.accounts
+    FOR ALL
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
+
+-- 6. Create sign_ins table (audit history of every sign-in across all methods)
+CREATE TABLE IF NOT EXISTS public.sign_ins (
+    id TEXT PRIMARY KEY,
+    account_id TEXT,
+    email TEXT,
+    phone TEXT,
+    name TEXT,
+    role TEXT,
+    sign_in_method TEXT NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    details JSONB DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_sign_ins_account_id ON public.sign_ins (account_id);
+CREATE INDEX IF NOT EXISTS idx_sign_ins_email ON public.sign_ins (email);
+CREATE INDEX IF NOT EXISTS idx_sign_ins_timestamp ON public.sign_ins (timestamp DESC);
+
+ALTER TABLE public.sign_ins ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public all sign_ins" ON public.sign_ins;
+CREATE POLICY "Allow public all sign_ins" ON public.sign_ins
+    FOR ALL
+    TO anon, authenticated
+    USING (true)
     WITH CHECK (true);`;
 
 export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
@@ -89,6 +147,7 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
 }) => {
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingAccounts, setSyncingAccounts] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -157,6 +216,22 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
       showToast(err.message || 'Failed to sync orders', 'error');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncAllAccounts = async () => {
+    setSyncingAccounts(true);
+    try {
+      const res = await api.syncAllAccountsToSupabase();
+      if (res.success) {
+        showToast(`Successfully synced ${res.syncedCount} account(s) to Supabase public.accounts!`);
+      } else {
+        showToast(res.message || 'Failed to sync accounts to Supabase', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to sync accounts', 'error');
+    } finally {
+      setSyncingAccounts(false);
     }
   };
 
@@ -311,7 +386,17 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
               >
                 <Database className={`w-3.5 h-3.5 ${syncing ? 'animate-bounce text-emerald-200' : 'text-emerald-200'}`} />
-                <span>{syncing ? 'Syncing...' : `Sync All Orders (${orders.length})`}</span>
+                <span>{syncing ? 'Syncing...' : `Sync Orders (${orders.length})`}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncAllAccounts}
+                disabled={syncingAccounts}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+              >
+                <Users className={`w-3.5 h-3.5 ${syncingAccounts ? 'animate-bounce text-blue-200' : 'text-blue-200'}`} />
+                <span>{syncingAccounts ? 'Syncing...' : 'Sync All Accounts'}</span>
               </button>
             </div>
 
