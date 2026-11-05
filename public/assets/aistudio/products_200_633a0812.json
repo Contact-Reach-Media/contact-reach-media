@@ -1,0 +1,1602 @@
+[
+  {
+    "name": "Wireless Bluetooth Earbuds Pro",
+    "category": "Electronics",
+    "base_price_RWF": 10000,
+    "markup_percentage": 40,
+    "final_price_RWF": 14000,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch",
+    "category": "Electronics",
+    "base_price_RWF": 19950,
+    "markup_percentage": 40,
+    "final_price_RWF": 27930,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse",
+    "category": "Electronics",
+    "base_price_RWF": 9700,
+    "markup_percentage": 40,
+    "final_price_RWF": 13580,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W",
+    "category": "Electronics",
+    "base_price_RWF": 10650,
+    "markup_percentage": 40,
+    "final_price_RWF": 14910,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M",
+    "category": "Electronics",
+    "base_price_RWF": 4000,
+    "markup_percentage": 40,
+    "final_price_RWF": 5600,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand",
+    "category": "Electronics",
+    "base_price_RWF": 18950,
+    "markup_percentage": 40,
+    "final_price_RWF": 26530,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones",
+    "category": "Electronics",
+    "base_price_RWF": 20900,
+    "markup_percentage": 40,
+    "final_price_RWF": 29260,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone",
+    "category": "Electronics",
+    "base_price_RWF": 13250,
+    "markup_percentage": 40,
+    "final_price_RWF": 18550,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter",
+    "category": "Electronics",
+    "base_price_RWF": 9700,
+    "markup_percentage": 40,
+    "final_price_RWF": 13580,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad",
+    "category": "Electronics",
+    "base_price_RWF": 8450,
+    "markup_percentage": 40,
+    "final_price_RWF": 11830,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers",
+    "category": "Footwear",
+    "base_price_RWF": 23600,
+    "markup_percentage": 40,
+    "final_price_RWF": 33040,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes",
+    "category": "Footwear",
+    "base_price_RWF": 22250,
+    "markup_percentage": 40,
+    "final_price_RWF": 31150,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes",
+    "category": "Footwear",
+    "base_price_RWF": 26000,
+    "markup_percentage": 40,
+    "final_price_RWF": 36400,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals",
+    "category": "Footwear",
+    "base_price_RWF": 22550,
+    "markup_percentage": 40,
+    "final_price_RWF": 31570,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes",
+    "category": "Footwear",
+    "base_price_RWF": 9100,
+    "markup_percentage": 40,
+    "final_price_RWF": 12740,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 15250,
+    "markup_percentage": 40,
+    "final_price_RWF": 21350,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 5900,
+    "markup_percentage": 40,
+    "final_price_RWF": 8260,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 8050,
+    "markup_percentage": 40,
+    "final_price_RWF": 11270,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 17700,
+    "markup_percentage": 40,
+    "final_price_RWF": 24780,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 20450,
+    "markup_percentage": 40,
+    "final_price_RWF": 28630,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle Max",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 9100,
+    "markup_percentage": 40,
+    "final_price_RWF": 12740,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Lite",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10550,
+    "markup_percentage": 40,
+    "final_price_RWF": 14770,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Premium",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 9900,
+    "markup_percentage": 40,
+    "final_price_RWF": 13860,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Standard",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10950,
+    "markup_percentage": 40,
+    "final_price_RWF": 15330,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Classic",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 14400,
+    "markup_percentage": 40,
+    "final_price_RWF": 20160,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Bluetooth Earbuds Pro",
+    "category": "Electronics",
+    "base_price_RWF": 11250,
+    "markup_percentage": 40,
+    "final_price_RWF": 15750,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch",
+    "category": "Electronics",
+    "base_price_RWF": 22500,
+    "markup_percentage": 40,
+    "final_price_RWF": 31500,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse",
+    "category": "Electronics",
+    "base_price_RWF": 6850,
+    "markup_percentage": 40,
+    "final_price_RWF": 9590,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W",
+    "category": "Electronics",
+    "base_price_RWF": 16400,
+    "markup_percentage": 40,
+    "final_price_RWF": 22960,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M",
+    "category": "Electronics",
+    "base_price_RWF": 2550,
+    "markup_percentage": 40,
+    "final_price_RWF": 3570,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand",
+    "category": "Electronics",
+    "base_price_RWF": 14500,
+    "markup_percentage": 40,
+    "final_price_RWF": 20300,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones",
+    "category": "Electronics",
+    "base_price_RWF": 28150,
+    "markup_percentage": 40,
+    "final_price_RWF": 39410,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone",
+    "category": "Electronics",
+    "base_price_RWF": 14600,
+    "markup_percentage": 40,
+    "final_price_RWF": 20440,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter",
+    "category": "Electronics",
+    "base_price_RWF": 9050,
+    "markup_percentage": 40,
+    "final_price_RWF": 12670,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad",
+    "category": "Electronics",
+    "base_price_RWF": 9900,
+    "markup_percentage": 40,
+    "final_price_RWF": 13860,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers Max",
+    "category": "Footwear",
+    "base_price_RWF": 28850,
+    "markup_percentage": 40,
+    "final_price_RWF": 40390,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes Lite",
+    "category": "Footwear",
+    "base_price_RWF": 14800,
+    "markup_percentage": 40,
+    "final_price_RWF": 20720,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes Premium",
+    "category": "Footwear",
+    "base_price_RWF": 34150,
+    "markup_percentage": 40,
+    "final_price_RWF": 47810,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals Standard",
+    "category": "Footwear",
+    "base_price_RWF": 16700,
+    "markup_percentage": 40,
+    "final_price_RWF": 23380,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes Classic",
+    "category": "Footwear",
+    "base_price_RWF": 12250,
+    "markup_percentage": 40,
+    "final_price_RWF": 17150,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag V2",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 15800,
+    "markup_percentage": 40,
+    "final_price_RWF": 22120,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet Advanced",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 6150,
+    "markup_percentage": 40,
+    "final_price_RWF": 8610,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses Essential",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 5700,
+    "markup_percentage": 40,
+    "final_price_RWF": 7980,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack Deluxe",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 27450,
+    "markup_percentage": 40,
+    "final_price_RWF": 38430,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch Mini",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 13400,
+    "markup_percentage": 40,
+    "final_price_RWF": 18760,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle Pro",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 7750,
+    "markup_percentage": 40,
+    "final_price_RWF": 10850,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Plus",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 15200,
+    "markup_percentage": 40,
+    "final_price_RWF": 21280,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Ultra",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10050,
+    "markup_percentage": 40,
+    "final_price_RWF": 14070,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Compact",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 9100,
+    "markup_percentage": 40,
+    "final_price_RWF": 12740,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Edition",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 17050,
+    "markup_percentage": 40,
+    "final_price_RWF": 23870,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Bluetooth Earbuds Pro Max",
+    "category": "Electronics",
+    "base_price_RWF": 13500,
+    "markup_percentage": 40,
+    "final_price_RWF": 18900,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch Lite",
+    "category": "Electronics",
+    "base_price_RWF": 15050,
+    "markup_percentage": 40,
+    "final_price_RWF": 21070,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse Premium",
+    "category": "Electronics",
+    "base_price_RWF": 9800,
+    "markup_percentage": 40,
+    "final_price_RWF": 13720,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W Standard",
+    "category": "Electronics",
+    "base_price_RWF": 12950,
+    "markup_percentage": 40,
+    "final_price_RWF": 18130,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M Classic",
+    "category": "Electronics",
+    "base_price_RWF": 2900,
+    "markup_percentage": 40,
+    "final_price_RWF": 4060,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand V2",
+    "category": "Electronics",
+    "base_price_RWF": 14950,
+    "markup_percentage": 40,
+    "final_price_RWF": 20930,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones Advanced",
+    "category": "Electronics",
+    "base_price_RWF": 30400,
+    "markup_percentage": 40,
+    "final_price_RWF": 42560,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone Essential",
+    "category": "Electronics",
+    "base_price_RWF": 10450,
+    "markup_percentage": 40,
+    "final_price_RWF": 14630,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter Deluxe",
+    "category": "Electronics",
+    "base_price_RWF": 13500,
+    "markup_percentage": 40,
+    "final_price_RWF": 18900,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad Mini",
+    "category": "Electronics",
+    "base_price_RWF": 7250,
+    "markup_percentage": 40,
+    "final_price_RWF": 10150,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers Pro",
+    "category": "Footwear",
+    "base_price_RWF": 22000,
+    "markup_percentage": 40,
+    "final_price_RWF": 30800,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes Plus",
+    "category": "Footwear",
+    "base_price_RWF": 19950,
+    "markup_percentage": 40,
+    "final_price_RWF": 27930,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes Ultra",
+    "category": "Footwear",
+    "base_price_RWF": 35300,
+    "markup_percentage": 40,
+    "final_price_RWF": 49420,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals Compact",
+    "category": "Footwear",
+    "base_price_RWF": 14050,
+    "markup_percentage": 40,
+    "final_price_RWF": 19670,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes Edition",
+    "category": "Footwear",
+    "base_price_RWF": 14400,
+    "markup_percentage": 40,
+    "final_price_RWF": 20160,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag Max",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 20250,
+    "markup_percentage": 40,
+    "final_price_RWF": 28350,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet Lite",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 4900,
+    "markup_percentage": 40,
+    "final_price_RWF": 6860,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses Premium",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 7250,
+    "markup_percentage": 40,
+    "final_price_RWF": 10150,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack Standard",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 20200,
+    "markup_percentage": 40,
+    "final_price_RWF": 28280,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch Classic",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 16550,
+    "markup_percentage": 40,
+    "final_price_RWF": 23170,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle V2",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 7900,
+    "markup_percentage": 40,
+    "final_price_RWF": 11060,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Advanced",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 16250,
+    "markup_percentage": 40,
+    "final_price_RWF": 22750,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Essential",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 8000,
+    "markup_percentage": 40,
+    "final_price_RWF": 11200,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Deluxe",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 15150,
+    "markup_percentage": 40,
+    "final_price_RWF": 21210,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Mini",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 11000,
+    "markup_percentage": 40,
+    "final_price_RWF": 15400,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Bluetooth Earbuds Pro Pro",
+    "category": "Electronics",
+    "base_price_RWF": 10250,
+    "markup_percentage": 40,
+    "final_price_RWF": 14350,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch Plus",
+    "category": "Electronics",
+    "base_price_RWF": 20200,
+    "markup_percentage": 40,
+    "final_price_RWF": 28280,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse Ultra",
+    "category": "Electronics",
+    "base_price_RWF": 9950,
+    "markup_percentage": 40,
+    "final_price_RWF": 13930,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W Compact",
+    "category": "Electronics",
+    "base_price_RWF": 10900,
+    "markup_percentage": 40,
+    "final_price_RWF": 15260,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M Edition",
+    "category": "Electronics",
+    "base_price_RWF": 4250,
+    "markup_percentage": 40,
+    "final_price_RWF": 5950,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand Max",
+    "category": "Electronics",
+    "base_price_RWF": 18200,
+    "markup_percentage": 40,
+    "final_price_RWF": 25480,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones Lite",
+    "category": "Electronics",
+    "base_price_RWF": 20150,
+    "markup_percentage": 40,
+    "final_price_RWF": 28210,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone Premium",
+    "category": "Electronics",
+    "base_price_RWF": 13500,
+    "markup_percentage": 40,
+    "final_price_RWF": 18900,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter Standard",
+    "category": "Electronics",
+    "base_price_RWF": 9950,
+    "markup_percentage": 40,
+    "final_price_RWF": 13930,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad Classic",
+    "category": "Electronics",
+    "base_price_RWF": 8700,
+    "markup_percentage": 40,
+    "final_price_RWF": 12180,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers V2",
+    "category": "Footwear",
+    "base_price_RWF": 23850,
+    "markup_percentage": 40,
+    "final_price_RWF": 33390,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes Advanced",
+    "category": "Footwear",
+    "base_price_RWF": 22500,
+    "markup_percentage": 40,
+    "final_price_RWF": 31500,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes Essential",
+    "category": "Footwear",
+    "base_price_RWF": 25250,
+    "markup_percentage": 40,
+    "final_price_RWF": 35350,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals Deluxe",
+    "category": "Footwear",
+    "base_price_RWF": 21800,
+    "markup_percentage": 40,
+    "final_price_RWF": 30520,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes Mini",
+    "category": "Footwear",
+    "base_price_RWF": 9350,
+    "markup_percentage": 40,
+    "final_price_RWF": 13090,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag Pro",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 15500,
+    "markup_percentage": 40,
+    "final_price_RWF": 21700,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet Plus",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 6150,
+    "markup_percentage": 40,
+    "final_price_RWF": 8610,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses Ultra",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 8300,
+    "markup_percentage": 40,
+    "final_price_RWF": 11620,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack Compact",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 17950,
+    "markup_percentage": 40,
+    "final_price_RWF": 25130,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch Edition",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 19700,
+    "markup_percentage": 40,
+    "final_price_RWF": 27580,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle Max",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 9350,
+    "markup_percentage": 40,
+    "final_price_RWF": 13090,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Lite",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10800,
+    "markup_percentage": 40,
+    "final_price_RWF": 15120,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Premium",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10150,
+    "markup_percentage": 40,
+    "final_price_RWF": 14210,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Standard",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 11200,
+    "markup_percentage": 40,
+    "final_price_RWF": 15680,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Classic",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 14650,
+    "markup_percentage": 40,
+    "final_price_RWF": 20510,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Bluetooth Earbuds Pro V2",
+    "category": "Electronics",
+    "base_price_RWF": 10500,
+    "markup_percentage": 40,
+    "final_price_RWF": 14700,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch Advanced",
+    "category": "Electronics",
+    "base_price_RWF": 21750,
+    "markup_percentage": 40,
+    "final_price_RWF": 30450,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse Essential",
+    "category": "Electronics",
+    "base_price_RWF": 7100,
+    "markup_percentage": 40,
+    "final_price_RWF": 9940,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W Deluxe",
+    "category": "Electronics",
+    "base_price_RWF": 16650,
+    "markup_percentage": 40,
+    "final_price_RWF": 23310,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M Mini",
+    "category": "Electronics",
+    "base_price_RWF": 2800,
+    "markup_percentage": 40,
+    "final_price_RWF": 3920,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand Pro",
+    "category": "Electronics",
+    "base_price_RWF": 14750,
+    "markup_percentage": 40,
+    "final_price_RWF": 20650,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones Plus",
+    "category": "Electronics",
+    "base_price_RWF": 28400,
+    "markup_percentage": 40,
+    "final_price_RWF": 39760,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone Ultra",
+    "category": "Electronics",
+    "base_price_RWF": 13850,
+    "markup_percentage": 40,
+    "final_price_RWF": 19390,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter Compact",
+    "category": "Electronics",
+    "base_price_RWF": 8300,
+    "markup_percentage": 40,
+    "final_price_RWF": 11620,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad Edition",
+    "category": "Electronics",
+    "base_price_RWF": 10150,
+    "markup_percentage": 40,
+    "final_price_RWF": 14210,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers Max",
+    "category": "Footwear",
+    "base_price_RWF": 29100,
+    "markup_percentage": 40,
+    "final_price_RWF": 40740,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes Lite",
+    "category": "Footwear",
+    "base_price_RWF": 15050,
+    "markup_percentage": 40,
+    "final_price_RWF": 21070,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes Premium",
+    "category": "Footwear",
+    "base_price_RWF": 34400,
+    "markup_percentage": 40,
+    "final_price_RWF": 48160,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals Standard",
+    "category": "Footwear",
+    "base_price_RWF": 16950,
+    "markup_percentage": 40,
+    "final_price_RWF": 23730,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes Classic",
+    "category": "Footwear",
+    "base_price_RWF": 11500,
+    "markup_percentage": 40,
+    "final_price_RWF": 16100,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag V2",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 16050,
+    "markup_percentage": 40,
+    "final_price_RWF": 22470,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet Advanced",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 6400,
+    "markup_percentage": 40,
+    "final_price_RWF": 8960,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses Essential",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 5950,
+    "markup_percentage": 40,
+    "final_price_RWF": 8330,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack Deluxe",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 27700,
+    "markup_percentage": 40,
+    "final_price_RWF": 38780,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch Mini",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 13650,
+    "markup_percentage": 40,
+    "final_price_RWF": 19110,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle Pro",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 7000,
+    "markup_percentage": 40,
+    "final_price_RWF": 9800,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Plus",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 14450,
+    "markup_percentage": 40,
+    "final_price_RWF": 20230,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Ultra",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10300,
+    "markup_percentage": 40,
+    "final_price_RWF": 14420,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Compact",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 9350,
+    "markup_percentage": 40,
+    "final_price_RWF": 13090,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Edition",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 17300,
+    "markup_percentage": 40,
+    "final_price_RWF": 24220,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Bluetooth Earbuds Pro Max",
+    "category": "Electronics",
+    "base_price_RWF": 13750,
+    "markup_percentage": 40,
+    "final_price_RWF": 19250,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch Lite",
+    "category": "Electronics",
+    "base_price_RWF": 15300,
+    "markup_percentage": 40,
+    "final_price_RWF": 21420,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse Premium",
+    "category": "Electronics",
+    "base_price_RWF": 9050,
+    "markup_percentage": 40,
+    "final_price_RWF": 12670,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W Standard",
+    "category": "Electronics",
+    "base_price_RWF": 12200,
+    "markup_percentage": 40,
+    "final_price_RWF": 17080,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M Classic",
+    "category": "Electronics",
+    "base_price_RWF": 3150,
+    "markup_percentage": 40,
+    "final_price_RWF": 4410,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand V2",
+    "category": "Electronics",
+    "base_price_RWF": 15200,
+    "markup_percentage": 40,
+    "final_price_RWF": 21280,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones Advanced",
+    "category": "Electronics",
+    "base_price_RWF": 30650,
+    "markup_percentage": 40,
+    "final_price_RWF": 42910,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone Essential",
+    "category": "Electronics",
+    "base_price_RWF": 10700,
+    "markup_percentage": 40,
+    "final_price_RWF": 14980,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter Deluxe",
+    "category": "Electronics",
+    "base_price_RWF": 13750,
+    "markup_percentage": 40,
+    "final_price_RWF": 19250,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad Mini",
+    "category": "Electronics",
+    "base_price_RWF": 6500,
+    "markup_percentage": 40,
+    "final_price_RWF": 9100,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers Pro",
+    "category": "Footwear",
+    "base_price_RWF": 22250,
+    "markup_percentage": 40,
+    "final_price_RWF": 31150,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes Plus",
+    "category": "Footwear",
+    "base_price_RWF": 20200,
+    "markup_percentage": 40,
+    "final_price_RWF": 28280,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes Ultra",
+    "category": "Footwear",
+    "base_price_RWF": 35550,
+    "markup_percentage": 40,
+    "final_price_RWF": 49770,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals Compact",
+    "category": "Footwear",
+    "base_price_RWF": 14300,
+    "markup_percentage": 40,
+    "final_price_RWF": 20020,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes Edition",
+    "category": "Footwear",
+    "base_price_RWF": 14650,
+    "markup_percentage": 40,
+    "final_price_RWF": 20510,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag Max",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 19500,
+    "markup_percentage": 40,
+    "final_price_RWF": 27300,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet Lite",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 4150,
+    "markup_percentage": 40,
+    "final_price_RWF": 5810,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses Premium",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 7500,
+    "markup_percentage": 40,
+    "final_price_RWF": 10500,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack Standard",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 20450,
+    "markup_percentage": 40,
+    "final_price_RWF": 28630,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch Classic",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 16800,
+    "markup_percentage": 40,
+    "final_price_RWF": 23520,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle V2",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 8150,
+    "markup_percentage": 40,
+    "final_price_RWF": 11410,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Advanced",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 16500,
+    "markup_percentage": 40,
+    "final_price_RWF": 23100,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Essential",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 7250,
+    "markup_percentage": 40,
+    "final_price_RWF": 10150,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Deluxe",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 14400,
+    "markup_percentage": 40,
+    "final_price_RWF": 20160,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Mini",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 11250,
+    "markup_percentage": 40,
+    "final_price_RWF": 15750,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Bluetooth Earbuds Pro Pro",
+    "category": "Electronics",
+    "base_price_RWF": 10500,
+    "markup_percentage": 40,
+    "final_price_RWF": 14700,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch Plus",
+    "category": "Electronics",
+    "base_price_RWF": 20450,
+    "markup_percentage": 40,
+    "final_price_RWF": 28630,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse Ultra",
+    "category": "Electronics",
+    "base_price_RWF": 10200,
+    "markup_percentage": 40,
+    "final_price_RWF": 14280,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W Compact",
+    "category": "Electronics",
+    "base_price_RWF": 11150,
+    "markup_percentage": 40,
+    "final_price_RWF": 15610,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M Edition",
+    "category": "Electronics",
+    "base_price_RWF": 3500,
+    "markup_percentage": 40,
+    "final_price_RWF": 4900,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand Max",
+    "category": "Electronics",
+    "base_price_RWF": 18450,
+    "markup_percentage": 40,
+    "final_price_RWF": 25830,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones Lite",
+    "category": "Electronics",
+    "base_price_RWF": 20400,
+    "markup_percentage": 40,
+    "final_price_RWF": 28560,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone Premium",
+    "category": "Electronics",
+    "base_price_RWF": 13750,
+    "markup_percentage": 40,
+    "final_price_RWF": 19250,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter Standard",
+    "category": "Electronics",
+    "base_price_RWF": 10200,
+    "markup_percentage": 40,
+    "final_price_RWF": 14280,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad Classic",
+    "category": "Electronics",
+    "base_price_RWF": 8950,
+    "markup_percentage": 40,
+    "final_price_RWF": 12530,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers V2",
+    "category": "Footwear",
+    "base_price_RWF": 23100,
+    "markup_percentage": 40,
+    "final_price_RWF": 32340,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes Advanced",
+    "category": "Footwear",
+    "base_price_RWF": 21750,
+    "markup_percentage": 40,
+    "final_price_RWF": 30450,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes Essential",
+    "category": "Footwear",
+    "base_price_RWF": 25500,
+    "markup_percentage": 40,
+    "final_price_RWF": 35700,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals Deluxe",
+    "category": "Footwear",
+    "base_price_RWF": 22050,
+    "markup_percentage": 40,
+    "final_price_RWF": 30870,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes Mini",
+    "category": "Footwear",
+    "base_price_RWF": 9600,
+    "markup_percentage": 40,
+    "final_price_RWF": 13440,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag Pro",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 15750,
+    "markup_percentage": 40,
+    "final_price_RWF": 22050,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet Plus",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 6400,
+    "markup_percentage": 40,
+    "final_price_RWF": 8960,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses Ultra",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 7550,
+    "markup_percentage": 40,
+    "final_price_RWF": 10570,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack Compact",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 17200,
+    "markup_percentage": 40,
+    "final_price_RWF": 24080,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch Edition",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 19950,
+    "markup_percentage": 40,
+    "final_price_RWF": 27930,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle Max",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 9600,
+    "markup_percentage": 40,
+    "final_price_RWF": 13440,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Lite",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 11050,
+    "markup_percentage": 40,
+    "final_price_RWF": 15470,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Premium",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10400,
+    "markup_percentage": 40,
+    "final_price_RWF": 14560,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Standard",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 11450,
+    "markup_percentage": 40,
+    "final_price_RWF": 16030,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Classic",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 13900,
+    "markup_percentage": 40,
+    "final_price_RWF": 19460,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Bluetooth Earbuds Pro V2",
+    "category": "Electronics",
+    "base_price_RWF": 10750,
+    "markup_percentage": 40,
+    "final_price_RWF": 15050,
+    "image_url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Smart Fitness Watch Advanced",
+    "category": "Electronics",
+    "base_price_RWF": 22000,
+    "markup_percentage": 40,
+    "final_price_RWF": 30800,
+    "image_url": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Ergonomic USB Optical Gaming Mouse Essential",
+    "category": "Electronics",
+    "base_price_RWF": 7350,
+    "markup_percentage": 40,
+    "final_price_RWF": 10290,
+    "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Portable Bluetooth Speaker 10W Deluxe",
+    "category": "Electronics",
+    "base_price_RWF": 16900,
+    "markup_percentage": 40,
+    "final_price_RWF": 23660,
+    "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Fast Charging USB-C Cable 2M Mini",
+    "category": "Electronics",
+    "base_price_RWF": 3050,
+    "markup_percentage": 40,
+    "final_price_RWF": 4270,
+    "image_url": "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Adjustable Aluminum Laptop Stand Pro",
+    "category": "Electronics",
+    "base_price_RWF": 14000,
+    "markup_percentage": 40,
+    "final_price_RWF": 19600,
+    "image_url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Over-Ear Noise Cancelling Headphones Plus",
+    "category": "Electronics",
+    "base_price_RWF": 27650,
+    "markup_percentage": 40,
+    "final_price_RWF": 38710,
+    "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "HD Web Camera with Microphone Ultra",
+    "category": "Electronics",
+    "base_price_RWF": 14100,
+    "markup_percentage": 40,
+    "final_price_RWF": 19740,
+    "image_url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Multi-Port USB-C Hub Adapter Compact",
+    "category": "Electronics",
+    "base_price_RWF": 8550,
+    "markup_percentage": 40,
+    "final_price_RWF": 11970,
+    "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Wireless Fast Charging Pad Edition",
+    "category": "Electronics",
+    "base_price_RWF": 10400,
+    "markup_percentage": 40,
+    "final_price_RWF": 14560,
+    "image_url": "https://images.unsplash.com/photo-1622445268465-8438a6d51e83?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Men Casual Running Sneakers Max",
+    "category": "Footwear",
+    "base_price_RWF": 29350,
+    "markup_percentage": 40,
+    "final_price_RWF": 41090,
+    "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Lightweight Breathable Sports Shoes Lite",
+    "category": "Footwear",
+    "base_price_RWF": 15300,
+    "markup_percentage": 40,
+    "final_price_RWF": 21420,
+    "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Classic Leather Dress Shoes Premium",
+    "category": "Footwear",
+    "base_price_RWF": 33650,
+    "markup_percentage": 40,
+    "final_price_RWF": 47110,
+    "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women High Heel Sandals Standard",
+    "category": "Footwear",
+    "base_price_RWF": 16200,
+    "markup_percentage": 40,
+    "final_price_RWF": 22680,
+    "image_url": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Unisex Canvas Slip-On Shoes Classic",
+    "category": "Footwear",
+    "base_price_RWF": 11750,
+    "markup_percentage": 40,
+    "final_price_RWF": 16450,
+    "image_url": "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Women Leather Crossbody Bag V2",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 16300,
+    "markup_percentage": 40,
+    "final_price_RWF": 22820,
+    "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Slim Leather Bi-Fold Wallet Advanced",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 6650,
+    "markup_percentage": 40,
+    "final_price_RWF": 9310,
+    "image_url": "https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Polarized Classic Sunglasses Essential",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 6200,
+    "markup_percentage": 40,
+    "final_price_RWF": 8680,
+    "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Waterproof Travel Backpack Deluxe",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 27950,
+    "markup_percentage": 40,
+    "final_price_RWF": 39130,
+    "image_url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Quartz Watch Mini",
+    "category": "Fashion & Accessories",
+    "base_price_RWF": 12900,
+    "markup_percentage": 40,
+    "final_price_RWF": 18060,
+    "image_url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Stainless Steel Thermal Water Bottle Pro",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 7250,
+    "markup_percentage": 40,
+    "final_price_RWF": 10150,
+    "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Electric Coffee Grinder Plus",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 14700,
+    "markup_percentage": 40,
+    "final_price_RWF": 20580,
+    "image_url": "https://images.unsplash.com/photo-1589396575653-c09c794ff6a6?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Automatic Soap Dispenser Ultra",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 10550,
+    "markup_percentage": 40,
+    "final_price_RWF": 14770,
+    "image_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "LED Desk Lamp with Touch Control Compact",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 9600,
+    "markup_percentage": 40,
+    "final_price_RWF": 13440,
+    "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c?w=500&auto=format&fit=crop"
+  },
+  {
+    "name": "Non-Stick Ceramic Frying Pan Edition",
+    "category": "Home & Kitchen",
+    "base_price_RWF": 17550,
+    "markup_percentage": 40,
+    "final_price_RWF": 24570,
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=500&auto=format&fit=crop"
+  }
+]

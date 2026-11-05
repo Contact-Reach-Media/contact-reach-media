@@ -3,11 +3,11 @@
   command = "npm run build"
   publish = "dist"
 
-# Proxy /api/* to Cloud Run backend with full Cloud SQL database access
+# Do not rewrite /api/* to index.html (preserves clean 404 or backend proxy if configured)
 [[redirects]]
   from = "/api/*"
-  to = "https://ais-pre-5yei3t5fbpm5y4v7w2ck65-894432086585.europe-west2.run.app/api/:splat"
-  status = 200
+  to = "/api/:splat"
+  status = 404
 
 # Single-page application fallback: reroute all paths to index.html with HTTP 200 (prevents 404 on refresh)
 [[redirects]]

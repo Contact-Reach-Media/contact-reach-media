@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Language, translations, SUPPORTED_LANGUAGES, LanguageOption } from '../translations.ts';
 import { CurrencyCode, SUPPORTED_CURRENCIES, CurrencyOption } from '../utils/currency.ts';
-import { Product, CustomerUser } from '../types.ts';
+import { Product, CustomerUser, MarketSettings } from '../types.ts';
 import { MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
 
 interface HeaderProps {
@@ -34,6 +34,7 @@ interface HeaderProps {
   onOpenCategoriesMenu?: () => void;
   selectedCategory?: string;
   onSelectCategory?: (mainCatId: string, subCatId?: string, searchTag?: string) => void;
+  settings?: MarketSettings;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -58,6 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBuyerAccount,
   isAdminLoggedIn = false,
   onOpenUploadProduct,
+  settings,
   onOpenCategoriesMenu,
   selectedCategory = 'all',
   onSelectCategory
@@ -134,11 +136,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Left: Help Line & Administrator top entry */}
           <div className="flex items-center gap-2.5">
             <a
-              href="tel:+250780022600"
+              href={settings?.phone ? `tel:${settings.phone.replace(/\s+/g, '')}` : '#'}
               className="flex items-center gap-1.5 hover:underline font-bold tracking-tight whitespace-nowrap"
             >
               <Phone className="w-3.5 h-3.5" />
-              <span>{t.helpLine}</span>
+              <span>{settings?.phone || t.helpLine}</span>
             </a>
 
             {isAdminLoggedIn && (

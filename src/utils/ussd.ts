@@ -9,11 +9,11 @@ import type { PaymentMethod } from '../types.ts';
  */
 
 export const USSD_CONFIG = {
-  mtnMomoNumber: '0780022600',
-  mtnMerchantCode: '2328354',
-  airtelNumber: '0780022600',
-  receiverName: 'Ruth',
-  merchantName: 'ContactReach Market'
+  mtnMomoNumber: '',
+  mtnMerchantCode: '',
+  airtelNumber: '',
+  receiverName: '',
+  merchantName: ''
 };
 
 /**
@@ -26,22 +26,30 @@ export function buildUssdCode(
   customMerchantCode?: string
 ): string {
   const roundedAmount = Math.max(0, Math.round(amount));
-  const momoPhone = (customReceiverPhone || USSD_CONFIG.mtnMomoNumber).replace(/\s+/g, '');
-  const merchantCode = (customMerchantCode || USSD_CONFIG.mtnMerchantCode).replace(/\s+/g, '');
-  const airtelPhone = (customReceiverPhone || USSD_CONFIG.airtelNumber).replace(/\s+/g, '');
+  let fallbackPhone = '';
+  let fallbackMerchant = '';
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('crm_market_settings_cache') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      fallbackPhone = parsed.paymentNumber || parsed.phone || '';
+      fallbackMerchant = parsed.merchantCode || '';
+    }
+  } catch {}
+
+  const momoPhone = (customReceiverPhone || fallbackPhone || USSD_CONFIG.mtnMomoNumber).replace(/\s+/g, '');
+  const merchantCode = (customMerchantCode || fallbackMerchant || USSD_CONFIG.mtnMerchantCode).replace(/\s+/g, '');
+  const airtelPhone = (customReceiverPhone || fallbackPhone || USSD_CONFIG.airtelNumber).replace(/\s+/g, '');
 
   switch (method) {
     case 'MTN Merchant Code':
-      // MTN MoMoPay Merchant: *182*8*1*2328354*AMOUNT#
       return `*182*8*1*${merchantCode}*${roundedAmount}#`;
 
     case 'Airtel Money':
-      // Airtel Money: *182*1*2*0780022600*AMOUNT#
       return `*182*1*2*${airtelPhone}*${roundedAmount}#`;
 
     case 'MTN Mobile Money':
     default:
-      // MTN MoMo Direct Transfer: *182*1*1*0780022600*AMOUNT#
       return `*182*1*1*${momoPhone}*${roundedAmount}#`;
   }
 }

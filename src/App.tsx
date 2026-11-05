@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
-import { initialProducts, initialCategories, initialSettings, initialShops } from './data/initialData.ts';
+import { initialSettings } from './data/initialData.ts';
 import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
 import { Language, translations, getCategoryTitle } from './translations.ts';
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
@@ -38,6 +38,7 @@ import { CartDrawer } from './components/CartDrawer.tsx';
 import { CheckoutModal } from './components/CheckoutModal.tsx';
 import { PaymentConfirmationModal } from './components/PaymentConfirmationModal.tsx';
 import { OrderTrackingModal } from './components/OrderTrackingModal.tsx';
+import { AdminLoginModal } from './components/AdminLoginModal.tsx';
 import { AdminGatewayCard } from './components/AdminGatewayCard.tsx';
 import { PWAInstallModal } from './components/PWAInstallModal.tsx';
 import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
@@ -151,7 +152,7 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
-  // Core Data with permanent local hydration
+  // Core Data loaded dynamically from database with localStorage hydration
   const [products, setProducts] = useState<Product[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -164,14 +165,46 @@ export default function App() {
             return list.filter((p: Product) => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
           }
         }
-        return initialProducts.filter(p => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
       } catch {}
     }
-    return initialProducts;
+    return [];
   });
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [shops, setShops] = useState<VendorShop[]>(initialShops);
-  const [settings, setSettings] = useState<AppSettings>(initialSettings);
+  const [categories, setCategories] = useState<Category[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_categories_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [shops, setShops] = useState<VendorShop[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_shops_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_settings_cache');
+        if (cached) {
+          const obj = JSON.parse(cached);
+          if (obj && typeof obj === 'object') return obj;
+        }
+      } catch {}
+    }
+    return initialSettings;
+  });
 
   // Request permanent storage from browser and persist catalog to local storage
   useEffect(() => {
@@ -248,12 +281,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
   // Active selected entities
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(() => {
-    if (initialRoute.productId) {
-      return initialProducts.find(p => p.id === initialRoute.productId) || null;
-    }
-    return null;
-  });
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [confirmationOrder, setConfirmationOrder] = useState<Order | null>(null);
   const [trackingOrderNumber, setTrackingOrderNumber] = useState<string>(initialRoute.orderRef || '');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
@@ -274,6 +302,7 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
   const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
@@ -427,6 +456,22 @@ export default function App() {
       setShops(fetchedShops);
       setIsAdminLoggedIn(isAuth);
 
+      try {
+        if (fetchedCategories && fetchedCategories.length > 0) {
+          localStorage.setItem('crm_categories_cache', JSON.stringify(fetchedCategories));
+        }
+        if (fetchedShops && fetchedShops.length > 0) {
+          localStorage.setItem('crm_shops_cache', JSON.stringify(fetchedShops));
+        }
+        if (fetchedSettings && typeof fetchedSettings === 'object') {
+          localStorage.setItem('crm_settings_cache', JSON.stringify(fetchedSettings));
+        }
+      } catch {}
+
+      if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
+        setIsAdminLoginOpen(true);
+      }
+
       if (initialRoute.productId) {
         const found = fetchedProducts.find(p => p.id === initialRoute.productId);
         if (found) setSelectedProduct(found);
@@ -499,6 +544,10 @@ export default function App() {
       const route = parseRouteFromLocation();
       if (route.view === 'admin') {
         setActiveView('admin');
+        const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+        if (!isAuth) {
+          setIsAdminLoginOpen(true);
+        }
       } else if (route.view === 'track-order') {
         setIsTrackingOpen(true);
         if (route.orderRef) setTrackingOrderNumber(route.orderRef);
@@ -685,7 +734,7 @@ export default function App() {
         /* VISITOR & BUYER PROFESSIONAL MAINTENANCE SCREEN */
         <MaintenancePage
           settings={settings}
-          onOpenAdminLogin={() => handleNavigate('admin')}
+          onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
           onOpenOrderTracking={() => setIsTrackingOpen(true)}
           onCheckStatus={refreshAllData}
           currentLang={currentLang}
@@ -804,48 +853,9 @@ export default function App() {
             onSuccess={(user) => {
               setIsAdminLoggedIn(true);
               setActiveView('admin');
-              if (pendingAdminAction === 'upload-product') {
-                setAdminInitialTab('products');
-                setAutoOpenAddProduct(true);
-                setPendingAdminAction(null);
-              }
               showToast(`Welcome Administrator ${user?.name || ''}`);
             }}
             onReturnHome={() => handleNavigate('home')}
-          />
-        )
-      ) : activeView === 'admin-login' ? (
-        isAdminLoggedIn ? (
-          <AdminDashboard
-            onLogout={async () => {
-              await api.adminLogout();
-              setIsAdminLoggedIn(false);
-              setAutoOpenAddProduct(false);
-              handleNavigate('home');
-              showToast('Logged out of admin portal');
-            }}
-            categories={categories}
-            onRefreshPublicData={refreshAllData}
-            initialTab={adminInitialTab as any}
-            autoOpenAddProduct={autoOpenAddProduct}
-            onNavigateToStorefront={() => handleNavigate('home')}
-          />
-        ) : (
-          <AdminLoginPage
-            onLoginSuccess={(user) => {
-              setIsAdminLoggedIn(true);
-              setActiveView('admin');
-              if (pendingAdminAction === 'upload-product') {
-                setAdminInitialTab('products');
-                setAutoOpenAddProduct(true);
-                setPendingAdminAction(null);
-              }
-              if (window.location.pathname !== '/admin') {
-                window.history.pushState({ view: 'admin' }, '', '/admin');
-              }
-              showToast(`Welcome Administrator ${user?.name || ''}`);
-            }}
-            onNavigateHome={() => handleNavigate('home')}
           />
         )
       ) : activeView === 'login' || activeView === 'register' ? (
@@ -871,7 +881,7 @@ export default function App() {
           products={products}
           onNavigate={handleNavigate}
           onSelectProduct={(p) => handleSelectProduct(p)}
-          onOpenAdminLogin={() => handleNavigate('admin')}
+          onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
           onOpenTracking={() => setIsTrackingOpen(true)}
           onSearch={(q) => {
             setSearchQuery(q);
@@ -1508,7 +1518,33 @@ export default function App() {
         />
       )}
 
-      {/* 6. Save to Home Screen / PWA Install Modal */}
+      {/* 6. Admin Login Modal */}
+      {isAdminLoginOpen && (
+        <AdminLoginModal
+          isOpen={isAdminLoginOpen}
+          onClose={() => {
+            setIsAdminLoginOpen(false);
+            if (window.location.pathname === '/admin' && !isAdminLoggedIn) {
+              window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
+            }
+          }}
+          onLoginSuccess={(user?: any) => {
+            setIsAdminLoggedIn(true);
+            setActiveView('admin');
+            if (pendingAdminAction === 'upload-product') {
+              setAdminInitialTab('products');
+              setAutoOpenAddProduct(true);
+              setPendingAdminAction(null);
+            }
+            if (window.location.pathname !== '/admin') {
+              window.history.pushState({ view: 'admin' }, '', '/admin');
+            }
+            showToast(`Welcome Administrator ${user?.name || ''}`);
+          }}
+        />
+      )}
+
+      {/* 7. Save to Home Screen / PWA Install Modal */}
       <PWAInstallModal
         isOpen={isAppDownloadOpen}
         onClose={() => setIsAppDownloadOpen(false)}

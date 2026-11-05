@@ -261,7 +261,7 @@ export const Footer: React.FC<FooterProps> = ({
             <button
               onClick={() => setLegalModal(legalModal?.title === t.termsConditions ? null : {
                 title: t.termsConditions,
-                content: 'ContactReach Market provides genuine products with official MTN Mobile Money and Airtel verification by Ruth. All deliveries are coordinated directly in Kigali and provincial centers.'
+                content: 'ContactReach Market provides genuine products with official MTN Mobile Money and Airtel payment verification. All deliveries are coordinated directly in Kigali and provincial centers.'
               })}
               className="hover:text-white transition-colors cursor-pointer"
             >

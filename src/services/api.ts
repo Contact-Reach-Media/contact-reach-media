@@ -6,7 +6,7 @@ import {
   CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig,
   AlibabaConfig, AlibabaShippingQuote, DsersConfig
 } from '../types.ts';
-import { initialProducts, initialCategories, initialSettings, initialShops } from '../data/initialData.ts';
+import { initialSettings } from '../data/initialData.ts';
 import {
   getProductsFromFirestore,
   saveProductToFirestore,
@@ -59,38 +59,6 @@ import {
   saveSettingsToFirestore,
   logoutUser
 } from './firebase.ts';
-
-// Production Cloud Run Backend URL hosting PostgreSQL (Cloud SQL) and API services
-export const CLOUD_RUN_BACKEND_URL = 'https://ais-pre-5yei3t5fbpm5y4v7w2ck65-894432086585.europe-west2.run.app';
-
-// Universal API request dispatcher: When running on contactreachmarket.com, automatically route /api calls to Cloud Run backend where PostgreSQL data is stored
-if (typeof window !== 'undefined' && window.fetch) {
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    try {
-      let urlStr: string | null = null;
-      if (typeof input === 'string') {
-        urlStr = input;
-      } else if (input instanceof URL) {
-        urlStr = input.toString();
-      } else if (input && typeof (input as any).url === 'string') {
-        urlStr = (input as any).url;
-      }
-
-      if (urlStr && (urlStr.startsWith('/api') || urlStr.startsWith('/api/'))) {
-        const host = window.location.hostname;
-        if (host.includes('contactreachmarket.com')) {
-          const targetUrl = `${CLOUD_RUN_BACKEND_URL}${urlStr}`;
-          if (input instanceof Request) {
-            return originalFetch(new Request(targetUrl, init || input));
-          }
-          return originalFetch(targetUrl, init);
-        }
-      }
-    } catch {}
-    return originalFetch(input, init);
-  };
-}
 
 const TOKEN_KEY = 'crm_admin_token';
 const ADMIN_USER_KEY = 'crm_admin_user';
@@ -247,9 +215,9 @@ function getAuthHeaders() {
   if (!token) {
     token = `crm_admin_token_${Date.now()}`;
     const defaultOwner = getStoredAdminUser() || {
-      id: 'adm-owner-ruth',
-      name: 'Ruth (System Owner)',
-      email: 'contactreachmedialimited@gmail.com',
+      id: 'adm-owner',
+      name: 'Administrator',
+      email: 'admin@contactreachmedia.rw',
       role: 'owner',
       active: true
     };
@@ -315,56 +283,7 @@ export async function safeParseResponse<T = any>(res: Response): Promise<{
 }
 
 // Fallback admin directory for direct verification when running in decoupled static hosting mode
-const fallbackAdminUsers: AdminUser[] = [
-  {
-    id: 'adm-owner-ruth',
-    name: 'Ruth (System Owner)',
-    email: 'contactreachmedialimited@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0780022600'
-  },
-  {
-    id: 'adm-owner-thierry-250',
-    name: 'Thierry Maniriho (Platform Owner)',
-    email: 'manirihothierry250@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-owner-umuhuza',
-    name: 'Umuhuza Market (Platform Owner)',
-    email: 'umuhuzamarket@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0780022600'
-  },
-  {
-    id: 'adm-ops',
-    name: 'Thierry Maniriho (Operations Admin)',
-    email: 'admin@contactreachmedia.rw',
-    role: 'administrator',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-prod-mgr',
-    name: 'Eric Kwizera (Catalog & Inventory)',
-    email: 'products@contactreachmedia.rw',
-    role: 'product_manager',
-    active: true,
-    phone: '0788112233'
-  },
-  {
-    id: 'adm-support',
-    name: 'Clarisse Umutoni (Customer Support)',
-    email: 'support@contactreachmedia.rw',
-    role: 'customer_support',
-    active: true,
-    phone: '0780022600'
-  }
-];
+const fallbackAdminUsers: AdminUser[] = [];
 
 export const api = {
   // Admin & Token Helpers
@@ -439,7 +358,7 @@ export const api = {
       if (fsCategories && fsCategories.length > 0) return fsCategories;
     } catch {}
 
-    return initialCategories;
+    return [];
   },
 
   // Public Shops
@@ -458,7 +377,7 @@ export const api = {
       if (fsShops && fsShops.length > 0) return fsShops;
     } catch {}
 
-    return initialShops;
+    return [];
   },
 
   async getShopById(id: string): Promise<{ shop: VendorShop; products: Product[] } | null> {
@@ -555,16 +474,7 @@ export const api = {
       }
     } catch {}
 
-    return initialProducts
-      .filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())))
-      .filter(p => {
-        const raw = (p.imageUrl || '').trim();
-        const norm = raw ? raw.split('?')[0].toLowerCase().trim() : '';
-        if (!norm) return true;
-        if (seenFallbackImgs.has(norm)) return false;
-        seenFallbackImgs.add(norm);
-        return true;
-      });
+    return [];
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -595,11 +505,7 @@ export const api = {
       }
     } catch {}
 
-    const initFound = initialProducts.find(p => p.id === id);
-    if (initFound && (deletedSet.has(initFound.id.toLowerCase()) || (initFound.sku && deletedSet.has(initFound.sku.toLowerCase())))) {
-      return null;
-    }
-    return initFound || null;
+    return null;
   },
 
   // Customer Place Order
@@ -684,9 +590,9 @@ export const api = {
       supplierPayoutStatus: 'Pending',
       supplierFulfillmentStatus: 'Pending',
       paymentMethod: orderPayload.paymentMethod,
-      receiverName: 'Ruth',
-      receiverDetails: orderPayload.paymentMethod === 'MTN Merchant Code' ? '2328354' : '0780022600',
-      shopName: 'ContactReach Market',
+      receiverName: (orderPayload as any).receiverName || '',
+      receiverDetails: (orderPayload as any).receiverDetails || '',
+      shopName: (orderPayload.items?.[0] as any)?.shop || 'ContactReach Market',
       paymentStatus: 'Pending Payment',
       status: 'New',
       stockDeducted: false,
@@ -1180,26 +1086,17 @@ export const api = {
     }
 
     // Resilient Google Auth fallback if server is offline or in decoupled static mode
-    const isOwner = cleanEmail.toLowerCase() === 'contactreachmedialimited@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'manirihothierry250@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'manirihothierry36@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'manirihothierry6@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'umuhuzamarket@gmail.com' ||
-                    cleanEmail.toLowerCase().startsWith('manirihothierry');
-    const fallbackUser = fallbackAdminUsers.find(a => a.email.toLowerCase() === cleanEmail.toLowerCase());
-
-    if (isOwner || fallbackUser) {
-      const adminData = fallbackUser || {
-        id: user.uid ? `adm-fb-${user.uid}` : 'adm-owner-ruth',
-        name: user.displayName || 'Ruth (System Owner)',
-        email: cleanEmail,
-        role: 'owner',
-        active: true
-      };
-      const mockToken = `fb_client_token_${Date.now()}`;
-      setAdminToken(mockToken, adminData);
-      return { token: mockToken, admin: adminData };
-    }
+    try {
+      const fsUsers = await getUsersFromFirestore();
+      const matched = (fsUsers as AdminUser[] || []).find(
+        a => a.email && a.email.toLowerCase() === cleanEmail.toLowerCase() && a.active
+      );
+      if (matched) {
+        const mockToken = `fb_client_token_${Date.now()}`;
+        setAdminToken(mockToken, matched);
+        return { token: mockToken, admin: matched };
+      }
+    } catch {}
 
     throw new Error(`Access denied. Google account (${cleanEmail}) is not an authorized ContactReach Market administrator.`);
   },
@@ -2080,9 +1977,9 @@ export const api = {
       category: shop.category || 'General',
       description: shop.description || '',
       location: shop.location || 'Kigali, Rwanda',
-      address: shop.address || 'Fair View Plaza, Kigali',
-      phone: shop.phone || '0780022600',
-      email: shop.email || 'contactreachmedialimited@gmail.com',
+      address: shop.address || '',
+      phone: shop.phone || '',
+      email: shop.email || '',
       deliveryInfo: shop.deliveryInfo || 'Same-day Kigali delivery',
       logo: shop.logo || 'ShoppingBag',
       bannerColor: shop.bannerColor || 'from-orange-500 to-amber-600',
@@ -3342,9 +3239,9 @@ export const api = {
       if (res.status === 401 || res.status === 403) {
         const freshToken = `crm_admin_token_${Date.now()}`;
         const owner = getStoredAdminUser() || {
-          id: 'adm-owner-ruth',
-          name: 'Ruth (System Owner)',
-          email: 'contactreachmedialimited@gmail.com',
+          id: 'adm-session',
+          name: 'Administrator',
+          email: 'admin@contactreachmedia.rw',
           role: 'owner',
           active: true
         };
@@ -3782,9 +3679,9 @@ export const api = {
     if (res.status === 401 || res.status === 403) {
       const freshToken = `crm_admin_token_${Date.now()}`;
       const owner = getStoredAdminUser() || {
-        id: 'adm-owner-ruth',
-        name: 'Ruth (System Owner)',
-        email: 'contactreachmedialimited@gmail.com',
+        id: 'adm-session',
+        name: 'Administrator',
+        email: 'admin@contactreachmedia.rw',
         role: 'owner',
         active: true
       };
@@ -3813,9 +3710,9 @@ export const api = {
     if (res.status === 401 || res.status === 403) {
       const freshToken = `crm_admin_token_${Date.now()}`;
       const owner = getStoredAdminUser() || {
-        id: 'adm-owner-ruth',
-        name: 'Ruth (System Owner)',
-        email: 'contactreachmedialimited@gmail.com',
+        id: 'adm-session',
+        name: 'Administrator',
+        email: 'admin@contactreachmedia.rw',
         role: 'owner',
         active: true
       };
@@ -3861,9 +3758,9 @@ export const api = {
     if (res.status === 401 || res.status === 403) {
       const freshToken = `crm_admin_token_${Date.now()}`;
       const owner = getStoredAdminUser() || {
-        id: 'adm-owner-ruth',
-        name: 'Ruth (System Owner)',
-        email: 'contactreachmedialimited@gmail.com',
+        id: 'adm-session',
+        name: 'Administrator',
+        email: 'admin@contactreachmedia.rw',
         role: 'owner',
         active: true
       };

@@ -118,9 +118,10 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
     }
   };
 
-  const whatsappDirect = `https://wa.me/250780022600?text=${encodeURIComponent(
+  const cleanWhatsApp = (settings.whatsAppNumber || settings.phone || '').replace(/[^0-9]/g, '');
+  const whatsappDirect = cleanWhatsApp ? `https://wa.me/${cleanWhatsApp}?text=${encodeURIComponent(
     'Hello ContactReach Support, I would like assistance with an order or product.'
-  )}`;
+  )}` : '#';
 
   return (
     <div className="bg-[#F8F9FA] min-h-[85vh] pb-16">
@@ -566,7 +567,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
                 {currentLang === 'en'
-                  ? 'Have questions about products, delivery fees, or payments? Ruth and our Kigali team are here to assist you.'
+                  ? 'Have questions about products, delivery fees, or payments? Our customer support team is here to assist you.'
                   : 'Ufite ikibazo ku bicuruzwa cyangwa serivisi zacu? Itsinda ryacu rihari ngo rigufashe. Twandikire ukoresheje uburyo bwose bukurikira.'}
               </p>
             </div>
@@ -582,7 +583,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
                     {currentLang === 'en' ? 'Address' : 'Aderesi'}
                   </h3>
                   <p className="text-xs text-slate-600 font-medium">
-                    Fair View Plaza, KG 622 St, Kigali, Rwanda
+                    {settings.address || settings.pickupAddress || 'Kigali, Rwanda'}
                   </p>
                   <span className="text-[11px] text-slate-400 block font-normal">
                     Central Distribution & Pickup Hub
@@ -599,12 +600,14 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
                   <h3 className="font-bold text-xs text-slate-900">
                     {currentLang === 'en' ? 'Support Helpline' : 'Telefoni y\'ubufasha'}
                   </h3>
-                  <a href="tel:0780022600" className="text-xs font-black text-slate-900 hover:text-[#FF6000] block">
-                    0780022600 / +250 780 022 600
+                  <a href={settings.phone ? `tel:${settings.phone.replace(/\s+/g, '')}` : '#'} className="text-xs font-black text-slate-900 hover:text-[#FF6000] block">
+                    {settings.phone}
                   </a>
-                  <span className="text-[11px] text-slate-500 block font-medium">
-                    MoMo & Airtel Receiver: <strong>Ruth (0780022600 / 2328354)</strong>
-                  </span>
+                  {settings.receiverName && (
+                    <span className="text-[11px] text-slate-500 block font-medium">
+                      MoMo & Airtel Receiver: <strong>{settings.receiverName}{settings.paymentNumber ? ` (${settings.paymentNumber})` : ''}</strong>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -617,8 +620,8 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
                   <h3 className="font-bold text-xs text-slate-900">
                     {currentLang === 'en' ? 'Support Email' : 'Imeyili y\'ubufasha'}
                   </h3>
-                  <a href="mailto:contactreachmedialimited@gmail.com" className="text-xs font-bold text-slate-800 hover:text-[#FF6000] block break-all">
-                    contactreachmedialimited@gmail.com
+                  <a href={settings.email ? `mailto:${settings.email}` : '#'} className="text-xs font-bold text-slate-800 hover:text-[#FF6000] block break-all">
+                    {settings.email}
                   </a>
                 </div>
               </div>

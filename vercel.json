@@ -5,10 +5,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://ais-pre-5yei3t5fbpm5y4v7w2ck65-894432086585.europe-west2.run.app/api/$1"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

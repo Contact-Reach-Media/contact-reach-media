@@ -16,7 +16,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   onLoginSuccess,
   onNavigateHome
 }) => {
-  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,25 +140,11 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
             </button>
           </div>
 
-          {/* Quick Auto-Fill Banner */}
-          <div className="p-3 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-between gap-3 text-xs">
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
-                <span className="font-black text-slate-900 truncate">Default System Account</span>
-              </div>
-              <p className="text-[11px] text-orange-600 font-mono font-bold truncate mt-0.5">contactreachmedialimited@gmail.com</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('contactreachmedialimited@gmail.com');
-                setPassword('CRM@2026');
-              }}
-              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-[11px] shrink-0 transition-transform active:scale-95 cursor-pointer"
-            >
-              Auto-Fill
-            </button>
+          <div className="relative flex items-center justify-center">
+            <div className="border-t border-slate-200 w-full" />
+            <span className="bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Or email & password
+            </span>
           </div>
 
           {/* Password Form */}
@@ -172,7 +158,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contactreachmedialimited@gmail.com"
+                  placeholder="admin@example.com"
                   required
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs"
                 />
