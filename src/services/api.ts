@@ -60,6 +60,38 @@ import {
   logoutUser
 } from './firebase.ts';
 
+// Production Cloud Run Backend URL hosting PostgreSQL (Cloud SQL) and API services
+export const CLOUD_RUN_BACKEND_URL = 'https://ais-pre-5yei3t5fbpm5y4v7w2ck65-894432086585.europe-west2.run.app';
+
+// Universal API request dispatcher: When running on contactreachmarket.com, automatically route /api calls to Cloud Run backend where PostgreSQL data is stored
+if (typeof window !== 'undefined' && window.fetch) {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    try {
+      let urlStr: string | null = null;
+      if (typeof input === 'string') {
+        urlStr = input;
+      } else if (input instanceof URL) {
+        urlStr = input.toString();
+      } else if (input && typeof (input as any).url === 'string') {
+        urlStr = (input as any).url;
+      }
+
+      if (urlStr && (urlStr.startsWith('/api') || urlStr.startsWith('/api/'))) {
+        const host = window.location.hostname;
+        if (host.includes('contactreachmarket.com')) {
+          const targetUrl = `${CLOUD_RUN_BACKEND_URL}${urlStr}`;
+          if (input instanceof Request) {
+            return originalFetch(new Request(targetUrl, init || input));
+          }
+          return originalFetch(targetUrl, init);
+        }
+      }
+    } catch {}
+    return originalFetch(input, init);
+  };
+}
+
 const TOKEN_KEY = 'crm_admin_token';
 const ADMIN_USER_KEY = 'crm_admin_user';
 

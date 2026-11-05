@@ -38,6 +38,27 @@ import { ALIBABA_1000_CATALOG, Alibaba1000Item } from './src/data/alibaba1000Fee
 import { PRODUCTS_200_CATALOG } from './src/data/products200Feed.ts';
 import { calculateAlibabaShipping, calculateAlibabaLandedPricing } from './src/utils/alibabaShipping.ts';
 import { calculateLandedCostAndSellingPrice } from './src/utils/pricing.ts';
+import {
+  saveProductToPostgres,
+  saveOrderToPostgres,
+  savePaymentToPostgres,
+  saveCategoryToPostgres,
+  saveShopToPostgres,
+  saveSettingsToPostgres,
+  saveProblemToPostgres,
+  saveMessageToPostgres,
+  deleteProductFromPostgres,
+  bulkSyncProductsToPostgres
+} from './src/db/repository.ts';
+import { db as drizzleDb } from './src/db/index.ts';
+import {
+  products as productsTable,
+  orders as ordersTable,
+  categories as categoriesTable,
+  paymentConfirmations as paymentsTable,
+  vendorShops as shopsTable
+} from './src/db/schema.ts';
+import { count } from 'drizzle-orm';
 
 // Universal category normalizer mapping arbitrary labels, subcategories & legacy IDs to the 13 canonical categories
 export function normalizeCategoryId(rawCategory?: string, name?: string): string {
@@ -577,6 +598,23 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
         if (payload.user?.id) saveToFirestoreAsync('adminUsers', payload.user.id, payload.user);
         if (payload.customer?.id) saveToFirestoreAsync('customers', payload.customer.id, payload.customer);
         if (payload.log?.id) saveToFirestoreAsync('auditLogs', payload.log.id, payload.log);
+      }
+    } catch {}
+
+    // Asynchronously synchronize changed entity to PostgreSQL Cloud database
+    try {
+      if (process.env.SQL_HOST) {
+        if (eventType === 'settings_updated') {
+          saveSettingsToPostgres(db.settings).catch(() => {});
+        } else if (payload) {
+          if (payload.product?.id) saveProductToPostgres(payload.product).catch(() => {});
+          if (payload.productId) deleteProductFromPostgres(payload.productId).catch(() => {});
+          if (payload.order?.id) saveOrderToPostgres(payload.order).catch(() => {});
+          if (payload.payment?.id) savePaymentToPostgres(payload.payment).catch(() => {});
+          if (payload.message?.id) saveMessageToPostgres(payload.message).catch(() => {});
+          if (payload.problem?.id) saveProblemToPostgres(payload.problem).catch(() => {});
+          if (payload.shop?.id) saveShopToPostgres(payload.shop).catch(() => {});
+        }
       }
     } catch {}
   } catch (err) {
@@ -1481,12 +1519,30 @@ async function syncWithFirestore() {
 }
 
 // JSON middleware
-// Security Headers Middleware
+// Security & CORS Middleware for contactreachmarket.com and local development
 app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://www.contactreachmarket.com',
+    'https://contactreachmarket.com',
+    'http://www.contactreachmarket.com',
+    'http://contactreachmarket.com',
+  ];
+  if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.contactreachmarket.com') || origin.endsWith('.run.app') || origin.includes('localhost'))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
   next();
 });
 
@@ -1639,6 +1695,85 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 app.get('/api/settings', (req: Request, res: Response) => {
   res.json(db.settings);
+});
+
+// -------------------------------------------------------------
+// POSTGRESQL CLOUD DATABASE API (Supabase / Cloud SQL)
+// -------------------------------------------------------------
+app.get('/api/sql/status', async (req: Request, res: Response) => {
+  try {
+    const isConfigured = Boolean(process.env.SQL_HOST && process.env.SQL_USER);
+    if (!isConfigured) {
+      return res.json({
+        configured: false,
+        engine: 'PostgreSQL (Cloud SQL / Supabase)',
+        message: 'SQL environment variables not loaded yet'
+      });
+    }
+
+    const [prodCount, ordCount, catCount, payCount, shopCount] = await Promise.all([
+      drizzleDb.select({ count: count() }).from(productsTable).catch(() => [{ count: 0 }]),
+      drizzleDb.select({ count: count() }).from(ordersTable).catch(() => [{ count: 0 }]),
+      drizzleDb.select({ count: count() }).from(categoriesTable).catch(() => [{ count: 0 }]),
+      drizzleDb.select({ count: count() }).from(paymentsTable).catch(() => [{ count: 0 }]),
+      drizzleDb.select({ count: count() }).from(shopsTable).catch(() => [{ count: 0 }]),
+    ]);
+
+    res.json({
+      configured: true,
+      engine: 'PostgreSQL (Cloud SQL / Supabase)',
+      database: process.env.SQL_DB_NAME,
+      tables: {
+        products: prodCount[0]?.count || 0,
+        orders: ordCount[0]?.count || 0,
+        categories: catCount[0]?.count || 0,
+        payments: payCount[0]?.count || 0,
+        shops: shopCount[0]?.count || 0,
+      },
+      syncedWithInMemory: true,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to retrieve database status', details: err?.message });
+  }
+});
+
+app.post('/api/sql/sync', async (req: Request, res: Response) => {
+  try {
+    if (!process.env.SQL_HOST) {
+      return res.status(503).json({ error: 'PostgreSQL database not configured' });
+    }
+
+    if (db.settings) await saveSettingsToPostgres(db.settings);
+    for (const cat of db.categories) {
+      await saveCategoryToPostgres(cat);
+    }
+    for (const shop of db.shops) {
+      await saveShopToPostgres(shop);
+    }
+    for (const order of db.orders) {
+      await saveOrderToPostgres(order);
+    }
+    for (const payment of db.paymentConfirmations) {
+      await savePaymentToPostgres(payment);
+    }
+    const syncedProducts = await bulkSyncProductsToPostgres(db.products);
+
+    res.json({
+      success: true,
+      message: 'All data successfully stored on PostgreSQL Cloud Database (Supabase-compatible)',
+      synced: {
+        products: syncedProducts,
+        orders: db.orders.length,
+        categories: db.categories.length,
+        shops: db.shops.length,
+        paymentConfirmations: db.paymentConfirmations.length,
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Sync failed', details: err?.message });
+  }
 });
 
 // -------------------------------------------------------------
@@ -14215,6 +14350,36 @@ async function startServer() {
         });
     }
   }, 10 * 60 * 1000);
+
+  // Background initial synchronization to PostgreSQL Cloud database (Supabase-compatible)
+  setTimeout(async () => {
+    try {
+      if (process.env.SQL_HOST) {
+        console.log('[PostgreSQL] Performing startup sync with Cloud SQL...');
+        if (db.settings) await saveSettingsToPostgres(db.settings);
+        for (const cat of db.categories) {
+          await saveCategoryToPostgres(cat);
+        }
+        for (const shop of db.shops) {
+          await saveShopToPostgres(shop);
+        }
+        for (const order of db.orders) {
+          await saveOrderToPostgres(order);
+        }
+        for (const payment of db.paymentConfirmations) {
+          await savePaymentToPostgres(payment);
+        }
+        let syncedCount = 0;
+        for (const p of db.products) {
+          const ok = await saveProductToPostgres(p);
+          if (ok) syncedCount++;
+        }
+        console.log(`[PostgreSQL] Startup sync completed: ${syncedCount} products stored.`);
+      }
+    } catch (err: any) {
+      console.warn('[PostgreSQL] Startup sync notice:', err?.message || err);
+    }
+  }, 1500);
 
   if (!isProduction) {
     const vite = await createViteServer({

@@ -1,2 +1,2 @@
-/api/*    /api/:splat   404
+/api/*    https://ais-pre-5yei3t5fbpm5y4v7w2ck65-894432086585.europe-west2.run.app/api/:splat   200
 /*        /index.html   200
