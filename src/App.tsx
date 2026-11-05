@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
-import { initialSettings } from './data/initialData.ts';
+import { initialProducts, initialCategories, initialSettings, initialShops } from './data/initialData.ts';
 import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
 import { Language, translations, getCategoryTitle } from './translations.ts';
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
@@ -152,7 +152,7 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
-  // Core Data loaded dynamically from database with localStorage hydration
+  // Core Data with permanent local hydration
   const [products, setProducts] = useState<Product[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -165,46 +165,14 @@ export default function App() {
             return list.filter((p: Product) => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
           }
         }
+        return initialProducts.filter(p => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
       } catch {}
     }
-    return [];
+    return initialProducts;
   });
-  const [categories, setCategories] = useState<Category[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_categories_cache');
-        if (cached) {
-          const list = JSON.parse(cached);
-          if (Array.isArray(list) && list.length > 0) return list;
-        }
-      } catch {}
-    }
-    return [];
-  });
-  const [shops, setShops] = useState<VendorShop[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_shops_cache');
-        if (cached) {
-          const list = JSON.parse(cached);
-          if (Array.isArray(list) && list.length > 0) return list;
-        }
-      } catch {}
-    }
-    return [];
-  });
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_settings_cache');
-        if (cached) {
-          const obj = JSON.parse(cached);
-          if (obj && typeof obj === 'object') return obj;
-        }
-      } catch {}
-    }
-    return initialSettings;
-  });
+  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [shops, setShops] = useState<VendorShop[]>(initialShops);
+  const [settings, setSettings] = useState<AppSettings>(initialSettings);
 
   // Request permanent storage from browser and persist catalog to local storage
   useEffect(() => {
@@ -281,7 +249,12 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
   // Active selected entities
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(() => {
+    if (initialRoute.productId) {
+      return initialProducts.find(p => p.id === initialRoute.productId) || null;
+    }
+    return null;
+  });
   const [confirmationOrder, setConfirmationOrder] = useState<Order | null>(null);
   const [trackingOrderNumber, setTrackingOrderNumber] = useState<string>(initialRoute.orderRef || '');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
@@ -455,18 +428,6 @@ export default function App() {
       setSettings(fetchedSettings);
       setShops(fetchedShops);
       setIsAdminLoggedIn(isAuth);
-
-      try {
-        if (fetchedCategories && fetchedCategories.length > 0) {
-          localStorage.setItem('crm_categories_cache', JSON.stringify(fetchedCategories));
-        }
-        if (fetchedShops && fetchedShops.length > 0) {
-          localStorage.setItem('crm_shops_cache', JSON.stringify(fetchedShops));
-        }
-        if (fetchedSettings && typeof fetchedSettings === 'object') {
-          localStorage.setItem('crm_settings_cache', JSON.stringify(fetchedSettings));
-        }
-      } catch {}
 
       if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
         setIsAdminLoginOpen(true);

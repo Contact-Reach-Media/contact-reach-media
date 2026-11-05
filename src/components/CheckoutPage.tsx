@@ -373,7 +373,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                         <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px]">Merchant</span>
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Code: <strong>{settings.merchantCode || '2328354'}</strong> (*182*8*1*{settings.merchantCode || '2328354'}#)
+                        Code: <strong>2328354</strong> (*182*8*1*2328354#)
                       </p>
                     </div>
                   </label>
@@ -399,7 +399,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                         <span>MTN Direct Transfer</span>
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Transfer to <strong>{settings.paymentNumber || settings.phone || '0780022600'}{settings.receiverName ? ` (${settings.receiverName})` : ''}</strong>
+                        Transfer to <strong>0780022600 (Ruth)</strong>
                       </p>
                     </div>
                   </label>
@@ -425,7 +425,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                         <span>Airtel Money</span>
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Send to <strong>{settings.paymentNumber || settings.phone || '0780022600'}{settings.receiverName ? ` (${settings.receiverName})` : ''}</strong>
+                        Send to <strong>0780022600 (Ruth)</strong>
                       </p>
                     </div>
                   </label>

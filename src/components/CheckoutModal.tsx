@@ -123,10 +123,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Merchant & Receiver details
   const primaryProduct = cart[0]?.product;
-  const merchantCode = primaryProduct?.merchantCode || settings.merchantCode || '';
-  const receiverPhone = primaryProduct?.receiverPhone || settings.paymentNumber || settings.phone || '';
-  const receiverName = primaryProduct?.receiverName || settings.receiverName || settings.marketName || 'ContactReach Market';
-  const cleanWhatsApp = (settings.whatsAppNumber || settings.phone || '').replace(/[^0-9]/g, '');
+  const merchantCode = primaryProduct?.merchantCode || settings.merchantCode || USSD_CONFIG.mtnMerchantCode;
+  const receiverPhone = primaryProduct?.receiverPhone || settings.paymentNumber || USSD_CONFIG.mtnMomoNumber;
+  const receiverName = primaryProduct?.receiverName || settings.receiverName || USSD_CONFIG.receiverName;
 
   const amountToPay = createdOrder ? createdOrder.totalAmount : grandTotal;
 
@@ -425,10 +424,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const handlePasteSampleSms = () => {
     const mockTxn = `TXN${Math.floor(100000000 + Math.random() * 900000000)}`;
     const sample = paymentMethod === 'Airtel Money'
-      ? `Airtel Money: You have sent ${amountToPay.toLocaleString()} RWF to ${receiverName}${receiverPhone ? ` (${receiverPhone})` : ''}. TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
+      ? `Airtel Money: You have sent ${amountToPay.toLocaleString()} RWF to Ruth (0780022600). TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
       : paymentMethod === 'MTN Merchant Code'
-      ? `Y'ello! You have paid ${amountToPay.toLocaleString()} RWF to ${settings.marketName || 'ContactReach Market'}${merchantCode ? ` (${merchantCode})` : ''} on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 0 RWF.`
-      : `Y'ello! You have transferred ${amountToPay.toLocaleString()} RWF to ${receiverName}${receiverPhone ? ` (${receiverPhone})` : ''} on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF.`;
+      ? `Y'ello! You have paid ${amountToPay.toLocaleString()} RWF to ContactReach Market (2328354) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 0 RWF.`
+      : `Y'ello! You have transferred ${amountToPay.toLocaleString()} RWF to Ruth (0780022600) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF.`;
     handleMessageChange(sample);
   };
 
@@ -1226,17 +1225,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span>Attach Screenshot or Confirmation SMS for Manual Audit</span>
                 </button>
 
-                {cleanWhatsApp && (
-                  <a
-                    href={`https://wa.me/${cleanWhatsApp}?text=${whatsappMessage}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <MessageCircle className="w-4 h-4 text-emerald-600" />
-                    <span>Contact Payment Support on WhatsApp ({settings.whatsAppNumber || settings.phone})</span>
-                  </a>
-                )}
+                <a
+                  href={`https://wa.me/250780022600?text=${whatsappMessage}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-600" />
+                  <span>Contact Payment Support on WhatsApp (+250 780 022 600)</span>
+                </a>
               </div>
             </div>
           )}
@@ -1298,9 +1295,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-semibold bg-slate-50"
                   >
-                    <option value="MTN Merchant Code">MTN MoMoPay {merchantCode ? `(Code: ${merchantCode})` : ''}</option>
-                    <option value="MTN Mobile Money">MTN MoMo Direct ({receiverName}{receiverPhone ? ` / ${receiverPhone}` : ''})</option>
-                    <option value="Airtel Money">Airtel Money ({receiverName}{receiverPhone ? ` / ${receiverPhone}` : ''})</option>
+                    <option value="MTN Merchant Code">MTN MoMoPay (Code: {merchantCode})</option>
+                    <option value="MTN Mobile Money">MTN MoMo Direct (Ruth / {receiverPhone})</option>
+                    <option value="Airtel Money">Airtel Money (Ruth / {receiverPhone})</option>
                   </select>
                 </div>
               </div>
@@ -1498,17 +1495,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
               {/* Action Buttons */}
               <div className="pt-2 space-y-2.5 max-w-md mx-auto">
-                {cleanWhatsApp && (
-                  <a
-                    href={`https://wa.me/${cleanWhatsApp}?text=${whatsappMessage}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3.5 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>Notify Support on WhatsApp ({settings.whatsAppNumber || settings.phone})</span>
-                  </a>
-                )}
+                <a
+                  href={`https://wa.me/250780022600?text=${whatsappMessage}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Notify Admin Ruth on WhatsApp (+250 780 022 600)</span>
+                </a>
 
                 {onOpenTracking && createdOrder && (
                   <button

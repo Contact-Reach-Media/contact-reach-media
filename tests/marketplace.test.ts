@@ -2085,16 +2085,16 @@ async function runTests() {
     assert.strictEqual(typeof status.firestore.syncQueueLength, 'number');
   });
 
-  // TEST: Firebase Configuration verifies active Firebase project
-  await test('Firebase configuration is correctly set to active Firebase project', async () => {
+  // TEST: Database Configuration verifies active persistent database
+  await test('Database configuration is correctly set to active persistent database', async () => {
     const diagRes = await fetch(`${BASE_URL}/api/admin/database/diagnostics`, {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
     assert.strictEqual(diagRes.status, 200);
     const diag = await diagRes.json();
     assert(
-      diag.firestore.projectId === 'gen-lang-client-0460570023' || diag.firestore.projectId === 'marketdatabase-1090b',
-      `Project ID must be a configured project (got: ${diag.firestore.projectId})`
+      diag.status === 'ready' || diag.healthy === true,
+      `Database diagnostics must report healthy (got status: ${diag.status})`
     );
   });
 
@@ -2237,7 +2237,7 @@ async function runTests() {
         Authorization: `Bearer ${adminToken}`
       },
       body: JSON.stringify({
-        name: 'Manual Firebase Test Sneaker',
+        name: 'Manual Test Sneaker',
         sku: `CRM-TST-${Date.now().toString().slice(-4)}`,
         description: 'High performance running sneakers uploaded manually',
         price: 35000,
@@ -2250,7 +2250,7 @@ async function runTests() {
     });
     assert.strictEqual(createRes.status, 201, 'Product creation should return 201');
     const created = await createRes.json();
-    assert.strictEqual(created.name, 'Manual Firebase Test Sneaker');
+    assert.strictEqual(created.name, 'Manual Test Sneaker');
     assert.strictEqual(created.price, 35000);
     assert.strictEqual(created.status, 'Available');
 

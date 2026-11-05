@@ -38,11 +38,11 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
   const message = settings.maintenanceMessage || (currentLang === 'en' ? defaultMessageEn : defaultMessageRw);
   const eta = settings.maintenanceEstimatedTime;
 
-  const phoneDisplay = settings.phone || '';
+  const phoneDisplay = settings.phone || '+250 780 022 600';
   const cleanPhone = phoneDisplay.replace(/\D/g, '');
-  const whatsAppNumber = settings.whatsAppNumber || settings.phone || '';
+  const whatsAppNumber = settings.whatsAppNumber || '+250780022600';
   const cleanWhatsApp = whatsAppNumber.replace(/\D/g, '');
-  const email = settings.email || '';
+  const email = settings.email || 'contactreachmedialimited@gmail.com';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white flex flex-col justify-between selection:bg-[#FF6000] selection:text-white relative overflow-hidden">

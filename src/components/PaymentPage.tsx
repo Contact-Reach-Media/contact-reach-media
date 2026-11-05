@@ -4,7 +4,7 @@ import {
   AlertCircle, ShieldCheck, ChevronRight, Package, Truck,
   Calendar, ShoppingBag, ArrowLeft, RefreshCw, MessageCircle
 } from 'lucide-react';
-import { Order, PaymentConfirmation, MarketSettings } from '../types.ts';
+import { Order, PaymentConfirmation } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
@@ -19,7 +19,6 @@ interface PaymentPageProps {
   currentLang: Language;
   currentCurrency?: CurrencyCode;
   exchangeRates?: Record<string, number>;
-  settings?: MarketSettings;
 }
 
 export const PaymentPage: React.FC<PaymentPageProps> = ({
@@ -28,8 +27,7 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
   onNavigate,
   currentLang,
   currentCurrency = 'RWF',
-  exchangeRates,
-  settings
+  exchangeRates
 }) => {
   const t = translations[currentLang] || translations.en;
 
@@ -156,14 +154,11 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
 
   const primaryItem = activeOrder.items?.[0];
   const primaryItemImg = getProductImageDueToProduct(primaryItem);
-  const receiverPhone = activeOrder.receiverDetails || settings?.paymentNumber || settings?.phone || '';
-  const merchantCode = activeOrder.merchantCode || settings?.merchantCode || '';
-  const receiverName = activeOrder.receiverName || settings?.receiverName || '';
   const ussdCode = buildUssdCode(
     activeOrder.paymentMethod,
     activeOrder.totalAmount,
-    receiverPhone,
-    merchantCode
+    activeOrder.receiverDetails || '0780022600',
+    '2328354'
   );
   const telUri = formatUssdTelUri(ussdCode);
 
@@ -406,9 +401,9 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
             </div>
 
             <p className="text-xs text-amber-900 leading-relaxed">
-              Please send exactly <strong>{activeOrder.totalAmount.toLocaleString()} RWF</strong>
-              {receiverName ? <> to <strong>{receiverName}</strong>{receiverPhone ? ` (${receiverPhone})` : ''}</> : (receiverPhone ? <> to <strong>{receiverPhone}</strong></> : '')}.
-              {merchantCode ? <> For MTN MoMoPay, enter merchant code <strong>{merchantCode}</strong>.</> : null}
+              Please send exactly <strong>{activeOrder.totalAmount.toLocaleString()} RWF</strong> to{' '}
+              <strong>{activeOrder.receiverName || 'Ruth'}</strong> ({activeOrder.receiverDetails || '0780022600'}).
+              For MTN MoMoPay, enter merchant code <strong>2328354</strong>.
             </p>
 
             {/* USSD Box with 1-tap dial */}
@@ -477,7 +472,7 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
                   <textarea
                     value={confirmationMessage}
                     onChange={(e) => handleSmsChange(e.target.value)}
-                    placeholder={`e.g. Y'ello! You have transferred ${activeOrder.totalAmount.toLocaleString()} RWF${receiverName ? ` to ${receiverName}` : ''}. Financial Transaction Id: 1982736451.`}
+                    placeholder="e.g. Y'ello! You have transferred 15,000 RWF to Ruth (0780022600). Financial Transaction Id: 1982736451."
                     rows={3}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 font-mono text-xs"
                   />

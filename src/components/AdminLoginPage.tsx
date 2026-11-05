@@ -16,7 +16,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   onLoginSuccess,
   onNavigateHome
 }) => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +158,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@example.com"
+                  placeholder="contactreachmedialimited@gmail.com"
                   required
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs"
                 />
@@ -195,7 +195,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
 
           <div className="p-3 bg-slate-50 rounded-xl text-[11px] text-slate-500 text-center flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Secured by Firebase RBAC & JWT tokens</span>
+            <span>Secured by ContactReach RBAC & JWT tokens</span>
           </div>
         </div>
 

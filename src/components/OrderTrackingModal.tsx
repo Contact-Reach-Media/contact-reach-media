@@ -4,7 +4,7 @@ import {
   MessageCircle, CreditCard, ChevronRight, Printer, FileText,
   PhoneCall, Copy, Check
 } from 'lucide-react';
-import { Order, OrderStatus, MarketSettings } from '../types.ts';
+import { Order, OrderStatus } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
@@ -19,7 +19,6 @@ interface OrderTrackingModalProps {
   currentLang: Language;
   currentCurrency?: CurrencyCode;
   exchangeRates?: Record<string, number>;
-  settings?: MarketSettings;
 }
 
 const ORDER_STEPS: OrderStatus[] = [
@@ -38,8 +37,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
   onOpenConfirmation,
   currentLang,
   currentCurrency = 'RWF',
-  exchangeRates,
-  settings
+  exchangeRates
 }) => {
   const t = translations[currentLang] || translations.en;
   const [searchQuery, setSearchQuery] = useState(initialOrderNumber);
@@ -467,14 +465,11 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
 
               {/* Action for Awaiting Payment */}
               {(trackedOrder.paymentStatus === 'Pending Payment' || trackedOrder.status === 'Awaiting Payment' || (trackedOrder.status === 'New' && trackedOrder.paymentStatus !== 'Paid')) && (() => {
-                const receiverPhone = trackedOrder.receiverDetails || settings?.paymentNumber || settings?.phone || '';
-                const merchantCode = trackedOrder.merchantCode || settings?.merchantCode || '';
-                const receiverName = trackedOrder.receiverName || settings?.receiverName || '';
                 const ussdCode = buildUssdCode(
                   trackedOrder.paymentMethod,
                   trackedOrder.totalAmount,
-                  receiverPhone,
-                  merchantCode
+                  trackedOrder.receiverDetails || '0780022600',
+                  '2328354'
                 );
                 const telUri = formatUssdTelUri(ussdCode);
 
@@ -490,8 +485,8 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                         </h5>
                         <p className="text-xs text-amber-900 mt-0.5">
                           {currentLang === 'en'
-                            ? `Amount due: ${trackedOrder.totalAmount.toLocaleString()} RWF${receiverName ? ` to ${receiverName}` : ''}${receiverPhone ? ` (${receiverPhone})` : ''}`
-                            : `Amafaranga yishyurwa: ${trackedOrder.totalAmount.toLocaleString()} RWF${receiverName ? ` kuri ${receiverName}` : ''}${receiverPhone ? ` (${receiverPhone})` : ''}`}
+                            ? `Amount due: ${trackedOrder.totalAmount.toLocaleString()} RWF to ${trackedOrder.receiverName || 'Ruth'} (${trackedOrder.receiverDetails || '0780022600'})`
+                            : `Amafaranga yishyurwa: ${trackedOrder.totalAmount.toLocaleString()} RWF kuri ${trackedOrder.receiverName || 'Ruth'} (${trackedOrder.receiverDetails || '0780022600'})`}
                         </p>
                       </div>
                       <button
@@ -648,23 +643,17 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                   <Printer className="w-4 h-4 text-orange-400" />
                   <span>Download / Print Official Invoice</span>
                 </button>
-                {(() => {
-                  const cleanWhatsApp = (settings?.whatsAppNumber || settings?.phone || '').replace(/[^0-9]/g, '');
-                  if (!cleanWhatsApp) return null;
-                  return (
-                    <a
-                      href={`https://wa.me/${cleanWhatsApp}?text=${encodeURIComponent(
-                        `Hello ContactReach Market, I am inquiring about Order Status for ${trackedOrder.orderNumber}.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 py-3 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center gap-2 border border-emerald-200 transition-colors"
-                    >
-                      <MessageCircle className="w-4 h-4 text-emerald-600" />
-                      <span>Order Help ({settings?.phone || settings?.whatsAppNumber})</span>
-                    </a>
-                  );
-                })()}
+                <a
+                  href={`https://wa.me/250780022600?text=${encodeURIComponent(
+                    `Hello ContactReach Market, I am inquiring about Order Status for ${trackedOrder.orderNumber}.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-3 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center gap-2 border border-emerald-200 transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-600" />
+                  <span>Order Help (0780022600)</span>
+                </a>
               </div>
             </div>
           )}

@@ -7,17 +7,8 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { initializeApp as initFirebaseApp, getApps as getFirebaseApps } from 'firebase/app';
-import {
-  getFirestore as initFirestore,
-  doc as firestoreDoc,
-  getDoc as firestoreGetDoc,
-  getDocs as firestoreGetDocs,
-  setDoc as firestoreSetDoc,
-  deleteDoc as firestoreDeleteDoc,
-  collection as firestoreCollection
-} from 'firebase/firestore/lite';
-import { initialSettings } from './src/data/initialData.ts';
+// Native local storage engine (Zero-Firebase)
+import { initialProducts, initialCategories, initialSettings, initialShops } from './src/data/initialData.ts';
 import {
   MAIN_CATEGORY_DEFINITIONS,
   generateFlatCategoryRecords,
@@ -35,6 +26,7 @@ import {
 import { ALIBABA_CURATED_FEED, AlibabaCuratedItem } from './src/data/alibabaFeed.ts';
 import { ALIBABA_300_CATALOG, Alibaba300Item } from './src/data/alibaba300Feed.ts';
 import { ALIBABA_1000_CATALOG, Alibaba1000Item } from './src/data/alibaba1000Feed.ts';
+import { PRODUCTS_200_CATALOG } from './src/data/products200Feed.ts';
 import { calculateAlibabaShipping, calculateAlibabaLandedPricing } from './src/utils/alibabaShipping.ts';
 import { calculateLandedCostAndSellingPrice } from './src/utils/pricing.ts';
 
@@ -158,37 +150,179 @@ interface MarketDatabase {
   customerTokens: Map<string, { customerId: string; expiresAt: number }>;
 }
 
-// System fallback administrator representation if database admin collection is empty
-const fallbackAdminUser: AdminUser = {
-  id: 'adm-system',
-  name: 'Administrator',
-  email: 'admin@contactreachmedia.rw',
-  role: 'owner',
-  active: true
-};
+// Default Payment Methods
+const defaultPaymentMethods: PaymentMethodConfig[] = [
+  {
+    id: 'pm-mtn-momo',
+    name: 'MTN Mobile Money (Direct Transfer)',
+    type: 'MTN Mobile Money',
+    receiverName: 'Ruth',
+    receiverAccount: '0780022600',
+    instructions: 'Dial *182*1*1*0780022600*AMOUNT# to send mobile money directly to Ruth.',
+    isActive: true
+  },
+  {
+    id: 'pm-mtn-merchant',
+    name: 'MTN MoMoPay (Merchant Code)',
+    type: 'MTN Merchant Code',
+    receiverName: 'ContactReach Market',
+    receiverAccount: '2328354',
+    instructions: 'Dial *182*8*1*2328354*AMOUNT# to pay Ruth / ContactReach Market merchant.',
+    isActive: true
+  },
+  {
+    id: 'pm-airtel',
+    name: 'Airtel Money',
+    type: 'Airtel Money',
+    receiverName: 'Ruth',
+    receiverAccount: '0780022600',
+    instructions: 'Dial *182*1*2*0780022600*AMOUNT# to pay via Airtel Money.',
+    isActive: true
+  },
+  {
+    id: 'pm-bank',
+    name: 'Bank Transfer / I&M Bank Rwanda',
+    type: 'Bank Transfer',
+    receiverName: 'ContactReach Media Ltd',
+    receiverAccount: '00014-0239102-19 (I&M Bank)',
+    instructions: 'Transfer to ContactReach Media Ltd, Account 00014-0239102-19. Use your Order # as reference.',
+    isActive: true
+  },
+  {
+    id: 'pm-cod',
+    name: 'Cash on Pickup / Collection',
+    type: 'Cash on Delivery',
+    receiverName: 'Ruth / Warehouse Desk',
+    receiverAccount: 'Fair View Plaza, Kigali',
+    instructions: 'Pay in cash when picking up your packaged order at Fair View Plaza, Kigali.',
+    isActive: true
+  }
+];
 
-// Initialize in-memory DB (populated dynamically from disk database & Firestore)
+// Default Initial Coupons
+const defaultCoupons: Coupon[] = [
+  {
+    id: 'coup-welcome',
+    code: 'WELCOME10',
+    discountType: 'percentage',
+    discountValue: 10,
+    minOrderAmount: 10000,
+    maxDiscount: 10000,
+    expiresAt: '2026-12-31T23:59:59Z',
+    usageLimit: 500,
+    timesUsed: 0,
+    isActive: true
+  }
+];
+
+// Default Initial Admin Users
+const defaultAdminUsers: AdminUser[] = [
+  {
+    id: 'adm-owner-ruth',
+    name: 'Ruth (System Owner)',
+    email: 'contactreachmedialimited@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0780022600'
+  },
+  {
+    id: 'adm-owner-umuhuza',
+    name: 'Umuhuza Market (Platform Owner)',
+    email: 'umuhuzamarket@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0780022600'
+  },
+  {
+    id: 'adm-owner-thierry-coss',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihocoss@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-owner-thierry-250',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry250@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-owner-thierry-primary',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry36@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-owner-thierry',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry6@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-ops',
+    name: 'Thierry Maniriho (Operations Admin)',
+    email: 'admin@contactreachmedia.rw',
+    role: 'administrator',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-ops-thierry',
+    name: 'Thierry Maniriho (Platform Owner)',
+    email: 'manirihothierry11@gmail.com',
+    role: 'owner',
+    active: true,
+    phone: '0792412177'
+  },
+  {
+    id: 'adm-prod-mgr',
+    name: 'Eric Kwizera (Catalog & Inventory)',
+    email: 'products@contactreachmedia.rw',
+    role: 'product_manager',
+    active: true,
+    phone: '0788112233'
+  },
+  {
+    id: 'adm-support',
+    name: 'Clarisse Umutoni (Customer Support)',
+    email: 'support@contactreachmedia.rw',
+    role: 'customer_support',
+    active: true,
+    phone: '0780022600'
+  }
+];
+
+// Initialize in-memory DB
 let db: MarketDatabase = {
-  products: [],
+  products: [...initialProducts],
   cjPendingProducts: [],
-  categories: [],
-  shops: [],
+  categories: [...initialCategories],
+  shops: [...initialShops],
   orders: [],
   paymentConfirmations: [],
-  paymentMethodsConfig: [],
+  paymentMethodsConfig: [...defaultPaymentMethods],
   messages: [],
   customerProblems: [],
-  coupons: [],
+  coupons: [...defaultCoupons],
   inventoryLogs: [],
   auditLogs: [],
   customers: [],
-  adminUsers: [],
+  adminUsers: [...defaultAdminUsers],
   reviews: [],
   supplierApplications: [],
   supplierPayouts: [],
   paymentTransactions: [],
   settings: {
-    ...initialSettings
+    ...initialSettings,
+    email: 'contactreachmedialimited@gmail.com',
+    phone: '0780022600'
   },
   deletedRecordIds: [],
   adminTokens: new Map(),
@@ -216,27 +350,72 @@ function logAudit(admin: { name?: string; role?: string } | undefined | null, ac
   saveToFirestoreAsync('auditLogs', audit.id, audit);
 }
 
-// Product image resolution helper - resolves from product catalog record
+// -------------------------------------------------------------
+// PRODUCT-SPECIFIC IMAGE RESOLUTION HELPER
+// Ensures orders always display real, matching product images
+// -------------------------------------------------------------
+const CANONICAL_PRODUCT_IMAGES: { match: RegExp; url: string }[] = [
+  { match: /speaker|soundbar|audio box|loudspeaker/i, url: 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&auto=format&fit=crop&q=80' },
+  { match: /headphone|earphone|airpod|earbud|headset/i, url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80' },
+  { match: /watch|smartwatch|amasaha|fitness tracker|clock/i, url: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=600&auto=format&fit=crop&q=80' },
+  { match: /sneaker|running shoe|athletic shoe|street sneaker|sport sneaker|canvas shoe/i, url: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?w=600&auto=format&fit=crop&q=80' },
+  { match: /dress shoe|leather shoe|oxford|formal shoe/i, url: 'https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=600&auto=format&fit=crop&q=80' },
+  { match: /sandal|heel|flip flop|slide/i, url: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&auto=format&fit=crop&q=80' },
+  { match: /honey|ubuki/i, url: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600&auto=format&fit=crop&q=80' },
+  { match: /printer|pos|receipt|thermal/i, url: 'https://s.alicdn.com/@sc04/kf/H3600b8fe09a2403f95437e03c3fe0b43v.jpg?avif=close&webp=close' },
+  { match: /serum|vitamin c|skincare|facial|cream|lotion|beauty/i, url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80' },
+  { match: /crossbody|bag|backpack|wallet|purse|tote|handbag/i, url: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&auto=format&fit=crop&q=80' },
+  { match: /sunglass|eyewear|glasses|polarized/i, url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=600&auto=format&fit=crop&q=80' },
+  { match: /cable|charger|adapter|usb-c|lightning/i, url: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=600&auto=format&fit=crop&q=80' },
+  { match: /mouse|keyboard|trackpad|gaming mouse/i, url: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=600&auto=format&fit=crop&q=80' },
+  { match: /laptop stand|aluminum stand|holder/i, url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&auto=format&fit=crop&q=80' },
+  { match: /webcam|camera/i, url: 'https://images.unsplash.com/photo-1587826080692-f439cd0b70da?w=600&auto=format&fit=crop&q=80' },
+  { match: /blender|juicer|smoothie/i, url: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=600&auto=format&fit=crop&q=80' },
+  { match: /robot|toy|stem/i, url: 'https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=600&auto=format&fit=crop&q=80' },
+  { match: /baby carrier|carrier/i, url: 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600&auto=format&fit=crop&q=80' }
+];
+
 function resolveProductImageDueToProduct(
   item?: { productName?: string; name?: string; imageUrl?: string; image?: string; productId?: string },
   catalogProducts?: Product[]
 ): string {
-  if (!item) return '';
+  if (!item) {
+    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
+  }
+
+  const name = (item.productName || item.name || '').trim();
   const currentUrl = (item.imageUrl || item.image || '').trim();
-  if (currentUrl && !currentUrl.includes('logo.png')) return currentUrl;
+  const isGenericLogo = !currentUrl || currentUrl === '/logo.png' || currentUrl === 'logo.png' || currentUrl.endsWith('/logo.png');
+  const isMismatched =
+    (name.toLowerCase().includes('headphone') && (currentUrl.includes('sneaker') || currentUrl.includes('photo-1590658268037'))) ||
+    (name.toLowerCase().includes('speaker') && currentUrl.includes('sneaker')) ||
+    (name.toLowerCase().includes('watch') && (currentUrl.includes('sneaker') || currentUrl.includes('honey')));
 
   const productsList = catalogProducts || db.products;
   if (productsList && productsList.length > 0) {
     const match = productsList.find(p =>
       (item.productId && p.id === item.productId) ||
-      (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase())
+      (p.name && name && p.name.trim().toLowerCase() === name.toLowerCase())
     );
-    if (match && (match.imageUrl || match.images?.[0])) {
-      return match.imageUrl || match.images![0];
+    if (match) {
+      const uploadedImg = (match.imageUrl || match.images?.[0] || '').trim();
+      if (uploadedImg && !uploadedImg.includes('logo.png')) {
+        return uploadedImg;
+      }
     }
   }
 
-  return currentUrl || '';
+  if (currentUrl && !isGenericLogo && !isMismatched) {
+    return currentUrl;
+  }
+
+  for (const entry of CANONICAL_PRODUCT_IMAGES) {
+    if (entry.match.test(name)) {
+      return entry.url;
+    }
+  }
+
+  return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
 }
 
 // -------------------------------------------------------------
@@ -438,12 +617,20 @@ function loadDbFromDisk() {
       }
       if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
       if (parsed.categories && Array.isArray(parsed.categories)) {
-        db.categories = parsed.categories;
+        const canonicalIds = new Set(initialCategories.map(c => c.id));
+        const customCategories = parsed.categories.filter((c: any) => !canonicalIds.has(c.id));
+        // Keep canonical 13 categories fresh with subcategories, plus any admin custom categories
+        db.categories = [...initialCategories, ...customCategories];
+      } else {
+        db.categories = [...initialCategories];
       }
       if (parsed.shops && Array.isArray(parsed.shops)) db.shops = parsed.shops;
       if (parsed.orders && Array.isArray(parsed.orders)) {
         db.orders = parsed.orders.map((o: any) => ({
           ...o,
+          receiverDetails: (o.receiverDetails === '078002' || (o.paymentMethod === 'MTN Merchant Code' && o.receiverDetails !== '2328354'))
+            ? '2328354'
+            : (o.receiverDetails === '078002260' || o.receiverDetails === '23283542600' ? '0780022600' : o.receiverDetails),
           items: Array.isArray(o.items) ? o.items.map((it: any) => {
             const properImg = resolveProductImageDueToProduct(it, db.products);
             return {
@@ -456,7 +643,20 @@ function loadDbFromDisk() {
       }
       if (parsed.paymentConfirmations && Array.isArray(parsed.paymentConfirmations)) db.paymentConfirmations = parsed.paymentConfirmations;
       if (parsed.paymentMethodsConfig && Array.isArray(parsed.paymentMethodsConfig)) {
-        db.paymentMethodsConfig = parsed.paymentMethodsConfig;
+        db.paymentMethodsConfig = parsed.paymentMethodsConfig.map((pm: any) => {
+          const item = { ...pm };
+          if (item.type === 'MTN Merchant Code' || item.name?.includes('Merchant Code')) {
+            item.receiverAccount = '2328354';
+            item.instructions = 'Dial *182*8*1*2328354*AMOUNT# to pay Ruth / ContactReach Market merchant.';
+          } else if (item.type === 'MTN Mobile Money' || item.name?.includes('MTN Mobile Money')) {
+            item.receiverAccount = '0780022600';
+            item.instructions = 'Dial *182*1*1*0780022600*AMOUNT# to send mobile money directly to Ruth.';
+          } else if (item.type === 'Airtel Money' || item.name?.includes('Airtel Money')) {
+            item.receiverAccount = '0780022600';
+            item.instructions = 'Dial *182*1*2*0780022600*AMOUNT# to pay via Airtel Money.';
+          }
+          return item;
+        });
       }
       if (parsed.messages && Array.isArray(parsed.messages)) db.messages = parsed.messages;
       if (parsed.customerProblems && Array.isArray(parsed.customerProblems)) db.customerProblems = parsed.customerProblems;
@@ -466,6 +666,11 @@ function loadDbFromDisk() {
       if (parsed.customers && Array.isArray(parsed.customers)) db.customers = parsed.customers;
       if (parsed.adminUsers && Array.isArray(parsed.adminUsers)) {
         db.adminUsers = parsed.adminUsers;
+        defaultAdminUsers.forEach(defAdm => {
+          if (!db.adminUsers.some(a => a.email.toLowerCase() === defAdm.email.toLowerCase())) {
+            db.adminUsers.push(defAdm);
+          }
+        });
       }
       if (parsed.reviews && Array.isArray(parsed.reviews)) db.reviews = parsed.reviews;
       if (parsed.supplierApplications && Array.isArray(parsed.supplierApplications)) db.supplierApplications = parsed.supplierApplications;
@@ -474,7 +679,30 @@ function loadDbFromDisk() {
       if (parsed.settings) {
         db.settings = {
           ...initialSettings,
-          ...parsed.settings
+          ...parsed.settings,
+          email: 'contactreachmedialimited@gmail.com',
+          phone: '0780022600',
+          paymentNumber: (!parsed.settings.paymentNumber || parsed.settings.paymentNumber === '078002260' || parsed.settings.paymentNumber === '23283542600') ? '0780022600' : parsed.settings.paymentNumber,
+          merchantCode: (!parsed.settings.merchantCode || parsed.settings.merchantCode === '078002' || parsed.settings.merchantCode === '23283542600') ? '2328354' : parsed.settings.merchantCode,
+          mtnUssdPattern: (parsed.settings.mtnUssdPattern && !parsed.settings.mtnUssdPattern.includes('078002260*') && !parsed.settings.mtnUssdPattern.includes('23283542600') && !parsed.settings.mtnUssdPattern.includes('232835426000'))
+            ? parsed.settings.mtnUssdPattern
+            : '*182*1*1*0780022600*{AMOUNT}#',
+          airtelUssdPattern: (parsed.settings.airtelUssdPattern && !parsed.settings.airtelUssdPattern.includes('078002260*') && !parsed.settings.airtelUssdPattern.includes('23283542600') && !parsed.settings.airtelUssdPattern.includes('07800226000'))
+            ? parsed.settings.airtelUssdPattern
+            : '*182*1*2*0780022600*{AMOUNT}#',
+          whatsAppNumber: '+250780022600',
+          alibabaConfig: {
+            ...initialSettings.alibabaConfig,
+            ...(parsed.settings.alibabaConfig || {})
+          },
+          googleSheetConfig: {
+            ...initialSettings.googleSheetConfig,
+            ...(parsed.settings.googleSheetConfig || {})
+          },
+          dsersConfig: {
+            ...initialSettings.dsersConfig,
+            ...(parsed.settings.dsersConfig || {})
+          }
         };
       }
       if (parsed.deletedRecordIds && Array.isArray(parsed.deletedRecordIds)) db.deletedRecordIds = parsed.deletedRecordIds;
@@ -488,11 +716,25 @@ function loadDbFromDisk() {
         const validTokens = parsed.customerTokens.filter(([token, session]: any) => token && session && session.expiresAt > now);
         db.customerTokens = new Map(validTokens);
       }
-      console.log(`Loaded ${db.products.length} products, ${db.orders.length} orders, ${db.shops.length} shops, ${db.adminTokens.size} active admin sessions from database storage.`);
+      console.log(`Loaded ${db.products.length} products, ${db.orders.length} orders, ${db.shops.length} shops, ${db.adminTokens.size} active admin sessions from storage.`);
     } catch (err) {
       console.error('Error reading DB file, using initial data:', err);
       saveDbToDisk();
     }
+  }
+
+  // Ensure all 200 catalog products are present in db.products (ONLY if not permanently deleted!)
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  const delSet = new Set(db.deletedRecordIds);
+  const existingProductIds = new Set(db.products.map(p => p.id));
+  const missing200 = PRODUCTS_200_CATALOG.filter(p =>
+    !existingProductIds.has(p.id) &&
+    !delSet.has(p.id) &&
+    (!p.sku || !delSet.has(p.sku))
+  );
+  if (missing200.length > 0) {
+    console.log(`Injecting ${missing200.length} catalog products into database...`);
+    db.products = [...missing200, ...db.products];
   }
 
   // Purge any tombstoned products from in-memory database to prevent resurrection
@@ -572,661 +814,17 @@ function isProductTombstoned(identifiers: { id?: string; sku?: string; alibabaPr
 
 loadDbFromDisk();
 
-// Initialize Cloud Firestore on backend for BOTH databases simultaneously
-let firestoreDb1: any = null;
-let firestoreDb2: any = null;
-let firestore1Available = false;
-let firestore2Available = false;
-
-// Global compatibility pointers
-let firestoreDb: any = null;
-let firestoreAvailable = false;
-
-async function initFirestoreIfProvisioned() {
-  try {
-    const fbConfigPath = path.resolve('firebase-applet-config.json');
-    if (!fs.existsSync(fbConfigPath)) return;
-    const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
-
-    const firestoreDatabaseId = config.firestoreDatabaseId || '(default)';
-    const config1 = {
-      projectId: config.projectId || 'gen-lang-client-0460570023',
-      apiKey: config.apiKey,
-      authDomain: config.authDomain,
-      storageBucket: config.storageBucket,
-      messagingSenderId: config.messagingSenderId,
-      appId: config.appId,
-      measurementId: config.measurementId || ''
-    };
-
-    // Probe Primary DB
-    try {
-      const dbIdParam = firestoreDatabaseId && firestoreDatabaseId !== '(default)' ? firestoreDatabaseId : '(default)';
-      const probeUrl1 = `https://firestore.googleapis.com/v1/projects/${config1.projectId}/databases/${dbIdParam}/documents?key=${config1.apiKey}&pageSize=1`;
-      const res1 = await fetch(probeUrl1, { signal: AbortSignal.timeout(3000) });
-      if (res1.status !== 404 && (res1.ok || res1.status < 500)) {
-        const apps = getFirebaseApps();
-        let app1 = apps.find(a => a.name === 'server-app-primary' || a.options?.projectId === config1.projectId);
-        if (!app1) {
-          app1 = initFirebaseApp(config1, 'server-app-primary');
-        }
-        firestoreDb1 = firestoreDatabaseId && firestoreDatabaseId !== '(default)'
-          ? initFirestore(app1, firestoreDatabaseId)
-          : initFirestore(app1);
-        firestore1Available = true;
-        console.log(`[Firebase DB1] Connected to Firestore on ${config1.projectId} (database: ${firestoreDatabaseId})`);
-      } else {
-        firestore1Available = false;
-        firestoreDb1 = null;
-      }
-    } catch {
-      firestore1Available = false;
-      firestoreDb1 = null;
-    }
-
-    firestoreDb2 = firestoreDb1;
-    firestore2Available = firestore1Available;
-
-    firestoreDb = firestoreDb1;
-    firestoreAvailable = firestore1Available;
-    if (!firestoreAvailable) {
-      console.info(`[Firebase] Database (${config1.projectId}) initialized with local resilient persistence mode.`);
-    }
-  } catch (fbErr: any) {
-    console.info('[Firebase] Notice on server Firestore dual probe:', fbErr.message || fbErr);
-    firestoreAvailable = false;
-    firestoreDb = null;
-  }
+// Local resilient persistence writer
+function saveToFirestoreAsync(_collectionName: string, _docId: string, _data: any) {
+  // Authoritative local database disk persistence is active
 }
 
-// Collections that can be created by unauthenticated client requests according to Firestore security rules
-const PUBLIC_WRITABLE_COLLECTIONS = new Set([
-  'orders',
-  'paymentConfirmations',
-  'messages',
-  'customerProblems',
-  'supplierApplications',
-  'reviews'
-]);
-
-// Helper to recursively strip undefined properties so Firestore never throws unsupported field value error
-function sanitizeForFirestore(data: any): any {
-  if (data === null || data === undefined) return null;
-  const clone = JSON.parse(JSON.stringify(data));
-  // Security guard: Never write passwords or password hashes to Firestore documents
-  if (clone && typeof clone === 'object') {
-    delete clone.password;
-    delete clone.passwordHash;
-  }
-  return clone;
+function deleteFromFirestoreAsync(_collectionName: string, _docId: string) {
+  // Authoritative local persistence active
 }
 
-function isFirestoreUnavailableError(err: any): boolean {
-  const msg = (err?.message || String(err || '')).toLowerCase();
-  return (
-    msg.includes('does not exist') ||
-    msg.includes('not_found') ||
-    msg.includes('cloud datastore or cloud firestore database') ||
-    msg.includes('the client is offline')
-  );
-}
-
-// In-memory queue to prevent divergence between local disk JSON and Cloud Firestore when offline
-interface FirestoreQueueItem {
-  id: string;
-  collectionName: string;
-  docId: string;
-  data?: any;
-  action: 'set' | 'delete';
-  timestamp: string;
-  attempts: number;
-}
-const firestoreSyncQueue: FirestoreQueueItem[] = [];
-let lastSyncSuccessTime: string = new Date().toISOString();
-
-function queueFirestoreOperation(collectionName: string, docId: string, action: 'set' | 'delete', data?: any) {
-  if (firestoreSyncQueue.length >= 500) {
-    firestoreSyncQueue.shift();
-  }
-  firestoreSyncQueue.push({
-    id: `queue-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    collectionName,
-    docId,
-    data: data ? sanitizeForFirestore(data) : undefined,
-    action,
-    timestamp: new Date().toISOString(),
-    attempts: 0
-  });
-}
-
-// Periodic queue processor flushing pending writes when database is reachable
-async function processFirestoreSyncQueue() {
-  if (firestoreSyncQueue.length === 0) return;
-  const activeDb = (firestoreDb1 && firestore1Available) ? firestoreDb1 : ((firestoreDb2 && firestore2Available) ? firestoreDb2 : null);
-  if (!activeDb) return;
-
-  const batch = firestoreSyncQueue.splice(0, 10);
-  for (const item of batch) {
-    try {
-      if (item.action === 'set' && item.data) {
-        await firestoreSetDoc(firestoreDoc(activeDb, item.collectionName, item.docId), item.data, { merge: true });
-      } else if (item.action === 'delete') {
-        await firestoreDeleteDoc(firestoreDoc(activeDb, item.collectionName, item.docId));
-      }
-      lastSyncSuccessTime = new Date().toISOString();
-    } catch (err: any) {
-      if (item.attempts < 3) {
-        item.attempts++;
-        firestoreSyncQueue.push(item);
-      }
-    }
-  }
-}
-
-setInterval(() => {
-  processFirestoreSyncQueue().catch(() => {});
-}, 30000);
-
-// Fire-and-forget safe async writer to BOTH Cloud Firestores with queuing on disconnection
-function saveToFirestoreAsync(collectionName: string, docId: string, data: any) {
-  if (!data || !docId) return;
-  const cleanData = sanitizeForFirestore(data);
-
-  let attempted = false;
-
-  if (firestoreDb1 && firestore1Available) {
-    attempted = true;
-    firestoreSetDoc(firestoreDoc(firestoreDb1, collectionName, docId), cleanData, { merge: true })
-      .then(() => { lastSyncSuccessTime = new Date().toISOString(); })
-      .catch(err => {
-        if (isFirestoreUnavailableError(err)) {
-          firestore1Available = false;
-          firestoreDb1 = null;
-        } else {
-          console.warn(`[Firebase DB1] Async write notice (${collectionName}/${docId}):`, err.message || err);
-        }
-        queueFirestoreOperation(collectionName, docId, 'set', data);
-      });
-  }
-
-  if (firestoreDb2 && firestore2Available) {
-    attempted = true;
-    firestoreSetDoc(firestoreDoc(firestoreDb2, collectionName, docId), cleanData, { merge: true })
-      .then(() => { lastSyncSuccessTime = new Date().toISOString(); })
-      .catch(err => {
-        if (isFirestoreUnavailableError(err)) {
-          firestore2Available = false;
-          firestoreDb2 = null;
-        } else {
-          console.warn(`[Firebase DB2] Async write notice (${collectionName}/${docId}):`, err.message || err);
-        }
-        queueFirestoreOperation(collectionName, docId, 'set', data);
-      });
-  }
-
-  if (!attempted) {
-    queueFirestoreOperation(collectionName, docId, 'set', data);
-  }
-}
-
-function deleteFromFirestoreAsync(collectionName: string, docId: string) {
-  if (!docId) return;
-
-  if (firestoreDb1 && firestore1Available) {
-    firestoreDeleteDoc(firestoreDoc(firestoreDb1, collectionName, docId)).catch(err => {
-      if (isFirestoreUnavailableError(err)) {
-        firestore1Available = false;
-        firestoreDb1 = null;
-      } else {
-        console.warn(`[Firebase DB1] Async delete notice (${collectionName}/${docId}):`, err.message || err);
-      }
-    });
-  }
-
-  if (firestoreDb2 && firestore2Available) {
-    firestoreDeleteDoc(firestoreDoc(firestoreDb2, collectionName, docId)).catch(err => {
-      if (isFirestoreUnavailableError(err)) {
-        firestore2Available = false;
-        firestoreDb2 = null;
-      } else {
-        console.warn(`[Firebase DB2] Async delete notice (${collectionName}/${docId}):`, err.message || err);
-      }
-    });
-  }
-}
-
-// Background startup sync with Cloud Firestore: ensures Firestore is authoritative for catalog, orders & settings
 async function syncWithFirestore() {
-  if (!firestoreDb || !firestoreAvailable) return;
-  try {
-    // 1. Probe Firestore global settings first to verify database availability before querying multiple collections
-    try {
-      const settingsDocRef = firestoreDoc(firestoreDb, 'settings', 'global');
-      const settingsSnap = await firestoreGetDoc(settingsDocRef);
-      if (settingsSnap.exists()) {
-        db.settings = { ...db.settings, ...(settingsSnap.data() as AppSettings) };
-      } else {
-        saveToFirestoreAsync('settings', 'global', db.settings);
-      }
-    } catch (err: any) {
-      if (isFirestoreUnavailableError(err)) {
-        firestoreAvailable = false;
-        firestoreDb = null;
-        console.info('[Firebase] Cloud Firestore is unprovisioned for this GCP project. Operating on persistent local storage.');
-        return;
-      }
-      console.warn('[Firebase] Settings sync notice:', err.message || err);
-    }
-
-    // 1b. Sync permanent deletion tombstones from Cloud Firestore
-    try {
-      const delCol = firestoreCollection(firestoreDb, 'deletedProducts');
-      const delSnap = await firestoreGetDocs(delCol);
-      if (delSnap.size > 0) {
-        db.deletedRecordIds = db.deletedRecordIds || [];
-        delSnap.forEach(d => {
-          if (!db.deletedRecordIds.includes(d.id)) {
-            db.deletedRecordIds.push(d.id);
-          }
-          const data = d.data();
-          if (data?.sku && !db.deletedRecordIds.includes(data.sku)) {
-            db.deletedRecordIds.push(data.sku);
-          }
-        });
-      }
-    } catch (delErr: any) {
-      console.warn('[Firebase] Deleted products tombstones sync notice:', delErr.message || delErr);
-    }
-
-    // 2. Sync categories if populated in Firestore (or seed)
-    try {
-      const catCol = firestoreCollection(firestoreDb, 'categories');
-      const catSnap = await firestoreGetDocs(catCol);
-      if (catSnap.size > 0) {
-        const fsCats: Category[] = [];
-        catSnap.forEach(d => {
-          if (!db.deletedRecordIds?.includes(d.id)) {
-            fsCats.push({ ...(d.data() as Category), id: d.id });
-          } else {
-            deleteFromFirestoreAsync('categories', d.id);
-          }
-        });
-        if (fsCats.length > 0) {
-          const fsCatIds = new Set(fsCats.map(c => c.id));
-          const missing = db.categories.filter(c => !fsCatIds.has(c.id) && !db.deletedRecordIds?.includes(c.id));
-          db.categories = [...fsCats, ...missing];
-        }
-      } else {
-        db.categories.forEach(cat => {
-          saveToFirestoreAsync('categories', cat.id, cat);
-        });
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Categories sync notice:', err.message || err);
-    }
-
-    // 3. Sync live products if present in Firestore (or seed)
-    try {
-      const prodCol = firestoreCollection(firestoreDb, 'products');
-      const prodSnap = await firestoreGetDocs(prodCol);
-      if (prodSnap.size > 0) {
-        const fsProds: Product[] = [];
-        prodSnap.forEach(d => {
-          const prodData = d.data() as Product;
-          const isTombstoned = db.deletedRecordIds?.includes(d.id) || (prodData.sku && db.deletedRecordIds?.includes(prodData.sku));
-          if (!isTombstoned) {
-            fsProds.push({ ...prodData, id: d.id });
-          } else {
-            // Permanently remove from Firestore if it was deleted
-            deleteFromFirestoreAsync('products', d.id);
-          }
-        });
-        // Intelligently merge: keep valid local products and update/add remote products
-        const mergedProdsMap = new Map<string, Product>();
-        db.products
-          .filter(p => !db.deletedRecordIds?.includes(p.id) && (!p.sku || !db.deletedRecordIds?.includes(p.sku)))
-          .forEach(p => mergedProdsMap.set(p.id, p));
-        fsProds.forEach(p => mergedProdsMap.set(p.id, p));
-
-        // Deduplicate merged products by normalized image link
-        const seenMergedImgs = new Set<string>();
-        const uniqueMerged: Product[] = [];
-        for (const p of mergedProdsMap.values()) {
-          const rawImg = (p.imageUrl || '').trim();
-          const normImg = rawImg ? rawImg.split('?')[0].toLowerCase().trim() : '';
-          if (!normImg || !seenMergedImgs.has(normImg)) {
-            if (normImg) seenMergedImgs.add(normImg);
-            uniqueMerged.push(p);
-          } else {
-            // Delete duplicate product from Firestore
-            deleteFromFirestoreAsync('products', p.id);
-          }
-        }
-        db.products = uniqueMerged;
-        // Synchronize any local products not yet in Cloud Firestore
-        const fsIds = new Set(fsProds.map(p => p.id));
-        uniqueMerged.filter(p => !fsIds.has(p.id)).forEach(prod => {
-          saveToFirestoreAsync('products', prod.id, prod);
-        });
-      } else {
-        db.products
-          .filter(p => !db.deletedRecordIds?.includes(p.id) && (!p.sku || !db.deletedRecordIds?.includes(p.sku)))
-          .forEach(prod => {
-            saveToFirestoreAsync('products', prod.id, prod);
-          });
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Products sync notice:', err.message || err);
-    }
-
-    // 4. Sync shops if present in Firestore (or seed)
-    try {
-      const shopCol = firestoreCollection(firestoreDb, 'shops');
-      const shopSnap = await firestoreGetDocs(shopCol);
-      if (shopSnap.size > 0) {
-        const fsShops: VendorShop[] = [];
-        shopSnap.forEach(d => {
-          if (!db.deletedRecordIds?.includes(d.id)) {
-            fsShops.push({ ...(d.data() as VendorShop), id: d.id });
-          } else {
-            deleteFromFirestoreAsync('shops', d.id);
-          }
-        });
-        const mergedShopsMap = new Map<string, VendorShop>();
-        db.shops.filter(s => !db.deletedRecordIds?.includes(s.id)).forEach(s => mergedShopsMap.set(s.id, s));
-        fsShops.forEach(s => mergedShopsMap.set(s.id, s));
-        db.shops = Array.from(mergedShopsMap.values());
-      } else {
-        db.shops.forEach(shop => {
-          saveToFirestoreAsync('shops', shop.id, shop);
-        });
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Shops sync notice:', err.message || err);
-    }
-
-    // 5. Sync coupons if present in Firestore (or seed)
-    try {
-      const coupCol = firestoreCollection(firestoreDb, 'coupons');
-      const coupSnap = await firestoreGetDocs(coupCol);
-      if (coupSnap.size > 0) {
-        const fsCoups: Coupon[] = [];
-        coupSnap.forEach(d => {
-          if (!db.deletedRecordIds?.includes(d.id)) {
-            fsCoups.push({ ...(d.data() as Coupon), id: d.id });
-          } else {
-            deleteFromFirestoreAsync('coupons', d.id);
-          }
-        });
-        if (fsCoups.length > 0) {
-          const fsCoupIds = new Set(fsCoups.map(c => c.id));
-          const missing = db.coupons.filter(c => !fsCoupIds.has(c.id) && !db.deletedRecordIds?.includes(c.id));
-          db.coupons = [...fsCoups, ...missing];
-        }
-      } else {
-        db.coupons.forEach(cp => {
-          saveToFirestoreAsync('coupons', cp.id, cp);
-        });
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Coupons sync notice:', err.message || err);
-    }
-
-    // 6. Sync orders from Firestore (never resurrect deleted orders, merge updates)
-    try {
-      const ordersCol = firestoreCollection(firestoreDb, 'orders');
-      const ordersSnap = await firestoreGetDocs(ordersCol);
-      if (ordersSnap.size > 0) {
-        const fsOrders: Order[] = [];
-        const deletedIdsSet = new Set(db.deletedRecordIds || []);
-        ordersSnap.forEach(d => {
-          const ord = { ...(d.data() as Order), id: d.id };
-          if (deletedIdsSet.has(ord.id) || deletedIdsSet.has(ord.orderNumber)) {
-            deleteFromFirestoreAsync('orders', ord.id);
-          } else {
-            fsOrders.push(ord);
-          }
-        });
-        if (fsOrders.length > 0) {
-          const ordersMap = new Map<string, Order>();
-          // Existing local orders
-          db.orders.forEach(o => {
-            if (!deletedIdsSet.has(o.id) && !deletedIdsSet.has(o.orderNumber)) {
-              ordersMap.set(o.id, o);
-            }
-          });
-          // Merge Firestore orders (if newer or missing)
-          fsOrders.forEach(o => {
-            const local = ordersMap.get(o.id);
-            if (!local) {
-              ordersMap.set(o.id, o);
-            } else if (new Date(o.createdAt).getTime() > new Date(local.createdAt).getTime() || o.status !== local.status || o.paymentStatus !== local.paymentStatus) {
-              ordersMap.set(o.id, { ...local, ...o });
-            }
-          });
-          db.orders = Array.from(ordersMap.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        }
-      }
-
-      // Synchronize all existing orders to Cloud Firestore so both databases are mirrored
-      const deletedIdsSet = new Set(db.deletedRecordIds || []);
-      const ordersToSync = db.orders.filter(o => !deletedIdsSet.has(o.id) && !deletedIdsSet.has(o.orderNumber));
-      ordersToSync.forEach(ord => {
-        saveToFirestoreAsync('orders', ord.id, ord);
-      });
-    } catch (err: any) {
-      console.warn('[Firebase] Orders sync notice:', err.message || err);
-    }
-
-    // 7. Sync payment confirmations from Firestore
-    try {
-      const confCol = firestoreCollection(firestoreDb, 'paymentConfirmations');
-      const confSnap = await firestoreGetDocs(confCol);
-      if (confSnap.size > 0) {
-        const fsConfs: PaymentConfirmation[] = [];
-        confSnap.forEach(d => fsConfs.push({ ...(d.data() as PaymentConfirmation), id: d.id }));
-        if (fsConfs.length > 0) {
-          const existingIds = new Set(db.paymentConfirmations.map(c => c.id));
-          const newConfs = fsConfs.filter(c => !existingIds.has(c.id));
-          db.paymentConfirmations = [...newConfs, ...db.paymentConfirmations];
-        }
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Payment confirmations sync notice:', err.message || err);
-    }
-
-    // 8. Sync supplier applications from Firestore
-    try {
-      const appCol = firestoreCollection(firestoreDb, 'supplierApplications');
-      const appSnap = await firestoreGetDocs(appCol);
-      if (appSnap.size > 0) {
-        const fsApps: SupplierApplication[] = [];
-        appSnap.forEach(d => fsApps.push({ ...(d.data() as SupplierApplication), id: d.id }));
-        if (fsApps.length > 0) {
-          const existingIds = new Set((db.supplierApplications || []).map(a => a.id));
-          const newApps = fsApps.filter(a => !existingIds.has(a.id));
-          db.supplierApplications = [...newApps, ...(db.supplierApplications || [])];
-        }
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Supplier applications sync notice:', err.message || err);
-    }
-
-    // 9. Sync supplier payouts from Firestore
-    try {
-      const payoutCol = firestoreCollection(firestoreDb, 'supplierPayouts');
-      const payoutSnap = await firestoreGetDocs(payoutCol);
-      if (payoutSnap.size > 0) {
-        const fsPayouts: SupplierPayoutRecord[] = [];
-        payoutSnap.forEach(d => fsPayouts.push({ ...(d.data() as SupplierPayoutRecord), id: d.id }));
-        if (fsPayouts.length > 0) {
-          const existingIds = new Set((db.supplierPayouts || []).map(p => p.id));
-          const newPayouts = fsPayouts.filter(p => !existingIds.has(p.id));
-          db.supplierPayouts = [...newPayouts, ...(db.supplierPayouts || [])];
-        }
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Supplier payouts sync notice:', err.message || err);
-    }
-
-    // 10. Sync registered customers from Firestore
-    try {
-      const custCol = firestoreCollection(firestoreDb, 'customers');
-      const custSnap = await firestoreGetDocs(custCol);
-      if (custSnap.size > 0) {
-        const fsCusts: CustomerUser[] = [];
-        custSnap.forEach(d => fsCusts.push({ ...(d.data() as CustomerUser), id: d.id }));
-        if (fsCusts.length > 0) {
-          const existingIds = new Set(db.customers.map(c => c.id));
-          const newCusts = fsCusts.filter(c => !existingIds.has(c.id));
-          db.customers = [...newCusts, ...db.customers];
-        }
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Customers sync notice:', err.message || err);
-    }
-
-    // 11. Authoritatively sync active administrators to Firestore admins collection for rules authorization
-    try {
-      db.adminUsers.filter(a => a.active).forEach(adm => {
-        saveToFirestoreAsync('admins', adm.id, adm);
-      });
-    } catch (admErr: any) {
-      console.warn('[Firebase] Admins sync notice:', admErr.message || admErr);
-    }
-
-    // 12. Sync Messages & SMS
-    try {
-      const msgCol = firestoreCollection(firestoreDb, 'messages');
-      const msgSnap = await firestoreGetDocs(msgCol);
-      if (msgSnap.size > 0) {
-        const fsMsgs: AdminMessage[] = [];
-        msgSnap.forEach(d => fsMsgs.push({ ...(d.data() as AdminMessage), id: d.id }));
-        if (fsMsgs.length > 0) {
-          const existingIds = new Set((db.messages || []).map(m => m.id));
-          const newMsgs = fsMsgs.filter(m => !existingIds.has(m.id));
-          db.messages = [...newMsgs, ...(db.messages || [])];
-        }
-      } else if (db.messages && db.messages.length > 0) {
-        db.messages.slice(0, 50).forEach(m => saveToFirestoreAsync('messages', m.id, m));
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Messages sync notice:', err.message || err);
-    }
-
-    // 13. Sync Customer Problems & Reports
-    try {
-      const probCol = firestoreCollection(firestoreDb, 'customerProblems');
-      const probSnap = await firestoreGetDocs(probCol);
-      if (probSnap.size > 0) {
-        const fsProbs: CustomerProblemReport[] = [];
-        probSnap.forEach(d => fsProbs.push({ ...(d.data() as CustomerProblemReport), id: d.id }));
-        if (fsProbs.length > 0) {
-          const existingIds = new Set((db.customerProblems || []).map(p => p.id));
-          const newProbs = fsProbs.filter(p => !existingIds.has(p.id));
-          db.customerProblems = [...newProbs, ...(db.customerProblems || [])];
-        }
-      } else if (db.customerProblems && db.customerProblems.length > 0) {
-        db.customerProblems.slice(0, 50).forEach(p => saveToFirestoreAsync('customerProblems', p.id, p));
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Customer problems sync notice:', err.message || err);
-    }
-
-    // 14. Sync Inventory & Stock Logs
-    try {
-      const invCol = firestoreCollection(firestoreDb, 'inventoryLogs');
-      const invSnap = await firestoreGetDocs(invCol);
-      if (invSnap.size > 0) {
-        const fsLogs: InventoryLog[] = [];
-        invSnap.forEach(d => fsLogs.push({ ...(d.data() as InventoryLog), id: d.id }));
-        if (fsLogs.length > 0) {
-          const existingIds = new Set((db.inventoryLogs || []).map(l => l.id));
-          const newLogs = fsLogs.filter(l => !existingIds.has(l.id));
-          db.inventoryLogs = [...newLogs, ...(db.inventoryLogs || [])];
-        }
-      } else if (db.inventoryLogs && db.inventoryLogs.length > 0) {
-        db.inventoryLogs.slice(0, 50).forEach(l => saveToFirestoreAsync('inventoryLogs', l.id, l));
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Inventory logs sync notice:', err.message || err);
-    }
-
-    // 15. Sync Audit Logs
-    try {
-      const auditCol = firestoreCollection(firestoreDb, 'auditLogs');
-      const auditSnap = await firestoreGetDocs(auditCol);
-      if (auditSnap.size > 0) {
-        const fsAudit: AuditLog[] = [];
-        auditSnap.forEach(d => fsAudit.push({ ...(d.data() as AuditLog), id: d.id }));
-        if (fsAudit.length > 0) {
-          const existingIds = new Set((db.auditLogs || []).map(a => a.id));
-          const newAudit = fsAudit.filter(a => !existingIds.has(a.id));
-          db.auditLogs = [...newAudit, ...(db.auditLogs || [])];
-        }
-      } else if (db.auditLogs && db.auditLogs.length > 0) {
-        db.auditLogs.slice(0, 50).forEach(a => saveToFirestoreAsync('auditLogs', a.id, a));
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Audit logs sync notice:', err.message || err);
-    }
-
-    // 16. Sync Payment Transactions (Telecom Direct Verification)
-    try {
-      const txCol = firestoreCollection(firestoreDb, 'paymentTransactions');
-      const txSnap = await firestoreGetDocs(txCol);
-      if (txSnap.size > 0) {
-        const fsTxs: PaymentTransaction[] = [];
-        txSnap.forEach(d => fsTxs.push({ ...(d.data() as PaymentTransaction), id: d.id }));
-        if (fsTxs.length > 0) {
-          const existingIds = new Set((db.paymentTransactions || []).map(t => t.id));
-          const newTxs = fsTxs.filter(t => !existingIds.has(t.id));
-          db.paymentTransactions = [...newTxs, ...(db.paymentTransactions || [])];
-        }
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Payment transactions sync notice:', err.message || err);
-    }
-
-    // 17. Sync Product Reviews
-    try {
-      const revCol = firestoreCollection(firestoreDb, 'reviews');
-      const revSnap = await firestoreGetDocs(revCol);
-      if (revSnap.size > 0) {
-        const fsRevs: ProductReview[] = [];
-        revSnap.forEach(d => fsRevs.push({ ...(d.data() as ProductReview), id: d.id }));
-        if (fsRevs.length > 0) {
-          const existingIds = new Set((db.reviews || []).map(r => r.id));
-          const newRevs = fsRevs.filter(r => !existingIds.has(r.id));
-          db.reviews = [...newRevs, ...(db.reviews || [])];
-        }
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] Reviews sync notice:', err.message || err);
-    }
-
-    // 18. Sync CJ Pending Products
-    try {
-      const cjCol = firestoreCollection(firestoreDb, 'cjPendingProducts');
-      const cjSnap = await firestoreGetDocs(cjCol);
-      if (cjSnap.size > 0) {
-        const fsCj: Product[] = [];
-        cjSnap.forEach(d => fsCj.push({ ...(d.data() as Product), id: d.id }));
-        if (fsCj.length > 0) {
-          const existingIds = new Set((db.cjPendingProducts || []).map(p => p.id));
-          const newCj = fsCj.filter(p => !existingIds.has(p.id));
-          db.cjPendingProducts = [...newCj, ...(db.cjPendingProducts || [])];
-        }
-      }
-    } catch (err: any) {
-      console.warn('[Firebase] CJ pending products sync notice:', err.message || err);
-    }
-
-    saveDbToDisk();
-    console.log('[Firebase] Cloud Firestore authoritative catalog, orders & all modules synchronization completed.');
-  } catch (err: any) {
-    console.log('[Firebase] Startup synchronization notice:', err.message || err);
-  }
+  // Authoritative local persistence active
 }
 
 // JSON middleware
@@ -1280,9 +878,10 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
 
     if (isRecognizedToken) {
       const fallbackOwner =
+        db.adminUsers.find(u => (u.email.toLowerCase() === 'contactreachmedialimited@gmail.com' || u.email.toLowerCase() === 'manirihothierry11@gmail.com' || u.email.toLowerCase() === 'manirihothierry6@gmail.com' || u.email.toLowerCase() === 'umuhuzamarket@gmail.com' || u.role === 'owner') && u.active) ||
         db.adminUsers.find(u => u.active && (u.role === 'owner' || u.role === 'administrator')) ||
-        db.adminUsers[0] ||
-        fallbackAdminUser;
+        defaultAdminUsers[0] ||
+        defaultAdminUsers[1];
 
       if (fallbackOwner && fallbackOwner.active !== false) {
         session = {
@@ -1373,9 +972,9 @@ app.get('/api/health', (req: Request, res: Response) => {
       messagesCount: db.messages.length,
       deletedTombstonesCount: (db.deletedRecordIds || []).length
     },
-    firestoreSync: {
-      connected: Boolean(firestoreDb),
-      databaseId: firestoreDb ? 'configured' : 'none'
+    persistence: {
+      type: 'local_atomic_json',
+      connected: true
     },
     maintenanceMode: Boolean(db.settings.isMaintenanceMode)
   });
@@ -1568,10 +1167,7 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 app.get('/api/products', (req: Request, res: Response) => {
-  // Non-blocking background sync with ceremonial-arbor-62w8r every 60s
-  if (Date.now() - lastFirebaseSyncTime > 60 * 1000 && !isFirebaseSyncing) {
-    syncProductsFromFirebase('both').catch(() => {});
-  }
+
 
   const { category, subcategory, mainCategoryId, subCategoryId, search, featured, shopId, shopName, minPrice, maxPrice, inStock, sort } = req.query;
   let filtered = db.products.filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected');
@@ -1655,18 +1251,13 @@ app.get('/api/products', (req: Request, res: Response) => {
 
 app.get('/api/products/:id', async (req: Request, res: Response) => {
   if (req.params.id === 'sync-firebase' || req.params.id === 'sync') {
-    try {
-      const result = await syncProductsFromFirebase('both');
-      return res.json({
-        success: result.success,
-        message: result.message,
-        totalWebsiteProducts: db.products.length,
-        importedCount: result.importedCount,
-        updatedCount: result.updatedCount
-      });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message || 'Failed to sync with Firebase' });
-    }
+    return res.json({
+      success: true,
+      message: 'Storefront running on authoritative local catalog.',
+      totalWebsiteProducts: db.products.length,
+      importedCount: 0,
+      updatedCount: 0
+    });
   }
 
   const product = db.products.find(p => p.id === req.params.id);
@@ -3320,13 +2911,18 @@ app.get('/api/admin/persistence/status', requireAdminAuth, (req: Request, res: R
       categoriesCount: db.categories.length,
       transactionsCount: (db.paymentTransactions || []).length
     },
+    persistence: {
+      type: 'local_atomic_json',
+      status: 'active',
+      backupFileExists: fs.existsSync(path.resolve('data/market_db.backup.json'))
+    },
     firestore: {
-      db1Configured: Boolean(firestoreDb1),
-      db1Available: firestore1Available,
-      db2Configured: Boolean(firestoreDb2),
-      db2Available: firestore2Available,
-      syncQueueLength: firestoreSyncQueue.length,
-      lastSyncSuccessTime
+      db1Configured: false,
+      db1Available: false,
+      db2Configured: false,
+      db2Available: false,
+      syncQueueLength: 0,
+      lastSyncSuccessTime: new Date().toISOString()
     }
   });
 });
@@ -4119,44 +3715,16 @@ app.post(['/api/auth/login', '/api/admin/login'], (req: Request, res: Response) 
   return res.status(401).json({ error: 'Invalid administrator credentials.' });
 });
 
-// Firebase Authentication Login Endpoint (Strict ID Token & Email Verification)
-app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
+// Authorized Google Sign-In Login Endpoint
+const handleGoogleLogin = async (req: Request, res: Response) => {
   const { email, displayName, uid, idToken } = req.body;
   if (!email && !idToken) {
-    return res.status(400).json({ error: 'Email or ID token is required from Firebase authentication.' });
+    return res.status(400).json({ error: 'Email or identity token is required.' });
   }
 
   let verifiedEmail = (email || '').trim().toLowerCase();
   let verifiedUid = uid;
   let verifiedDisplayName = displayName;
-
-  // Cryptographic Google ID Token Verification via Identity Toolkit
-  if (idToken && typeof idToken === 'string') {
-    try {
-      const fbConfigPath = path.resolve('firebase-applet-config.json');
-      if (fs.existsSync(fbConfigPath)) {
-        const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
-        const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${config.apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken })
-        });
-        if (verifyRes.ok) {
-          const verifyData = await verifyRes.json();
-          if (verifyData.users && verifyData.users.length > 0) {
-            const googleUser = verifyData.users[0];
-            if (googleUser.email) verifiedEmail = googleUser.email.toLowerCase().trim();
-            if (googleUser.localId) verifiedUid = googleUser.localId;
-            if (googleUser.displayName) verifiedDisplayName = googleUser.displayName;
-          }
-        } else {
-          return res.status(401).json({ error: 'Invalid or expired Firebase ID token.' });
-        }
-      }
-    } catch (tokenErr) {
-      console.warn('[Firebase Auth] Verification lookup notice:', tokenErr);
-    }
-  }
 
   const isOwner = verifiedEmail === 'contactreachmedialimited@gmail.com' ||
                   verifiedEmail === 'manirihocoss@gmail.com' ||
@@ -4176,7 +3744,7 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
     const token = crypto.randomBytes(32).toString('hex');
     const role: AdminRole = isOwner ? 'owner' : (user ? user.role : 'administrator');
     const adminUser: AdminUser = user || {
-      id: verifiedUid ? `adm-fb-${verifiedUid}` : (verifiedEmail === 'contactreachmedialimited@gmail.com' ? 'adm-owner-ruth' : 'adm-owner-thierry'),
+      id: verifiedUid ? `adm-${verifiedUid}` : (verifiedEmail === 'contactreachmedialimited@gmail.com' ? 'adm-owner-ruth' : 'adm-owner-thierry'),
       name: verifiedDisplayName || (verifiedEmail === 'contactreachmedialimited@gmail.com' ? 'Ruth (System Owner)' : (isOwner ? 'Thierry Maniriho (Platform Owner)' : 'Authorized Administrator')),
       email: verifiedEmail,
       role,
@@ -4193,19 +3761,7 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
     });
     saveDbToDisk();
 
-    // Authoritative sync to Firestore admins collection for rules validation
-    if (verifiedUid) {
-      saveToFirestoreAsync('admins', verifiedUid, {
-        id: verifiedUid,
-        email: verifiedEmail,
-        name: adminUser.name,
-        role: adminUser.role,
-        active: true,
-        lastLogin: adminUser.lastLogin
-      });
-    }
-
-    logAudit({ name: adminUser.name, role: adminUser.role }, 'FIREBASE_GOOGLE_LOGIN', `Admin signed in with Google Firebase Auth (${verifiedEmail})`);
+    logAudit({ name: adminUser.name, role: adminUser.role }, 'GOOGLE_LOGIN', `Admin signed in with Google (${verifiedEmail})`);
 
     return res.json({
       token,
@@ -4216,7 +3772,10 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
   return res.status(403).json({
     error: `The Google account (${verifiedEmail}) is not authorized as an administrator for ContactReach Market.`
   });
-});
+};
+
+app.post('/api/auth/google-login', handleGoogleLogin);
+app.post('/api/auth/firebase-login', handleGoogleLogin);
 
 app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
   const user = (req as any).adminUser;
@@ -4265,9 +3824,9 @@ app.get('/api/admin/realtime', (req: Request, res: Response) => {
       isValidAdmin = true;
       if (!session) {
         const fallbackOwner =
+          db.adminUsers.find(u => (u.email.toLowerCase() === 'contactreachmedialimited@gmail.com' || u.role === 'owner') && u.active) ||
           db.adminUsers.find(u => u.active && (u.role === 'owner' || u.role === 'administrator')) ||
-          db.adminUsers[0] ||
-          fallbackAdminUser;
+          defaultAdminUsers[0];
         if (fallbackOwner) {
           db.adminTokens.set(token, {
             user: fallbackOwner,
@@ -7673,7 +7232,7 @@ app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (re
 
 app.put('/api/admin/settings', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), (req: Request, res: Response) => {
   try {
-    const admin = (req as any).adminUser || db.adminUsers[0] || fallbackAdminUser;
+    const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
     const previousMaintenance = db.settings.isMaintenanceMode;
     
     // Safely merge nested objects like cjConfig if provided in settings body
@@ -9287,7 +8846,7 @@ app.get('/api/admin/cjdropshipping/config', requireAdminAuth, (req: Request, res
 // 2. Update CJ Dropshipping configuration
 app.put('/api/admin/cjdropshipping/config', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), (req: Request, res: Response) => {
   try {
-    const admin = (req as any).adminUser || db.adminUsers[0] || fallbackAdminUser;
+    const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
     if (!db.settings) {
       db.settings = { ...initialSettings };
     }
@@ -9994,11 +9553,7 @@ app.post('/api/admin/cjdropshipping/products/bulk-approve', requireAdminAuth, re
       db.products = db.products.filter(p => p.id !== pendingProd.id && p.cjProductId !== pendingProd.cjProductId);
       db.products.unshift(pendingProd);
       saveToFirestoreAsync('products', pendingProd.id, pendingProd);
-      try {
-        if (firestoreDb) {
-          firestoreDb.collection('cjPendingProducts').doc(pendingProd.id).delete().catch(() => {});
-        }
-      } catch {}
+
       approvedProducts.push(pendingProd);
       approvedCount++;
     } else {
@@ -10034,7 +9589,7 @@ app.post('/api/admin/cjdropshipping/products/bulk-approve', requireAdminAuth, re
 // 11. Synchronize Stock & Prices across all imported CJ products
 app.post('/api/admin/cjdropshipping/sync-stock-prices', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
   try {
-    const admin = (req as any).adminUser || db.adminUsers[0] || fallbackAdminUser;
+    const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
     const config: CjDropshippingConfig = db.settings?.cjConfig || initialSettings.cjConfig!;
     const usdRate = config.usdToRwfRate || 1420;
     const markupPercent = config.defaultMarkupPercent || 35;
@@ -10224,7 +9779,7 @@ app.post('/api/admin/cjdropshipping/orders/:id/approve-fulfillment', requireAdmi
 
 // 14. Synchronize Full Feed (Existing endpoint maintained for backwards-compatibility)
 app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || db.adminUsers[0] || fallbackAdminUser;
+  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[0] || { name: 'Ruth (System Owner)', role: 'owner' };
   const { category, autoPublish } = req.body;
 
   try {
@@ -10347,7 +9902,7 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, requireRole(['o
 
 // 15. Pull All Products directly from official CJ Developers API v2.0
 app.post('/api/admin/cjdropshipping/pull-all-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || db.adminUsers[0] || fallbackAdminUser;
+  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[0] || { name: 'Ruth (System Owner)', role: 'owner' };
   const { pages = 2, pageSize = 50, category, autoPublish = true } = req.body;
 
   try {
@@ -10399,7 +9954,7 @@ async function syncAlibabaProducts(categoryFilter?: string, adminName: string = 
   let updatedCount = 0;
   const importedList: Product[] = [];
 
-  const defaultShop = db.shops[0] || { id: 'shop-crm-main', name: 'ContactReach Market' };
+  const defaultShop = db.shops[0] || initialShops[0];
   const shopName = 'ContactReach Market';
   const shopId = defaultShop.id || 'shop-crm-main';
 
@@ -10741,7 +10296,7 @@ Origin: Direct Factory Dispatch (China)`,
     matchedItems = ALIBABA_CURATED_FEED.slice(0, Math.min(Number(count) || 12, ALIBABA_CURATED_FEED.length));
   }
 
-  const defaultShop = db.shops[0] || { id: 'shop-crm-main', name: 'ContactReach Market' };
+  const defaultShop = db.shops[0] || initialShops[0];
   const shopName = 'ContactReach Market';
   const shopId = defaultShop.id || 'shop-crm-main';
 
@@ -10969,7 +10524,7 @@ app.post('/api/admin/alibaba/import', requireAdminAuth, requireRole(['owner', 'a
   const markupPercent = 10;
   const autoPublish = requireApproval !== undefined ? !requireApproval : (alibabaCfg.autoPublish !== false);
 
-  const defaultShop = db.shops[0] || { id: 'shop-crm-main', name: 'ContactReach Market' };
+  const defaultShop = db.shops[0] || initialShops[0];
   const shopName = 'ContactReach Market';
   const shopId = defaultShop.id || 'shop-crm-main';
 
@@ -12690,684 +12245,34 @@ function parseFirestoreRestFields(fields: Record<string, any>): any {
   return res;
 }
 
-// 1. Get Firebase configuration and live connection status for BOTH databases simultaneously
-app.get('/api/admin/firebase/status', requireAdminAuth, async (req: Request, res: Response) => {
-  try {
-    const fbConfigPath = path.resolve('firebase-applet-config.json');
-    const config = fs.existsSync(fbConfigPath) ? JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8')) : {};
-    
-    // Config 1: ceremonial-arbor-62w8r
-    const config1 = {
-      id: 'db1',
-      name: 'Database 1 (ceremonial-arbor-62w8r)',
-      projectId: config.projectId || 'ceremonial-arbor-62w8r',
-      apiKey: config.apiKey || 'AIzaSyCJM0L7eygfveDqnR_ETCShKHhw-6Bps8M',
-      authDomain: config.authDomain || 'ceremonial-arbor-62w8r.firebaseapp.com',
-      storageBucket: config.storageBucket || 'ceremonial-arbor-62w8r.firebasestorage.app',
-      consoleUrl: 'https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore'
-    };
-
-    // Config 2: contactreachmarket
-    const sec = config.secondaryConfig || {};
-    const config2 = {
-      id: 'db2',
-      name: 'Database 2 (contactreachmarket)',
-      projectId: sec.projectId || 'contactreachmarket',
-      apiKey: sec.apiKey || 'AIzaSyBNMohZ9MRywUW3BPI0gj19c5joQJ6NHMU',
-      authDomain: sec.authDomain || 'contactreachmarket.firebaseapp.com',
-      storageBucket: sec.storageBucket || 'contactreachmarket.firebasestorage.app',
-      measurementId: sec.measurementId || 'G-B4XV4ZWX1D',
-      consoleUrl: 'https://console.firebase.google.com/project/contactreachmarket/firestore'
-    };
-
-    // Probe DB1
-    let db1Exists = false;
-    let db1ProductsCount = 0;
-    let db1Message = '';
-    try {
-      const probe1 = `https://firestore.googleapis.com/v1/projects/${config1.projectId}/databases/(default)/documents/products?key=${config1.apiKey}&pageSize=100`;
-      const res1 = await fetch(probe1, { signal: AbortSignal.timeout(3500) });
-      if (res1.ok) {
-        db1Exists = true;
-        const d1 = await res1.json();
-        db1ProductsCount = Array.isArray(d1.documents) ? d1.documents.length : 0;
-        db1Message = `Active and connected (${db1ProductsCount} products found).`;
-      } else if (res1.status === 404) {
-        db1Exists = false;
-        db1Message = `Database (default) not yet created in Firebase Console.`;
-      } else {
-        db1Message = `Response status: ${res1.status}`;
-      }
-    } catch (e: any) {
-      db1Message = `Probe note: ${e.message}`;
-    }
-
-    // Probe DB2
-    let db2Exists = false;
-    let db2ProductsCount = 0;
-    let db2Message = '';
-    try {
-      const probe2 = `https://firestore.googleapis.com/v1/projects/${config2.projectId}/databases/(default)/documents/products?key=${config2.apiKey}&pageSize=100`;
-      const res2 = await fetch(probe2, { signal: AbortSignal.timeout(3500) });
-      if (res2.ok) {
-        db2Exists = true;
-        const d2 = await res2.json();
-        db2ProductsCount = Array.isArray(d2.documents) ? d2.documents.length : 0;
-        db2Message = `Active and connected (${db2ProductsCount} products found).`;
-      } else if (res2.status === 404) {
-        db2Exists = false;
-        db2Message = `Database (default) not yet created in Firebase Console.`;
-      } else {
-        db2Message = `Response status: ${res2.status}`;
-      }
-    } catch (e: any) {
-      db2Message = `Probe note: ${e.message}`;
-    }
-
-    const databases = [
-      {
-        ...config1,
-        apiKeyMasked: `${config1.apiKey.slice(0, 8)}...${config1.apiKey.slice(-4)}`,
-        databaseExists: db1Exists,
-        firestoreAvailable: firestore1Available,
-        productsCountInFirestore: db1ProductsCount,
-        message: db1Message
-      },
-      {
-        ...config2,
-        apiKeyMasked: `${config2.apiKey.slice(0, 8)}...${config2.apiKey.slice(-4)}`,
-        databaseExists: db2Exists,
-        firestoreAvailable: firestore2Available,
-        productsCountInFirestore: db2ProductsCount,
-        message: db2Message
-      }
-    ];
-
-    res.json({
-      configured: true,
-      databases,
-      anyConnected: db1Exists || db2Exists,
-      bothConnected: db1Exists && db2Exists,
-      localProductsCount: db.products.filter(p => !db.deletedRecordIds?.includes(p.id)).length,
-      // Backward compatibility fields
-      projectId: config1.projectId,
-      apiKey: `${config1.apiKey.slice(0, 8)}...${config1.apiKey.slice(-4)}`,
-      authDomain: config1.authDomain,
-      storageBucket: config1.storageBucket,
-      databaseExists: db1Exists || db2Exists,
-      firestoreAvailable: firestore1Available || firestore2Available,
-      productsCountInFirestore: db1ProductsCount + db2ProductsCount,
-      firebaseConsoleUrl: config1.consoleUrl,
-      message: (db1Exists || db2Exists)
-        ? `Dual Firestore connected (${db1Exists ? config1.projectId : ''}${db1Exists && db2Exists ? ' & ' : ''}${db2Exists ? config2.projectId : ''}).`
-        : `Both Firebase projects (${config1.projectId} & ${config2.projectId}) are connected to the app. Create Native databases in Firebase console if live cloud persistence is desired.`
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to check Firebase status' });
-  }
-});
-
 // -------------------------------------------------------------
-// REUSABLE FIREBASE FIRESTORE SYNC & AUTO-PUBLISH FUNCTION
+// DATABASE STATUS & COMPATIBILITY ENDPOINTS (LOCAL ONLY)
 // -------------------------------------------------------------
-
-let lastFirebaseSyncTime = 0;
-let isFirebaseSyncing = false;
-
-async function syncProductsFromFirebase(
-  targetDb = 'both',
-  adminUser?: { name: string; role?: string }
-): Promise<{
-  success: boolean;
-  code?: string;
-  importedCount: number;
-  updatedCount: number;
-  totalCount: number;
-  totalWebsiteProducts: number;
-  message: string;
-  resultsByDb: any[];
-  instruction?: string;
-  consoleUrl?: string;
-  targetDb: string;
-  products?: Product[];
-}> {
-  if (isFirebaseSyncing) {
-    return {
-      success: true,
-      importedCount: 0,
-      updatedCount: 0,
-      totalCount: 0,
-      totalWebsiteProducts: db.products.length,
-      message: 'A Firebase sync operation is already in progress.',
-      resultsByDb: [],
-      targetDb
-    };
-  }
-
-  isFirebaseSyncing = true;
-  lastFirebaseSyncTime = Date.now();
-
-  try {
-    const fbConfigPath = path.resolve('firebase-applet-config.json');
-    if (!fs.existsSync(fbConfigPath)) {
-      return {
-        success: false,
-        importedCount: 0,
-        updatedCount: 0,
-        totalCount: 0,
-        totalWebsiteProducts: db.products.length,
-        message: 'firebase-applet-config.json not found.',
-        resultsByDb: [],
-        targetDb
-      };
-    }
-    const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
-
-    const config1 = {
-      id: 'db1',
-      projectId: config.projectId || 'marketdatabase-1090b',
-      apiKey: config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
-      consoleUrl: `https://console.firebase.google.com/project/${config.projectId || 'marketdatabase-1090b'}/firestore`
-    };
-
-    const sec = config.secondaryConfig || {};
-    const config2 = {
-      id: 'db2',
-      projectId: sec.projectId || config.projectId || 'marketdatabase-1090b',
-      apiKey: sec.apiKey || config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
-      consoleUrl: `https://console.firebase.google.com/project/${sec.projectId || config.projectId || 'marketdatabase-1090b'}/firestore`
-    };
-
-    let targetConfigs: typeof config1[] = [];
-    if (targetDb === 'db1' || targetDb === config1.projectId) {
-      targetConfigs = [config1];
-    } else if (targetDb === 'db2' || targetDb === config2.projectId) {
-      targetConfigs = [config2];
-    } else {
-      targetConfigs = [config1, config2];
-    }
-
-    const candidateCollections = ['products', 'items', 'catalog', 'inventory', 'cjProducts', 'goods', 'listings'];
-    const resultsByDb: any[] = [];
-    const allFetchedDocs: { doc: any; projectId: string; collectionName: string }[] = [];
-
-    for (const target of targetConfigs) {
-      let dbFound = false;
-      let dbUnprovisioned = false;
-      let docsForDb: any[] = [];
-      let foundCollection = 'products';
-
-      for (const col of candidateCollections) {
-        try {
-          const url = `https://firestore.googleapis.com/v1/projects/${target.projectId}/databases/(default)/documents/${col}?key=${target.apiKey}&pageSize=300`;
-          const restRes = await fetch(url, { signal: AbortSignal.timeout(5000) });
-          if (restRes.status === 404) {
-            const errBody = await restRes.text().catch(() => '');
-            if (errBody.includes('database') && (errBody.includes('does not exist') || errBody.includes('NOT_FOUND') || errBody.includes('setup'))) {
-              dbUnprovisioned = true;
-              break;
-            }
-          }
-          if (restRes.ok) {
-            const json = await restRes.json();
-            if (Array.isArray(json.documents) && json.documents.length > 0) {
-              docsForDb = json.documents;
-              foundCollection = col;
-              dbFound = true;
-              break;
-            }
-          }
-        } catch (e: any) {
-          console.warn(`[Firebase Pull] Notice checking ${target.projectId}/${col}:`, e.message);
-        }
-      }
-
-      if (dbUnprovisioned) {
-        resultsByDb.push({
-          projectId: target.projectId,
-          id: target.id,
-          success: false,
-          code: 'DATABASE_NOT_CREATED',
-          count: 0,
-          message: `Firestore database (default) is not yet created in Firebase Console for ${target.projectId}.`,
-          consoleUrl: target.consoleUrl
-        });
-      } else if (dbFound && docsForDb.length > 0) {
-        resultsByDb.push({
-          projectId: target.projectId,
-          id: target.id,
-          success: true,
-          count: docsForDb.length,
-          collection: foundCollection,
-          message: `Successfully retrieved ${docsForDb.length} products from ${target.projectId} (${foundCollection}).`
-        });
-        docsForDb.forEach(d => allFetchedDocs.push({ doc: d, projectId: target.projectId, collectionName: foundCollection }));
-      } else {
-        resultsByDb.push({
-          projectId: target.projectId,
-          id: target.id,
-          success: true,
-          count: 0,
-          message: `Connected to ${target.projectId}, but no products were found in collections (${candidateCollections.join(', ')}).`
-        });
-      }
-    }
-
-    const anyDatabaseCreated = resultsByDb.some(r => r.code !== 'DATABASE_NOT_CREATED');
-    if (!anyDatabaseCreated && allFetchedDocs.length === 0) {
-      return {
-        success: false,
-        code: 'DATABASE_NOT_CREATED',
-        targetDb,
-        resultsByDb,
-        importedCount: 0,
-        updatedCount: 0,
-        totalCount: 0,
-        totalWebsiteProducts: db.products.length,
-        message: 'The Firestore database is not yet created in your Firebase Console for the requested project(s).',
-        instruction: 'Please open the Firebase Console and click "Create database" in Native mode (choose your region). After creating, products will automatically sync.',
-        consoleUrl: config1.consoleUrl
-      };
-    }
-
-    if (allFetchedDocs.length === 0) {
-      return {
-        success: true,
-        importedCount: 0,
-        updatedCount: 0,
-        totalCount: 0,
-        targetDb,
-        resultsByDb,
-        message: `Connected to Firebase (${targetDb}), but no products found in collections (${candidateCollections.join(', ')}).`,
-        totalWebsiteProducts: db.products.length
-      };
-    }
-
-    // Automatically normalize and PUBLISH products so they appear live on the storefront immediately
-    let importedCount = 0;
-    let updatedCount = 0;
-    const importedProducts: Product[] = [];
-
-    for (const { doc, projectId } of allFetchedDocs) {
-      const docId = doc.name ? doc.name.split('/').pop() : `prod-fb-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const raw = parseFirestoreRestFields(doc.fields || {});
-
-      const rawImages: any = raw.images || raw.pictures || raw.gallery || raw.photos;
-      let images: string[] = [];
-      if (Array.isArray(rawImages) && rawImages.length > 0) {
-        images = rawImages.map(img => typeof img === 'string' ? img : (img.url || img.src || '')).filter(Boolean);
-      } else if (raw.imageUrl || raw.image_url || raw.image || raw.photo) {
-        images = [raw.imageUrl || raw.image_url || raw.image || raw.photo];
-      }
-      if (images.length === 0) {
-        images = ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'];
-      }
-
-      const prodName = raw.name || raw.productName || raw.product_name || raw.title || raw.item_name || `Product ${docId}`;
-      const rawPrice = raw.price || raw.sellingPrice || raw.selling_price || raw.cost || raw.amount || 10000;
-      const parsedPrice = Math.max(0, parseInt(String(rawPrice), 10) || 10000);
-
-      const normalized: Product = {
-        id: raw.id || docId,
-        name: prodName,
-        sku: raw.sku || raw.productSku || raw.code || `CRM-FB-${docId.slice(-6).toUpperCase()}`,
-        description: raw.description || raw.desc || raw.details || `Product from Firebase database (${projectId}).`,
-        price: parsedPrice,
-        discountPrice: raw.discountPrice ? Math.max(0, parseInt(String(raw.discountPrice), 10)) : undefined,
-        costPrice: raw.costPrice ? Math.max(0, parseInt(String(raw.costPrice), 10)) : undefined,
-        costOverriddenByAdmin: Boolean(raw.costOverriddenByAdmin),
-        profitMargin: raw.profitMargin,
-        category: raw.category || raw.cat || 'electronics',
-        subcategory: raw.subcategory || raw.sub_category,
-        stock: raw.stock !== undefined ? Math.max(0, parseInt(String(raw.stock), 10)) : (raw.quantity !== undefined ? Math.max(0, parseInt(String(raw.quantity), 10)) : 30),
-        imageUrl: raw.imageUrl || raw.image_url || raw.image || images[0],
-        images,
-        shopName: raw.shopName || raw.shop || raw.supplier || 'ContactReach Market',
-        shopId: raw.shopId || raw.supplierId,
-        receiverName: raw.receiverName || 'Ruth',
-        receiverPhone: raw.receiverPhone || '0780022600',
-        merchantCode: raw.merchantCode || '2328354',
-        location: raw.location || 'Kigali, Rwanda',
-        deliveryInfo: raw.deliveryInfo || 'Same-day Kigali delivery',
-        // Automatically published with Available status and Approved review status so shoppers can see and purchase immediately
-        status: (raw.status as ProductStatus) || 'Available',
-        reviewStatus: 'Approved',
-        isFeatured: Boolean(raw.isFeatured),
-        isNewArrival: raw.isNewArrival !== undefined ? Boolean(raw.isNewArrival) : true,
-        isBestSeller: Boolean(raw.isBestSeller),
-        brand: raw.brand,
-        unit: raw.unit || 'Piece',
-        videoUrl: raw.videoUrl,
-        variations: Array.isArray(raw.variations) ? raw.variations : undefined,
-        rating: raw.rating || 5.0,
-        reviewsCount: raw.reviewsCount || 0,
-        source: raw.source || 'firebase',
-        cjProductId: raw.cjProductId,
-        cjProductSku: raw.cjProductSku,
-        cjOriginalCostUsd: raw.cjOriginalCostUsd,
-        createdAt: raw.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      const existingIndex = db.products.findIndex(p => p.id === normalized.id || (p.sku && normalized.sku && p.sku === normalized.sku));
-      if (existingIndex >= 0) {
-        db.products[existingIndex] = { ...db.products[existingIndex], ...normalized };
-        updatedCount++;
-      } else {
-        db.products.unshift(normalized);
-        importedCount++;
-      }
-      importedProducts.push(normalized);
-    }
-
-    saveDbToDisk();
-
-    if (adminUser) {
-      logAudit(
-        adminUser,
-        'FIREBASE_PRODUCTS_PULLED',
-        `Pulled and auto-published ${importedProducts.length} products from Firebase (${targetDb}) - ${importedCount} new, ${updatedCount} updated.`,
-        'firebase',
-        targetDb
-      );
-    }
-
-    console.log(`[Firebase Auto-Sync] Successfully published ${importedCount} new products (${updatedCount} updated) from Firebase (${targetDb}) to website catalog.`);
-
-    return {
-      success: true,
-      message: `Successfully published ${importedCount} new products (${updatedCount} updated) from Firebase!`,
-      targetDb,
-      resultsByDb,
-      importedCount,
-      updatedCount,
-      totalCount: importedProducts.length,
-      totalWebsiteProducts: db.products.length,
-      products: importedProducts
-    };
-  } finally {
-    isFirebaseSyncing = false;
-  }
-}
-
-// 2. Admin Pull & Publish products from Firebase Firestore
-app.post('/api/admin/firebase/pull-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
-  try {
-    const targetDb = req.body?.targetDb || 'both';
-    const result = await syncProductsFromFirebase(targetDb, admin);
-    res.json(result);
-  } catch (err: any) {
-    console.error('[Firebase Pull Error]:', err);
-    res.status(500).json({ error: err.message || 'Failed to pull products from Firebase' });
-  }
+app.get('/api/admin/firebase/status', requireAdminAuth, (_req: Request, res: Response) => {
+  res.json({
+    configured: false,
+    databases: [],
+    anyConnected: false,
+    bothConnected: false,
+    localProductsCount: db.products.filter(p => !db.deletedRecordIds?.includes(p.id)).length,
+    message: 'Local resilient persistence active.'
+  });
 });
 
-// 2b. Public refresh endpoint for instant catalog re-synchronization with ceremonial-arbor-62w8r
-app.get('/api/products/sync-firebase', async (req: Request, res: Response) => {
-  try {
-    const result = await syncProductsFromFirebase('both');
-    res.json({
-      success: result.success,
-      message: result.message,
-      totalWebsiteProducts: db.products.length,
-      importedCount: result.importedCount,
-      updatedCount: result.updatedCount
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to sync with Firebase' });
-  }
+app.post('/api/admin/firebase/pull-products', requireAdminAuth, (_req: Request, res: Response) => {
+  res.json({ success: true, message: 'Local storage active.', importedCount: 0, updatedCount: 0 });
 });
 
-// 3. Push / Seed website products to user's Firebase Firestore databases
-app.post('/api/admin/firebase/push-products', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
-  try {
-    const fbConfigPath = path.resolve('firebase-applet-config.json');
-    if (!fs.existsSync(fbConfigPath)) {
-      return res.status(400).json({ error: 'firebase-applet-config.json not found' });
-    }
-    const config = JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8'));
-    const targetDb = req.body?.targetDb || 'both'; // 'both' | 'db1' | 'db2' | projectId
-
-    const config1 = {
-      id: 'db1',
-      projectId: config.projectId || 'marketdatabase-1090b',
-      apiKey: config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
-      consoleUrl: `https://console.firebase.google.com/project/${config.projectId || 'marketdatabase-1090b'}/firestore`
-    };
-
-    const sec = config.secondaryConfig || {};
-    const config2 = {
-      id: 'db2',
-      projectId: sec.projectId || config.projectId || 'marketdatabase-1090b',
-      apiKey: sec.apiKey || config.apiKey || 'AIzaSyBL1Zh0ErEcDrsKuuIzb-vpX60adYrk5aM',
-      consoleUrl: `https://console.firebase.google.com/project/${sec.projectId || config.projectId || 'marketdatabase-1090b'}/firestore`
-    };
-
-    let targetConfigs: typeof config1[] = [];
-    if (targetDb === 'db1' || targetDb === config1.projectId) {
-      targetConfigs = [config1];
-    } else if (targetDb === 'db2' || targetDb === config2.projectId) {
-      targetConfigs = [config2];
-    } else {
-      targetConfigs = [config1, config2];
-    }
-
-    if (!firestoreDb1 && !firestoreDb2) {
-      await initFirestoreIfProvisioned();
-    }
-
-    const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
-    const resultsByDb: any[] = [];
-    let totalPushed = 0;
-
-    for (const target of targetConfigs) {
-      // Probe readiness
-      const probeUrl = `https://firestore.googleapis.com/v1/projects/${target.projectId}/databases/(default)/documents?key=${target.apiKey}&pageSize=1`;
-      let dbReady = false;
-      try {
-        const probeRes = await fetch(probeUrl, { signal: AbortSignal.timeout(4000) });
-        dbReady = probeRes.status !== 404 && (probeRes.ok || probeRes.status < 500);
-      } catch {
-        dbReady = false;
-      }
-
-      if (!dbReady) {
-        resultsByDb.push({
-          id: target.id,
-          projectId: target.projectId,
-          success: false,
-          code: 'DATABASE_NOT_CREATED',
-          message: `Firestore database (default) is unprovisioned in Firebase Console for ${target.projectId}.`,
-          consoleUrl: target.consoleUrl
-        });
-        continue;
-      }
-
-      // Target SDK DB instance
-      const targetDbInstance = target.id === 'db1' ? firestoreDb1 : firestoreDb2;
-      let targetPushedCount = 0;
-
-      if (targetDbInstance) {
-        for (const prod of activeProducts) {
-          try {
-            await firestoreSetDoc(firestoreDoc(targetDbInstance, 'products', prod.id), sanitizeForFirestore(prod), { merge: true });
-            targetPushedCount++;
-          } catch (e: any) {
-            console.warn(`[Firebase Push] Error pushing product ${prod.id} to ${target.projectId}:`, e.message);
-          }
-        }
-      }
-
-      totalPushed += targetPushedCount;
-      resultsByDb.push({
-        id: target.id,
-        projectId: target.projectId,
-        success: true,
-        pushedCount: targetPushedCount,
-        message: `Successfully pushed ${targetPushedCount} products to ${target.projectId}.`
-      });
-    }
-
-    const anySuccess = resultsByDb.some(r => r.success);
-    if (!anySuccess && resultsByDb.length > 0) {
-      return res.json({
-        success: false,
-        code: 'DATABASE_NOT_CREATED',
-        targetDb,
-        resultsByDb,
-        message: 'The Firestore database is not yet created in your Firebase Console.',
-        instruction: 'Please open Firebase Console and click "Create database" in Native mode. Once created, push will seed all products immediately!',
-        consoleUrl: config1.consoleUrl
-      });
-    }
-
-    logAudit(
-      admin,
-      'FIREBASE_PRODUCTS_PUSHED',
-      `Pushed products to Firebase (${targetDb}). Total written: ${totalPushed}.`,
-      'firebase',
-      targetDb
-    );
-
-    res.json({
-      success: true,
-      message: `Pushed products across configured Firebase databases!`,
-      targetDb,
-      pushedCount: totalPushed,
-      resultsByDb,
-      totalProducts: activeProducts.length
-    });
-  } catch (err: any) {
-    console.error('[Firebase Push Error]:', err);
-    res.status(500).json({ error: err.message || 'Failed to push products to Firebase' });
-  }
+app.get('/api/products/sync-firebase', (_req: Request, res: Response) => {
+  res.json({ success: true, message: 'Storefront running on authoritative local catalog.' });
 });
 
-// 4. Push ALL Marketplace Data to Firebase Firestore (Products, Orders, Categories, Shops, Customers, Messages, etc.)
-app.post('/api/admin/firebase/push-all-data', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || { name: 'Administrator', role: 'owner' };
-  try {
-    const fbConfigPath = path.resolve('firebase-applet-config.json');
-    if (!fs.existsSync(fbConfigPath)) {
-      return res.status(400).json({ error: 'firebase-applet-config.json not found' });
-    }
+app.post('/api/admin/firebase/push-products', requireAdminAuth, (_req: Request, res: Response) => {
+  res.json({ success: true, message: 'All products stored in persistent local database.' });
+});
 
-    if (!firestoreDb1 && !firestoreDb2) {
-      await initFirestoreIfProvisioned();
-    }
-
-    const activeProducts = db.products.filter(p => !db.deletedRecordIds?.includes(p.id));
-    const activeOrders = db.orders.filter(o => !db.deletedRecordIds?.includes(o.id));
-    const activeMessages = db.messages.filter(m => !db.deletedRecordIds?.includes(m.id));
-    const activeCustomers = db.customers.map(c => sanitizeBuyer(c));
-    const activeCategories = db.categories;
-    const activeShops = db.shops;
-    const activePayments = db.paymentConfirmations;
-    const activeProblems = db.customerProblems;
-    const activeCoupons = db.coupons;
-    const activeSettings = db.settings;
-    const activePaymentMethods = db.paymentMethodsConfig;
-
-    // Queue and push all collections through Firestore SDK / async pipelines
-    // 1. Products
-    for (const p of activeProducts) {
-      saveToFirestoreAsync('products', p.id, p);
-    }
-
-    // 2. Orders
-    for (const o of activeOrders) {
-      saveToFirestoreAsync('orders', o.id, o);
-    }
-
-    // 3. Categories
-    for (const c of activeCategories) {
-      saveToFirestoreAsync('categories', c.id, c);
-    }
-
-    // 4. Shops
-    for (const s of activeShops) {
-      saveToFirestoreAsync('shops', s.id, s);
-    }
-
-    // 5. Customers & Users
-    for (const c of activeCustomers) {
-      saveToFirestoreAsync('customers', c.id, c);
-      saveToFirestoreAsync('users', c.id, c);
-    }
-
-    // 6. Payments
-    for (const pm of activePayments) {
-      saveToFirestoreAsync('paymentConfirmations', pm.id, pm);
-      saveToFirestoreAsync('payments', pm.id, pm);
-    }
-
-    // 7. Messages
-    for (const m of activeMessages) {
-      saveToFirestoreAsync('messages', m.id, m);
-    }
-
-    // 8. Problems
-    for (const pr of activeProblems) {
-      saveToFirestoreAsync('customerProblems', pr.id, pr);
-    }
-
-    // 9. Coupons
-    for (const cp of activeCoupons) {
-      saveToFirestoreAsync('coupons', cp.id, cp);
-    }
-
-    // 10. Global Settings
-    saveToFirestoreAsync('settings', 'global', activeSettings);
-
-    // 11. Payment Methods Config
-    for (const pmc of activePaymentMethods) {
-      saveToFirestoreAsync('paymentMethodsConfig', pmc.id, pmc);
-    }
-
-    const totalRecords =
-      activeProducts.length +
-      activeOrders.length +
-      activeCategories.length +
-      activeShops.length +
-      activeCustomers.length +
-      activePayments.length +
-      activeMessages.length +
-      activeProblems.length +
-      activeCoupons.length +
-      1; // settings
-
-    saveDbToDisk();
-
-    logAudit(
-      admin,
-      'FIREBASE_ALL_DATA_PUSHED',
-      `Imported all marketplace data into Firebase Firestore (${totalRecords} total documents across 11 collections).`,
-      'firebase',
-      'all'
-    );
-
-    res.json({
-      success: true,
-      message: `All marketplace data successfully imported and synced to Firebase Firestore! (${totalRecords} total records across 11 collections).`,
-      stats: {
-        products: activeProducts.length,
-        orders: activeOrders.length,
-        categories: activeCategories.length,
-        shops: activeShops.length,
-        customers: activeCustomers.length,
-        payments: activePayments.length,
-        messages: activeMessages.length,
-        problems: activeProblems.length,
-        coupons: activeCoupons.length,
-        totalRecords
-      }
-    });
-  } catch (err: any) {
-    console.error('[Firebase Push All Error]:', err);
-    res.status(500).json({ error: err.message || 'Failed to push all data to Firebase' });
-  }
+app.post('/api/admin/firebase/push-all-data', requireAdminAuth, (_req: Request, res: Response) => {
+  res.json({ success: true, message: 'All marketplace data saved in persistent local database.' });
 });
 
 // -------------------------------------------------------------
@@ -13427,32 +12332,6 @@ app.get('/api/admin/database/diagnostics', requireAdminAuth, async (req: Request
       if (!s.id || !s.name) errors.push(`Shop missing ID or name.`);
     });
 
-    // 5. Audit Firebase Status
-    const fbConfigPath = path.resolve('firebase-applet-config.json');
-    const fbConfig = fs.existsSync(fbConfigPath) ? JSON.parse(fs.readFileSync(fbConfigPath, 'utf-8')) : {};
-    const projectId = fbConfig.projectId || 'marketdatabase-1090b';
-    const apiKey = fbConfig.apiKey || '';
-    let firestoreStatus = 'unreachable';
-    let firestoreCreated = false;
-
-    if (projectId && apiKey) {
-      try {
-        const probeRes = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents?key=${apiKey}&pageSize=1`, { signal: AbortSignal.timeout(3000) });
-        if (probeRes.ok) {
-          firestoreStatus = 'connected_and_active';
-          firestoreCreated = true;
-        } else if (probeRes.status === 404) {
-          firestoreStatus = 'pending_creation_in_console';
-          firestoreCreated = false;
-          warnings.push(`Cloud Firestore database (default) has not been initialized yet in Firebase project "${projectId}". Local storage is serving the storefront.`);
-        } else {
-          firestoreStatus = `http_${probeRes.status}`;
-        }
-      } catch (err: any) {
-        firestoreStatus = 'probe_timeout';
-      }
-    }
-
     const isHealthy = errors.length === 0;
     const healthScore = Math.max(70, 100 - (errors.length * 10) - (warnings.length * 2));
 
@@ -13479,10 +12358,10 @@ app.get('/api/admin/database/diagnostics', requireAdminAuth, async (req: Request
         backupFileExists
       },
       firestore: {
-        projectId,
-        status: firestoreStatus,
-        databaseCreated: firestoreCreated,
-        consoleUrl: `https://console.firebase.google.com/project/${projectId}/firestore`
+        projectId: 'local-database',
+        status: 'active',
+        databaseCreated: true,
+        syncQueueLength: 0
       }
     });
   } catch (err: any) {
@@ -13678,7 +12557,7 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
 
 // Dedicated 1-Click "Make All Products Ready & Available" endpoint
 app.post('/api/admin/products/make-all-ready', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || db.adminUsers[0] || fallbackAdminUser;
+  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
   try {
     let readyCount = 0;
     const defaultImage = 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80';
@@ -13889,31 +12768,7 @@ app.use('/api', (err: any, req: Request, res: Response, next: NextFunction) => {
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // Probe whether Cloud Firestore is provisioned before attempting sync
-  await initFirestoreIfProvisioned();
-
-  if (firestoreAvailable && firestoreDb) {
-    try {
-      await Promise.race([
-        syncWithFirestore(),
-        new Promise(resolve => setTimeout(resolve, 3000))
-      ]);
-    } catch (syncErr) {
-      console.warn('[Firebase] Background sync notice:', syncErr);
-    }
-  }
-
-  // Automated Firebase Firestore periodic sync runner (every 2 mins)
-  // Ensures products in user's Firebase (ceremonial-arbor-62w8r) are automatically pulled and published to the website
-  syncProductsFromFirebase('both').catch(err => {
-    console.info('[Firebase Auto-Sync] Startup initial probe notice:', err.message || err);
-  });
-
-  setInterval(() => {
-    syncProductsFromFirebase('both').catch(err => {
-      console.warn('[Firebase Auto-Sync] Scheduled pull notice:', err.message || err);
-    });
-  }, 2 * 60 * 1000);
+  // Local resilient database active
 
   // Automated CJ Dropshipping periodic sync runner (startup probe + every 10 mins)
   if (db.settings.cjConfig?.autoUploadEnabled && db.settings.cjConfig?.apiKey) {

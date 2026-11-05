@@ -19,13 +19,11 @@ import {
   CjDropshippingConfig, GoogleDriveBackupStatus
 } from '../types.ts';
 import { api, getStoredAdminUser } from '../services/api.ts';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db, getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive, isFirestoreConnected } from '../services/firebase.ts';
+import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/firebase.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
 import { ProductSpreadsheetModal } from './ProductSpreadsheetModal.tsx';
-import { FirebaseSyncModal } from './FirebaseSyncModal.tsx';
 import { DsersFulfillmentTab } from './DsersFulfillmentTab.tsx';
 import { AlibabaHub } from './AlibabaHub.tsx';
 import {
@@ -425,7 +423,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Product Editor Modal
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
-  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState<{
     name: string;
@@ -849,21 +846,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Problem Search & Filter
   const [problemSearch, setProblemSearch] = useState('');
   const [problemFilter, setProblemFilter] = useState<string>('all');
-  const [syncingAllFirebase, setSyncingAllFirebase] = useState(false);
-
-  const handlePushAllToFirebaseDirect = async () => {
-    setSyncingAllFirebase(true);
-    try {
-      const res = await api.adminPushAllDataToFirebase();
-      showToast(res.message);
-      fetchAllData(true);
-      onRefreshPublicData();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to sync with Firebase', 'error');
-    } finally {
-      setSyncingAllFirebase(false);
-    }
-  };
 
   const handleOpenOrderDetail = (order: Order) => {
     setSelectedOrderModal(order);
@@ -1407,187 +1389,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       window.addEventListener('focus', handleReSyncOnVisible);
       window.addEventListener('online', handleReSyncOnVisible);
     }
-
-    // 3. Live Firestore onSnapshot listeners for instant push updates (gen-lang-client-0460570023)
-    const unsubs: (() => void)[] = [];
-    if (db) {
-      try {
-        // 1. Orders
-        const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
-          if (!snapshot.empty) {
-            const liveOrders: Order[] = [];
-            snapshot.forEach(docSnap => {
-              liveOrders.push({ ...(docSnap.data() as Order), id: docSnap.id });
-            });
-            if (prevOrdersCountRef.current !== -1 && liveOrders.length > prevOrdersCountRef.current) {
-              const diff = liveOrders.length - prevOrdersCountRef.current;
-              showToast(`🔔 Real-time: ${diff} new order(s) received!`, 'success');
-              playNotificationChime('order');
-              sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
-            }
-            setOrders(prev => {
-              const map = new Map<string, Order>();
-              // Maintain all existing orders from the authoritative permanent database
-              prev.forEach(o => map.set(o.id, o));
-              // Merge live incoming updates or new orders
-              liveOrders.forEach(o => {
-                const existing = map.get(o.id) || Array.from(map.values()).find(x => x.orderNumber === o.orderNumber);
-                if (!existing) {
-                  map.set(o.id, o);
-                } else {
-                  map.set(existing.id, { ...existing, ...o });
-                }
-              });
-              const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-              prevOrdersCountRef.current = merged.length;
-              try {
-                localStorage.setItem('crm_admin_orders_cache', JSON.stringify(merged));
-              } catch {}
-              return merged;
-            });
-            setLastSyncTime(new Date());
-            setIsRealtimeConnected(true);
-          }
-        }, (err) => {
-          console.warn('[Firestore] Live orders subscription notice:', err.message);
-        });
-        unsubs.push(unsubOrders);
-
-        // 2. Payments & SMS Proofs
-        const unsubPayments = onSnapshot(collection(db, 'paymentConfirmations'), (snapshot) => {
-          if (!snapshot.empty) {
-            const livePayments: PaymentConfirmation[] = [];
-            snapshot.forEach(docSnap => {
-              livePayments.push({ ...(docSnap.data() as PaymentConfirmation), id: docSnap.id });
-            });
-            if (prevPaymentsCountRef.current !== -1 && livePayments.length > prevPaymentsCountRef.current) {
-              const diff = livePayments.length - prevPaymentsCountRef.current;
-              showToast(`💳 Real-time: ${diff} new payment proof / SMS received!`, 'success');
-              playNotificationChime('payment');
-              sendDesktopNotification('Payment Confirmation Received', `${diff} new payment verification(s) submitted.`);
-            }
-            prevPaymentsCountRef.current = livePayments.length;
-            setPayments(prev => {
-              const map = new Map<string, PaymentConfirmation>();
-              prev.forEach(p => map.set(p.id, p));
-              livePayments.forEach(p => map.set(p.id, p));
-              return Array.from(map.values()).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-            });
-            setLastSyncTime(new Date());
-            setIsRealtimeConnected(true);
-          }
-        }, (err) => {
-          console.warn('[Firestore] Live payments subscription notice:', err.message);
-        });
-        unsubs.push(unsubPayments);
-
-        // 3. Supplier Applications
-        const unsubSuppliers = onSnapshot(collection(db, 'supplierApplications'), (snapshot) => {
-          if (!snapshot.empty) {
-            const liveApps: any[] = [];
-            snapshot.forEach(docSnap => {
-              liveApps.push({ ...(docSnap.data() as any), id: docSnap.id });
-            });
-            if (prevSuppliersCountRef.current !== -1 && liveApps.length > prevSuppliersCountRef.current) {
-              const diff = liveApps.length - prevSuppliersCountRef.current;
-              showToast(`🤝 Real-time: ${diff} new supplier application(s) received!`, 'success');
-              playNotificationChime('alert');
-              sendDesktopNotification('New Supplier Application', `${diff} business supplier application(s) pending review.`);
-            }
-            setSupplierApplications(prev => {
-              const map = new Map<string, any>();
-              prev.forEach(a => map.set(a.id, a));
-              liveApps.forEach(a => map.set(a.id, a));
-              const merged = Array.from(map.values());
-              prevSuppliersCountRef.current = merged.length;
-              return merged;
-            });
-            setLastSyncTime(new Date());
-            setIsRealtimeConnected(true);
-          }
-        }, (err) => {
-          console.warn('[Firestore] Live suppliers subscription notice:', err.message);
-        });
-        unsubs.push(unsubSuppliers);
-
-        // 4. Messages & SMS Inquiries
-        const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
-          if (!snapshot.empty) {
-            const liveMsgs: AdminMessage[] = [];
-            snapshot.forEach(docSnap => {
-              liveMsgs.push({ ...(docSnap.data() as AdminMessage), id: docSnap.id });
-            });
-            if (prevMessagesCountRef.current !== -1 && liveMsgs.length > prevMessagesCountRef.current) {
-              const diff = liveMsgs.length - prevMessagesCountRef.current;
-              showToast(`💬 Real-time: ${diff} new SMS / inquiry received!`, 'success');
-              playNotificationChime('sms');
-              sendDesktopNotification('New SMS / Inquiry', `${diff} new customer message(s) received.`);
-            }
-            setMessages(prev => {
-              const map = new Map<string, AdminMessage>();
-              prev.forEach(m => map.set(m.id, m));
-              liveMsgs.forEach(m => map.set(m.id, m));
-              const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-              prevMessagesCountRef.current = merged.length;
-              return merged;
-            });
-            setLastSyncTime(new Date());
-            setIsRealtimeConnected(true);
-          }
-        }, (err) => {
-          console.warn('[Firestore] Live messages subscription notice:', err.message);
-        });
-        unsubs.push(unsubMessages);
-
-        // 5. Problems & Reports
-        const unsubProblems = onSnapshot(collection(db, 'customerProblems'), (snapshot) => {
-          if (!snapshot.empty) {
-            const liveProblems: CustomerProblemReport[] = [];
-            snapshot.forEach(docSnap => {
-              liveProblems.push({ ...(docSnap.data() as CustomerProblemReport), id: docSnap.id });
-            });
-            if (prevProblemsCountRef.current !== -1 && liveProblems.length > prevProblemsCountRef.current) {
-              const diff = liveProblems.length - prevProblemsCountRef.current;
-              showToast(`⚠️ Real-time: ${diff} new problem report(s) filed!`, 'error');
-              playNotificationChime('alert');
-              sendDesktopNotification('Customer Problem Reported', `${diff} new customer case(s) filed.`);
-            }
-            setProblems(prev => {
-              const map = new Map<string, CustomerProblemReport>();
-              prev.forEach(p => map.set(p.id, p));
-              liveProblems.forEach(p => map.set(p.id, p));
-              const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-              prevProblemsCountRef.current = merged.length;
-              return merged;
-            });
-            setLastSyncTime(new Date());
-            setIsRealtimeConnected(true);
-          }
-        }, (err) => {
-          console.warn('[Firestore] Live problems subscription notice:', err.message);
-        });
-        unsubs.push(unsubProblems);
-
-        // 6. Audit Logs
-        const unsubAudit = onSnapshot(collection(db, 'auditLogs'), (snapshot) => {
-          if (!snapshot.empty) {
-            const liveAudit: AuditLog[] = [];
-            snapshot.forEach(docSnap => {
-              liveAudit.push({ ...(docSnap.data() as AuditLog), id: docSnap.id });
-            });
-            setAuditLogs(liveAudit);
-            setLastSyncTime(new Date());
-            setIsRealtimeConnected(true);
-          }
-        }, (err) => {
-          console.warn('[Firestore] Live audit logs subscription notice:', err.message);
-        });
-        unsubs.push(unsubAudit);
-      } catch (e) {
-        console.warn('[Firestore] Realtime subscription init error:', e);
-      }
-    }
-
     return () => {
       isSubscribed = false;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
@@ -1602,9 +1403,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         window.removeEventListener('focus', handleReSyncOnVisible);
         window.removeEventListener('online', handleReSyncOnVisible);
       }
-      unsubs.forEach(unsub => {
-        try { unsub(); } catch {}
-      });
     };
   }, []);
 
@@ -1962,11 +1760,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (editingProduct) {
         const updated = await api.adminUpdateProduct(editingProduct.id, payload);
         setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...updated } : p));
-        showToast('Product updated & saved permanently to Firebase & Store!', 'success');
+        showToast('Product updated & saved permanently to Store!', 'success');
       } else {
         const created = await api.adminAddProduct(payload);
         setProducts(prev => [created, ...prev.filter(p => p.id !== created.id)]);
-        showToast('Product uploaded & saved permanently to Firebase & Store!', 'success');
+        showToast('Product uploaded & saved permanently to Store!', 'success');
       }
       setProductModalOpen(false);
       fetchAllData(true);
@@ -2467,7 +2265,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         message: `Successfully stored ${result.productCount} products in Google Drive.`
       });
 
-      showToast(`Products catalog (${result.productCount} items) backed up to Google Drive & Firebase!`);
+      showToast(`Products catalog (${result.productCount} items) backed up to Google Drive!`);
       fetchAllData();
     } catch (err: any) {
       const msg = err.message?.includes('not available') || err.message?.includes('authorize')
@@ -3005,15 +2803,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Quick Dual Firebase Sync Button */}
-          <button
-            onClick={() => setIsFirebaseModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600/25 text-orange-300 hover:bg-orange-600/35 text-xs font-bold transition-colors cursor-pointer border border-orange-500/40 shadow-xs"
-            title="Import all data to Firebase Firestore or pull updates"
-          >
-            <Database className="w-3.5 h-3.5 text-orange-400" />
-            <span className="hidden sm:inline">Firebase Sync</span>
-          </button>
+
 
           {/* Live Real-Time Database Sync Status Indicator (Visible on all devices) */}
           <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-[10px] sm:text-[11px] font-bold shadow-2xs">
@@ -3358,14 +3148,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setIsFirebaseModalOpen(true)}
-                    className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-[#FF6000] hover:from-amber-600 hover:to-[#e05500] text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                    title="Pull products from Firebase Firestore or push current catalog (ceremonial-arbor-62w8r)"
-                  >
-                    <Database className="w-4 h-4" />
-                    <span>Firebase Sync</span>
-                  </button>
+
 
                   <button
                     onClick={() => setIsSpreadsheetModalOpen(true)}
@@ -3439,10 +3222,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <button
                     onClick={handleOpenAddProduct}
                     className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
-                    title="Manually upload a new product and save directly to Firebase and store catalog"
+                    title="Manually upload a new product and add to the store catalog"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>+ Upload Product (Manual / Firebase)</span>
+                    <span>+ Upload Product</span>
                   </button>
                 </div>
               </div>
@@ -6671,7 +6454,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                                     <button
                                       onClick={async () => {
-                                        if (confirm(`Are you sure you want to delete customer account "${c.name}"? This will delete all user data and synchronize with Firebase.`)) {
+                                        if (confirm(`Are you sure you want to delete customer account "${c.name}"? This will delete all user data.`)) {
                                           try {
                                             await api.adminDeleteCustomer(c.id);
                                             showToast(`Customer account "${c.name}" deleted.`);
@@ -7205,7 +6988,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Comprehensive Database Health, Diagnostics & Firebase Storage Card */}
+              {/* Comprehensive Database Health, Diagnostics & Storage Card */}
               <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4 text-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
                   <div className="flex items-center gap-2.5">
@@ -7213,7 +6996,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div>
                       <h3 className="font-black text-sm text-slate-900">Database Health & Storage Status</h3>
                       <p className="text-[11px] text-slate-500">
-                        Local atomic persistence, Firebase Firestore connection & Google Drive sync
+                        Local atomic persistence & Google Drive cloud backup
                       </p>
                     </div>
                   </div>
@@ -7267,49 +7050,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
 
-                  {/* Firebase Firestore Status */}
-                  <div className="p-4 rounded-2xl bg-orange-50/50 border border-orange-200/80 space-y-2 flex flex-col justify-between">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-orange-950 flex items-center gap-1.5 text-xs">
-                          <Database className="w-3.5 h-3.5 text-[#FF6000]" />
-                          Firebase Firestore
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-orange-100 text-orange-800">
-                          Connected
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-orange-900 space-y-1">
-                        <div>Project: <strong className="font-mono">ceremonial-arbor-62w8r</strong></div>
-                        <div>Credentials: <strong className="text-emerald-700">Verified & Active</strong></div>
-                        <p className="text-[10px] text-orange-700 leading-tight">
-                          Sync products between your online store and Cloud Firestore anytime.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsFirebaseModalOpen(true)}
-                        className="w-full py-2 px-3 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-                      >
-                        <Database className="w-3.5 h-3.5" />
-                        <span>Firebase Sync (Pull / Push)</span>
-                      </button>
-                      <a
-                        href="https://console.firebase.google.com/project/ceremonial-arbor-62w8r/firestore"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-full py-1.5 px-3 bg-white border border-orange-200 text-orange-800 hover:bg-orange-50 font-bold rounded-xl text-[11px] transition-colors flex items-center justify-center gap-1"
-                      >
-                        <span>Open Firebase Console</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* Google Drive Status */}
+{/* Google Drive Status */}
                   <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/80 space-y-2 flex flex-col justify-between">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
@@ -9061,10 +8802,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-black text-base text-slate-900">
-                    {editingProduct ? 'Edit Product & Update Firebase' : 'Upload Product (Manual / Firebase)'}
+                    {editingProduct ? 'Edit Product' : 'Upload Product'}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    {editingProduct ? 'Modifications sync immediately with Cloud Firestore and local storage' : 'All attributes, pictures, and pricing will be saved to Firebase and the store'}
+                    {editingProduct ? 'Modifications save immediately to store catalog' : 'All attributes, pictures, and pricing will be saved to the store'}
                   </p>
                 </div>
               </div>
@@ -9934,7 +9675,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="px-6 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shadow-sm cursor-pointer flex items-center gap-2"
                   >
                     <CloudUpload className="w-4 h-4" />
-                    <span>{editingProduct ? 'Save Changes to Firebase' : 'Upload & Save to Firebase'}</span>
+                    <span>{editingProduct ? 'Save Changes' : 'Upload & Save Product'}</span>
                   </button>
                 </div>
               </div>
@@ -12581,17 +12322,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         showToast={showToast}
       />
 
-      {/* Firebase Firestore Database & Products Sync Modal */}
-      <FirebaseSyncModal
-        isOpen={isFirebaseModalOpen}
-        onClose={() => setIsFirebaseModalOpen(false)}
-        productsCount={products.length}
-        onProductsUpdated={() => {
-          fetchAllData(true);
-          onRefreshPublicData();
-        }}
-        showToast={showToast}
-      />
+
     </div>
   );
 };
