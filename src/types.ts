@@ -417,6 +417,18 @@ export interface AppSettings {
   alibabaConfig?: AlibabaConfig;
   // DSers & AliExpress Supplier Fulfillment Integration
   dsersConfig?: DsersConfig;
+  // Supabase Database Integration
+  supabaseConfig?: SupabaseConfig;
+}
+
+export interface SupabaseConfig {
+  enabled?: boolean;
+  projectUrl?: string;
+  anonKey?: string;
+  projectId?: string;
+  projectName?: string;
+  tableName?: string;
+  autoSyncOrders?: boolean;
 }
 
 export interface DsersConfig {
