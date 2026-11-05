@@ -38,7 +38,6 @@ import { CartDrawer } from './components/CartDrawer.tsx';
 import { CheckoutModal } from './components/CheckoutModal.tsx';
 import { PaymentConfirmationModal } from './components/PaymentConfirmationModal.tsx';
 import { OrderTrackingModal } from './components/OrderTrackingModal.tsx';
-import { AdminLoginModal } from './components/AdminLoginModal.tsx';
 import { AdminGatewayCard } from './components/AdminGatewayCard.tsx';
 import { PWAInstallModal } from './components/PWAInstallModal.tsx';
 import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
@@ -275,7 +274,6 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
-  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
   const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
@@ -429,10 +427,6 @@ export default function App() {
       setShops(fetchedShops);
       setIsAdminLoggedIn(isAuth);
 
-      if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
-        setIsAdminLoginOpen(true);
-      }
-
       if (initialRoute.productId) {
         const found = fetchedProducts.find(p => p.id === initialRoute.productId);
         if (found) setSelectedProduct(found);
@@ -505,10 +499,6 @@ export default function App() {
       const route = parseRouteFromLocation();
       if (route.view === 'admin') {
         setActiveView('admin');
-        const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
-        if (!isAuth) {
-          setIsAdminLoginOpen(true);
-        }
       } else if (route.view === 'track-order') {
         setIsTrackingOpen(true);
         if (route.orderRef) setTrackingOrderNumber(route.orderRef);
@@ -695,7 +685,7 @@ export default function App() {
         /* VISITOR & BUYER PROFESSIONAL MAINTENANCE SCREEN */
         <MaintenancePage
           settings={settings}
-          onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
+          onOpenAdminLogin={() => handleNavigate('admin')}
           onOpenOrderTracking={() => setIsTrackingOpen(true)}
           onCheckStatus={refreshAllData}
           currentLang={currentLang}
@@ -814,9 +804,48 @@ export default function App() {
             onSuccess={(user) => {
               setIsAdminLoggedIn(true);
               setActiveView('admin');
+              if (pendingAdminAction === 'upload-product') {
+                setAdminInitialTab('products');
+                setAutoOpenAddProduct(true);
+                setPendingAdminAction(null);
+              }
               showToast(`Welcome Administrator ${user?.name || ''}`);
             }}
             onReturnHome={() => handleNavigate('home')}
+          />
+        )
+      ) : activeView === 'admin-login' ? (
+        isAdminLoggedIn ? (
+          <AdminDashboard
+            onLogout={async () => {
+              await api.adminLogout();
+              setIsAdminLoggedIn(false);
+              setAutoOpenAddProduct(false);
+              handleNavigate('home');
+              showToast('Logged out of admin portal');
+            }}
+            categories={categories}
+            onRefreshPublicData={refreshAllData}
+            initialTab={adminInitialTab as any}
+            autoOpenAddProduct={autoOpenAddProduct}
+            onNavigateToStorefront={() => handleNavigate('home')}
+          />
+        ) : (
+          <AdminLoginPage
+            onLoginSuccess={(user) => {
+              setIsAdminLoggedIn(true);
+              setActiveView('admin');
+              if (pendingAdminAction === 'upload-product') {
+                setAdminInitialTab('products');
+                setAutoOpenAddProduct(true);
+                setPendingAdminAction(null);
+              }
+              if (window.location.pathname !== '/admin') {
+                window.history.pushState({ view: 'admin' }, '', '/admin');
+              }
+              showToast(`Welcome Administrator ${user?.name || ''}`);
+            }}
+            onNavigateHome={() => handleNavigate('home')}
           />
         )
       ) : activeView === 'login' || activeView === 'register' ? (
@@ -842,7 +871,7 @@ export default function App() {
           products={products}
           onNavigate={handleNavigate}
           onSelectProduct={(p) => handleSelectProduct(p)}
-          onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
+          onOpenAdminLogin={() => handleNavigate('admin')}
           onOpenTracking={() => setIsTrackingOpen(true)}
           onSearch={(q) => {
             setSearchQuery(q);
@@ -1479,33 +1508,7 @@ export default function App() {
         />
       )}
 
-      {/* 6. Admin Login Modal */}
-      {isAdminLoginOpen && (
-        <AdminLoginModal
-          isOpen={isAdminLoginOpen}
-          onClose={() => {
-            setIsAdminLoginOpen(false);
-            if (window.location.pathname === '/admin' && !isAdminLoggedIn) {
-              window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
-            }
-          }}
-          onLoginSuccess={(user?: any) => {
-            setIsAdminLoggedIn(true);
-            setActiveView('admin');
-            if (pendingAdminAction === 'upload-product') {
-              setAdminInitialTab('products');
-              setAutoOpenAddProduct(true);
-              setPendingAdminAction(null);
-            }
-            if (window.location.pathname !== '/admin') {
-              window.history.pushState({ view: 'admin' }, '', '/admin');
-            }
-            showToast(`Welcome Administrator ${user?.name || ''}`);
-          }}
-        />
-      )}
-
-      {/* 7. Save to Home Screen / PWA Install Modal */}
+      {/* 6. Save to Home Screen / PWA Install Modal */}
       <PWAInstallModal
         isOpen={isAppDownloadOpen}
         onClose={() => setIsAppDownloadOpen(false)}
