@@ -770,7 +770,9 @@ async function saveToSupabaseAsync(entityType: string, docId: string, data: any)
         currency: 'RWF',
         payment_method: data.paymentMethod || 'MTN Mobile Money',
         payment_status: data.paymentStatus || 'Pending Payment',
+        status: data.status || 'New',
         order_status: data.status || 'New',
+        delivery_status: data.deliveryStatus || 'Pending',
         tracking_number: data.trackingNumber || null,
         tracking_token: data.trackingToken || null,
         updated_at: new Date().toISOString()
@@ -798,34 +800,247 @@ async function saveToSupabaseAsync(entityType: string, docId: string, data: any)
         description: data.description || '',
         price: data.price,
         cost_price: data.costPrice ?? null,
+        cost_overridden_by_admin: Boolean(data.costOverriddenByAdmin),
+        commission_rate: data.commissionRate ?? 10,
+        profit_margin: data.profitMargin ?? 0,
+        discount_percent: data.discountPercent ?? 0,
+        discount_price: data.discountPrice ?? null,
         category: data.category || 'clothing',
+        subcategory: data.subcategory || null,
+        main_category_id: data.mainCategoryId || null,
+        sub_category_id: data.subCategoryId || null,
+        category_name: data.categoryName || null,
+        sub_category_name: data.subCategoryName || null,
+        stock: data.stock ?? 0,
         stock_quantity: data.stock ?? 0,
         image_url: data.imageUrl || (Array.isArray(data.images) && data.images[0]) || '',
+        images: data.images || [],
+        shop_name: data.shopName || 'ContactReach Market',
+        shop_id: data.shopId || null,
         status: data.status || 'Available',
+        is_featured: Boolean(data.isFeatured),
+        is_new_arrival: Boolean(data.isNewArrival),
+        is_best_seller: Boolean(data.isBestSeller),
+        brand: data.brand || null,
+        unit: data.unit || 'Piece',
+        shipping_cost: data.shippingCost || 0,
+        specifications: data.specifications || null,
+        attributes: data.attributes || [],
+        variations: data.variations || [],
+        source: data.source || 'local',
+        alibaba_product_id: data.alibabaProductId || null,
+        cj_product_id: data.cjProductId || null,
         updated_at: new Date().toISOString()
       };
-      if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
+      if (data.id) {
         prodRow.id = data.id;
       }
       await supabase.from('products').upsert(prodRow);
+    } else if (entityType === 'categories' || entityType === 'category') {
+      await supabase.from('categories').upsert({
+        id: data.id,
+        name: data.nameEn || data.name || '',
+        name_en: data.nameEn || data.name || '',
+        name_rw: data.nameRw || null,
+        icon: data.icon || 'Tag',
+        image_url: data.imageUrl || null,
+        description: data.description || null,
+        parent_id: data.parentId || null,
+        sort_order: data.sortOrder ?? 0,
+        is_active: data.isActive !== false,
+        subcategories: data.subcategories || [],
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'shops' || entityType === 'shop') {
+      await supabase.from('shops').upsert({
+        id: data.id,
+        name: data.name,
+        category: data.category || 'all',
+        phone: data.phone || '',
+        email: data.email || null,
+        location: data.location || 'Kigali, Rwanda',
+        address: data.address || null,
+        logo: data.logo || 'ShoppingBag',
+        logo_url: data.logo || null,
+        banner_color: data.bannerColor || 'from-orange-500 to-amber-600',
+        total_sales: data.totalSales || 0,
+        status: data.isActive === false ? 'Inactive' : 'Active',
+        is_verified: Boolean(data.isVerified),
+        is_recommended: Boolean(data.isRecommended),
+        followers_count: data.followersCount || 0,
+        description: data.description || null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
     } else if (entityType === 'paymentConfirmations' || entityType === 'payments' || entityType === 'payment') {
       const payRow: Record<string, any> = {
         order_number: data.orderNumber,
         payment_method: data.paymentMethod || 'MTN Mobile Money',
         amount: data.amount || data.amountPaid || 0,
-        transaction_reference: data.transactionId || null,
+        amount_paid: data.amountPaid || data.amount || 0,
+        transaction_id: data.transactionId || null,
         sender_phone: data.senderPhone || data.paymentPhone || null,
+        payment_phone: data.paymentPhone || data.senderPhone || null,
         sender_name: data.senderName || data.customerName || null,
+        customer_name: data.customerName || 'Customer',
+        customer_phone: data.customerPhone || data.paymentPhone || '0780000000',
         proof_image_url: data.screenshotUrl || data.paymentProofUrl || null,
-        status: data.verificationStatus || 'Pending Verification',
+        screenshot_url: data.screenshotUrl || data.paymentProofUrl || null,
+        verification_status: data.verificationStatus || 'Pending Verification',
         verified_by: data.verifiedBy || null,
         verified_at: data.verifiedAt || null,
-        notes: data.notes || data.adminNotes || null
+        notes: data.notes || data.adminNotes || null,
+        admin_notes: data.adminNotes || data.notes || null,
+        submitted_at: data.submittedAt || new Date().toISOString()
       };
-      if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
+      if (data.id) {
         payRow.id = data.id;
       }
       await supabase.from('payments').upsert(payRow);
+    } else if (entityType === 'messages' || entityType === 'message' || entityType === 'customer_messages') {
+      await supabase.from('messages').upsert({
+        id: data.id,
+        name: data.name || data.senderName || 'Customer',
+        sender_name: data.name || data.senderName || 'Customer',
+        phone: data.phone || null,
+        sender_phone: data.phone || null,
+        email: data.email || null,
+        sender_email: data.email || null,
+        subject: data.subject || null,
+        message: data.message,
+        order_number: data.orderNumber || null,
+        customer_id: data.customerId || null,
+        sender: data.sender || 'customer',
+        status: data.status || 'unread',
+        reply_note: data.replyNote || null,
+        replied_at: data.repliedAt || null,
+        created_at: data.createdAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'customerProblems' || entityType === 'problem' || entityType === 'issues') {
+      await supabase.from('customer_problems').upsert({
+        id: data.id,
+        case_number: data.caseNumber || null,
+        order_number: data.orderNumber,
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone,
+        customer_email: data.customerEmail || null,
+        category: data.category || 'delivery_delay',
+        issue_type: data.issueType || null,
+        description: data.description,
+        priority: data.priority || 'medium',
+        status: data.status || 'New',
+        assigned_to: data.assignedTo || null,
+        admin_notes: data.adminNotes || null,
+        resolution: data.resolution || null,
+        resolved_at: data.resolvedAt || null,
+        updated_at: new Date().toISOString(),
+        created_at: data.createdAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'coupons' || entityType === 'coupon' || entityType === 'promo_codes') {
+      await supabase.from('coupons').upsert({
+        id: data.id,
+        code: data.code,
+        discount_type: data.discountType || 'percentage',
+        discount_value: data.discountValue,
+        min_order_amount: data.minOrderAmount || 0,
+        max_discount: data.maxDiscount || null,
+        expires_at: data.expiresAt || null,
+        usage_limit: data.usageLimit || null,
+        times_used: data.timesUsed || 0,
+        is_active: data.isActive !== false,
+        created_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'inventoryLogs' || entityType === 'inventory_logs' || entityType === 'log') {
+      await supabase.from('inventory_logs').upsert({
+        id: data.id,
+        product_id: data.productId,
+        product_name: data.productName,
+        previous_stock: data.previousStock,
+        new_stock: data.newStock,
+        change_amount: data.quantityChanged || 0,
+        quantity_changed: data.quantityChanged || 0,
+        reason: data.reason,
+        performed_by: data.performedBy,
+        admin_name: data.performedBy,
+        timestamp: data.timestamp || new Date().toISOString(),
+        created_at: data.timestamp || new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'auditLogs' || entityType === 'audit_logs' || entityType === 'audit') {
+      await supabase.from('audit_logs').upsert({
+        id: data.id,
+        admin_name: data.adminName,
+        admin_role: data.adminRole,
+        action: data.action,
+        details: data.details,
+        entity_type: data.entityType || null,
+        entity_id: data.entityId || null,
+        timestamp: data.timestamp || new Date().toISOString(),
+        created_at: data.timestamp || new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'supplierApplications' || entityType === 'application' || entityType === 'suppliers') {
+      await supabase.from('supplier_applications').upsert({
+        id: data.id,
+        business_name: data.businessName,
+        owner_name: data.ownerName,
+        phone: data.phone,
+        email: data.email || null,
+        tin_number: data.tinNumber || null,
+        location: data.location || null,
+        category: data.category || null,
+        description: data.description || null,
+        status: data.status || 'Pending',
+        reviewed_by: data.reviewedBy || null,
+        reviewed_at: data.reviewedAt || null,
+        created_at: data.createdAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'supplierPayouts' || entityType === 'payout') {
+      await supabase.from('supplier_payouts').upsert({
+        id: data.id,
+        shop_id: data.shopId,
+        shop_name: data.shopName,
+        order_id: data.orderId,
+        order_number: data.orderNumber,
+        order_total: data.orderTotal || 0,
+        commission_rate: data.commissionRate || 0.1,
+        commission_earned: data.commissionEarned || 0,
+        payout_amount: data.payoutAmount || 0,
+        status: data.status || 'Pending',
+        payment_reference: data.paymentReference || null,
+        paid_at: data.paidAt || null,
+        approved_by: data.approvedBy || null,
+        created_at: data.createdAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'settings' || entityType === 'store_settings') {
+      await supabase.from('app_settings').upsert({
+        id: 'global',
+        market_name: data.marketName || 'ContactReach Market',
+        company_name: data.companyName || 'ContactReach Media Ltd',
+        phone: data.phone || '+250780022600',
+        email: data.email || 'contactreachmedialimited@gmail.com',
+        receiver_name: data.receiverName || 'Ruth',
+        payment_number: data.paymentNumber || '0780022600',
+        merchant_code: data.merchantCode || '2328354',
+        mtn_ussd_pattern: data.mtnUssdPattern || '*182*1*1*0780022600*{AMOUNT}#',
+        airtel_ussd_pattern: data.airtelUssdPattern || '*182*1*2*0780022600*{AMOUNT}#',
+        delivery_fee_kigali: data.deliveryFeeKigali || 1500,
+        delivery_fee_upcountry: data.deliveryFeeUpcountry || 3500,
+        free_delivery_threshold: data.freeDeliveryThreshold || 50000,
+        is_maintenance_mode: Boolean(data.isMaintenanceMode),
+        maintenance_title: data.maintenanceTitle || null,
+        maintenance_message: data.maintenanceMessage || null,
+        settings_data: data,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    } else if (entityType === 'reviews' || entityType === 'review') {
+      await supabase.from('reviews').upsert({
+        id: data.id,
+        product_id: data.productId,
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone || null,
+        rating: data.rating,
+        comment: data.comment,
+        verified_purchase: Boolean(data.verifiedPurchase),
+        created_at: data.createdAt || new Date().toISOString()
+      }, { onConflict: 'id' });
     } else if (entityType === 'accounts' || entityType === 'customers' || entityType === 'adminUsers') {
       if (data.email) {
         const userRow: Record<string, any> = {
@@ -844,6 +1059,14 @@ async function saveToSupabaseAsync(entityType: string, docId: string, data: any)
         }
         await supabase.from('users').upsert(userRow, { onConflict: 'email' });
       }
+    } else if (entityType === 'deletedProducts' || entityType === 'deletedRecordIds') {
+      await supabase.from('deleted_tombstones').upsert({
+        id: data.id,
+        product_name: data.name || null,
+        deleted_by: data.deletedBy || 'System Admin',
+        deleted_at: new Date().toISOString(),
+        reason: data.reason || 'Admin deleted product'
+      }, { onConflict: 'id' });
     }
   } catch (err: any) {
     // Non-blocking background sync
@@ -856,16 +1079,33 @@ async function deleteFromSupabaseAsync(entityType: string, id: string) {
       await supabase.from('products').delete().eq('id', id);
     } else if (entityType === 'orders' || entityType === 'order') {
       await supabase.from('orders').delete().eq('id', id);
+    } else if (entityType === 'categories' || entityType === 'category') {
+      await supabase.from('categories').delete().eq('id', id);
+    } else if (entityType === 'shops' || entityType === 'shop') {
+      await supabase.from('shops').delete().eq('id', id);
+    } else if (entityType === 'payments' || entityType === 'payment') {
+      await supabase.from('payments').delete().eq('id', id);
+    } else if (entityType === 'messages' || entityType === 'message') {
+      await supabase.from('messages').delete().eq('id', id);
+    } else if (entityType === 'customerProblems' || entityType === 'customer_problems') {
+      await supabase.from('customer_problems').delete().eq('id', id);
+    } else if (entityType === 'coupons' || entityType === 'coupon') {
+      await supabase.from('coupons').delete().eq('id', id);
     } else if (entityType === 'users' || entityType === 'customers' || entityType === 'accounts') {
       await supabase.from('users').delete().eq('id', id);
+    } else if (entityType === 'supplierApplications' || entityType === 'supplier_applications') {
+      await supabase.from('supplier_applications').delete().eq('id', id);
+    } else if (entityType === 'supplierPayouts' || entityType === 'supplier_payouts') {
+      await supabase.from('supplier_payouts').delete().eq('id', id);
     }
   } catch {}
 }
 
-// Hydrate server in-memory database directly from Supabase
+// Hydrate server in-memory database directly from Supabase for all modules
 export async function loadAllDataFromSupabase() {
   try {
-    console.log('[Supabase] Hydrating catalog, orders, and users from Supabase...');
+    console.log('[Supabase] Hydrating all modules from Supabase PostgreSQL...');
+
     // 1. Products
     const { data: prods, error: prodErr } = await supabase
       .from('products')
@@ -880,20 +1120,72 @@ export async function loadAllDataFromSupabase() {
         description: p.description || '',
         price: Number(p.price) || 0,
         costPrice: p.cost_price !== null ? Number(p.cost_price) : undefined,
+        costOverriddenByAdmin: Boolean(p.cost_overridden_by_admin),
+        commissionRate: p.commission_rate !== null ? Number(p.commission_rate) : 10,
+        discountPercent: Number(p.discount_percent) || 0,
+        discountPrice: p.discount_price !== null ? Number(p.discount_price) : undefined,
         category: normalizeCategoryId(p.category, p.name),
+        subcategory: p.subcategory || undefined,
+        mainCategoryId: p.main_category_id || undefined,
+        subCategoryId: p.sub_category_id || undefined,
+        categoryName: p.category_name || undefined,
+        subCategoryName: p.sub_category_name || undefined,
         stock: Number(p.stock_quantity ?? p.stock ?? 0),
         imageUrl: p.image_url || '',
-        images: p.image_url ? [p.image_url] : [],
-        shopName: 'ContactReach Market',
+        images: Array.isArray(p.images) ? p.images : (p.image_url ? [p.image_url] : []),
+        shopName: p.shop_name || 'ContactReach Market',
+        shopId: p.shop_id || undefined,
         status: p.status || 'Available',
-        rating: 5.0,
-        reviewsCount: 0,
+        rating: Number(p.rating) || 5.0,
+        reviewsCount: Number(p.reviews_count) || 0,
         createdAt: p.created_at || new Date().toISOString()
       }));
-      console.log(`[Supabase] Successfully loaded ${db.products.length} live products.`);
+      console.log(`[Supabase] Loaded ${db.products.length} products.`);
     }
 
-    // 2. Orders with items
+    // 2. Categories
+    const { data: cats, error: catErr } = await supabase.from('categories').select('*').order('sort_order', { ascending: true });
+    if (!catErr && Array.isArray(cats) && cats.length > 0) {
+      db.categories = cats.map(c => ({
+        id: c.id,
+        nameEn: c.name_en || c.name || '',
+        nameRw: c.name_rw || c.name_en || c.name || '',
+        icon: c.icon || 'Tag',
+        imageUrl: c.image_url || undefined,
+        description: c.description || undefined,
+        parentId: c.parent_id || undefined,
+        sortOrder: c.sort_order || 0,
+        isActive: c.is_active !== false,
+        subcategories: Array.isArray(c.subcategories) ? c.subcategories : []
+      }));
+      console.log(`[Supabase] Loaded ${db.categories.length} categories.`);
+    }
+
+    // 3. Shops
+    const { data: shps, error: shpErr } = await supabase.from('shops').select('*');
+    if (!shpErr && Array.isArray(shps) && shps.length > 0) {
+      db.shops = shps.map(s => ({
+        id: s.id,
+        name: s.name,
+        category: s.category || 'all',
+        description: s.description || '',
+        location: s.location || 'Kigali, Rwanda',
+        address: s.address || undefined,
+        phone: s.phone || '',
+        email: s.email || undefined,
+        totalSales: Number(s.total_sales) || 0,
+        logo: s.logo || 'ShoppingBag',
+        bannerColor: s.banner_color || 'from-orange-500 to-amber-600',
+        isVerified: Boolean(s.is_verified),
+        isRecommended: Boolean(s.is_recommended),
+        followersCount: Number(s.followers_count) || 0,
+        isActive: s.is_active !== false && s.status !== 'Inactive',
+        createdAt: s.created_at || new Date().toISOString()
+      }));
+      console.log(`[Supabase] Loaded ${db.shops.length} registered shops.`);
+    }
+
+    // 4. Orders with items
     const { data: ords, error: ordErr } = await supabase
       .from('orders')
       .select('*, order_items(*)')
@@ -917,31 +1209,50 @@ export async function loadAllDataFromSupabase() {
         paymentStatus: o.payment_status || 'Pending Payment',
         receiverName: 'Ruth',
         receiverDetails: '0780022600',
-        stockDeducted: false,
-        statusHistory: [],
-        status: o.order_status || 'New',
-        deliveryStatus: 'Pending',
+        stockDeducted: Boolean(o.stock_deducted),
+        statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
+        status: o.status || o.order_status || 'New',
+        deliveryStatus: o.delivery_status || 'Pending',
         trackingNumber: o.tracking_number || undefined,
         trackingToken: o.tracking_token || undefined,
-        items: Array.isArray(o.order_items) ? o.order_items.map((it: any) => ({
+        items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
           productId: it.product_id ? String(it.product_id) : undefined,
           name: it.product_name,
           productName: it.product_name,
           price: Number(it.unit_price) || 0,
           quantity: Number(it.quantity) || 1
-        })) : [],
+        })) : (Array.isArray(o.items) ? o.items : []),
         createdAt: o.created_at || new Date().toISOString(),
         updatedAt: o.updated_at || undefined
       }));
-      console.log(`[Supabase] Successfully loaded ${db.orders.length} live orders.`);
+      console.log(`[Supabase] Loaded ${db.orders.length} orders.`);
     }
 
-    // 3. Users / Customers
-    const { data: usrs, error: usrErr } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // 5. Payments
+    const { data: pays, error: payErr } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
+    if (!payErr && Array.isArray(pays) && pays.length > 0) {
+      db.paymentConfirmations = pays.map(p => ({
+        id: p.id,
+        orderId: p.order_id || '',
+        orderNumber: p.order_number || '',
+        customerName: p.customer_name || 'Customer',
+        paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
+        amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
+        paymentMethod: p.payment_method || 'MTN Mobile Money',
+        transactionId: p.transaction_id || '',
+        screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
+        confirmationMessage: p.confirmation_message || undefined,
+        verificationStatus: p.verification_status || 'Pending Verification',
+        verifiedAt: p.verified_at || undefined,
+        verifiedBy: p.verified_by || undefined,
+        adminNotes: p.admin_notes || p.notes || undefined,
+        submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
+      }));
+      console.log(`[Supabase] Loaded ${db.paymentConfirmations.length} payments.`);
+    }
 
+    // 6. Users / Customers
+    const { data: usrs, error: usrErr } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     if (!usrErr && Array.isArray(usrs) && usrs.length > 0) {
       db.customers = usrs.filter(u => u.role !== 'admin' && u.role !== 'owner').map(u => ({
         id: String(u.id),
@@ -955,10 +1266,166 @@ export async function loadAllDataFromSupabase() {
         isRegisteredBuyer: true,
         createdAt: u.created_at || new Date().toISOString()
       }));
-      console.log(`[Supabase] Successfully loaded ${db.customers.length} registered customers.`);
+      console.log(`[Supabase] Loaded ${db.customers.length} registered customers.`);
+    }
+
+    // 7. Messages
+    const { data: msgs, error: msgErr } = await supabase.from('messages').select('*').order('created_at', { ascending: false });
+    if (!msgErr && Array.isArray(msgs) && msgs.length > 0) {
+      db.messages = msgs.map(m => ({
+        id: m.id,
+        name: m.name || m.sender_name || 'Customer',
+        email: m.email || m.sender_email || '',
+        phone: m.phone || m.sender_phone || undefined,
+        subject: m.subject || '',
+        message: m.message,
+        status: m.status || 'unread',
+        orderNumber: m.order_number || undefined,
+        customerId: m.customer_id || undefined,
+        sender: m.sender || 'customer',
+        senderName: m.name || m.sender_name || undefined,
+        createdAt: m.created_at || new Date().toISOString(),
+        readAt: m.read_at || undefined,
+        repliedAt: m.replied_at || undefined,
+        replyNote: m.reply_note || m.reply_message || undefined
+      }));
+      console.log(`[Supabase] Loaded ${db.messages.length} messages.`);
+    }
+
+    // 8. Customer Problems / Issues
+    const { data: probs, error: probErr } = await supabase.from('customer_problems').select('*').order('created_at', { ascending: false });
+    if (!probErr && Array.isArray(probs) && probs.length > 0) {
+      db.customerProblems = probs.map(p => ({
+        id: p.id,
+        caseNumber: p.case_number || undefined,
+        orderNumber: p.order_number,
+        customerName: p.customer_name,
+        customerPhone: p.customer_phone,
+        customerEmail: p.customer_email || undefined,
+        category: p.category || 'delivery_delay',
+        issueType: p.issue_type || undefined,
+        description: p.description,
+        priority: p.priority || 'medium',
+        status: p.status || 'New',
+        assignedTo: p.assigned_to || undefined,
+        adminNotes: p.admin_notes || undefined,
+        resolution: p.resolution || undefined,
+        resolvedAt: p.resolved_at || undefined,
+        createdAt: p.created_at || new Date().toISOString()
+      }));
+      console.log(`[Supabase] Loaded ${db.customerProblems.length} customer problem reports.`);
+    }
+
+    // 9. Coupons
+    const { data: cpnData, error: cpnErr } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
+    if (!cpnErr && Array.isArray(cpnData) && cpnData.length > 0) {
+      db.coupons = cpnData.map(c => ({
+        id: c.id,
+        code: c.code,
+        discountType: c.discount_type || 'percentage',
+        discountValue: Number(c.discount_value) || 0,
+        minOrderAmount: Number(c.min_order_amount) || 0,
+        maxDiscount: c.max_discount !== null ? Number(c.max_discount) : undefined,
+        expiresAt: c.expires_at || undefined,
+        usageLimit: c.usage_limit !== null ? Number(c.usage_limit) : undefined,
+        timesUsed: Number(c.times_used) || 0,
+        isActive: c.is_active !== false
+      }));
+      console.log(`[Supabase] Loaded ${db.coupons.length} coupons.`);
+    }
+
+    // 10. Inventory Logs
+    const { data: invData, error: invErr } = await supabase.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(200);
+    if (!invErr && Array.isArray(invData) && invData.length > 0) {
+      db.inventoryLogs = invData.map(l => ({
+        id: l.id,
+        productId: l.product_id,
+        productName: l.product_name,
+        previousStock: l.previous_stock,
+        newStock: l.new_stock,
+        changeAmount: l.change_amount || l.quantity_changed || 0,
+        reason: l.reason,
+        adminName: l.admin_name || l.performed_by || 'System',
+        timestamp: l.timestamp || l.created_at || new Date().toISOString()
+      }));
+    }
+
+    // 11. Audit Logs
+    const { data: audData, error: audErr } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(250);
+    if (!audErr && Array.isArray(audData) && audData.length > 0) {
+      db.auditLogs = audData.map(a => ({
+        id: a.id,
+        adminName: a.admin_name || 'System Admin',
+        adminRole: a.admin_role || 'owner',
+        action: a.action,
+        details: a.details || '',
+        entityType: a.entity_type || undefined,
+        entityId: a.entity_id || undefined,
+        timestamp: a.timestamp || a.created_at || new Date().toISOString()
+      }));
+    }
+
+    // 12. Supplier Applications
+    const { data: suppData, error: suppErr } = await supabase.from('supplier_applications').select('*').order('created_at', { ascending: false });
+    if (!suppErr && Array.isArray(suppData) && suppData.length > 0) {
+      db.supplierApplications = suppData.map(s => ({
+        id: s.id,
+        businessName: s.business_name,
+        ownerName: s.owner_name,
+        phone: s.phone,
+        email: s.email || undefined,
+        tinNumber: s.tin_number || undefined,
+        location: s.location || '',
+        category: s.category || '',
+        description: s.description || undefined,
+        status: s.status || 'Pending',
+        reviewedBy: s.reviewed_by || undefined,
+        reviewedAt: s.reviewed_at || undefined,
+        createdAt: s.created_at || new Date().toISOString()
+      }));
+      console.log(`[Supabase] Loaded ${db.supplierApplications.length} supplier applications.`);
+    }
+
+    // 13. Supplier Payouts
+    const { data: payoutData, error: payoutErr } = await supabase.from('supplier_payouts').select('*').order('created_at', { ascending: false });
+    if (!payoutErr && Array.isArray(payoutData) && payoutData.length > 0) {
+      db.supplierPayouts = payoutData.map(p => ({
+        id: p.id,
+        shopId: p.shop_id,
+        shopName: p.shop_name,
+        orderId: p.order_id,
+        orderNumber: p.order_number,
+        orderTotal: Number(p.order_total) || 0,
+        commissionRate: Number(p.commission_rate) || 0.1,
+        commissionEarned: Number(p.commission_earned) || 0,
+        payoutAmount: Number(p.payout_amount) || 0,
+        status: p.status || 'Pending',
+        paymentReference: p.payment_reference || undefined,
+        paidAt: p.paid_at || undefined,
+        approvedBy: p.approved_by || undefined,
+        createdAt: p.created_at || new Date().toISOString()
+      }));
+      console.log(`[Supabase] Loaded ${db.supplierPayouts.length} supplier payouts.`);
+    }
+
+    // 14. Settings
+    const { data: settData, error: settErr } = await supabase.from('app_settings').select('settings_data').eq('id', 'global').maybeSingle();
+    if (!settErr && settData?.settings_data) {
+      db.settings = {
+        ...db.settings,
+        ...(settData.settings_data as AppSettings)
+      };
+      console.log('[Supabase] Loaded store settings from Supabase.');
+    }
+
+    // 15. Deleted Tombstones
+    const { data: tombData, error: tombErr } = await supabase.from('deleted_tombstones').select('id');
+    if (!tombErr && Array.isArray(tombData) && tombData.length > 0) {
+      const tombIds = tombData.map(d => String(d.id));
+      db.deletedRecordIds = Array.from(new Set([...(db.deletedRecordIds || []), ...tombIds]));
     }
   } catch (err: any) {
-    console.warn('[Supabase] Hydration warning:', err?.message || err);
+    console.warn('[Supabase] Hydration notice:', err?.message || err);
   }
 }
 

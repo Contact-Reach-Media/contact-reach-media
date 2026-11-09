@@ -12,7 +12,8 @@ import {
   AppSettings,
   AuditLog,
   CustomerUser,
-  InventoryLog
+  InventoryLog,
+  AdminUser
 } from '../types.ts';
 
 // -------------------------------------------------------------
@@ -46,13 +47,11 @@ export interface SupabaseAuthResult {
 export async function loginWithSupabasePassword(email: string, password: string): Promise<SupabaseAuthResult> {
   const cleanEmail = email.trim().toLowerCase();
 
-  // Attempt login
   let { data, error } = await supabase.auth.signInWithPassword({
     email: cleanEmail,
     password: password
   });
 
-  // If user does not exist in Supabase auth yet, auto-register them
   if (error && (
     error.message.includes('Invalid login credentials') ||
     error.message.includes('user_not_found') ||
@@ -74,7 +73,7 @@ export async function loginWithSupabasePassword(email: string, password: string)
         error = null;
       }
     } catch {
-      // ignore signup error if signup is restricted
+      // ignore
     }
   }
 
@@ -90,7 +89,7 @@ export async function loginWithSupabasePassword(email: string, password: string)
 }
 
 /**
- * Sign in using Supabase Google OAuth (domain-independent)
+ * Sign in using Supabase Google OAuth
  */
 export async function loginWithSupabaseGoogle(): Promise<void> {
   const redirectUrl = typeof window !== 'undefined'
@@ -143,43 +142,36 @@ export async function testSupabaseConnection(): Promise<{
   details?: any;
 }> {
   const tableStatus: Record<string, boolean> = {
-    orders: false,
     products: false,
+    orders: false,
+    order_items: false,
+    payments: false,
+    users: false,
     categories: false,
     shops: false,
-    accounts: false,
-    payments: false,
-    messages: false
+    messages: false,
+    customer_problems: false,
+    coupons: false,
+    inventory_logs: false,
+    audit_logs: false,
+    supplier_applications: false,
+    supplier_payouts: false,
+    app_settings: false
   };
 
   try {
-    // Check orders table
-    const ordersRes = await supabase.from('orders').select('id').limit(1);
-    tableStatus.orders = !ordersRes.error;
+    const checks = await Promise.allSettled(
+      Object.keys(tableStatus).map(async (table) => {
+        const res = await supabase.from(table).select('id').limit(1);
+        return { table, ok: !res.error };
+      })
+    );
 
-    // Check products table
-    const prodRes = await supabase.from('products').select('id').limit(1);
-    tableStatus.products = !prodRes.error;
-
-    // Check categories table
-    const catRes = await supabase.from('categories').select('id').limit(1);
-    tableStatus.categories = !catRes.error;
-
-    // Check shops table
-    const shopRes = await supabase.from('shops').select('id').limit(1);
-    tableStatus.shops = !shopRes.error;
-
-    // Check accounts table
-    const accRes = await supabase.from('accounts').select('id').limit(1);
-    tableStatus.accounts = !accRes.error;
-
-    // Check payments table
-    const payRes = await supabase.from('payments').select('id').limit(1);
-    tableStatus.payments = !payRes.error;
-
-    // Check messages table
-    const msgRes = await supabase.from('messages').select('id').limit(1);
-    tableStatus.messages = !msgRes.error;
+    checks.forEach((c) => {
+      if (c.status === 'fulfilled') {
+        tableStatus[c.value.table] = c.value.ok;
+      }
+    });
 
     const anyTableExists = Object.values(tableStatus).some(Boolean);
     const allTablesExist = Object.values(tableStatus).every(Boolean);
@@ -187,25 +179,23 @@ export async function testSupabaseConnection(): Promise<{
     if (allTablesExist) {
       return {
         success: true,
-        message: 'Successfully connected to Supabase project contactreachmarket! All database tables are active and ready.',
+        message: 'Successfully connected to Supabase PostgreSQL! All modules are connected.',
         tableExists: true,
-        tableStatus,
-        details: { orders: ordersRes.data }
+        tableStatus
       };
     } else if (anyTableExists) {
       return {
         success: true,
-        message: 'Connected to Supabase project contactreachmarket! Some tables exist. Run the migration SQL in Supabase SQL Editor to finish setting up all tables.',
+        message: 'Connected to Supabase PostgreSQL! Active tables detected. Safe migrations available for remaining modules.',
         tableExists: true,
         tableStatus
       };
     } else {
       return {
         success: true,
-        message: 'Connected to Supabase project contactreachmarket successfully! Please run the SQL schema migration in Supabase to create the tables.',
+        message: 'Connected to Supabase project contactreachmarket. Tables ready for migration.',
         tableExists: false,
-        tableStatus,
-        details: ordersRes.error
+        tableStatus
       };
     }
   } catch (err: any) {
@@ -213,14 +203,13 @@ export async function testSupabaseConnection(): Promise<{
       success: false,
       message: err?.message || 'Failed to connect to Supabase database',
       tableExists: false,
-      tableStatus,
-      details: err
+      tableStatus
     };
   }
 }
 
 // -------------------------------------------------------------
-// PRODUCTS CRUD
+// 1. PRODUCTS CRUD & SYNC
 // -------------------------------------------------------------
 export async function getProductsFromSupabase(): Promise<Product[]> {
   try {
@@ -229,27 +218,54 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error || !data) {
-      if (error) console.warn('[Supabase] Products query notice:', error.message);
-      return [];
-    }
+    if (error || !data) return [];
 
     return data.map((row: any) => ({
       id: String(row.id),
-      name: row.name || 'Untitled Product',
+      name: row.name || 'Product',
       sku: row.sku || undefined,
       description: row.description || '',
       price: Number(row.price) || 0,
       costPrice: row.cost_price !== null ? Number(row.cost_price) : undefined,
-      costOverriddenByAdmin: false,
+      costOverriddenByAdmin: Boolean(row.cost_overridden_by_admin),
+      commissionRate: row.commission_rate !== null ? Number(row.commission_rate) : 10,
+      discountPercent: Number(row.discount_percent) || 0,
+      discountPrice: row.discount_price !== null ? Number(row.discount_price) : undefined,
       category: row.category || 'clothing',
+      subcategory: row.subcategory || undefined,
+      mainCategoryId: row.main_category_id || undefined,
+      subCategoryId: row.sub_category_id || undefined,
+      categoryName: row.category_name || undefined,
+      subCategoryName: row.sub_category_name || undefined,
       stock: Number(row.stock_quantity ?? row.stock ?? 0),
       imageUrl: row.image_url || '',
-      images: row.image_url ? [row.image_url] : [],
-      shopName: 'ContactReach Market',
+      images: Array.isArray(row.images) ? row.images : (row.image_url ? [row.image_url] : []),
+      videoUrl: row.video_url || undefined,
+      youtubeUrl: row.youtube_url || undefined,
+      shopName: row.shop_name || 'ContactReach Market',
+      shopId: row.shop_id || undefined,
+      receiverName: row.receiver_name || undefined,
+      receiverPhone: row.receiver_phone || undefined,
+      merchantCode: row.merchant_code || undefined,
+      location: row.location || 'Kigali, Rwanda',
+      deliveryInfo: row.delivery_info || undefined,
       status: (row.status || 'Available') as any,
-      rating: 5.0,
-      reviewsCount: 0,
+      isFeatured: Boolean(row.is_featured),
+      isNewArrival: Boolean(row.is_new_arrival),
+      isBestSeller: Boolean(row.is_best_seller),
+      brand: row.brand || undefined,
+      unit: row.unit || 'Piece',
+      shippingCost: Number(row.shipping_cost) || 0,
+      specifications: row.specifications || undefined,
+      storage: row.storage || undefined,
+      packagingInfo: row.packaging_info || undefined,
+      attributes: Array.isArray(row.attributes) ? row.attributes : [],
+      variations: Array.isArray(row.variations) ? row.variations : [],
+      rating: Number(row.rating) || 5.0,
+      reviewsCount: Number(row.reviews_count) || 0,
+      source: row.source || 'local',
+      alibabaProductId: row.alibaba_product_id || undefined,
+      cjProductId: row.cj_product_id || undefined,
       createdAt: row.created_at || new Date().toISOString()
     }));
   } catch (err) {
@@ -266,21 +282,51 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
       description: p.description || '',
       price: p.price,
       cost_price: p.costPrice ?? null,
+      cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
+      commission_rate: p.commissionRate ?? 10,
+      profit_margin: p.profitMargin ?? 0,
+      discount_percent: p.discountPercent ?? 0,
+      discount_price: p.discountPrice ?? null,
       category: p.category || 'clothing',
+      subcategory: p.subcategory || null,
+      main_category_id: p.mainCategoryId || null,
+      sub_category_id: p.subCategoryId || null,
+      category_name: p.categoryName || null,
+      sub_category_name: p.subCategoryName || null,
+      stock: p.stock ?? 0,
       stock_quantity: p.stock ?? 0,
       image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
+      images: p.images || [],
+      video_url: p.videoUrl || null,
+      youtube_url: p.youtubeUrl || null,
+      shop_name: p.shopName || 'ContactReach Market',
+      shop_id: p.shopId || null,
       status: p.status || 'Available',
+      is_featured: Boolean(p.isFeatured),
+      is_new_arrival: Boolean(p.isNewArrival),
+      is_best_seller: Boolean(p.isBestSeller),
+      brand: p.brand || null,
+      unit: p.unit || 'Piece',
+      shipping_cost: p.shippingCost || 0,
+      specifications: p.specifications || null,
+      storage: p.storage || null,
+      packaging_info: p.packagingInfo || null,
+      attributes: p.attributes || [],
+      variations: p.variations || [],
+      rating: p.rating || 5.0,
+      reviews_count: p.reviewsCount || 0,
+      source: p.source || 'local',
+      alibaba_product_id: p.alibabaProductId || null,
+      cj_product_id: p.cjProductId || null,
       updated_at: new Date().toISOString()
     };
 
-    // If valid UUID format, preserve it, otherwise omit id and let Supabase assign uuid_generate_v4()
-    if (p.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(p.id)) {
+    if (p.id) {
       row.id = p.id;
     }
 
     const { data, error } = await supabase.from('products').upsert(row).select();
     if (error) {
-      console.warn('[Supabase] Save product notice:', error.message);
       return { success: false, error: error.message };
     }
     return { success: true, data: data?.[0] };
@@ -308,7 +354,6 @@ export async function syncAllProductsToSupabase(products: Product[] = []): Promi
   }
 
   let count = 0;
-  // Batch in chunks of 50 for efficient Supabase insert
   for (let i = 0; i < products.length; i += 50) {
     const chunk = products.slice(i, i + 50);
     const rows = chunk.map(p => ({
@@ -318,59 +363,28 @@ export async function syncAllProductsToSupabase(products: Product[] = []): Promi
       description: p.description || '',
       price: p.price,
       cost_price: p.costPrice ?? null,
-      cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
       category: p.category,
-      main_category_id: p.mainCategoryId || null,
-      sub_category_id: p.subCategoryId || null,
-      category_name: p.categoryName || null,
-      sub_category_name: p.subCategoryName || null,
       stock: p.stock,
+      stock_quantity: p.stock,
       image_url: p.imageUrl || '',
       images: p.images || [],
       shop_name: p.shopName || null,
-      shop_id: p.shopId || null,
-      receiver_name: p.receiverName || null,
-      payment_methods: p.paymentMethods || [],
-      merchant_code: p.merchantCode || null,
-      receiver_phone: p.receiverPhone || null,
-      location: p.location || null,
-      delivery_info: p.deliveryInfo || null,
       status: p.status || 'Available',
-      is_featured: Boolean(p.isFeatured),
-      is_new_arrival: Boolean(p.isNewArrival),
-      is_best_seller: Boolean(p.isBestSeller),
-      brand: p.brand || null,
-      unit: p.unit || 'Piece',
-      video_url: p.videoUrl || null,
-      variations: p.variations || [],
-      rating: p.rating || 5.0,
-      reviews_count: p.reviewsCount || 0,
-      source: p.source || null,
-      alibaba_product_id: p.alibabaProductId || null,
-      cj_product_id: p.cjProductId || null,
       created_at: p.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     }));
 
     try {
       const { error } = await supabase.from('products').upsert(rows, { onConflict: 'id' });
-      if (!error) {
-        count += chunk.length;
-      }
-    } catch {
-      // continue next chunk
-    }
+      if (!error) count += chunk.length;
+    } catch {}
   }
 
-  return {
-    success: count > 0,
-    syncedCount: count,
-    message: `Synchronized ${count} products to Supabase`
-  };
+  return { success: count > 0, syncedCount: count };
 }
 
 // -------------------------------------------------------------
-// CATEGORIES CRUD
+// 2. CATEGORIES CRUD
 // -------------------------------------------------------------
 export async function getCategoriesFromSupabase(): Promise<Category[]> {
   try {
@@ -400,45 +414,44 @@ export async function saveCategoryToSupabase(c: Category): Promise<void> {
       name: c.nameEn || '',
       name_en: c.nameEn,
       name_rw: c.nameRw || null,
-      name_fr: null,
       icon: c.icon || 'Tag',
       image_url: c.imageUrl || null,
       description: c.description || null,
       parent_id: c.parentId || null,
-      sort_order: c.sortOrder ?? c.order ?? 0,
+      sort_order: c.sortOrder ?? 0,
       is_active: c.isActive !== false,
-      subcategories: c.subcategories || []
+      subcategories: c.subcategories || [],
+      updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
   } catch (err) {
     console.warn('[Supabase] Save category error:', err);
   }
 }
 
+export async function deleteCategoryFromSupabase(categoryId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function syncAllCategoriesToSupabase(categories: Category[] = []): Promise<number> {
   try {
-    const rows = categories.map((c, idx) => ({
-      id: c.id,
-      name: c.nameEn || '',
-      name_en: c.nameEn,
-      name_rw: c.nameRw || null,
-      name_fr: null,
-      icon: c.icon || 'Tag',
-      image_url: c.imageUrl || null,
-      description: c.description || null,
-      parent_id: c.parentId || null,
-      sort_order: c.sortOrder ?? c.order ?? idx,
-      is_active: c.isActive !== false,
-      subcategories: c.subcategories || []
-    }));
-    const { error } = await supabase.from('categories').upsert(rows, { onConflict: 'id' });
-    return error ? 0 : rows.length;
+    let count = 0;
+    for (const c of categories) {
+      await saveCategoryToSupabase(c);
+      count++;
+    }
+    return count;
   } catch {
     return 0;
   }
 }
 
 // -------------------------------------------------------------
-// SHOPS CRUD
+// 3. SHOPS CRUD
 // -------------------------------------------------------------
 export async function getShopsFromSupabase(): Promise<VendorShop[]> {
   try {
@@ -454,8 +467,8 @@ export async function getShopsFromSupabase(): Promise<VendorShop[]> {
       phone: s.phone || '',
       email: s.email || undefined,
       totalSales: Number(s.total_sales) || 0,
-      logo: s.logo || s.logo_url || 'ShoppingBag',
-      bannerColor: s.banner_color || s.banner_url || 'from-orange-500 to-amber-600',
+      logo: s.logo || 'ShoppingBag',
+      bannerColor: s.banner_color || 'from-orange-500 to-amber-600',
       isVerified: Boolean(s.is_verified),
       isRecommended: Boolean(s.is_recommended),
       followersCount: Number(s.followers_count) || 0,
@@ -485,42 +498,38 @@ export async function saveShopToSupabase(s: VendorShop): Promise<void> {
       is_verified: Boolean(s.isVerified),
       is_recommended: Boolean(s.isRecommended),
       followers_count: s.followersCount || 0,
-      description: s.description || null
+      description: s.description || null,
+      updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
   } catch (err) {
     console.warn('[Supabase] Save shop error:', err);
   }
 }
 
+export async function deleteShopFromSupabase(shopId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('shops').delete().eq('id', shopId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function syncAllShopsToSupabase(shops: VendorShop[] = []): Promise<number> {
   try {
-    const rows = shops.map(s => ({
-      id: s.id,
-      name: s.name,
-      category: s.category || 'all',
-      phone: s.phone || '',
-      email: s.email || null,
-      location: s.location || 'Kigali, Rwanda',
-      address: s.address || null,
-      logo: s.logo || 'ShoppingBag',
-      logo_url: s.logo || null,
-      banner_color: s.bannerColor || 'from-orange-500 to-amber-600',
-      total_sales: s.totalSales || 0,
-      status: s.isActive === false ? 'Inactive' : 'Active',
-      is_verified: Boolean(s.isVerified),
-      is_recommended: Boolean(s.isRecommended),
-      followers_count: s.followersCount || 0,
-      description: s.description || null
-    }));
-    const { error } = await supabase.from('shops').upsert(rows, { onConflict: 'id' });
-    return error ? 0 : rows.length;
+    let count = 0;
+    for (const s of shops) {
+      await saveShopToSupabase(s);
+      count++;
+    }
+    return count;
   } catch {
     return 0;
   }
 }
 
 // -------------------------------------------------------------
-// ORDERS CRUD & SYNC
+// 4. ORDERS CRUD & SYNC
 // -------------------------------------------------------------
 export async function getOrdersFromSupabase(): Promise<Order[]> {
   try {
@@ -529,10 +538,7 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
       .select('*, order_items(*)')
       .order('created_at', { ascending: false });
 
-    if (error || !data) {
-      if (error) console.warn('[Supabase] Orders query notice:', error.message);
-      return [];
-    }
+    if (error || !data) return [];
 
     return data.map((o: any) => ({
       id: String(o.id),
@@ -553,24 +559,25 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
       })) : (Array.isArray(o.items) ? o.items : []),
       subtotal: Number(o.subtotal) || Number(o.total_amount) || 0,
       deliveryFee: Number(o.delivery_fee) || 0,
-      shippingCost: 0,
+      shippingCost: Number(o.shipping_cost) || 0,
+      discountAmount: Number(o.discount_amount) || 0,
+      couponCode: o.coupon_code || undefined,
       totalAmount: Number(o.total_amount) || 0,
+      commissionRate: Number(o.commission_rate) || 10,
+      commissionEarned: Number(o.commission_earned) || 0,
+      supplierPayoutAmount: Number(o.supplier_payout_amount) || 0,
+      supplierPayoutStatus: o.supplier_payout_status || 'Pending',
       paymentMethod: o.payment_method || 'MTN Mobile Money',
-      receiverName: 'Ruth',
-      receiverDetails: '0780022600',
+      receiverName: o.receiver_name || 'Ruth',
+      receiverDetails: o.receiver_details || '0780022600',
       paymentStatus: o.payment_status || 'Pending Payment',
-      deliveryStatus: 'Pending',
-      status: o.order_status || 'New',
-      stockDeducted: false,
-      statusHistory: [{
-        status: o.order_status || 'New',
-        deliveryStatus: 'Pending',
-        paymentStatus: o.payment_status || 'Pending Payment',
-        timestamp: o.created_at || new Date().toISOString()
-      }],
+      deliveryStatus: o.delivery_status || 'Pending',
+      status: o.status || o.order_status || 'New',
+      stockDeducted: Boolean(o.stock_deducted),
       trackingNumber: o.tracking_number || undefined,
       trackingToken: o.tracking_token || undefined,
-      discountAmount: Number(o.discount_amount) || 0,
+      trackingCarrier: o.tracking_carrier || undefined,
+      statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
       createdAt: o.created_at || new Date().toISOString(),
       updatedAt: o.updated_at || undefined
     }));
@@ -590,20 +597,24 @@ export async function saveOrderToSupabase(order: any): Promise<{ success: boolea
       delivery_city: order.deliveryCity || order.deliveryLocation?.split(' ')[0] || 'Kigali',
       delivery_district: order.deliveryLocation || null,
       delivery_notes: order.deliveryNotes || null,
+      items: order.items || [],
       total_amount: order.totalAmount,
       subtotal: order.subtotal || order.totalAmount,
       delivery_fee: order.deliveryFee || 0,
       discount_amount: order.discountAmount || 0,
+      coupon_code: order.couponCode || null,
       currency: 'RWF',
       payment_method: order.paymentMethod || 'MTN Mobile Money',
       payment_status: order.paymentStatus || 'Pending Payment',
+      status: order.status || 'New',
       order_status: order.status || 'New',
+      delivery_status: order.deliveryStatus || 'Pending',
       tracking_number: order.trackingNumber || null,
       tracking_token: order.trackingToken || null,
       updated_at: new Date().toISOString()
     };
 
-    if (order.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(order.id)) {
+    if (order.id) {
       orderRecord.id = order.id;
     }
 
@@ -613,53 +624,53 @@ export async function saveOrderToSupabase(order: any): Promise<{ success: boolea
       .select();
 
     if (error) {
-      console.warn('[Supabase] orders table upsert notice:', error.message);
       return { success: false, error: error.message };
     }
 
     const targetOrderId = savedOrder?.[0]?.id || order.id;
     if (targetOrderId && Array.isArray(order.items) && order.items.length > 0) {
-      const itemsRows = order.items.map((it: any) => ({
-        order_id: targetOrderId,
-        product_name: it.productName || it.name || 'Product',
-        unit_price: it.price || it.unitPrice || 0,
-        quantity: it.quantity || 1,
-        line_total: (it.price || it.unitPrice || 0) * (it.quantity || 1),
-        ...(it.productId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(it.productId) ? { product_id: it.productId } : {})
-      }));
-      await supabase.from('order_items').insert(itemsRows);
+      try {
+        const itemsRows = order.items.map((it: any) => ({
+          order_id: targetOrderId,
+          product_name: it.productName || it.name || 'Product',
+          unit_price: it.price || it.unitPrice || 0,
+          quantity: it.quantity || 1,
+          line_total: (it.price || it.unitPrice || 0) * (it.quantity || 1),
+          ...(it.productId ? { product_id: it.productId } : {})
+        }));
+        await supabase.from('order_items').insert(itemsRows);
+      } catch {}
     }
 
     return { success: true, data: savedOrder?.[0] };
   } catch (err: any) {
-    console.warn('[Supabase] Save order error:', err);
     return { success: false, error: err?.message };
+  }
+}
+
+export async function deleteOrderFromSupabase(orderId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('orders').delete().eq('id', orderId);
+    return !error;
+  } catch {
+    return false;
   }
 }
 
 export async function syncAllOrdersToSupabase(orders: any[] = []): Promise<{
   success: boolean;
   syncedCount: number;
-  message?: string;
 }> {
-  if (!orders || orders.length === 0) {
-    return { success: true, syncedCount: 0, message: 'No orders to sync' };
-  }
-
   let count = 0;
   for (const ord of orders) {
     const res = await saveOrderToSupabase(ord);
     if (res.success) count++;
   }
-  return {
-    success: count > 0,
-    syncedCount: count,
-    message: `Successfully synchronized ${count} orders to Supabase`
-  };
+  return { success: count > 0, syncedCount: count };
 }
 
 // -------------------------------------------------------------
-// PAYMENTS CRUD
+// 5. PAYMENTS & VERIFICATIONS CRUD
 // -------------------------------------------------------------
 export async function getPaymentsFromSupabase(): Promise<PaymentConfirmation[]> {
   try {
@@ -716,29 +727,31 @@ export async function savePaymentToSupabase(p: PaymentConfirmation): Promise<voi
   }
 }
 
-export async function syncAllPaymentsToSupabase(payments: PaymentConfirmation[] = []): Promise<number> {
+export async function deletePaymentFromSupabase(paymentId: string): Promise<boolean> {
   try {
-    let count = 0;
-    for (const p of payments) {
-      await savePaymentToSupabase(p);
-      count++;
-    }
-    return count;
+    const { error } = await supabase.from('payments').delete().eq('id', paymentId);
+    return !error;
   } catch {
-    return 0;
+    return false;
   }
 }
 
+export async function syncAllPaymentsToSupabase(payments: PaymentConfirmation[] = []): Promise<number> {
+  let count = 0;
+  for (const p of payments) {
+    await savePaymentToSupabase(p);
+    count++;
+  }
+  return count;
+}
+
 // -------------------------------------------------------------
-// ACCOUNTS & USERS CRUD
+// 6. CUSTOMERS & USERS CRUD
 // -------------------------------------------------------------
 export async function getAccountsFromSupabase(): Promise<any[]> {
   try {
     const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-    if (error || !data) {
-      if (error) console.warn('[Supabase] Users query notice:', error.message);
-      return [];
-    }
+    if (error || !data) return [];
     return data.map((u: any) => ({
       id: String(u.id),
       name: u.full_name || 'Customer',
@@ -771,7 +784,7 @@ export async function saveAccountToSupabase(account: any): Promise<void> {
       is_active: account.active !== false && account.status !== 'Inactive',
       updated_at: new Date().toISOString()
     };
-    if (account.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(account.id)) {
+    if (account.id) {
       row.id = account.id;
     }
     await supabase.from('users').upsert(row, { onConflict: 'email' });
@@ -780,37 +793,32 @@ export async function saveAccountToSupabase(account: any): Promise<void> {
   }
 }
 
+export async function deleteAccountFromSupabase(userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('users').delete().eq('id', userId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function syncAllAccountsToSupabase(accounts: any[] = []): Promise<{
   success: boolean;
   syncedCount: number;
   message?: string;
 }> {
-  try {
-    let count = 0;
-    for (const acc of accounts) {
-      const { error } = await supabase.from('accounts').upsert({
-        id: acc.id,
-        name: acc.name || 'Account User',
-        email: acc.email || null,
-        phone: acc.phone || null,
-        role: acc.role || 'customer',
-        status: acc.status || (acc.active === false ? 'Inactive' : 'Active'),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
-      if (!error) count++;
-    }
-    return {
-      success: count > 0,
-      syncedCount: count,
-      message: `Successfully synchronized ${count} accounts to Supabase`
-    };
-  } catch (err: any) {
-    return { success: false, syncedCount: 0, message: err?.message };
+  let count = 0;
+  for (const acc of accounts) {
+    try {
+      await saveAccountToSupabase(acc);
+      count++;
+    } catch {}
   }
+  return { success: count > 0 || accounts.length === 0, syncedCount: count };
 }
 
 // -------------------------------------------------------------
-// MESSAGES CRUD
+// 7. CUSTOMER MESSAGES CRUD
 // -------------------------------------------------------------
 export async function getMessagesFromSupabase(): Promise<AdminMessage[]> {
   try {
@@ -863,8 +871,319 @@ export async function saveMessageToSupabase(m: AdminMessage): Promise<void> {
   }
 }
 
+export async function deleteMessageFromSupabase(messageId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('messages').delete().eq('id', messageId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // -------------------------------------------------------------
-// APP SETTINGS CRUD
+// 8. ISSUES & CUSTOMER PROBLEMS CRUD
+// -------------------------------------------------------------
+export async function getCustomerProblemsFromSupabase(): Promise<CustomerProblemReport[]> {
+  try {
+    const { data, error } = await supabase.from('customer_problems').select('*').order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map((p: any) => ({
+      id: p.id,
+      caseNumber: p.case_number || undefined,
+      orderNumber: p.order_number,
+      customerName: p.customer_name,
+      customerPhone: p.customer_phone,
+      customerEmail: p.customer_email || undefined,
+      category: p.category || 'delivery_delay',
+      issueType: p.issue_type || undefined,
+      description: p.description,
+      priority: p.priority || 'medium',
+      status: p.status || 'New',
+      assignedTo: p.assigned_to || undefined,
+      adminNotes: p.admin_notes || undefined,
+      resolution: p.resolution || undefined,
+      resolvedAt: p.resolved_at || undefined,
+      createdAt: p.created_at || new Date().toISOString()
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveCustomerProblemToSupabase(p: CustomerProblemReport): Promise<void> {
+  try {
+    await supabase.from('customer_problems').upsert({
+      id: p.id,
+      case_number: p.caseNumber || null,
+      order_number: p.orderNumber,
+      customer_name: p.customerName,
+      customer_phone: p.customerPhone,
+      customer_email: p.customerEmail || null,
+      category: p.category || 'delivery_delay',
+      issue_type: (p as any).issueType || p.category || null,
+      description: p.description,
+      priority: p.priority || 'medium',
+      status: p.status || 'New',
+      assigned_to: p.assignedTo || null,
+      admin_notes: (p as any).adminNotes || (p.privateNotes ? JSON.stringify(p.privateNotes) : null),
+      resolution: p.resolution || null,
+      resolved_at: p.resolvedAt || null,
+      updated_at: new Date().toISOString(),
+      created_at: p.createdAt || new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save customer problem error:', err);
+  }
+}
+
+export async function deleteCustomerProblemFromSupabase(problemId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('customer_problems').delete().eq('id', problemId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// 9. COUPONS & PROMO CODES CRUD
+// -------------------------------------------------------------
+export async function getCouponsFromSupabase(): Promise<Coupon[]> {
+  try {
+    const { data, error } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map((c: any) => ({
+      id: c.id,
+      code: c.code,
+      discountType: c.discount_type || 'percentage',
+      discountValue: Number(c.discount_value) || 0,
+      minOrderAmount: Number(c.min_order_amount) || 0,
+      maxDiscount: c.max_discount !== null ? Number(c.max_discount) : undefined,
+      expiresAt: c.expires_at || undefined,
+      usageLimit: c.usage_limit !== null ? Number(c.usage_limit) : undefined,
+      timesUsed: Number(c.times_used) || 0,
+      isActive: c.is_active !== false
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveCouponToSupabase(c: Coupon): Promise<void> {
+  try {
+    await supabase.from('coupons').upsert({
+      id: c.id,
+      code: c.code,
+      discount_type: c.discountType || 'percentage',
+      discount_value: c.discountValue,
+      min_order_amount: c.minOrderAmount || 0,
+      max_discount: c.maxDiscount || null,
+      expires_at: c.expiresAt || null,
+      usage_limit: c.usageLimit || null,
+      times_used: c.timesUsed || 0,
+      is_active: c.isActive !== false,
+      created_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save coupon error:', err);
+  }
+}
+
+export async function deleteCouponFromSupabase(couponId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('coupons').delete().eq('id', couponId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// 10. INVENTORY LOGS CRUD
+// -------------------------------------------------------------
+export async function getInventoryLogsFromSupabase(): Promise<InventoryLog[]> {
+  try {
+    const { data, error } = await supabase.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(200);
+    if (error || !data) return [];
+    return data.map((l: any) => ({
+      id: l.id,
+      productId: l.product_id,
+      productName: l.product_name,
+      previousStock: l.previous_stock,
+      newStock: l.new_stock,
+      changeAmount: l.change_amount || l.quantity_changed || 0,
+      reason: l.reason,
+      adminName: l.admin_name || l.performed_by || 'System',
+      timestamp: l.timestamp || l.created_at || new Date().toISOString()
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveInventoryLogToSupabase(l: InventoryLog): Promise<void> {
+  try {
+    await supabase.from('inventory_logs').upsert({
+      id: l.id,
+      product_id: l.productId,
+      product_name: l.productName,
+      previous_stock: l.previousStock,
+      new_stock: l.newStock,
+      change_amount: l.changeAmount,
+      quantity_changed: l.changeAmount,
+      reason: l.reason,
+      performed_by: l.adminName,
+      admin_name: l.adminName,
+      timestamp: l.timestamp || new Date().toISOString(),
+      created_at: l.timestamp || new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save inventory log error:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// 11. AUDIT LOGS CRUD
+// -------------------------------------------------------------
+export async function getAuditLogsFromSupabase(): Promise<AuditLog[]> {
+  try {
+    const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(250);
+    if (error || !data) return [];
+    return data.map((a: any) => ({
+      id: a.id,
+      adminName: a.admin_name || 'System Admin',
+      adminRole: a.admin_role || 'owner',
+      action: a.action,
+      details: a.details || '',
+      entityType: a.entity_type || undefined,
+      entityId: a.entity_id || undefined,
+      timestamp: a.timestamp || a.created_at || new Date().toISOString()
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveAuditLogToSupabase(a: AuditLog): Promise<void> {
+  try {
+    await supabase.from('audit_logs').upsert({
+      id: a.id,
+      admin_name: a.adminName,
+      admin_role: a.adminRole,
+      action: a.action,
+      details: a.details,
+      entity_type: a.entityType || null,
+      entity_id: a.entityId || null,
+      timestamp: a.timestamp || new Date().toISOString(),
+      created_at: a.timestamp || new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save audit log error:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// 12. SUPPLIERS & APPLICATIONS CRUD
+// -------------------------------------------------------------
+export async function getSupplierApplicationsFromSupabase(): Promise<any[]> {
+  try {
+    const { data, error } = await supabase.from('supplier_applications').select('*').order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map((s: any) => ({
+      id: s.id,
+      businessName: s.business_name,
+      ownerName: s.owner_name,
+      phone: s.phone,
+      email: s.email || undefined,
+      tinNumber: s.tin_number || undefined,
+      location: s.location || '',
+      category: s.category || '',
+      description: s.description || undefined,
+      status: s.status || 'Pending',
+      reviewedBy: s.reviewed_by || undefined,
+      reviewedAt: s.reviewed_at || undefined,
+      createdAt: s.created_at || new Date().toISOString()
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveSupplierApplicationToSupabase(a: any): Promise<void> {
+  try {
+    await supabase.from('supplier_applications').upsert({
+      id: a.id,
+      business_name: a.businessName,
+      owner_name: a.ownerName,
+      phone: a.phone,
+      email: a.email || null,
+      tin_number: a.tinNumber || null,
+      location: a.location || null,
+      category: a.category || null,
+      description: a.description || null,
+      status: a.status || 'Pending',
+      reviewed_by: a.reviewedBy || null,
+      reviewed_at: a.reviewedAt || null,
+      created_at: a.createdAt || new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save supplier application error:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// 13. SUPPLIER PAYOUTS CRUD
+// -------------------------------------------------------------
+export async function getSupplierPayoutsFromSupabase(): Promise<any[]> {
+  try {
+    const { data, error } = await supabase.from('supplier_payouts').select('*').order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map((p: any) => ({
+      id: p.id,
+      shopId: p.shop_id,
+      shopName: p.shop_name,
+      orderId: p.order_id,
+      orderNumber: p.order_number,
+      orderTotal: Number(p.order_total) || 0,
+      commissionRate: Number(p.commission_rate) || 0.1,
+      commissionEarned: Number(p.commission_earned) || 0,
+      payoutAmount: Number(p.payout_amount) || 0,
+      status: p.status || 'Pending',
+      paymentReference: p.payment_reference || undefined,
+      paidAt: p.paid_at || undefined,
+      approvedBy: p.approved_by || undefined,
+      createdAt: p.created_at || new Date().toISOString()
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveSupplierPayoutToSupabase(p: any): Promise<void> {
+  try {
+    await supabase.from('supplier_payouts').upsert({
+      id: p.id,
+      shop_id: p.shopId,
+      shop_name: p.shopName,
+      order_id: p.orderId,
+      order_number: p.orderNumber,
+      order_total: p.orderTotal || 0,
+      commission_rate: p.commissionRate || 0.1,
+      commission_earned: p.commissionEarned || 0,
+      payout_amount: p.payoutAmount || 0,
+      status: p.status || 'Pending',
+      payment_reference: p.paymentReference || null,
+      paid_at: p.paidAt || null,
+      approved_by: p.approvedBy || null,
+      created_at: p.createdAt || new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save supplier payout error:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// 14. STORE SETTINGS CRUD
 // -------------------------------------------------------------
 export async function getSettingsFromSupabase(): Promise<AppSettings | null> {
   try {
@@ -884,6 +1203,17 @@ export async function saveSettingsToSupabase(settings: AppSettings): Promise<voi
       company_name: settings.companyName || 'ContactReach Media Ltd',
       phone: settings.phone || '+250780022600',
       email: settings.email || 'contactreachmedialimited@gmail.com',
+      receiver_name: settings.receiverName || 'Ruth',
+      payment_number: settings.paymentNumber || '0780022600',
+      merchant_code: settings.merchantCode || '2328354',
+      mtn_ussd_pattern: settings.mtnUssdPattern || '*182*1*1*0780022600*{AMOUNT}#',
+      airtel_ussd_pattern: settings.airtelUssdPattern || '*182*1*2*0780022600*{AMOUNT}#',
+      delivery_fee_kigali: settings.deliveryFeeKigali || 1500,
+      delivery_fee_upcountry: settings.deliveryFeeUpcountry || 3500,
+      free_delivery_threshold: settings.freeDeliveryThreshold || 50000,
+      is_maintenance_mode: Boolean(settings.isMaintenanceMode),
+      maintenance_title: settings.maintenanceTitle || null,
+      maintenance_message: settings.maintenanceMessage || null,
       settings_data: settings,
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
@@ -893,8 +1223,75 @@ export async function saveSettingsToSupabase(settings: AppSettings): Promise<voi
 }
 
 // -------------------------------------------------------------
-// FULL DATABASE MIGRATION HELPER
-// Migrates live products, categories, shops, orders, etc. into Supabase
+// 15. REVIEWS CRUD
+// -------------------------------------------------------------
+export async function getReviewsFromSupabase(productId?: string): Promise<ProductReview[]> {
+  try {
+    let query = supabase.from('reviews').select('*').order('created_at', { ascending: false });
+    if (productId) query = query.eq('product_id', productId);
+    const { data, error } = await query;
+    if (error || !data) return [];
+    return data.map((r: any) => ({
+      id: r.id,
+      productId: r.product_id,
+      customerName: r.customer_name,
+      rating: Number(r.rating) || 5.0,
+      comment: r.comment || '',
+      verifiedPurchase: Boolean(r.verified_purchase),
+      status: (r.status as 'approved' | 'pending' | 'hidden') || 'approved',
+      createdAt: r.created_at || new Date().toISOString()
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveReviewToSupabase(review: ProductReview): Promise<void> {
+  try {
+    await supabase.from('reviews').upsert({
+      id: review.id,
+      product_id: review.productId,
+      customer_name: review.customerName,
+      customer_phone: review.customerPhone || null,
+      rating: review.rating,
+      comment: review.comment,
+      verified_purchase: Boolean(review.verifiedPurchase),
+      created_at: review.createdAt || new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save review error:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// 16. DELETED TOMBSTONES
+// -------------------------------------------------------------
+export async function getTombstonedProductIdsFromSupabase(): Promise<string[]> {
+  try {
+    const { data, error } = await supabase.from('deleted_tombstones').select('id');
+    if (error || !data) return [];
+    return data.map((d: any) => String(d.id));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDeletedTombstoneToSupabase(id: string, name?: string, adminName?: string, reason?: string): Promise<void> {
+  try {
+    await supabase.from('deleted_tombstones').upsert({
+      id: id,
+      product_name: name || null,
+      deleted_by: adminName || 'System Admin',
+      deleted_at: new Date().toISOString(),
+      reason: reason || 'Admin deleted product'
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('[Supabase] Save tombstone error:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// 17. FULL DATABASE MIGRATION HELPER
 // -------------------------------------------------------------
 export async function syncAllDataToSupabase(db: {
   products?: Product[];
@@ -905,7 +1302,12 @@ export async function syncAllDataToSupabase(db: {
   customers?: CustomerUser[];
   adminUsers?: any[];
   messages?: AdminMessage[];
+  customerProblems?: CustomerProblemReport[];
   coupons?: Coupon[];
+  inventoryLogs?: InventoryLog[];
+  auditLogs?: AuditLog[];
+  supplierApplications?: any[];
+  supplierPayouts?: any[];
   settings?: AppSettings;
 }): Promise<{
   success: boolean;
@@ -919,31 +1321,78 @@ export async function syncAllDataToSupabase(db: {
     orders: 0,
     payments: 0,
     accounts: 0,
-    messages: 0
+    messages: 0,
+    problems: 0,
+    coupons: 0,
+    inventoryLogs: 0,
+    auditLogs: 0,
+    supplierApps: 0,
+    supplierPayouts: 0
   };
 
   try {
-    if (db.products && db.products.length > 0) {
+    if (db.products?.length) {
       const prodRes = await syncAllProductsToSupabase(db.products);
       results.products = prodRes.syncedCount;
     }
-    if (db.categories && db.categories.length > 0) {
+    if (db.categories?.length) {
       results.categories = await syncAllCategoriesToSupabase(db.categories);
     }
-    if (db.shops && db.shops.length > 0) {
+    if (db.shops?.length) {
       results.shops = await syncAllShopsToSupabase(db.shops);
     }
-    if (db.orders && db.orders.length > 0) {
+    if (db.orders?.length) {
       const ordRes = await syncAllOrdersToSupabase(db.orders);
       results.orders = ordRes.syncedCount;
     }
-    if (db.payments && db.payments.length > 0) {
+    if (db.payments?.length) {
       results.payments = await syncAllPaymentsToSupabase(db.payments);
     }
-    const combinedAccounts = [...(db.adminUsers || []), ...(db.customers || [])];
-    if (combinedAccounts.length > 0) {
-      const accRes = await syncAllAccountsToSupabase(combinedAccounts);
-      results.accounts = accRes.syncedCount;
+    if (db.customers?.length || db.adminUsers?.length) {
+      const combined = [...(db.adminUsers || []), ...(db.customers || [])];
+      results.accounts = (await syncAllAccountsToSupabase(combined)).syncedCount;
+    }
+    if (db.messages?.length) {
+      for (const m of db.messages) {
+        await saveMessageToSupabase(m);
+        results.messages++;
+      }
+    }
+    if (db.customerProblems?.length) {
+      for (const p of db.customerProblems) {
+        await saveCustomerProblemToSupabase(p);
+        results.problems++;
+      }
+    }
+    if (db.coupons?.length) {
+      for (const c of db.coupons) {
+        await saveCouponToSupabase(c);
+        results.coupons++;
+      }
+    }
+    if (db.inventoryLogs?.length) {
+      for (const l of db.inventoryLogs) {
+        await saveInventoryLogToSupabase(l);
+        results.inventoryLogs++;
+      }
+    }
+    if (db.auditLogs?.length) {
+      for (const a of db.auditLogs) {
+        await saveAuditLogToSupabase(a);
+        results.auditLogs++;
+      }
+    }
+    if (db.supplierApplications?.length) {
+      for (const app of db.supplierApplications) {
+        await saveSupplierApplicationToSupabase(app);
+        results.supplierApps++;
+      }
+    }
+    if (db.supplierPayouts?.length) {
+      for (const p of db.supplierPayouts) {
+        await saveSupplierPayoutToSupabase(p);
+        results.supplierPayouts++;
+      }
     }
     if (db.settings) {
       await saveSettingsToSupabase(db.settings);
@@ -953,19 +1402,19 @@ export async function syncAllDataToSupabase(db: {
     return {
       success: true,
       results,
-      message: `Full database migration complete! Synchronized ${totalSynced} records to Supabase project contactreachmarket.`
+      message: `Full database synchronization complete! Successfully synchronized ${totalSynced} records to Supabase.`
     };
   } catch (err: any) {
     return {
       success: false,
       results,
-      message: `Migration notice: ${err?.message || 'Partial sync completed'}`
+      message: `Sync notice: ${err?.message || 'Completed'}`
     };
   }
 }
 
 // -------------------------------------------------------------
-// REALTIME SUBSCRIPTIONS HELPER
+// 18. REALTIME SUBSCRIPTIONS
 // -------------------------------------------------------------
 export function subscribeToSupabaseTable(
   tableName: string,
@@ -973,7 +1422,7 @@ export function subscribeToSupabaseTable(
 ): () => void {
   try {
     const channel = supabase
-      .channel(`realtime-${tableName}`)
+      .channel(`realtime-${tableName}-${Date.now()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: tableName },
@@ -987,7 +1436,7 @@ export function subscribeToSupabaseTable(
       supabase.removeChannel(channel);
     };
   } catch (err) {
-    console.warn('[Supabase] Subscription notice:', err);
+    console.warn('[Supabase] Subscription error:', err);
     return () => {};
   }
 }

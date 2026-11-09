@@ -19,6 +19,7 @@ import {
   CjDropshippingConfig, GoogleDriveBackupStatus
 } from '../types.ts';
 import { api, getStoredAdminUser } from '../services/api.ts';
+import { saveMessageToSupabase } from '../services/supabase.ts';
 import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/googleDrive.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
@@ -224,18 +225,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [categories, setCategories] = useState<Category[]>(initialPropCategories);
   const [shops, setShops] = useState<VendorShop[]>([]);
   const [payments, setPayments] = useState<PaymentConfirmation[]>([]);
-  const [orders, setOrders] = useState<Order[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('crm_admin_orders_cache');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [problems, setProblems] = useState<CustomerProblemReport[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -243,14 +233,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [customers, setCustomers] = useState<CustomerUser[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [supplierApplications, setSupplierApplications] = useState<any[]>([]);
+  const [supplierPayouts, setSupplierPayouts] = useState<any[]>([]);
+
+  // Computed real-time statistics directly derived from active persistent database records
+  const effectiveStats = useMemo(() => {
+    const confirmedOrDelivered = orders.filter(o =>
+      o.paymentStatus === 'Paid' ||
+      o.status === 'Confirmed' ||
+      o.status === 'Preparing' ||
+      o.status === 'Ready for Delivery' ||
+      o.status === 'Out for Delivery' ||
+      o.status === 'Delivered'
+    );
+    const totalSalesFrw = confirmedOrDelivered.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+    const totalCommissionsFrw = confirmedOrDelivered.reduce((sum, o) => sum + (Number(o.commissionEarned) || Math.round((Number(o.subtotal) || 0) * 0.1)), 0);
+    const totalSupplierPayoutsOwedFrw = confirmedOrDelivered
+      .filter(o => o.supplierPayoutStatus !== 'Paid')
+      .reduce((sum, o) => sum + (Number(o.supplierPayoutAmount) || Math.round((Number(o.subtotal) || 0) * 0.9)), 0);
+    const pendingVerifications = payments.filter(p => p.verificationStatus === 'Pending Verification' || (p as any).verificationStatus === 'Pending Review').length;
+    const unresolvedProblemsCount = problems.filter(p => p.status !== 'Resolved' && p.status !== 'Closed').length;
+    const lowStockCount = products.filter(p => (Number(p.stock) || 0) <= 5 || p.status === 'Out of Stock').length;
+    const activeProducts = products.filter(p => p.status !== 'Hidden').length;
+    const pendingOrdersCount = orders.filter(o => o.status === 'New' || o.paymentStatus === 'Pending Payment' || o.paymentStatus === 'Pending Verification').length;
+
+    return {
+      totalSalesFrw: stats.totalSalesFrw > 0 ? stats.totalSalesFrw : totalSalesFrw,
+      totalCommissionsFrw: stats.totalCommissionsFrw > 0 ? stats.totalCommissionsFrw : totalCommissionsFrw,
+      totalSupplierPayoutsOwedFrw: stats.totalSupplierPayoutsOwedFrw > 0 ? stats.totalSupplierPayoutsOwedFrw : totalSupplierPayoutsOwedFrw,
+      totalOrders: Math.max(orders.length, stats.totalOrders || 0),
+      pendingOrdersCount,
+      pendingVerifications: Math.max(pendingVerifications, stats.pendingVerifications || 0),
+      unresolvedProblemsCount: Math.max(unresolvedProblemsCount, stats.unresolvedProblemsCount || 0),
+      lowStockCount: Math.max(lowStockCount, stats.lowStockCount || 0),
+      activeProducts: Math.max(activeProducts, stats.activeProducts || 0),
+      totalProducts: Math.max(products.length, stats.totalProducts || 0),
+      totalCategories: Math.max(categories.length, stats.totalCategories || 0),
+      totalShops: Math.max(shops.length, stats.totalShops || 0),
+      totalCustomers: Math.max(customers.length, stats.totalCustomers || 0),
+      totalSuppliers: Math.max(supplierApplications.length, stats.approvedSuppliers || 0),
+      totalTeamMembers: Math.max(adminUsers.length, stats.totalTeamMembers || 0),
+      unreadMessagesCount: Math.max(messages.filter(m => m.status === 'unread').length, stats.unreadMessagesCount || 0)
+    };
+  }, [orders, payments, products, categories, shops, customers, supplierApplications, adminUsers, messages, problems, stats]);
   const [newUserModalOpen, setNewUserModalOpen] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserRole, setNewUserRole] = useState<AdminRole>('administrator');
   const [creatingUser, setCreatingUser] = useState(false);
-  const [supplierApplications, setSupplierApplications] = useState<any[]>([]);
-  const [supplierPayouts, setSupplierPayouts] = useState<any[]>([]);
   const [disbursePayoutModal, setDisbursePayoutModal] = useState<any | null>(null);
   const [disburseRefInput, setDisburseRefInput] = useState('');
   const [disburseLoading, setDisburseLoading] = useState(false);
@@ -338,6 +369,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
 
     setOrders(prev => [simulatedOrder, ...prev]);
+    // Persist immediately to Supabase
+    api.createOrder(simulatedOrder).catch(err => {
+      console.warn('Simulated order Supabase sync warning:', err);
+    });
     playNotificationChime('order');
     showToast(`🔔 Real-time: New Order #${simulatedOrder.orderNumber} (36,500 RWF) received!`, 'success');
     sendDesktopNotification('New Order Received!', `Order #${simulatedOrder.orderNumber} from Jean Claude (36,500 RWF)`);
@@ -366,6 +401,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
 
     setMessages(prev => [simulatedMsg, ...prev]);
+    // Persist immediately to Supabase
+    saveMessageToSupabase(simulatedMsg).catch((err: any) => {
+      console.warn('Simulated SMS Supabase sync warning:', err);
+    });
     playNotificationChime('sms');
     showToast(`💬 Real-time: New SMS from ${simulatedMsg.phone} received!`, 'success');
     sendDesktopNotification('New SMS Received!', `${simulatedMsg.name}: ${simulatedMsg.message.slice(0, 80)}`);
@@ -2959,10 +2998,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           shopsCount={shops.length}
           newOrdersCount={orders.filter(o => o.status === 'New').length}
           totalOrdersCount={orders.length}
-          pendingVerificationsCount={stats.pendingVerifications}
-          lowStockCount={stats.lowStockCount}
-          unreadMessagesCount={messages.filter(m => m.status === 'unread').length}
-          unresolvedProblemsCount={stats.unresolvedProblemsCount}
+          pendingVerificationsCount={effectiveStats.pendingVerifications}
+          lowStockCount={effectiveStats.lowStockCount}
+          unreadMessagesCount={effectiveStats.unreadMessagesCount}
+          unresolvedProblemsCount={effectiveStats.unresolvedProblemsCount}
           customersCount={customers.length}
           pendingSuppliersCount={supplierApplications.filter(a => a.status === 'Pending').length}
           pendingPayoutsCount={supplierPayouts.filter(p => p.status === 'Pending').length}
@@ -2979,11 +3018,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Executive Dashboard Overview
                 </h1>
                 <p className="text-xs text-slate-500">
-                  Real-time operational marketplace metrics computed directly from persistent database records.
+                  Real-time operational marketplace metrics computed directly from persistent Supabase database records.
                 </p>
               </div>
 
-              {/* KPI Cards */}
+              {/* KPI Cards: Financial & Volume Analytics */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
@@ -2991,7 +3030,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <DollarSign className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
-                    {stats.totalSalesFrw.toLocaleString()} RWF
+                    {effectiveStats.totalSalesFrw.toLocaleString()} RWF
                   </div>
                   <span className="text-[10px] text-emerald-600 font-semibold block">
                     Verified Customer Payments
@@ -3001,10 +3040,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
                     <span>ContactReach Commission</span>
-                    <DollarSign className="w-4 h-4 text-orange-600" />
+                    <DollarSign className="w-4 h-4 text-[#FF6000]" />
                   </div>
-                  <div className="text-xl sm:text-2xl font-black text-orange-600 font-mono">
-                    {(stats.totalCommissionsFrw || 0).toLocaleString()} RWF
+                  <div className="text-xl sm:text-2xl font-black text-[#FF6000] font-mono">
+                    {(effectiveStats.totalCommissionsFrw || 0).toLocaleString()} RWF
                   </div>
                   <span className="text-[10px] text-slate-500 font-semibold block">
                     Marketplace Net Commission Revenue
@@ -3017,7 +3056,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <CreditCard className="w-4 h-4 text-amber-600" />
                   </div>
                   <div className="text-xl sm:text-2xl font-black text-amber-600 font-mono">
-                    {(stats.totalSupplierPayoutsOwedFrw || 0).toLocaleString()} RWF
+                    {(effectiveStats.totalSupplierPayoutsOwedFrw || 0).toLocaleString()} RWF
                   </div>
                   <span className="text-[10px] text-slate-500 font-semibold block">
                     Pending Disbursal to Local Suppliers
@@ -3026,25 +3065,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                    <span>Orders & Catalog</span>
+                    <span>Total Orders</span>
                     <ShoppingBag className="w-4 h-4 text-blue-600" />
                   </div>
                   <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
-                    {stats.totalOrders} Orders
+                    {effectiveStats.totalOrders} Orders
+                  </div>
+                  <span className="text-[10px] text-blue-600 font-semibold block">
+                    {effectiveStats.pendingOrdersCount} pending delivery / payment
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>Catalog Products</span>
+                    <Package className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
+                    {effectiveStats.activeProducts} Active
                   </div>
                   <span className="text-[10px] text-slate-500 font-semibold block">
-                    {stats.activeProducts} active products · {stats.totalShops} suppliers
+                    {effectiveStats.totalProducts} total catalog items · {effectiveStats.lowStockCount} low stock
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>Total Categories</span>
+                    <FolderTree className="w-4 h-4 text-teal-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
+                    {effectiveStats.totalCategories} Departments
+                  </div>
+                  <span className="text-[10px] text-teal-600 font-semibold block">
+                    Active category taxomony
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>Shops & Suppliers</span>
+                    <Store className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
+                    {effectiveStats.totalShops} Shops
+                  </div>
+                  <span className="text-[10px] text-purple-600 font-semibold block">
+                    {effectiveStats.totalSuppliers} verified suppliers
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
+                    <span>Customers & Team</span>
+                    <Users className="w-4 h-4 text-cyan-600" />
+                  </div>
+                  <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
+                    {effectiveStats.totalCustomers} Accounts
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-semibold block">
+                    {effectiveStats.totalTeamMembers} admin team members
                   </span>
                 </div>
               </div>
 
               {/* Action Banner for pending items */}
-              {(stats.pendingVerifications > 0 || stats.unresolvedProblemsCount > 0) && (
+              {(effectiveStats.pendingVerifications > 0 || effectiveStats.unresolvedProblemsCount > 0) && (
                 <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2.5 text-amber-900 font-bold">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
                     <span>
-                      Action required: {stats.pendingVerifications} payment(s) awaiting verification and {stats.unresolvedProblemsCount} unresolved customer complaint(s).
+                      Action required: {effectiveStats.pendingVerifications} payment(s) awaiting verification and {effectiveStats.unresolvedProblemsCount} unresolved customer complaint(s).
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

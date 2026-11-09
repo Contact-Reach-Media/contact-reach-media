@@ -14,18 +14,40 @@ import {
   syncAllProductsToSupabase,
   getCategoriesFromSupabase,
   saveCategoryToSupabase,
+  deleteCategoryFromSupabase,
   getShopsFromSupabase,
   saveShopToSupabase,
+  deleteShopFromSupabase,
   getOrdersFromSupabase,
   saveOrderToSupabase,
+  deleteOrderFromSupabase,
   getPaymentsFromSupabase,
   savePaymentToSupabase,
+  deletePaymentFromSupabase,
   getAccountsFromSupabase,
   saveAccountToSupabase,
+  deleteAccountFromSupabase,
   getMessagesFromSupabase,
   saveMessageToSupabase,
+  deleteMessageFromSupabase,
+  getCustomerProblemsFromSupabase,
+  saveCustomerProblemToSupabase,
+  deleteCustomerProblemFromSupabase,
+  getCouponsFromSupabase,
+  saveCouponToSupabase,
+  deleteCouponFromSupabase,
+  getInventoryLogsFromSupabase,
+  saveInventoryLogToSupabase,
+  getAuditLogsFromSupabase,
+  saveAuditLogToSupabase,
+  getSupplierApplicationsFromSupabase,
+  saveSupplierApplicationToSupabase,
+  getSupplierPayoutsFromSupabase,
+  saveSupplierPayoutToSupabase,
   getSettingsFromSupabase,
   saveSettingsToSupabase,
+  getReviewsFromSupabase,
+  saveReviewToSupabase,
   syncAllDataToSupabase,
   testSupabaseConnection
 } from './supabase.ts';
@@ -38,49 +60,49 @@ const batchSaveProductsToFirestore = async (prods: any[]) => { const r = await s
 const deleteProductFromFirestore = async (id: string, _meta?: any) => deleteProductFromSupabase(id);
 const getCategoriesFromFirestore = getCategoriesFromSupabase;
 const saveCategoryToFirestore = saveCategoryToSupabase;
-const deleteCategoryFromFirestore = async (_id: string) => {};
+const deleteCategoryFromFirestore = async (id: string) => deleteCategoryFromSupabase(id);
 const getShopsFromFirestore = getShopsFromSupabase;
 const saveShopToFirestore = saveShopToSupabase;
-const deleteShopFromFirestore = async (_id: string) => {};
+const deleteShopFromFirestore = async (id: string) => deleteShopFromSupabase(id);
 const getOrdersFromFirestore = getOrdersFromSupabase;
 const getOrderFromFirestore = async (_id: string) => null;
 const createOrderInFirestore = async (o: any) => { await saveOrderToSupabase(o); };
 const updateOrderInFirestore = async (o: any) => { await saveOrderToSupabase(o); };
-const deleteOrderFromFirestore = async (_id: string) => {};
+const deleteOrderFromFirestore = async (id: string) => deleteOrderFromSupabase(id);
 const getPaymentsFromFirestore = getPaymentsFromSupabase;
 const submitPaymentToFirestore = async (p: any) => { await savePaymentToSupabase(p); };
 const updatePaymentInFirestore = async (p: any) => { await savePaymentToSupabase(p); };
-const deletePaymentFromFirestore = async (_id: string) => {};
+const deletePaymentFromFirestore = async (id: string) => deletePaymentFromSupabase(id);
 const getMessagesFromFirestore = getMessagesFromSupabase;
 const submitMessageToFirestore = async (m: any) => { await saveMessageToSupabase(m); return true; };
 const updateMessageInFirestore = async (m: any) => { await saveMessageToSupabase(m); return true; };
-const deleteMessageFromFirestore = async (_id: string) => true;
+const deleteMessageFromFirestore = async (id: string) => deleteMessageFromSupabase(id);
 const batchSaveMessagesToFirestore = async (msgs: any[]) => { for (const m of msgs) await saveMessageToSupabase(m); return { count: msgs.length, failed: 0 }; };
-const getCustomerProblemsFromFirestore = async () => [];
-const submitProblemReportToFirestore = async (_p: any) => {};
-const saveCustomerProblemToFirestore = async (_p: any) => {};
-const deleteCustomerProblemFromFirestore = async (_id: string) => {};
-const getCouponsFromFirestore = async () => [];
-const saveCouponToFirestore = async (_c: any) => {};
-const deleteCouponFromFirestore = async (_id: string) => {};
-const getInventoryLogsFromFirestore = async () => [];
-const saveInventoryLogToFirestore = async (_l: any) => {};
-const getAuditLogsFromFirestore = async () => [];
-const saveAuditLogToFirestore = async (_l: any) => {};
-const getCustomersFromFirestore = async () => [];
+const getCustomerProblemsFromFirestore = getCustomerProblemsFromSupabase;
+const submitProblemReportToFirestore = async (p: any) => { await saveCustomerProblemToSupabase(p); };
+const saveCustomerProblemToFirestore = async (p: any) => { await saveCustomerProblemToSupabase(p); };
+const deleteCustomerProblemFromFirestore = async (id: string) => deleteCustomerProblemFromSupabase(id);
+const getCouponsFromFirestore = getCouponsFromSupabase;
+const saveCouponToFirestore = async (c: any) => { await saveCouponToSupabase(c); };
+const deleteCouponFromFirestore = async (id: string) => deleteCouponFromSupabase(id);
+const getInventoryLogsFromFirestore = getInventoryLogsFromSupabase;
+const saveInventoryLogToFirestore = async (l: any) => { await saveInventoryLogToSupabase(l); };
+const getAuditLogsFromFirestore = getAuditLogsFromSupabase;
+const saveAuditLogToFirestore = async (l: any) => { await saveAuditLogToSupabase(l); };
+const getCustomersFromFirestore = getAccountsFromSupabase;
 const saveCustomerToFirestore = async (c: any) => { await saveAccountToSupabase(c); };
-const deleteCustomerFromFirestore = async (_id: string) => {};
+const deleteCustomerFromFirestore = async (id: string) => deleteAccountFromSupabase(id);
 const getUsersFromFirestore = getAccountsFromSupabase;
 const saveUserToFirestore = async (u: any) => { await saveAccountToSupabase(u); };
-const deleteUserFromFirestore = async (_id: string) => {};
-const submitReviewToFirestore = async (_r: any) => {};
+const deleteUserFromFirestore = async (id: string) => deleteAccountFromSupabase(id);
+const submitReviewToFirestore = async (r: any) => { await saveReviewToSupabase(r); };
 const getSettingsFromFirestore = getSettingsFromSupabase;
 const saveSettingsToFirestore = saveSettingsToSupabase;
-const getSupplierApplicationsFromFirestore = async () => [];
-const submitSupplierApplicationToFirestore = async (_a: any) => {};
-const updateSupplierApplicationInFirestore = async (_a: any) => {};
-const getSupplierPayoutsFromFirestore = async () => [];
-const saveSupplierPayoutToFirestore = async (_p: any) => {};
+const getSupplierApplicationsFromFirestore = getSupplierApplicationsFromSupabase;
+const submitSupplierApplicationToFirestore = async (a: any) => { await saveSupplierApplicationToSupabase(a); };
+const updateSupplierApplicationInFirestore = async (a: any) => { await saveSupplierApplicationToSupabase(a); };
+const getSupplierPayoutsFromFirestore = getSupplierPayoutsFromSupabase;
+const saveSupplierPayoutToFirestore = async (p: any) => { await saveSupplierPayoutToSupabase(p); };
 
 const TOKEN_KEY = 'crm_admin_token';
 const ADMIN_USER_KEY = 'crm_admin_user';
