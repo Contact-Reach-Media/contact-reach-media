@@ -19,7 +19,7 @@ import {
   CjDropshippingConfig, GoogleDriveBackupStatus
 } from '../types.ts';
 import { api, getStoredAdminUser } from '../services/api.ts';
-import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/firebase.ts';
+import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/googleDrive.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';

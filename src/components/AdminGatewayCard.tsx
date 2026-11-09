@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Mail, Lock, ArrowRight, ShieldAlert, Sparkles } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { loginWithGoogle } from '../services/firebase.ts';
+import { loginWithGoogle } from '../services/googleDrive.ts';
 
 interface AdminGatewayCardProps {
   onSuccess: (adminUser: any) => void;
@@ -45,7 +45,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
         throw new Error('Google account did not provide an email address.');
       }
       const idToken = await fbUser.getIdToken();
-      const res = await api.adminFirebaseLogin({
+      const res = await api.adminGoogleLogin({
         email: fbUser.email,
         displayName: fbUser.displayName,
         uid: fbUser.uid,

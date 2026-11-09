@@ -4,7 +4,7 @@ import {
   KeyRound, Shield, CheckCircle2
 } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { loginWithGoogle } from '../services/firebase.ts';
+import { loginWithGoogle } from '../services/googleDrive.ts';
 import { AdminUser } from '../types.ts';
 
 interface AdminLoginPageProps {
@@ -55,7 +55,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
         throw new Error('Could not retrieve verified Google email.');
       }
       const token = await user.getIdToken();
-      const res = await api.adminFirebaseLogin({
+      const res = await api.adminGoogleLogin({
         idToken: token,
         email: user.email,
         displayName: user.displayName,

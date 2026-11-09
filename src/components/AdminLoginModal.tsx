@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, ShieldAlert, KeyRound, ArrowRight, ShieldCheck, CheckCircle2, HelpCircle, Copy, ExternalLink, Sparkles } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { loginWithGoogle } from '../services/firebase.ts';
+import { loginWithGoogle } from '../services/googleDrive.ts';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -33,7 +33,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         throw new Error('Google account did not provide an email address.');
       }
       const idToken = await fbUser.getIdToken();
-      const res = await api.adminFirebaseLogin({
+      const res = await api.adminGoogleLogin({
         email: fbUser.email,
         displayName: fbUser.displayName,
         uid: fbUser.uid,

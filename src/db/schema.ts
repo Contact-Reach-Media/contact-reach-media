@@ -10,10 +10,10 @@ import {
   timestamp
 } from 'drizzle-orm/pg-core';
 
-// Users table (linked to Firebase Auth UID)
+// Users table (linked to Supabase Auth UID)
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  uid: text('uid').notNull().unique(), // Firebase Auth UID
+  uid: text('uid').notNull().unique(), // Supabase Auth UID
   email: text('email').notNull(),
   name: text('name'),
   role: text('role').default('buyer'),

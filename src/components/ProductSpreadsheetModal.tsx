@@ -13,7 +13,7 @@ import {
   createNewGoogleSheetWithProducts
 } from '../utils/spreadsheet.ts';
 import { api } from '../services/api.ts';
-import { getGoogleAccessToken, loginWithGoogle } from '../services/firebase.ts';
+import { getGoogleAccessToken, loginWithGoogle } from '../services/googleDrive.ts';
 
 interface ProductSpreadsheetModalProps {
   isOpen: boolean;

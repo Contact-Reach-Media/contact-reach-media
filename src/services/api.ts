@@ -8,57 +8,79 @@ import {
 } from '../types.ts';
 import { initialProducts, initialCategories, initialSettings, initialShops } from '../data/initialData.ts';
 import {
-  getProductsFromFirestore,
-  saveProductToFirestore,
-  batchSaveProductsToFirestore,
-  deleteProductFromFirestore,
-  getCategoriesFromFirestore,
-  saveCategoryToFirestore,
-  deleteCategoryFromFirestore,
-  getShopsFromFirestore,
-  saveShopToFirestore,
-  deleteShopFromFirestore,
-  getOrderFromFirestore,
-  getOrdersFromFirestore,
-  createOrderInFirestore,
-  updateOrderInFirestore,
-  deleteOrderFromFirestore,
-  getPaymentsFromFirestore,
-  submitPaymentToFirestore,
-  updatePaymentInFirestore,
-  deletePaymentFromFirestore,
-  getSupplierApplicationsFromFirestore,
-  submitSupplierApplicationToFirestore,
-  updateSupplierApplicationInFirestore,
-  getSupplierPayoutsFromFirestore,
-  saveSupplierPayoutToFirestore,
-  getMessagesFromFirestore,
-  submitMessageToFirestore,
-  updateMessageInFirestore,
-  deleteMessageFromFirestore,
-  batchSaveMessagesToFirestore,
-  getCustomerProblemsFromFirestore,
-  submitProblemReportToFirestore,
-  saveCustomerProblemToFirestore,
-  deleteCustomerProblemFromFirestore,
-  getCouponsFromFirestore,
-  saveCouponToFirestore,
-  deleteCouponFromFirestore,
-  getInventoryLogsFromFirestore,
-  saveInventoryLogToFirestore,
-  getAuditLogsFromFirestore,
-  saveAuditLogToFirestore,
-  getCustomersFromFirestore,
-  saveCustomerToFirestore,
-  deleteCustomerFromFirestore,
-  getUsersFromFirestore,
-  saveUserToFirestore,
-  deleteUserFromFirestore,
-  submitReviewToFirestore,
-  getSettingsFromFirestore,
-  saveSettingsToFirestore,
-  logoutUser
-} from './firebase.ts';
+  getProductsFromSupabase,
+  saveProductToSupabase,
+  deleteProductFromSupabase,
+  syncAllProductsToSupabase,
+  getCategoriesFromSupabase,
+  saveCategoryToSupabase,
+  getShopsFromSupabase,
+  saveShopToSupabase,
+  getOrdersFromSupabase,
+  saveOrderToSupabase,
+  getPaymentsFromSupabase,
+  savePaymentToSupabase,
+  getAccountsFromSupabase,
+  saveAccountToSupabase,
+  getMessagesFromSupabase,
+  saveMessageToSupabase,
+  getSettingsFromSupabase,
+  saveSettingsToSupabase,
+  syncAllDataToSupabase,
+  testSupabaseConnection
+} from './supabase.ts';
+import { logoutUser } from './googleDrive.ts';
+
+// Supabase live database synchronization adapters
+const getProductsFromFirestore = getProductsFromSupabase;
+const saveProductToFirestore = async (p: any) => { const r = await saveProductToSupabase(p); return r.success; };
+const batchSaveProductsToFirestore = async (prods: any[]) => { const r = await syncAllProductsToSupabase(prods); return { count: r.syncedCount, failed: 0 }; };
+const deleteProductFromFirestore = async (id: string, _meta?: any) => deleteProductFromSupabase(id);
+const getCategoriesFromFirestore = getCategoriesFromSupabase;
+const saveCategoryToFirestore = saveCategoryToSupabase;
+const deleteCategoryFromFirestore = async (_id: string) => {};
+const getShopsFromFirestore = getShopsFromSupabase;
+const saveShopToFirestore = saveShopToSupabase;
+const deleteShopFromFirestore = async (_id: string) => {};
+const getOrdersFromFirestore = getOrdersFromSupabase;
+const getOrderFromFirestore = async (_id: string) => null;
+const createOrderInFirestore = async (o: any) => { await saveOrderToSupabase(o); };
+const updateOrderInFirestore = async (o: any) => { await saveOrderToSupabase(o); };
+const deleteOrderFromFirestore = async (_id: string) => {};
+const getPaymentsFromFirestore = getPaymentsFromSupabase;
+const submitPaymentToFirestore = async (p: any) => { await savePaymentToSupabase(p); };
+const updatePaymentInFirestore = async (p: any) => { await savePaymentToSupabase(p); };
+const deletePaymentFromFirestore = async (_id: string) => {};
+const getMessagesFromFirestore = getMessagesFromSupabase;
+const submitMessageToFirestore = async (m: any) => { await saveMessageToSupabase(m); return true; };
+const updateMessageInFirestore = async (m: any) => { await saveMessageToSupabase(m); return true; };
+const deleteMessageFromFirestore = async (_id: string) => true;
+const batchSaveMessagesToFirestore = async (msgs: any[]) => { for (const m of msgs) await saveMessageToSupabase(m); return { count: msgs.length, failed: 0 }; };
+const getCustomerProblemsFromFirestore = async () => [];
+const submitProblemReportToFirestore = async (_p: any) => {};
+const saveCustomerProblemToFirestore = async (_p: any) => {};
+const deleteCustomerProblemFromFirestore = async (_id: string) => {};
+const getCouponsFromFirestore = async () => [];
+const saveCouponToFirestore = async (_c: any) => {};
+const deleteCouponFromFirestore = async (_id: string) => {};
+const getInventoryLogsFromFirestore = async () => [];
+const saveInventoryLogToFirestore = async (_l: any) => {};
+const getAuditLogsFromFirestore = async () => [];
+const saveAuditLogToFirestore = async (_l: any) => {};
+const getCustomersFromFirestore = async () => [];
+const saveCustomerToFirestore = async (c: any) => { await saveAccountToSupabase(c); };
+const deleteCustomerFromFirestore = async (_id: string) => {};
+const getUsersFromFirestore = getAccountsFromSupabase;
+const saveUserToFirestore = async (u: any) => { await saveAccountToSupabase(u); };
+const deleteUserFromFirestore = async (_id: string) => {};
+const submitReviewToFirestore = async (_r: any) => {};
+const getSettingsFromFirestore = getSettingsFromSupabase;
+const saveSettingsToFirestore = saveSettingsToSupabase;
+const getSupplierApplicationsFromFirestore = async () => [];
+const submitSupplierApplicationToFirestore = async (_a: any) => {};
+const updateSupplierApplicationInFirestore = async (_a: any) => {};
+const getSupplierPayoutsFromFirestore = async () => [];
+const saveSupplierPayoutToFirestore = async (_p: any) => {};
 
 const TOKEN_KEY = 'crm_admin_token';
 const ADMIN_USER_KEY = 'crm_admin_user';
@@ -1117,13 +1139,11 @@ export const api = {
     throw new Error('Invalid administrator credentials. Please verify your email and password.');
   },
 
-  async adminGoogleLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> { return this.adminFirebaseLogin(user); },
-
-  async adminFirebaseLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
+  async adminGoogleLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
     const cleanEmail = (user.email || '').trim();
 
     try {
-      const res = await fetch('/api/auth/firebase-login', {
+      let res = await fetch('/api/auth/google-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1133,6 +1153,18 @@ export const api = {
           idToken: user.idToken
         })
       });
+      if (res.status === 404) {
+        res = await fetch('/api/auth/firebase-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            displayName: user.displayName,
+            uid: user.uid,
+            idToken: user.idToken
+          })
+        });
+      }
       const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
 
       if (res.ok && parsed.isJson && parsed.json?.token) {
@@ -1172,6 +1204,14 @@ export const api = {
     }
 
     throw new Error(`Access denied. Google account (${cleanEmail}) is not an authorized ContactReach Market administrator.`);
+  },
+
+  async adminFirebaseLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
+    return this.adminGoogleLogin(user);
+  },
+
+  async adminSupabaseLogin(email: string, pass: string): Promise<{ token: string; admin: any }> {
+    return this.adminLogin(email, pass);
   },
 
   async adminCheckAuth(): Promise<boolean> {
@@ -3961,6 +4001,62 @@ export const api = {
     return parsed.json as Order;
   },
 
+  async getSupabaseStatus(): Promise<{
+    configured: boolean;
+    projectId: string;
+    projectUrl: string;
+    connected: boolean;
+    message: string;
+  }> {
+    try {
+      const diag = await testSupabaseConnection();
+      return {
+        configured: true,
+        projectId: 'hfwfjbvwhkjfrdodqyyw',
+        projectUrl: 'https://hfwfjbvwhkjfrdodqyyw.supabase.co',
+        connected: diag.success,
+        message: diag.message
+      };
+    } catch {
+      return {
+        configured: true,
+        projectId: 'hfwfjbvwhkjfrdodqyyw',
+        projectUrl: 'https://hfwfjbvwhkjfrdodqyyw.supabase.co',
+        connected: false,
+        message: 'Supabase client configured'
+      };
+    }
+  },
+
+  async pullProductsFromSupabase(): Promise<{ success: boolean; products: Product[]; message: string }> {
+    const products = await getProductsFromSupabase();
+    return { success: true, products, message: `Loaded ${products.length} products from Supabase.` };
+  },
+
+  async pushProductsToSupabase(productsList?: Product[]): Promise<{ success: boolean; message: string }> {
+    const list = productsList || await this.getProducts();
+    const res = await syncAllProductsToSupabase(list);
+    return { success: res.success, message: res.message || 'Synced to Supabase' };
+  },
+
+  async adminPushAllDataToSupabase(): Promise<{ success: boolean; message: string }> {
+    const prods = await this.getProducts();
+    const cats = await this.getCategories();
+    const shps = await this.getShops();
+    const ords = await this.adminGetOrders();
+    const custs = await this.adminGetCustomers().catch(() => []);
+    const sett = await this.getSettings();
+    const res = await syncAllDataToSupabase({
+      products: prods,
+      categories: cats,
+      shops: shps,
+      orders: ords,
+      customers: custs,
+      settings: sett
+    });
+    return { success: res.success, message: res.message };
+  },
+
   async getFirebaseStatus(): Promise<{
     configured: boolean;
     databaseExists: boolean;
@@ -3971,20 +4067,20 @@ export const api = {
       configured: false,
       databaseExists: true,
       localProductsCount: 0,
-      message: 'Local database active'
+      message: 'Migrated to Supabase project contactreachmarket'
     };
   },
 
   async pullProductsFromFirebase(): Promise<{ success: boolean; message: string }> {
-    return { success: true, message: 'Storefront running on authoritative local catalog.' };
+    return { success: true, message: 'Migrated to Supabase project contactreachmarket.' };
   },
 
   async pushProductsToFirebase(): Promise<{ success: boolean; message: string }> {
-    return { success: true, message: 'Products persisted in local database.' };
+    return this.pushProductsToSupabase();
   },
 
   async adminPushAllDataToFirebase(): Promise<{ success: boolean; message: string }> {
-    return { success: true, message: 'All data saved to persistent local database.' };
+    return this.adminPushAllDataToSupabase();
   },
 
   async getDatabaseDiagnostics(): Promise<{

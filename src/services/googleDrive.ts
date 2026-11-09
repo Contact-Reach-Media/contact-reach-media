@@ -1,83 +1,12 @@
-// Independent Authentication & Google Drive Workspace Integration
-// Zero external Firebase SDK dependencies - 100% resilient and self-contained
-import {
-  Product,
-  Category,
-  VendorShop,
-  Order,
-  PaymentConfirmation,
-  Coupon,
-  AdminMessage,
-  CustomerProblemReport,
-  ProductReview,
-  AppSettings,
-  AuditLog,
-  CustomerUser,
-  InventoryLog
-} from '../types.ts';
-
-// Config placeholder for backward compatibility
-export const firebaseConfig: Record<string, string> = {
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-};
-export const primaryConfig = firebaseConfig;
-export const secondaryConfig = firebaseConfig;
-
-// Safe stub handles for compatibility
-export const app: any = null;
-export const app1: any = null;
-export const app2: any = null;
-export const db: any = null;
-export const db1: any = null;
-export const db2: any = null;
-export const auth: any = null;
-export const auth2: any = null;
-export let analytics: any = null;
-
-export const googleProvider: any = null;
-export const workspaceProvider: any = null;
+// Google Workspace & Google Drive Integration
+// Client-side OAuth & Drive v3 API file backup and restoration
+import { Product } from '../types.ts';
 
 let cachedAccessToken: string | null = null;
 export const getGoogleAccessToken = (): string | null => cachedAccessToken;
 export const setGoogleAccessToken = (token: string | null): void => {
   cachedAccessToken = token;
 };
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo?: any;
-}
-
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    operationType,
-    path
-  };
-  throw new Error(JSON.stringify(errInfo));
-}
-
-export let firestoreConnected = false;
-export async function testConnection(): Promise<{ db1: boolean; db2: boolean; anyConnected: boolean }> {
-  return { db1: false, db2: false, anyConnected: false };
-}
-export const isFirestoreConnected = (): boolean => false;
-export const isFirestore1Connected = (): boolean => false;
-export const isFirestore2Connected = (): boolean => false;
-export const testFirestoreConnection = testConnection;
 
 export interface GoogleAuthUser {
   uid: string;
@@ -335,82 +264,3 @@ export async function importProductsFromGoogleDrive(
     message: `Successfully loaded ${rawProducts.length} products from Google Drive ("${fileName}").`
   };
 }
-
-// -------------------------------------------------------------
-// LOCAL STORAGE & API FALLBACK STUBS FOR COMPATIBILITY
-// -------------------------------------------------------------
-export function cleanForFirestore<T>(data: T): any {
-  return data;
-}
-
-export async function getProductsFromFirestore(): Promise<Product[]> { return []; }
-export async function saveProductToFirestore(_product: Product): Promise<boolean> { return true; }
-export async function batchSaveProductsToFirestore(productsList: Product[]): Promise<{ count: number; failed: number }> { return { count: productsList.length, failed: 0 }; }
-export async function deleteProductFromFirestore(_productId: string, _metadata?: any): Promise<boolean> { return true; }
-
-export async function getCategoriesFromFirestore(): Promise<Category[]> { return []; }
-export async function saveCategoryToFirestore(_category: Category): Promise<void> {}
-export async function getShopsFromFirestore(): Promise<VendorShop[]> { return []; }
-export async function saveShopToFirestore(_shop: VendorShop): Promise<void> {}
-export async function getOrdersFromFirestore(): Promise<Order[]> { return []; }
-export async function createOrderInFirestore(_order: Order): Promise<void> {}
-export async function getOrderFromFirestore(_orderId: string): Promise<Order | null> { return null; }
-export async function getPaymentsFromFirestore(): Promise<PaymentConfirmation[]> { return []; }
-export async function submitPaymentToFirestore(_payment: PaymentConfirmation): Promise<void> {}
-export async function deletePaymentFromFirestore(_paymentId: string): Promise<void> {}
-
-export interface SupplierApplicationData {
-  id: string;
-  applicantName?: string;
-  shopName?: string;
-  businessName?: string;
-  ownerName?: string;
-  email?: string;
-  phone?: string;
-  businessType?: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  notes?: string;
-  createdAt: string;
-  reviewedAt?: string;
-  tinNumber?: string;
-  location?: string;
-  category?: string;
-  description?: string;
-}
-export async function getSupplierApplicationsFromFirestore(): Promise<SupplierApplicationData[]> { return []; }
-export async function submitSupplierApplicationToFirestore(_appData: SupplierApplicationData): Promise<void> {}
-export async function submitMessageToFirestore(_msg: AdminMessage): Promise<boolean> { return true; }
-export async function getCustomerProblemsFromFirestore(): Promise<CustomerProblemReport[]> { return []; }
-export async function submitProblemReportToFirestore(_report: CustomerProblemReport): Promise<void> {}
-export async function saveCustomerProblemToFirestore(_report: CustomerProblemReport): Promise<void> {}
-export async function deleteCustomerProblemFromFirestore(_reportId: string): Promise<void> {}
-export async function getCouponsFromFirestore(): Promise<Coupon[]> { return []; }
-export async function saveCouponToFirestore(_coupon: Coupon): Promise<void> {}
-export async function deleteCouponFromFirestore(_couponId: string): Promise<void> {}
-export async function getInventoryLogsFromFirestore(): Promise<InventoryLog[]> { return []; }
-export async function saveInventoryLogToFirestore(_log: InventoryLog): Promise<void> {}
-export async function getAuditLogsFromFirestore(): Promise<AuditLog[]> { return []; }
-export async function saveAuditLogToFirestore(_log: AuditLog): Promise<void> {}
-export async function submitReviewToFirestore(_review: ProductReview): Promise<void> {}
-export async function getSettingsFromFirestore(): Promise<AppSettings | null> { return null; }
-export async function saveSettingsToFirestore(_settings: AppSettings): Promise<void> {}
-export async function saveCustomerToFirestore(_customer: CustomerUser): Promise<void> {}
-export async function getCustomerFromFirestore(_customerId: string): Promise<CustomerUser | null> { return null; }
-export async function updateOrderInFirestore(_order: Order): Promise<void> {}
-export async function updatePaymentInFirestore(_payment: PaymentConfirmation): Promise<void> {}
-export async function getSupplierPayoutsFromFirestore(): Promise<any[]> { return []; }
-export async function saveSupplierPayoutToFirestore(_payout: any): Promise<void> {}
-export async function updateSupplierApplicationInFirestore(_appData: any): Promise<void> {}
-export async function getMessagesFromFirestore(): Promise<AdminMessage[]> { return []; }
-export async function updateMessageInFirestore(_msg: Partial<AdminMessage> & { id: string }): Promise<boolean> { return true; }
-export async function deleteMessageFromFirestore(_messageId: string): Promise<boolean> { return true; }
-export async function batchSaveMessagesToFirestore(messagesList: AdminMessage[]): Promise<{ count: number; failed: number }> { return { count: messagesList.length, failed: 0 }; }
-export async function getUsersFromFirestore(): Promise<any[]> { return []; }
-export async function getCustomersFromFirestore(): Promise<CustomerUser[]> { return []; }
-export async function saveUserToFirestore(_user: any): Promise<void> {}
-export async function deleteUserFromFirestore(_userId: string): Promise<void> {}
-export async function deleteCustomerFromFirestore(_customerId: string): Promise<void> {}
-export async function deleteOrderFromFirestore(_orderId: string): Promise<void> {}
-export async function deleteCategoryFromFirestore(_categoryId: string): Promise<void> {}
-export async function deleteShopFromFirestore(_shopId: string): Promise<void> {}
-export async function deleteReviewFromFirestore(_reviewId: string): Promise<void> {}

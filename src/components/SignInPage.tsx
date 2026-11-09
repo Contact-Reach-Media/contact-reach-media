@@ -5,7 +5,7 @@ import {
   Sparkles, ShieldCheck, Check
 } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { loginWithGoogle } from '../services/firebase.ts';
+import { loginWithGoogle } from '../services/googleDrive.ts';
 import { CustomerUser } from '../types.ts';
 import { Language } from '../translations.ts';
 
