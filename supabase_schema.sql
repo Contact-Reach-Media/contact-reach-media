@@ -15,6 +15,47 @@
 -- Enable UUID extension if available
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ==============================================================================
+-- ESSENTIAL 1-CLICK RLS PERMISSION POLICIES
+-- Run these lines immediately to allow your ContactReach Market frontend and backend
+-- to seamlessly read and write products, orders, order items, payments, and users.
+-- ==============================================================================
+ALTER TABLE IF EXISTS public.products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow anon and auth products" ON public.products;
+DROP POLICY IF EXISTS "Allow public all products" ON public.products;
+CREATE POLICY "Allow public all products" ON public.products FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow anon and auth orders" ON public.orders;
+DROP POLICY IF EXISTS "Allow public all orders" ON public.orders;
+CREATE POLICY "Allow public all orders" ON public.orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.order_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow anon and auth order_items" ON public.order_items;
+DROP POLICY IF EXISTS "Allow public all order_items" ON public.order_items;
+CREATE POLICY "Allow public all order_items" ON public.order_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow anon and auth payments" ON public.payments;
+DROP POLICY IF EXISTS "Allow public all payments" ON public.payments;
+CREATE POLICY "Allow public all payments" ON public.payments FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS public.users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow anon and auth users" ON public.users;
+DROP POLICY IF EXISTS "Allow public all users" ON public.users;
+CREATE POLICY "Allow public all users" ON public.users FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Ensure stock_quantity and stock columns are interchangeable
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='products' AND column_name='stock_quantity') THEN
+        ALTER TABLE public.products ADD COLUMN IF NOT EXISTS stock INTEGER GENERATED ALWAYS AS (stock_quantity) STORED;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END;
+$$;
+
 -- Helper function to automatically update `updated_at` timestamps
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$

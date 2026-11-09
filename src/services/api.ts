@@ -6,7 +6,7 @@ import {
   CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig,
   AlibabaConfig, AlibabaShippingQuote, DsersConfig
 } from '../types.ts';
-import { initialProducts, initialCategories, initialSettings, initialShops } from '../data/initialData.ts';
+import { initialCategories, initialSettings } from '../data/initialData.ts';
 import {
   getProductsFromSupabase,
   saveProductToSupabase,
@@ -448,7 +448,7 @@ export const api = {
       if (fsShops && fsShops.length > 0) return fsShops;
     } catch {}
 
-    return initialShops;
+    return [];
   },
 
   async getShopById(id: string): Promise<{ shop: VendorShop; products: Product[] } | null> {
@@ -545,16 +545,7 @@ export const api = {
       }
     } catch {}
 
-    return initialProducts
-      .filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())))
-      .filter(p => {
-        const raw = (p.imageUrl || '').trim();
-        const norm = raw ? raw.split('?')[0].toLowerCase().trim() : '';
-        if (!norm) return true;
-        if (seenFallbackImgs.has(norm)) return false;
-        seenFallbackImgs.add(norm);
-        return true;
-      });
+    return [];
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -585,11 +576,7 @@ export const api = {
       }
     } catch {}
 
-    const initFound = initialProducts.find(p => p.id === id);
-    if (initFound && (deletedSet.has(initFound.id.toLowerCase()) || (initFound.sku && deletedSet.has(initFound.sku.toLowerCase())))) {
-      return null;
-    }
-    return initFound || null;
+    return null;
   },
 
   // Customer Place Order

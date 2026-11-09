@@ -520,16 +520,6 @@ export function broadcastDatabaseEvent(eventType: string = 'database_change', pa
 
 function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
   try {
-    // Permanent Storage Safety Guard: Never allow an empty in-memory orders array to wipe out stored disk orders
-    if (db.orders.length === 0 && fs.existsSync(DB_FILE)) {
-      try {
-        const diskRaw = fs.readFileSync(DB_FILE, 'utf-8');
-        const diskParsed = JSON.parse(diskRaw);
-        if (Array.isArray(diskParsed.orders) && diskParsed.orders.length > 0) {
-          db.orders = diskParsed.orders;
-        }
-      } catch {}
-    }
 
     const dataToSave = {
       products: db.products,
@@ -735,76 +725,7 @@ function loadDbFromDisk() {
     }
   }
 
-  // Ensure all 200 catalog products are present in db.products (ONLY if not permanently deleted!)
   db.deletedRecordIds = db.deletedRecordIds || [];
-  const delSet = new Set(db.deletedRecordIds);
-  const existingProductIds = new Set(db.products.map(p => p.id));
-  const missing200 = PRODUCTS_200_CATALOG.filter(p =>
-    !existingProductIds.has(p.id) &&
-    !delSet.has(p.id) &&
-    (!p.sku || !delSet.has(p.sku))
-  );
-  if (missing200.length > 0) {
-    console.log(`Injecting ${missing200.length} catalog products into database...`);
-    db.products = [...missing200, ...db.products];
-  }
-
-  // Purge any tombstoned products from in-memory database to prevent resurrection
-  if (delSet.size > 0) {
-    db.products = db.products.filter(p =>
-      !delSet.has(p.id) &&
-      (!p.sku || !delSet.has(p.sku)) &&
-      (!p.alibabaProductId || !delSet.has(p.alibabaProductId)) &&
-      (!p.cjProductId || !delSet.has(p.cjProductId))
-    );
-  }
-
-  // Deduplicate products by image URL to strictly guarantee no two products share the same image
-  const seenImageUrls = new Set<string>();
-  const cleanUniqueProducts: Product[] = [];
-  const imageDupsRemoved: Product[] = [];
-
-  for (const p of db.products) {
-    const rawImg = (p.imageUrl || '').trim();
-    const normImg = rawImg ? rawImg.split('?')[0].toLowerCase().trim() : '';
-
-    if (!normImg) {
-      cleanUniqueProducts.push(p);
-      continue;
-    }
-
-    if (seenImageUrls.has(normImg)) {
-      imageDupsRemoved.push(p);
-      if (!delSet.has(p.id)) {
-        db.deletedRecordIds.push(p.id);
-        delSet.add(p.id);
-      }
-      if (p.sku && !delSet.has(p.sku)) {
-        db.deletedRecordIds.push(p.sku);
-        delSet.add(p.sku);
-      }
-    } else {
-      seenImageUrls.add(normImg);
-      cleanUniqueProducts.push(p);
-    }
-  }
-
-  if (imageDupsRemoved.length > 0) {
-    console.log(`[Deduplication] Purged ${imageDupsRemoved.length} duplicate products sharing identical image links.`);
-    db.products = cleanUniqueProducts;
-  }
-
-  // Ensure SKU for each product if missing
-  db.products.forEach((p, idx) => {
-    if (!p.sku) {
-      p.sku = `CRM-${p.category.toUpperCase().slice(0, 3)}-${1000 + idx}`;
-    }
-  });
-
-  // Ensure isRecommended boolean is guaranteed on all shops (defaults to false)
-  db.shops.forEach(s => {
-    s.isRecommended = Boolean(s.isRecommended);
-  });
 
   if (!db.settings.alibabaConfig) {
     db.settings.alibabaConfig = { ...(initialSettings.alibabaConfig as AlibabaConfig) };
@@ -833,138 +754,218 @@ async function saveToSupabaseAsync(entityType: string, docId: string, data: any)
   if (!data) return;
   try {
     if (entityType === 'orders' || entityType === 'order') {
-      await supabase.from('orders').upsert({
-        id: data.id || docId,
+      const orderRow: Record<string, any> = {
         order_number: data.orderNumber,
         customer_name: data.customerName,
+        customer_email: data.customerEmail || `${(data.customerPhone || '0780000000').replace(/\D/g, '')}@customer.crm.rw`,
         customer_phone: data.customerPhone,
-        customer_email: data.customerEmail || null,
-        delivery_type: data.deliveryType || 'delivery',
-        delivery_address: data.deliveryAddress || null,
-        delivery_location: data.deliveryLocation || null,
+        delivery_address: data.deliveryAddress || 'Kigali, Rwanda',
+        delivery_city: data.deliveryCity || data.deliveryLocation?.split(' ')[0] || 'Kigali',
+        delivery_district: data.deliveryLocation || null,
         delivery_notes: data.deliveryNotes || null,
         total_amount: data.totalAmount,
         subtotal: data.subtotal || data.totalAmount,
         delivery_fee: data.deliveryFee || 0,
-        shipping_cost: data.shippingCost || 0,
-        payment_method: data.paymentMethod || null,
+        discount_amount: data.discountAmount || 0,
+        currency: 'RWF',
+        payment_method: data.paymentMethod || 'MTN Mobile Money',
         payment_status: data.paymentStatus || 'Pending Payment',
-        delivery_status: data.deliveryStatus || 'Pending',
-        status: data.status || 'New',
-        items: data.items || [],
+        order_status: data.status || 'New',
         tracking_number: data.trackingNumber || null,
         tracking_token: data.trackingToken || null,
-        coupon_code: data.couponCode || null,
-        discount_amount: data.discountAmount || 0,
-        supplier_name: data.supplierName || null,
-        shop_name: data.shopName || null,
-        created_at: data.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      };
+      if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
+        orderRow.id = data.id;
+      }
+      const { data: savedOrder, error: ordErr } = await supabase.from('orders').upsert(orderRow, { onConflict: 'order_number' }).select();
+      if (!ordErr && savedOrder?.[0]?.id && Array.isArray(data.items) && data.items.length > 0) {
+        const targetOrderId = savedOrder[0].id;
+        const itemsRows = data.items.map((it: any) => ({
+          order_id: targetOrderId,
+          product_name: it.productName || it.name || 'Product',
+          unit_price: it.price || it.unitPrice || 0,
+          quantity: it.quantity || 1,
+          line_total: (it.price || it.unitPrice || 0) * (it.quantity || 1),
+          ...(it.productId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(it.productId) ? { product_id: it.productId } : {})
+        }));
+        await supabase.from('order_items').insert(itemsRows);
+      }
     } else if (entityType === 'products' || entityType === 'product') {
-      await supabase.from('products').upsert({
-        id: data.id || docId,
+      const prodRow: Record<string, any> = {
         name: data.name,
         sku: data.sku || null,
         description: data.description || '',
         price: data.price,
         cost_price: data.costPrice ?? null,
-        cost_overridden_by_admin: Boolean(data.costOverriddenByAdmin),
         category: data.category || 'clothing',
-        main_category_id: data.mainCategoryId || null,
-        sub_category_id: data.subCategoryId || null,
-        category_name: data.categoryName || null,
-        sub_category_name: data.subCategoryName || null,
-        stock: data.stock,
-        image_url: data.imageUrl || '',
-        images: data.images || [],
-        shop_name: data.shopName || null,
-        shop_id: data.shopId || null,
-        receiver_name: data.receiverName || null,
-        payment_methods: data.paymentMethods || [],
-        merchant_code: data.merchantCode || null,
-        receiver_phone: data.receiverPhone || null,
-        location: data.location || null,
-        delivery_info: data.deliveryInfo || null,
+        stock_quantity: data.stock ?? 0,
+        image_url: data.imageUrl || (Array.isArray(data.images) && data.images[0]) || '',
         status: data.status || 'Available',
-        is_featured: Boolean(data.isFeatured),
-        is_new_arrival: Boolean(data.isNewArrival),
-        is_best_seller: Boolean(data.isBestSeller),
-        brand: data.brand || null,
-        unit: data.unit || 'Piece',
-        video_url: data.videoUrl || null,
-        variations: data.variations || [],
-        rating: data.rating || 5.0,
-        reviews_count: data.reviewsCount || 0,
-        source: data.source || null,
-        alibaba_product_id: data.alibabaProductId || null,
-        cj_product_id: data.cjProductId || null,
-        created_at: data.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      };
+      if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
+        prodRow.id = data.id;
+      }
+      await supabase.from('products').upsert(prodRow);
     } else if (entityType === 'paymentConfirmations' || entityType === 'payments' || entityType === 'payment') {
-      await supabase.from('payments').upsert({
-        id: data.id || docId,
-        order_id: data.orderId,
+      const payRow: Record<string, any> = {
         order_number: data.orderNumber,
-        customer_name: data.customerName,
-        customer_phone: data.customerPhone,
-        amount: data.amount,
-        payment_method: data.paymentMethod,
-        sender_name: data.senderName || null,
-        sender_phone: data.senderPhone || null,
-        transaction_id: data.transactionId || null,
-        payment_proof_url: data.paymentProofUrl || null,
-        verification_status: data.verificationStatus || 'Pending Review',
-        verified_at: data.verifiedAt || null,
+        payment_method: data.paymentMethod || 'MTN Mobile Money',
+        amount: data.amount || data.amountPaid || 0,
+        transaction_reference: data.transactionId || null,
+        sender_phone: data.senderPhone || data.paymentPhone || null,
+        sender_name: data.senderName || data.customerName || null,
+        proof_image_url: data.screenshotUrl || data.paymentProofUrl || null,
+        status: data.verificationStatus || 'Pending Verification',
         verified_by: data.verifiedBy || null,
-        notes: data.notes || null,
-        created_at: data.createdAt || new Date().toISOString()
-      }, { onConflict: 'id' });
+        verified_at: data.verifiedAt || null,
+        notes: data.notes || data.adminNotes || null
+      };
+      if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
+        payRow.id = data.id;
+      }
+      await supabase.from('payments').upsert(payRow);
     } else if (entityType === 'accounts' || entityType === 'customers' || entityType === 'adminUsers') {
-      await supabase.from('accounts').upsert({
-        id: data.id || docId,
-        name: data.name || 'User',
-        email: data.email || null,
-        phone: data.phone || null,
-        role: data.role || 'customer',
-        status: data.status || (data.active === false ? 'Inactive' : 'Active'),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
-    } else if (entityType === 'messages' || entityType === 'message') {
-      await supabase.from('messages').upsert({
-        id: data.id || docId,
-        sender_name: data.senderName,
-        sender_phone: data.senderPhone,
-        sender_email: data.senderEmail || null,
-        subject: data.subject || null,
-        message: data.message,
-        status: data.status || 'unread',
-        read_at: data.readAt || null,
-        replied_at: data.repliedAt || null,
-        reply_message: data.replyMessage || null,
-        created_at: data.createdAt || new Date().toISOString()
-      }, { onConflict: 'id' });
-    } else if (entityType === 'settings') {
-      await supabase.from('app_settings').upsert({
-        id: 'global',
-        market_name: data.marketName || 'ContactReach Market',
-        company_name: data.companyName || 'ContactReach Media Ltd',
-        phone: data.phone || '+250780022600',
-        email: data.email || 'contactreachmedialimited@gmail.com',
-        settings_data: data,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      if (data.email) {
+        const userRow: Record<string, any> = {
+          full_name: data.name || data.fullName || 'User',
+          email: data.email,
+          phone: data.phone || null,
+          role: data.role || 'customer',
+          default_address: data.deliveryAddress || data.defaultAddress || null,
+          city: 'Kigali',
+          country: 'Rwanda',
+          is_active: data.active !== false && data.status !== 'Inactive',
+          updated_at: new Date().toISOString()
+        };
+        if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
+          userRow.id = data.id;
+        }
+        await supabase.from('users').upsert(userRow, { onConflict: 'email' });
+      }
     }
   } catch (err: any) {
     // Non-blocking background sync
   }
 }
 
-// Backward-compatible alias
+async function deleteFromSupabaseAsync(entityType: string, id: string) {
+  try {
+    if (entityType === 'products' || entityType === 'product') {
+      await supabase.from('products').delete().eq('id', id);
+    } else if (entityType === 'orders' || entityType === 'order') {
+      await supabase.from('orders').delete().eq('id', id);
+    } else if (entityType === 'users' || entityType === 'customers' || entityType === 'accounts') {
+      await supabase.from('users').delete().eq('id', id);
+    }
+  } catch {}
+}
+
+// Hydrate server in-memory database directly from Supabase
+export async function loadAllDataFromSupabase() {
+  try {
+    console.log('[Supabase] Hydrating catalog, orders, and users from Supabase...');
+    // 1. Products
+    const { data: prods, error: prodErr } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!prodErr && Array.isArray(prods) && prods.length > 0) {
+      db.products = prods.map(p => ({
+        id: String(p.id),
+        name: p.name,
+        sku: p.sku || undefined,
+        description: p.description || '',
+        price: Number(p.price) || 0,
+        costPrice: p.cost_price !== null ? Number(p.cost_price) : undefined,
+        category: normalizeCategoryId(p.category, p.name),
+        stock: Number(p.stock_quantity ?? p.stock ?? 0),
+        imageUrl: p.image_url || '',
+        images: p.image_url ? [p.image_url] : [],
+        shopName: 'ContactReach Market',
+        status: p.status || 'Available',
+        rating: 5.0,
+        reviewsCount: 0,
+        createdAt: p.created_at || new Date().toISOString()
+      }));
+      console.log(`[Supabase] Successfully loaded ${db.products.length} live products.`);
+    }
+
+    // 2. Orders with items
+    const { data: ords, error: ordErr } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .order('created_at', { ascending: false });
+
+    if (!ordErr && Array.isArray(ords) && ords.length > 0) {
+      db.orders = ords.map(o => ({
+        id: String(o.id),
+        orderNumber: o.order_number,
+        customerName: o.customer_name,
+        customerPhone: o.customer_phone,
+        customerEmail: o.customer_email || undefined,
+        deliveryLocation: o.delivery_district || o.delivery_city || 'Kigali',
+        deliveryAddress: o.delivery_address,
+        deliveryNotes: o.delivery_notes || undefined,
+        subtotal: Number(o.subtotal) || 0,
+        deliveryFee: Number(o.delivery_fee) || 0,
+        discountAmount: Number(o.discount_amount) || 0,
+        totalAmount: Number(o.total_amount) || 0,
+        paymentMethod: o.payment_method || 'MTN Mobile Money',
+        paymentStatus: o.payment_status || 'Pending Payment',
+        receiverName: 'Ruth',
+        receiverDetails: '0780022600',
+        stockDeducted: false,
+        statusHistory: [],
+        status: o.order_status || 'New',
+        deliveryStatus: 'Pending',
+        trackingNumber: o.tracking_number || undefined,
+        trackingToken: o.tracking_token || undefined,
+        items: Array.isArray(o.order_items) ? o.order_items.map((it: any) => ({
+          productId: it.product_id ? String(it.product_id) : undefined,
+          name: it.product_name,
+          productName: it.product_name,
+          price: Number(it.unit_price) || 0,
+          quantity: Number(it.quantity) || 1
+        })) : [],
+        createdAt: o.created_at || new Date().toISOString(),
+        updatedAt: o.updated_at || undefined
+      }));
+      console.log(`[Supabase] Successfully loaded ${db.orders.length} live orders.`);
+    }
+
+    // 3. Users / Customers
+    const { data: usrs, error: usrErr } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!usrErr && Array.isArray(usrs) && usrs.length > 0) {
+      db.customers = usrs.filter(u => u.role !== 'admin' && u.role !== 'owner').map(u => ({
+        id: String(u.id),
+        name: u.full_name || 'Customer',
+        email: u.email,
+        phone: u.phone || undefined,
+        role: 'customer',
+        deliveryAddress: u.default_address || undefined,
+        totalOrders: 0,
+        totalSpent: 0,
+        isRegisteredBuyer: true,
+        createdAt: u.created_at || new Date().toISOString()
+      }));
+      console.log(`[Supabase] Successfully loaded ${db.customers.length} registered customers.`);
+    }
+  } catch (err: any) {
+    console.warn('[Supabase] Hydration warning:', err?.message || err);
+  }
+}
+
+// Backward-compatible aliases
 const saveToFirestoreAsync = saveToSupabaseAsync;
-const deleteFromFirestoreAsync = async (_collectionName: string, _docId: string) => {};
-const syncWithFirestore = async () => {};
+const deleteFromFirestoreAsync = deleteFromSupabaseAsync;
+const syncWithFirestore = loadAllDataFromSupabase;
 
 // JSON middleware
 // Security Headers Middleware
@@ -10374,10 +10375,10 @@ app.post('/api/admin/alibaba/clone-store-or-product', requireAdminAuth, async (r
   if (keyword && typeof keyword === 'string' && keyword.trim()) {
     const q = keyword.trim().toLowerCase();
     matchedItems = matchedItems.filter(item =>
-      item.productName.toLowerCase().includes(q) ||
-      item.originalDescription.toLowerCase().includes(q) ||
-      item.supplierName.toLowerCase().includes(q) ||
-      item.brand.toLowerCase().includes(q)
+      (item.productName || item.name || '').toLowerCase().includes(q) ||
+      (item.originalDescription || item.description || '').toLowerCase().includes(q) ||
+      (item.supplierName || '').toLowerCase().includes(q) ||
+      (item.brand || '').toLowerCase().includes(q)
     );
   }
 
@@ -10392,8 +10393,20 @@ app.post('/api/admin/alibaba/clone-store-or-product', requireAdminAuth, async (r
       const syntheticPid = `ali-url-${Date.now().toString().slice(-8)}`;
       const syntheticItem: AlibabaCuratedItem = {
         pid: syntheticPid,
+        name: urlTitle.charAt(0).toUpperCase() + urlTitle.slice(1),
         productName: urlTitle.charAt(0).toUpperCase() + urlTitle.slice(1),
         productSku: `ALI-CLONE-${Date.now().toString().slice(-6)}`,
+        priceUsd: 25.00,
+        priceRwf: 25.00 * 1435,
+        imageUrl: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
+        images: [
+          'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'
+        ],
+        description: `Product Direct Clone from Alibaba Store: ${cleanUrl}
+Original supplier specifications and factory parameters preserved.
+Warranty & Certifications: Alibaba Trade Assurance Verified, CE/FCC/RoHS Certified.
+Origin: Direct Factory Dispatch (China)`,
         originalDescription: `Product Direct Clone from Alibaba Store: ${cleanUrl}
 Original supplier specifications and factory parameters preserved.
 Warranty & Certifications: Alibaba Trade Assurance Verified, CE/FCC/RoHS Certified.
@@ -10411,6 +10424,7 @@ Origin: Direct Factory Dispatch (China)`,
         verifiedSupplier: true,
         moq: 1,
         leadTimeDays: 5,
+        stock: 50,
         category: category || 'electronics',
         brand: 'Alibaba Verified',
         unit: 'Piece',
@@ -10439,7 +10453,7 @@ Origin: Direct Factory Dispatch (China)`,
     if (isProductTombstoned({ id: aliProdId, sku, alibabaProductId: pid })) {
       continue;
     }
-    const wholesaleUsd = item.unitCostUsd;
+    const wholesaleUsd = Number(item.unitCostUsd || item.priceUsd || 15);
 
     const quote = calculateAlibabaShipping(item.weightKg, item.dimensionsCm, usdRate, item.isFreeShipping);
     const pricing = calculateAlibabaLandedPricing(wholesaleUsd, item.weightKg, item.dimensionsCm, usdRate, markupPercent, item.isFreeShipping);
@@ -10477,11 +10491,12 @@ Origin: Direct Factory Dispatch (China)`,
       clonedProducts.push(existing);
       updatedCount++;
     } else {
+      const imgList = item.productImages || item.images || [item.imageUrl];
       const newProduct: Product = {
         id: `prod-ali-${pid.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`,
-        name: item.productName,
-        sku: item.productSku,
-        description: item.originalDescription,
+        name: item.productName || item.name || 'Alibaba Product',
+        sku: item.productSku || `ALI-${pid.slice(-6)}`,
+        description: item.originalDescription || item.description || '',
         source: 'alibaba',
         alibabaProductId: pid,
         alibabaItemUrl: item.alibabaItemUrl,
@@ -10503,8 +10518,8 @@ Origin: Direct Factory Dispatch (China)`,
         profitMargin: pricing.profitMargin,
         category: item.category,
         stock: 50,
-        imageUrl: item.productImages[0] || '/logo.png',
-        images: item.productImages,
+        imageUrl: imgList[0] || '/logo.png',
+        images: imgList,
         shopName,
         shopId,
         receiverName: db.settings.receiverName || 'Ruth',
@@ -12965,7 +12980,10 @@ app.use('/api', (err: any, req: Request, res: Response, next: NextFunction) => {
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // Local resilient database active
+  // Load all live products, orders, and users directly from Supabase
+  await loadAllDataFromSupabase().catch(err => {
+    console.warn('[Supabase] Initial startup load notice:', err?.message || err);
+  });
 
   // Automated CJ Dropshipping periodic sync runner (startup probe + every 10 mins)
   if (db.settings.cjConfig?.autoUploadEnabled && db.settings.cjConfig?.apiKey) {

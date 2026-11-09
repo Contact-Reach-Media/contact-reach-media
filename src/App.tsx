@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
-import { initialProducts, initialCategories, initialSettings, initialShops } from './data/initialData.ts';
+import { initialCategories, initialSettings } from './data/initialData.ts';
 import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
 import { Language, translations, getCategoryTitle } from './translations.ts';
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
@@ -152,26 +152,10 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
-  // Core Data with permanent local hydration
-  const [products, setProducts] = useState<Product[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const deletedIds = api.getLocallyDeletedProductIds();
-        const delSet = new Set(deletedIds.map((d: string) => d.toLowerCase().trim()));
-        const cached = localStorage.getItem('crm_home_catalog_cache');
-        if (cached) {
-          const list = JSON.parse(cached);
-          if (Array.isArray(list) && list.length > 0) {
-            return list.filter((p: Product) => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
-          }
-        }
-        return initialProducts.filter(p => !delSet.has(p.id.toLowerCase().trim()) && (!p.sku || !delSet.has(p.sku.toLowerCase().trim())));
-      } catch {}
-    }
-    return initialProducts;
-  });
+  // Core Data loaded dynamically from Supabase
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [shops, setShops] = useState<VendorShop[]>(initialShops);
+  const [shops, setShops] = useState<VendorShop[]>([]);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
 
   // Request permanent storage from browser and persist catalog to local storage
@@ -249,12 +233,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'newest'>('featured');
 
   // Active selected entities
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(() => {
-    if (initialRoute.productId) {
-      return initialProducts.find(p => p.id === initialRoute.productId) || null;
-    }
-    return null;
-  });
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [confirmationOrder, setConfirmationOrder] = useState<Order | null>(null);
   const [trackingOrderNumber, setTrackingOrderNumber] = useState<string>(initialRoute.orderRef || '');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {

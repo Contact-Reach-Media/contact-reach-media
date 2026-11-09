@@ -230,46 +230,26 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
       .order('created_at', { ascending: false });
 
     if (error || !data) {
+      if (error) console.warn('[Supabase] Products query notice:', error.message);
       return [];
     }
 
     return data.map((row: any) => ({
-      id: row.id,
-      name: row.name,
+      id: String(row.id),
+      name: row.name || 'Untitled Product',
       sku: row.sku || undefined,
       description: row.description || '',
       price: Number(row.price) || 0,
       costPrice: row.cost_price !== null ? Number(row.cost_price) : undefined,
-      costOverriddenByAdmin: Boolean(row.cost_overridden_by_admin),
+      costOverriddenByAdmin: false,
       category: row.category || 'clothing',
-      mainCategoryId: row.main_category_id || undefined,
-      subCategoryId: row.sub_category_id || undefined,
-      categoryName: row.category_name || undefined,
-      subCategoryName: row.sub_category_name || undefined,
-      stock: Number(row.stock) || 0,
+      stock: Number(row.stock_quantity ?? row.stock ?? 0),
       imageUrl: row.image_url || '',
-      images: Array.isArray(row.images) ? row.images : (row.image_url ? [row.image_url] : []),
-      shopName: row.shop_name || 'ContactReach Market Hub',
-      shopId: row.shop_id || undefined,
-      receiverName: row.receiver_name || undefined,
-      paymentMethods: Array.isArray(row.payment_methods) ? row.payment_methods : [],
-      merchantCode: row.merchant_code || undefined,
-      receiverPhone: row.receiver_phone || undefined,
-      location: row.location || 'Kigali, Rwanda',
-      deliveryInfo: row.delivery_info || undefined,
-      status: row.status || 'Available',
-      isFeatured: Boolean(row.is_featured),
-      isNewArrival: Boolean(row.is_new_arrival),
-      isBestSeller: Boolean(row.is_best_seller),
-      brand: row.brand || undefined,
-      unit: row.unit || 'Piece',
-      videoUrl: row.video_url || undefined,
-      variations: Array.isArray(row.variations) ? row.variations : [],
-      rating: Number(row.rating) || 5.0,
-      reviewsCount: Number(row.reviews_count) || 0,
-      source: row.source || undefined,
-      alibabaProductId: row.alibaba_product_id || undefined,
-      cjProductId: row.cj_product_id || undefined,
+      images: row.image_url ? [row.image_url] : [],
+      shopName: 'ContactReach Market',
+      status: (row.status || 'Available') as any,
+      rating: 5.0,
+      reviewsCount: 0,
       createdAt: row.created_at || new Date().toISOString()
     }));
   } catch (err) {
@@ -278,55 +258,32 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
   }
 }
 
-export async function saveProductToSupabase(p: Product): Promise<{ success: boolean; error?: string }> {
+export async function saveProductToSupabase(p: Product): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
-    const row = {
-      id: p.id,
+    const row: Record<string, any> = {
       name: p.name,
       sku: p.sku || null,
       description: p.description || '',
       price: p.price,
       cost_price: p.costPrice ?? null,
-      cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
-      category: p.category,
-      main_category_id: p.mainCategoryId || null,
-      sub_category_id: p.subCategoryId || null,
-      category_name: p.categoryName || null,
-      sub_category_name: p.subCategoryName || null,
-      stock: p.stock,
-      image_url: p.imageUrl || '',
-      images: p.images || [],
-      shop_name: p.shopName || null,
-      shop_id: p.shopId || null,
-      receiver_name: p.receiverName || null,
-      payment_methods: p.paymentMethods || [],
-      merchant_code: p.merchantCode || null,
-      receiver_phone: p.receiverPhone || null,
-      location: p.location || null,
-      delivery_info: p.deliveryInfo || null,
+      category: p.category || 'clothing',
+      stock_quantity: p.stock ?? 0,
+      image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
       status: p.status || 'Available',
-      is_featured: Boolean(p.isFeatured),
-      is_new_arrival: Boolean(p.isNewArrival),
-      is_best_seller: Boolean(p.isBestSeller),
-      brand: p.brand || null,
-      unit: p.unit || 'Piece',
-      video_url: p.videoUrl || null,
-      variations: p.variations || [],
-      rating: p.rating || 5.0,
-      reviews_count: p.reviewsCount || 0,
-      source: p.source || null,
-      alibaba_product_id: p.alibabaProductId || null,
-      cj_product_id: p.cjProductId || null,
-      created_at: p.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabase.from('products').upsert(row, { onConflict: 'id' });
+    // If valid UUID format, preserve it, otherwise omit id and let Supabase assign uuid_generate_v4()
+    if (p.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(p.id)) {
+      row.id = p.id;
+    }
+
+    const { data, error } = await supabase.from('products').upsert(row).select();
     if (error) {
       console.warn('[Supabase] Save product notice:', error.message);
       return { success: false, error: error.message };
     }
-    return { success: true };
+    return { success: true, data: data?.[0] };
   } catch (err: any) {
     return { success: false, error: err?.message };
   }
@@ -569,44 +526,51 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
   try {
     const { data, error } = await supabase
       .from('orders')
-      .select('*')
+      .select('*, order_items(*)')
       .order('created_at', { ascending: false });
 
-    if (error || !data) return [];
+    if (error || !data) {
+      if (error) console.warn('[Supabase] Orders query notice:', error.message);
+      return [];
+    }
+
     return data.map((o: any) => ({
-      id: o.id,
+      id: String(o.id),
       orderNumber: o.order_number || '',
       customerName: o.customer_name || 'Customer',
       customerPhone: o.customer_phone || '',
       customerEmail: o.customer_email || undefined,
-      deliveryType: o.delivery_type || 'delivery',
-      deliveryLocation: o.delivery_location || 'Gasabo',
+      deliveryType: 'delivery',
+      deliveryLocation: o.delivery_district || o.delivery_city || 'Kigali',
       deliveryAddress: o.delivery_address || 'Kigali, Rwanda',
       deliveryNotes: o.delivery_notes || undefined,
-      items: Array.isArray(o.items) ? o.items : [],
+      items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
+        productId: it.product_id ? String(it.product_id) : undefined,
+        name: it.product_name,
+        productName: it.product_name,
+        price: Number(it.unit_price) || 0,
+        quantity: Number(it.quantity) || 1
+      })) : (Array.isArray(o.items) ? o.items : []),
       subtotal: Number(o.subtotal) || Number(o.total_amount) || 0,
       deliveryFee: Number(o.delivery_fee) || 0,
-      shippingCost: Number(o.shipping_cost) || 0,
+      shippingCost: 0,
       totalAmount: Number(o.total_amount) || 0,
       paymentMethod: o.payment_method || 'MTN Mobile Money',
-      receiverName: o.receiver_name || 'Ruth',
-      receiverDetails: o.receiver_details || '0780022600',
+      receiverName: 'Ruth',
+      receiverDetails: '0780022600',
       paymentStatus: o.payment_status || 'Pending Payment',
-      deliveryStatus: o.delivery_status || 'Pending',
-      status: o.status || 'New',
-      stockDeducted: Boolean(o.stock_deducted),
-      statusHistory: Array.isArray(o.status_history) && o.status_history.length > 0 ? o.status_history : [{
-        status: o.status || 'New',
-        deliveryStatus: o.delivery_status || 'Pending',
+      deliveryStatus: 'Pending',
+      status: o.order_status || 'New',
+      stockDeducted: false,
+      statusHistory: [{
+        status: o.order_status || 'New',
+        deliveryStatus: 'Pending',
         paymentStatus: o.payment_status || 'Pending Payment',
         timestamp: o.created_at || new Date().toISOString()
       }],
       trackingNumber: o.tracking_number || undefined,
       trackingToken: o.tracking_token || undefined,
-      couponCode: o.coupon_code || undefined,
       discountAmount: Number(o.discount_amount) || 0,
-      supplierName: o.supplier_name || undefined,
-      shopName: o.shop_name || undefined,
       createdAt: o.created_at || new Date().toISOString(),
       updatedAt: o.updated_at || undefined
     }));
@@ -618,47 +582,55 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
 export async function saveOrderToSupabase(order: any): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const orderRecord: Record<string, any> = {
-      id: order.id || `ord-${Date.now()}`,
       order_number: order.orderNumber,
       customer_name: order.customerName,
       customer_phone: order.customerPhone,
-      customer_email: order.customerEmail || null,
-      delivery_type: order.deliveryType || 'delivery',
-      delivery_address: order.deliveryAddress || null,
-      delivery_location: order.deliveryLocation || null,
+      customer_email: order.customerEmail || `${(order.customerPhone || '0780000000').replace(/\D/g, '')}@customer.crm.rw`,
+      delivery_address: order.deliveryAddress || 'Kigali, Rwanda',
+      delivery_city: order.deliveryCity || order.deliveryLocation?.split(' ')[0] || 'Kigali',
+      delivery_district: order.deliveryLocation || null,
       delivery_notes: order.deliveryNotes || null,
       total_amount: order.totalAmount,
       subtotal: order.subtotal || order.totalAmount,
       delivery_fee: order.deliveryFee || 0,
-      shipping_cost: order.shippingCost || 0,
-      payment_method: order.paymentMethod || null,
-      receiver_name: order.receiverName || 'Ruth',
-      receiver_details: order.receiverDetails || '0780022600',
+      discount_amount: order.discountAmount || 0,
+      currency: 'RWF',
+      payment_method: order.paymentMethod || 'MTN Mobile Money',
       payment_status: order.paymentStatus || 'Pending Payment',
-      delivery_status: order.deliveryStatus || 'Pending',
-      status: order.status || 'New',
-      stock_deducted: Boolean(order.stockDeducted),
-      status_history: order.statusHistory || [],
-      items: order.items || [],
+      order_status: order.status || 'New',
       tracking_number: order.trackingNumber || null,
       tracking_token: order.trackingToken || null,
-      coupon_code: order.couponCode || null,
-      discount_amount: order.discountAmount || 0,
-      supplier_name: order.supplierName || null,
-      shop_name: order.shopName || null,
-      created_at: order.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    const { data, error } = await supabase
+    if (order.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(order.id)) {
+      orderRecord.id = order.id;
+    }
+
+    const { data: savedOrder, error } = await supabase
       .from('orders')
-      .upsert(orderRecord, { onConflict: 'id' });
+      .upsert(orderRecord, { onConflict: 'order_number' })
+      .select();
 
     if (error) {
       console.warn('[Supabase] orders table upsert notice:', error.message);
       return { success: false, error: error.message };
     }
-    return { success: true, data };
+
+    const targetOrderId = savedOrder?.[0]?.id || order.id;
+    if (targetOrderId && Array.isArray(order.items) && order.items.length > 0) {
+      const itemsRows = order.items.map((it: any) => ({
+        order_id: targetOrderId,
+        product_name: it.productName || it.name || 'Product',
+        unit_price: it.price || it.unitPrice || 0,
+        quantity: it.quantity || 1,
+        line_total: (it.price || it.unitPrice || 0) * (it.quantity || 1),
+        ...(it.productId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(it.productId) ? { product_id: it.productId } : {})
+      }));
+      await supabase.from('order_items').insert(itemsRows);
+    }
+
+    return { success: true, data: savedOrder?.[0] };
   } catch (err: any) {
     console.warn('[Supabase] Save order error:', err);
     return { success: false, error: err?.message };
@@ -762,9 +734,25 @@ export async function syncAllPaymentsToSupabase(payments: PaymentConfirmation[] 
 // -------------------------------------------------------------
 export async function getAccountsFromSupabase(): Promise<any[]> {
   try {
-    const { data, error } = await supabase.from('accounts').select('*');
-    if (error || !data) return [];
-    return data;
+    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    if (error || !data) {
+      if (error) console.warn('[Supabase] Users query notice:', error.message);
+      return [];
+    }
+    return data.map((u: any) => ({
+      id: String(u.id),
+      name: u.full_name || 'Customer',
+      email: u.email,
+      phone: u.phone || undefined,
+      role: u.role || 'customer',
+      deliveryAddress: u.default_address || undefined,
+      city: u.city || 'Kigali',
+      country: u.country || 'Rwanda',
+      status: u.is_active !== false ? 'Active' : 'Inactive',
+      active: u.is_active !== false,
+      isRegisteredBuyer: true,
+      createdAt: u.created_at || new Date().toISOString()
+    }));
   } catch {
     return [];
   }
@@ -772,18 +760,23 @@ export async function getAccountsFromSupabase(): Promise<any[]> {
 
 export async function saveAccountToSupabase(account: any): Promise<void> {
   try {
-    await supabase.from('accounts').upsert({
-      id: account.id,
-      name: account.name || 'User',
-      email: account.email || null,
+    const row: Record<string, any> = {
+      full_name: account.name || account.fullName || 'User',
+      email: account.email,
       phone: account.phone || null,
       role: account.role || 'customer',
-      status: account.status || 'Active',
-      metadata: account.metadata || {},
+      default_address: account.deliveryAddress || account.defaultAddress || null,
+      city: account.city || 'Kigali',
+      country: 'Rwanda',
+      is_active: account.active !== false && account.status !== 'Inactive',
       updated_at: new Date().toISOString()
-    }, { onConflict: 'id' });
+    };
+    if (account.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(account.id)) {
+      row.id = account.id;
+    }
+    await supabase.from('users').upsert(row, { onConflict: 'email' });
   } catch (err) {
-    console.warn('[Supabase] Save account error:', err);
+    console.warn('[Supabase] Save user error:', err);
   }
 }
 
