@@ -55,26 +55,6 @@ export const initialSettings: AppSettings = {
   "maintenanceTitle": "We'll Be Back Soon",
   "maintenanceMessage": "ContactReach Market is currently under scheduled maintenance. We will return online shortly.",
   "maintenanceEstimatedTime": "",
-  "cjConfig": {
-    "apiKey": "",
-    "email": "",
-    "autoUploadEnabled": false,
-    "syncFrequency": "daily",
-    "defaultMarkupPercent": 15,
-    "usdToRwfRate": 1435,
-    "autoPublish": true,
-    "selectedCategories": [],
-    "lastSyncStats": {
-      "uploadedCount": 0,
-      "updatedCount": 0,
-      "totalCjProducts": 0,
-      "timestamp": new Date().toISOString(),
-      "status": "idle",
-      "message": "Ready to synchronize with Supabase"
-    },
-    "lastSyncAt": new Date().toISOString(),
-    "requireAdminApproval": false
-  },
   "driveBackupStatus": {
     "status": "idle",
     "fileName": "ContactReach_Market_Products.json",
@@ -101,40 +81,6 @@ export const initialSettings: AppSettings = {
       "message": "Connected to Supabase"
     },
     "lastSyncAt": ""
-  },
-  "alibabaConfig": {
-    "appKey": "",
-    "hasAppKey": false,
-    "appSecret": "",
-    "hasAppSecret": false,
-    "accessToken": "",
-    "hasAccessToken": false,
-    "email": "contactreachmedialimited@gmail.com",
-    "autoUploadEnabled": false,
-    "syncFrequency": "daily",
-    "defaultMarkupPercent": 10,
-    "usdToRwfRate": 1435,
-    "autoPublish": true,
-    "requireAdminApproval": false,
-    "destinationCountry": "RW",
-    "destinationCity": "Kigali",
-    "destinationPostalCode": "00000",
-    "selectedCategories": [],
-    "lastSyncStats": {
-      "uploadedCount": 0,
-      "updatedCount": 0,
-      "totalAlibabaProducts": 0,
-      "timestamp": new Date().toISOString(),
-      "status": "idle",
-      "message": "All product data resides in Supabase"
-    }
-  },
-  "dsersConfig": {
-    "hasCredentials": false,
-    "isConnected": false,
-    "connectionStatus": "unconfigured",
-    "autoFulfillApprovedOrders": false,
-    "defaultShippingCarrier": "AliExpress Standard Shipping"
   },
   "supabaseConfig": {
     "enabled": true,
