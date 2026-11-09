@@ -750,7 +750,9 @@ loadDbFromDisk();
 // -------------------------------------------------------------
 // SUPABASE REAL-TIME PERSISTENCE WRITER
 // -------------------------------------------------------------
-async function saveToSupabaseAsync(entityType: string, docId: string, data: any) {
+async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
+  const data = arg3 !== undefined ? arg3 : arg2;
+  const docId = arg3 !== undefined ? String(arg2) : (data?.id ? String(data.id) : 'global');
   if (!data) return;
   try {
     if (entityType === 'orders' || entityType === 'order') {
@@ -1429,10 +1431,16 @@ export async function loadAllDataFromSupabase() {
   }
 }
 
-// Backward-compatible aliases
-const saveToFirestoreAsync = saveToSupabaseAsync;
-const deleteFromFirestoreAsync = deleteFromSupabaseAsync;
-const syncWithFirestore = loadAllDataFromSupabase;
+// Backward-compatible aliases (hoisted)
+function saveToFirestoreAsync(entityType: string, arg2: any, arg3?: any) {
+  return saveToSupabaseAsync(entityType, arg2, arg3);
+}
+function deleteFromFirestoreAsync(entityType: string, id: string) {
+  return deleteFromSupabaseAsync(entityType, id);
+}
+function syncWithFirestore() {
+  return loadAllDataFromSupabase();
+}
 
 // JSON middleware
 // Security Headers Middleware
