@@ -1,1031 +1,419 @@
 -- ==============================================================================
--- ContactReach Market — Comprehensive Supabase Database Schema
--- Project Name: contactreachmarket
--- Project ID: hfwfjbvwhkjfrdodqyyw
--- Project URL: https://hfwfjbvwhkjfrdodqyyw.supabase.co
--- ==============================================================================
--- INSTRUCTIONS FOR SUPABASE SQL EDITOR:
--- 1. Open your Supabase SQL Editor:
---    https://supabase.com/dashboard/project/hfwfjbvwhkjfrdodqyyw/sql/new
--- 2. Paste this entire script into the editor.
--- 3. Click "Run" (or press Ctrl+Enter).
--- This script is completely safe, idempotent, and non-destructive.
+-- ContactReach Market: Production Supabase Database Schema
+-- Project: ContactReach Market
+-- Database: Supabase PostgreSQL (hfwfjbvwhkjfrdodqyyw)
+-- Includes: Core Schema, Atomic Order & Payment Functions, Idempotent RLS Policies
 -- ==============================================================================
 
--- 0. Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+create extension if not exists pgcrypto;
+create extension if not exists "uuid-ossp";
 
 -- Helper function to automatically update updated_at timestamps
-CREATE OR REPLACE FUNCTION public.handle_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+create or replace function public.handle_updated_at()
+returns trigger as $$
+begin
+    new.updated_at = now();
+    return new;
+end;
+$$ language plpgsql;
 
--- ==============================================================================
--- 1. PROFILES & AUTHENTICATED USERS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID,
-    full_name TEXT NOT NULL DEFAULT 'Customer',
-    email TEXT UNIQUE,
-    phone TEXT,
-    role TEXT NOT NULL DEFAULT 'buyer',
-    avatar_url TEXT,
-    delivery_address TEXT,
-    city TEXT DEFAULT 'Kigali',
-    country TEXT DEFAULT 'Rwanda',
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- ---------- Staff & roles ----------
+create table if not exists staff_accounts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  role text not null check (role in ('owner','administrator','product_manager','shop_manager','order_manager','customer_support')),
+  full_name text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
 );
 
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all profiles" ON public.profiles;
-CREATE POLICY "Allow public all profiles" ON public.profiles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- Legacy users/accounts table support
-CREATE TABLE IF NOT EXISTS public.users (
-    id TEXT PRIMARY KEY,
-    full_name TEXT NOT NULL DEFAULT 'User',
-    email TEXT UNIQUE,
-    phone TEXT,
-    role TEXT NOT NULL DEFAULT 'customer',
-    default_address TEXT,
-    city TEXT DEFAULT 'Kigali',
-    country TEXT DEFAULT 'Rwanda',
-    is_active BOOLEAN DEFAULT true,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all users" ON public.users;
-CREATE POLICY "Allow public all users" ON public.users FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.accounts (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE,
-    phone TEXT,
-    role TEXT NOT NULL DEFAULT 'buyer',
-    status TEXT NOT NULL DEFAULT 'Active',
-    active BOOLEAN DEFAULT true,
-    delivery_address TEXT,
-    total_orders INTEGER DEFAULT 0,
-    total_spent NUMERIC DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all accounts" ON public.accounts;
-CREATE POLICY "Allow public all accounts" ON public.accounts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 2. ADMIN ROLES & ADMIN USERS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.admin_roles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT UNIQUE NOT NULL,
-    description TEXT,
-    permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.admin_roles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all admin_roles" ON public.admin_roles;
-CREATE POLICY "Allow public all admin_roles" ON public.admin_roles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.admin_users (
-    id TEXT PRIMARY KEY,
-    profile_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    phone TEXT,
-    role TEXT NOT NULL DEFAULT 'administrator',
-    permissions JSONB DEFAULT '[]'::jsonb,
-    active BOOLEAN DEFAULT true,
-    last_login TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all admin_users" ON public.admin_users;
-CREATE POLICY "Allow public all admin_users" ON public.admin_users FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 3. CATEGORIES TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.categories (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    name_en TEXT,
-    name_rw TEXT,
-    name_fr TEXT,
-    slug TEXT,
-    icon TEXT DEFAULT 'Tag',
-    image_url TEXT,
-    description TEXT,
-    parent_id TEXT,
-    level INTEGER DEFAULT 1,
-    sort_order INTEGER DEFAULT 0,
-    is_active BOOLEAN DEFAULT true,
-    item_count INTEGER DEFAULT 0,
-    keywords JSONB DEFAULT '[]'::jsonb,
-    subcategories JSONB DEFAULT '[]'::jsonb,
-    subcategories_list JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all categories" ON public.categories;
-CREATE POLICY "Allow public all categories" ON public.categories FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 4. REGISTERED SHOPS & VENDORS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.shops (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    name_rw TEXT,
-    category TEXT DEFAULT 'all',
-    description TEXT,
-    location TEXT DEFAULT 'Kigali, Rwanda',
-    address TEXT,
-    phone TEXT,
-    email TEXT,
-    tin_number TEXT,
-    contact_person TEXT,
-    commission_rate NUMERIC DEFAULT 10,
-    payout_method TEXT DEFAULT 'MTN Mobile Money',
-    payout_account TEXT,
-    payout_receiver_name TEXT,
-    total_sales NUMERIC DEFAULT 0,
-    total_payouts_paid NUMERIC DEFAULT 0,
-    pending_payout NUMERIC DEFAULT 0,
-    logo TEXT DEFAULT 'ShoppingBag',
-    logo_url TEXT,
-    banner_color TEXT DEFAULT 'from-orange-500 to-amber-600',
-    banner_url TEXT,
-    rating REAL DEFAULT 5.0,
-    followers_count INTEGER DEFAULT 0,
-    is_verified BOOLEAN DEFAULT false,
-    is_recommended BOOLEAN DEFAULT false,
-    status TEXT DEFAULT 'Active',
-    is_active BOOLEAN DEFAULT true,
-    delivery_info TEXT,
-    categories JSONB DEFAULT '[]'::jsonb,
-    owner_name TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all shops" ON public.shops;
-CREATE POLICY "Allow public all shops" ON public.shops FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 5. PRODUCTS CATALOG TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.products (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    sku TEXT,
-    description TEXT,
-    price NUMERIC NOT NULL DEFAULT 0,
-    cost_price NUMERIC,
-    cost_overridden_by_admin BOOLEAN DEFAULT false,
-    commission_rate NUMERIC DEFAULT 10,
-    profit_margin NUMERIC DEFAULT 0,
-    discount_percent NUMERIC DEFAULT 0,
-    discount_price NUMERIC,
-    promo_start_date TIMESTAMPTZ,
-    promo_end_date TIMESTAMPTZ,
-    category TEXT NOT NULL DEFAULT 'clothing',
-    subcategory TEXT,
-    main_category_id TEXT,
-    sub_category_id TEXT,
-    category_name TEXT,
-    sub_category_name TEXT,
-    stock INTEGER NOT NULL DEFAULT 0,
-    image_url TEXT,
-    images JSONB DEFAULT '[]'::jsonb,
-    video_url TEXT,
-    youtube_url TEXT,
-    shop_name TEXT,
-    shop_id TEXT REFERENCES public.shops(id) ON DELETE SET NULL,
-    receiver_name TEXT,
-    receiver_phone TEXT,
-    payment_methods JSONB DEFAULT '[]'::jsonb,
-    merchant_code TEXT,
-    location TEXT DEFAULT 'Kigali, Rwanda',
-    delivery_info TEXT,
-    status TEXT NOT NULL DEFAULT 'Available',
-    is_featured BOOLEAN DEFAULT false,
-    is_new_arrival BOOLEAN DEFAULT false,
-    is_best_seller BOOLEAN DEFAULT false,
-    brand TEXT,
-    unit TEXT DEFAULT 'Piece',
-    shipping_cost NUMERIC DEFAULT 0,
-    specifications TEXT,
-    storage TEXT,
-    packaging_info TEXT,
-    attributes JSONB DEFAULT '[]'::jsonb,
-    variations JSONB DEFAULT '[]'::jsonb,
-    rating REAL DEFAULT 5.0,
-    reviews_count INTEGER DEFAULT 0,
-    source TEXT DEFAULT 'local',
-    cj_product_id TEXT,
-    cj_product_sku TEXT,
-    cj_original_cost_usd NUMERIC,
-    cj_last_sync_at TIMESTAMPTZ,
-    review_status TEXT DEFAULT 'Approved',
-    alibaba_product_id TEXT,
-    alibaba_item_url TEXT,
-    alibaba_supplier_name TEXT,
-    alibaba_supplier_location TEXT,
-    alibaba_moq INTEGER DEFAULT 1,
-    alibaba_weight_kg NUMERIC,
-    alibaba_dimensions_cm JSONB,
-    alibaba_original_cost_usd NUMERIC,
-    alibaba_shipping_cost_usd NUMERIC,
-    alibaba_shipping_cost_rwf NUMERIC,
-    alibaba_shipping_method TEXT,
-    alibaba_lead_time_days INTEGER,
-    alibaba_trade_assurance BOOLEAN DEFAULT true,
-    alibaba_verified_supplier BOOLEAN DEFAULT false,
-    alibaba_last_sync_at TIMESTAMPTZ,
-    ali_express_url TEXT,
-    supplier_variant TEXT,
-    supplier_sku TEXT,
-    supplier_product_url TEXT,
-    is_supplier_mapped BOOLEAN DEFAULT false,
-    last_verified_at TIMESTAMPTZ,
-    history JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all products" ON public.products;
-CREATE POLICY "Allow public all products" ON public.products FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 6. INVENTORY & INVENTORY TRANSACTIONS
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.inventory (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    product_id TEXT REFERENCES public.products(id) ON DELETE CASCADE,
-    stock_quantity INTEGER NOT NULL DEFAULT 0,
-    reserved_quantity INTEGER NOT NULL DEFAULT 0,
-    available_quantity INTEGER NOT NULL DEFAULT 0,
-    low_stock_threshold INTEGER NOT NULL DEFAULT 5,
-    location TEXT DEFAULT 'Kigali Main Warehouse',
-    last_restocked_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all inventory" ON public.inventory;
-CREATE POLICY "Allow public all inventory" ON public.inventory FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.inventory_logs (
-    id TEXT PRIMARY KEY,
-    product_id TEXT NOT NULL,
-    product_name TEXT,
-    transaction_type TEXT DEFAULT 'adjustment',
-    previous_stock INTEGER,
-    new_stock INTEGER,
-    change_amount INTEGER,
-    quantity_changed INTEGER,
-    reason TEXT,
-    admin_name TEXT,
-    performed_by TEXT,
-    timestamp TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.inventory_logs ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all inventory_logs" ON public.inventory_logs;
-CREATE POLICY "Allow public all inventory_logs" ON public.inventory_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.inventory_transactions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    product_id TEXT NOT NULL,
-    product_name TEXT,
-    transaction_type TEXT DEFAULT 'adjustment',
-    previous_stock INTEGER,
-    new_stock INTEGER,
-    change_amount INTEGER,
-    reason TEXT,
-    performed_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.inventory_transactions ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all inventory_transactions" ON public.inventory_transactions;
-CREATE POLICY "Allow public all inventory_transactions" ON public.inventory_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 7. ORDERS & ORDER ITEMS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.orders (
-    id TEXT PRIMARY KEY,
-    order_number TEXT UNIQUE NOT NULL,
-    tracking_token TEXT,
-    tracking_number TEXT,
-    tracking_carrier TEXT,
-    tracking_url TEXT,
-    tracking_added_at TIMESTAMPTZ,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    customer_email TEXT,
-    delivery_type TEXT DEFAULT 'delivery',
-    delivery_location TEXT DEFAULT 'Gasabo',
-    delivery_address TEXT,
-    delivery_notes TEXT,
-    items JSONB NOT NULL DEFAULT '[]'::jsonb,
-    subtotal NUMERIC DEFAULT 0,
-    delivery_fee NUMERIC DEFAULT 0,
-    shipping_cost NUMERIC DEFAULT 0,
-    discount_amount NUMERIC DEFAULT 0,
-    coupon_code TEXT,
-    total_amount NUMERIC NOT NULL DEFAULT 0,
-    commission_rate NUMERIC DEFAULT 10,
-    commission_earned NUMERIC DEFAULT 0,
-    supplier_payout_amount NUMERIC DEFAULT 0,
-    supplier_payout_status TEXT DEFAULT 'Pending',
-    supplier_fulfillment_status TEXT DEFAULT 'Pending',
-    supplier_payout_ref TEXT,
-    payment_method TEXT DEFAULT 'MTN Mobile Money',
-    receiver_name TEXT DEFAULT 'Ruth',
-    receiver_details TEXT DEFAULT '0780022600',
-    shop_name TEXT,
-    payment_status TEXT DEFAULT 'Pending Payment',
-    status TEXT DEFAULT 'New',
-    delivery_status TEXT DEFAULT 'Pending',
-    expected_delivery_date TIMESTAMPTZ,
-    supplier_name TEXT,
-    supplier_order_ref TEXT,
-    dispatch_date TIMESTAMPTZ,
-    stock_deducted BOOLEAN DEFAULT false,
-    assigned_courier TEXT,
-    courier_phone TEXT,
-    internal_notes TEXT,
-    user_id TEXT,
-    supplier_approval_status TEXT DEFAULT 'Pending Review',
-    supplier_approved_at TIMESTAMPTZ,
-    supplier_approved_by TEXT,
-    supplier_rejection_reason TEXT,
-    cj_fulfillment_status TEXT DEFAULT 'Not Applicable',
-    cj_fulfillment_approved_at TIMESTAMPTZ,
-    cj_fulfillment_approved_by TEXT,
-    cj_tracking_number TEXT,
-    alibaba_fulfillment_status TEXT DEFAULT 'Not Applicable',
-    alibaba_fulfillment_approved_at TIMESTAMPTZ,
-    alibaba_fulfillment_approved_by TEXT,
-    alibaba_order_ref TEXT,
-    alibaba_tracking_number TEXT,
-    alibaba_shipping_method TEXT,
-    status_history JSONB DEFAULT '[]'::jsonb,
-    payment_confirmation JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all orders" ON public.orders;
-CREATE POLICY "Allow public all orders" ON public.orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.order_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id TEXT NOT NULL,
-    product_id TEXT,
-    product_name TEXT NOT NULL,
-    unit_price NUMERIC NOT NULL DEFAULT 0,
-    quantity INTEGER NOT NULL DEFAULT 1,
-    line_total NUMERIC NOT NULL DEFAULT 0,
-    variation JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all order_items" ON public.order_items;
-CREATE POLICY "Allow public all order_items" ON public.order_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 8. DELIVERIES TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.deliveries (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id TEXT,
-    order_number TEXT NOT NULL,
-    tracking_number TEXT,
-    courier_name TEXT,
-    courier_phone TEXT,
-    delivery_address TEXT NOT NULL,
-    delivery_city TEXT DEFAULT 'Kigali',
-    delivery_district TEXT,
-    delivery_fee NUMERIC DEFAULT 0,
-    delivery_status TEXT NOT NULL DEFAULT 'Pending',
-    expected_delivery_date TIMESTAMPTZ,
-    actual_delivery_date TIMESTAMPTZ,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.deliveries ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all deliveries" ON public.deliveries;
-CREATE POLICY "Allow public all deliveries" ON public.deliveries FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 9. PAYMENTS & PAYMENT VERIFICATIONS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.payments (
-    id TEXT PRIMARY KEY,
-    order_id TEXT,
-    order_number TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    payment_phone TEXT,
-    amount NUMERIC NOT NULL DEFAULT 0,
-    amount_paid NUMERIC NOT NULL DEFAULT 0,
-    payment_method TEXT NOT NULL DEFAULT 'MTN Mobile Money',
-    transaction_id TEXT,
-    screenshot_url TEXT,
-    payment_proof_url TEXT,
-    confirmation_message TEXT,
-    verification_status TEXT DEFAULT 'Pending Verification',
-    verified_at TIMESTAMPTZ,
-    verified_by TEXT,
-    notes TEXT,
-    admin_notes TEXT,
-    is_duplicate_txn BOOLEAN DEFAULT false,
-    duplicate_order_numbers JSONB DEFAULT '[]'::jsonb,
-    flagged_suspicious BOOLEAN DEFAULT false,
-    suspicious_reason TEXT,
-    customer_notified BOOLEAN DEFAULT false,
-    notification_message TEXT,
-    verified_directly BOOLEAN DEFAULT false,
-    telecom_verified BOOLEAN DEFAULT false,
-    telecom_reference TEXT,
-    sender_name TEXT,
-    sender_phone TEXT,
-    submitted_at TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all payments" ON public.payments;
-CREATE POLICY "Allow public all payments" ON public.payments FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.payment_verifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    payment_id TEXT,
-    order_number TEXT NOT NULL,
-    verified_by TEXT NOT NULL,
-    verification_method TEXT DEFAULT 'manual',
-    telecom_reference TEXT,
-    amount_verified NUMERIC NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'Verified',
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.payment_verifications ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all payment_verifications" ON public.payment_verifications;
-CREATE POLICY "Allow public all payment_verifications" ON public.payment_verifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.payment_transactions (
-    id TEXT PRIMARY KEY,
-    order_id TEXT,
-    order_number TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    customer_email TEXT,
-    amount NUMERIC NOT NULL DEFAULT 0,
-    currency TEXT NOT NULL DEFAULT 'RWF',
-    payment_method TEXT NOT NULL,
-    provider TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'Pending',
-    provider_transaction_id TEXT,
-    financial_transaction_id TEXT,
-    idempotency_key TEXT,
-    checkout_url TEXT,
-    failure_reason TEXT,
-    verified_directly BOOLEAN DEFAULT false,
-    verified_at TIMESTAMPTZ,
-    telecom_status TEXT,
-    signature_verified BOOLEAN DEFAULT false,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all payment_transactions" ON public.payment_transactions;
-CREATE POLICY "Allow public all payment_transactions" ON public.payment_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 10. CUSTOMERS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.customers (
-    id TEXT PRIMARY KEY,
-    email TEXT,
-    phone TEXT,
-    name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'customer',
-    delivery_address TEXT,
-    default_address TEXT,
-    city TEXT DEFAULT 'Kigali',
-    country TEXT DEFAULT 'Rwanda',
-    total_orders INTEGER DEFAULT 0,
-    total_spent NUMERIC DEFAULT 0,
-    is_active BOOLEAN DEFAULT true,
-    status TEXT DEFAULT 'Active',
-    is_registered_buyer BOOLEAN DEFAULT true,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all customers" ON public.customers;
-CREATE POLICY "Allow public all customers" ON public.customers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 11. CONVERSATIONS & CUSTOMER MESSAGES TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.conversations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    customer_id TEXT,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT,
-    customer_email TEXT,
-    last_message TEXT,
-    unread_count INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'active',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all conversations" ON public.conversations;
-CREATE POLICY "Allow public all conversations" ON public.conversations FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.messages (
-    id TEXT PRIMARY KEY,
-    conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
-    customer_id TEXT,
-    name TEXT NOT NULL,
-    sender_name TEXT,
-    email TEXT,
-    sender_email TEXT,
-    phone TEXT,
-    sender_phone TEXT,
-    subject TEXT,
-    message TEXT NOT NULL,
-    order_number TEXT,
-    status TEXT DEFAULT 'unread',
-    read_at TIMESTAMPTZ,
-    replied_at TIMESTAMPTZ,
-    reply_note TEXT,
-    reply_message TEXT,
-    sender TEXT DEFAULT 'customer',
-    is_read_by_customer BOOLEAN DEFAULT false,
-    is_read_by_admin BOOLEAN DEFAULT false,
-    notification_type TEXT DEFAULT 'chat',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all messages" ON public.messages;
-CREATE POLICY "Allow public all messages" ON public.messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.customer_messages (
-    id TEXT PRIMARY KEY,
-    conversation_id UUID,
-    customer_id TEXT,
-    name TEXT NOT NULL,
-    phone TEXT,
-    email TEXT,
-    message TEXT NOT NULL,
-    order_number TEXT,
-    status TEXT DEFAULT 'unread',
-    reply_note TEXT,
-    sender TEXT DEFAULT 'customer',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.customer_messages ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all customer_messages" ON public.customer_messages;
-CREATE POLICY "Allow public all customer_messages" ON public.customer_messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 12. ISSUES & REPORTS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.customer_problems (
-    id TEXT PRIMARY KEY,
-    case_number TEXT,
-    order_number TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    customer_email TEXT,
-    category TEXT DEFAULT 'delivery_delay',
-    issue_type TEXT,
-    description TEXT NOT NULL,
-    priority TEXT DEFAULT 'medium',
-    status TEXT NOT NULL DEFAULT 'New',
-    assigned_to TEXT,
-    private_notes JSONB DEFAULT '[]'::jsonb,
-    admin_notes TEXT,
-    resolution TEXT,
-    resolved_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.customer_problems ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all customer_problems" ON public.customer_problems;
-CREATE POLICY "Allow public all customer_problems" ON public.customer_problems FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.issues (
-    id TEXT PRIMARY KEY,
-    case_number TEXT,
-    order_number TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    category TEXT DEFAULT 'delivery_delay',
-    description TEXT NOT NULL,
-    priority TEXT DEFAULT 'medium',
-    status TEXT NOT NULL DEFAULT 'New',
-    resolution TEXT,
-    resolved_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.issues ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all issues" ON public.issues;
-CREATE POLICY "Allow public all issues" ON public.issues FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.reports (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    report_type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT,
-    filters JSONB DEFAULT '{}'::jsonb,
-    generated_by TEXT,
-    file_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all reports" ON public.reports;
-CREATE POLICY "Allow public all reports" ON public.reports FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 13. SUPPLIERS & SOURCING TABLES
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.suppliers (
-    id TEXT PRIMARY KEY,
-    business_name TEXT NOT NULL,
-    owner_name TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    email TEXT,
-    tin_number TEXT,
-    location TEXT,
-    category TEXT,
-    description TEXT,
-    documents JSONB DEFAULT '[]'::jsonb,
-    status TEXT NOT NULL DEFAULT 'Pending',
-    reviewed_by TEXT,
-    reviewed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all suppliers" ON public.suppliers;
-CREATE POLICY "Allow public all suppliers" ON public.suppliers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.supplier_applications (
-    id TEXT PRIMARY KEY,
-    business_name TEXT NOT NULL,
-    owner_name TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    email TEXT,
-    tin_number TEXT,
-    location TEXT,
-    category TEXT,
-    description TEXT,
-    status TEXT NOT NULL DEFAULT 'Pending',
-    reviewed_by TEXT,
-    reviewed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.supplier_applications ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all supplier_applications" ON public.supplier_applications;
-CREATE POLICY "Allow public all supplier_applications" ON public.supplier_applications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.supplier_payouts (
-    id TEXT PRIMARY KEY,
-    shop_id TEXT,
-    shop_name TEXT,
-    order_id TEXT,
-    order_number TEXT,
-    order_total NUMERIC DEFAULT 0,
-    commission_rate NUMERIC DEFAULT 0.1,
-    commission_earned NUMERIC DEFAULT 0,
-    payout_amount NUMERIC DEFAULT 0,
-    status TEXT DEFAULT 'Pending',
-    payment_reference TEXT,
-    paid_at TIMESTAMPTZ,
-    approved_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.supplier_payouts ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all supplier_payouts" ON public.supplier_payouts;
-CREATE POLICY "Allow public all supplier_payouts" ON public.supplier_payouts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.supplier_products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    supplier_id TEXT,
-    product_id TEXT,
-    supplier_sku TEXT,
-    wholesale_price NUMERIC NOT NULL DEFAULT 0,
-    moq INTEGER DEFAULT 1,
-    lead_time_days INTEGER DEFAULT 3,
-    status TEXT DEFAULT 'active',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.supplier_products ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all supplier_products" ON public.supplier_products;
-CREATE POLICY "Allow public all supplier_products" ON public.supplier_products FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.supplier_imports (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    source TEXT NOT NULL,
-    imported_count INTEGER DEFAULT 0,
-    approved_count INTEGER DEFAULT 0,
-    rejected_count INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'completed',
-    error_details TEXT,
-    imported_by TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.supplier_imports ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all supplier_imports" ON public.supplier_imports;
-CREATE POLICY "Allow public all supplier_imports" ON public.supplier_imports FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.fulfillment_records (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id TEXT,
-    order_number TEXT NOT NULL,
-    provider TEXT NOT NULL,
-    supplier_order_ref TEXT,
-    tracking_number TEXT,
-    fulfillment_status TEXT DEFAULT 'Pending',
-    sync_status TEXT DEFAULT 'synced',
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.fulfillment_records ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all fulfillment_records" ON public.fulfillment_records;
-CREATE POLICY "Allow public all fulfillment_records" ON public.fulfillment_records FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 14. PROMO CODES & COUPONS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.coupons (
-    id TEXT PRIMARY KEY,
-    code TEXT UNIQUE NOT NULL,
-    discount_type TEXT NOT NULL DEFAULT 'percentage',
-    discount_value NUMERIC NOT NULL DEFAULT 0,
-    min_order_amount NUMERIC DEFAULT 0,
-    max_discount NUMERIC,
-    max_discount_amount NUMERIC,
-    expires_at TIMESTAMPTZ,
-    usage_limit INTEGER,
-    times_used INTEGER DEFAULT 0,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all coupons" ON public.coupons;
-CREATE POLICY "Allow public all coupons" ON public.coupons FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.promo_codes (
-    id TEXT PRIMARY KEY,
-    code TEXT UNIQUE NOT NULL,
-    discount_type TEXT NOT NULL DEFAULT 'percentage',
-    discount_value NUMERIC NOT NULL DEFAULT 0,
-    min_order_amount NUMERIC DEFAULT 0,
-    max_discount NUMERIC,
-    expires_at TIMESTAMPTZ,
-    usage_limit INTEGER,
-    times_used INTEGER DEFAULT 0,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.promo_codes ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all promo_codes" ON public.promo_codes;
-CREATE POLICY "Allow public all promo_codes" ON public.promo_codes FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.promo_code_usage (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    promo_code_id TEXT,
-    code TEXT NOT NULL,
-    order_id TEXT,
-    customer_id TEXT,
-    discount_applied NUMERIC NOT NULL DEFAULT 0,
-    used_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.promo_code_usage ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all promo_code_usage" ON public.promo_code_usage;
-CREATE POLICY "Allow public all promo_code_usage" ON public.promo_code_usage FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 15. AUDIT LOGS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.audit_logs (
-    id TEXT PRIMARY KEY,
-    admin_name TEXT,
-    admin_role TEXT,
-    action TEXT NOT NULL,
-    details TEXT,
-    entity_type TEXT,
-    entity_id TEXT,
-    timestamp TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all audit_logs" ON public.audit_logs;
-CREATE POLICY "Allow public all audit_logs" ON public.audit_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 16. STORE SETTINGS & CONFIGURATION TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.app_settings (
-    id TEXT PRIMARY KEY DEFAULT 'global',
-    market_name TEXT DEFAULT 'ContactReach Market',
-    company_name TEXT DEFAULT 'ContactReach Media Ltd',
-    slogan TEXT DEFAULT 'Discover Products. Pay Easily. Shop with Confidence.',
-    phone TEXT DEFAULT '+250780022600',
-    email TEXT DEFAULT 'contactreachmedialimited@gmail.com',
-    address TEXT DEFAULT 'KG 622 St, Fair View Plaza, Kigali, Rwanda',
-    receiver_name TEXT DEFAULT 'Ruth',
-    payment_number TEXT DEFAULT '0780022600',
-    merchant_code TEXT DEFAULT '2328354',
-    mtn_ussd_pattern TEXT DEFAULT '*182*1*1*0780022600*{AMOUNT}#',
-    airtel_ussd_pattern TEXT DEFAULT '*182*1*2*0780022600*{AMOUNT}#',
-    whats_app_number TEXT DEFAULT '+250780022600',
-    delivery_fee_kigali NUMERIC DEFAULT 1500,
-    delivery_fee_upcountry NUMERIC DEFAULT 3500,
-    free_delivery_threshold NUMERIC DEFAULT 50000,
-    outside_kigali_notice TEXT,
-    is_maintenance_mode BOOLEAN DEFAULT false,
-    maintenance_title TEXT,
-    maintenance_message TEXT,
-    maintenance_estimated_time TEXT,
-    maintenance_updated_at TIMESTAMPTZ,
-    socials JSONB DEFAULT '{}'::jsonb,
-    kigali_areas JSONB DEFAULT '[]'::jsonb,
-    cj_config JSONB DEFAULT '{}'::jsonb,
-    drive_backup_status JSONB DEFAULT '{}'::jsonb,
-    google_sheet_config JSONB DEFAULT '{}'::jsonb,
-    alibaba_config JSONB DEFAULT '{}'::jsonb,
-    dsers_config JSONB DEFAULT '{}'::jsonb,
-    supabase_config JSONB DEFAULT '{}'::jsonb,
-    settings_data JSONB DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all app_settings" ON public.app_settings;
-CREATE POLICY "Allow public all app_settings" ON public.app_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.store_settings (
-    id TEXT PRIMARY KEY DEFAULT 'global',
-    settings JSONB NOT NULL DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.store_settings ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all store_settings" ON public.store_settings;
-CREATE POLICY "Allow public all store_settings" ON public.store_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 17. NOTIFICATION LOGS & REVIEWS TABLE
--- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.notification_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    channel TEXT NOT NULL DEFAULT 'sms',
-    recipient TEXT NOT NULL,
-    subject TEXT,
-    message TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'sent',
-    error_message TEXT,
-    sent_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all notification_logs" ON public.notification_logs;
-CREATE POLICY "Allow public all notification_logs" ON public.notification_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.reviews (
-    id TEXT PRIMARY KEY,
-    product_id TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT,
-    rating REAL NOT NULL DEFAULT 5.0,
-    comment TEXT,
-    verified_purchase BOOLEAN DEFAULT false,
-    status TEXT DEFAULT 'approved',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all reviews" ON public.reviews;
-CREATE POLICY "Allow public all reviews" ON public.reviews FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE TABLE IF NOT EXISTS public.deleted_tombstones (
-    id TEXT PRIMARY KEY,
-    product_name TEXT,
-    deleted_by TEXT,
-    deleted_at TIMESTAMPTZ DEFAULT NOW(),
-    reason TEXT
-);
-
-ALTER TABLE public.deleted_tombstones ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public all deleted_tombstones" ON public.deleted_tombstones;
-CREATE POLICY "Allow public all deleted_tombstones" ON public.deleted_tombstones FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
--- ==============================================================================
--- 18. REALTIME REPLICATION PUBLICATION SETUP
--- ==============================================================================
-DO $$
-DECLARE
-    tbl text;
-    realtime_tables text[] := ARRAY[
-        'products', 'orders', 'payments', 'messages', 'customer_problems',
-        'categories', 'shops', 'coupons', 'inventory_logs', 'audit_logs',
-        'supplier_applications', 'supplier_payouts', 'app_settings'
-    ];
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-        FOREACH tbl IN ARRAY realtime_tables LOOP
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_publication_tables 
-                WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = tbl
-            ) THEN
-                BEGIN
-                    EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
-                EXCEPTION WHEN OTHERS THEN
-                    NULL;
-                END;
-            END IF;
-        END LOOP;
-    END IF;
-END;
+create or replace function is_staff(roles text[] default null) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from staff_accounts s
+    where s.user_id = auth.uid() and s.active
+      and (roles is null or s.role = any(roles)));
 $$;
 
--- ==============================================================================
--- 19. AUTOMATIC UPDATED_AT TRIGGERS
--- ==============================================================================
-DROP TRIGGER IF EXISTS trigger_products_updated_at ON public.products;
-CREATE TRIGGER trigger_products_updated_at BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+-- ---------- Customers & Profiles ----------
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  phone text unique,
+  delivery_address text,
+  created_at timestamptz not null default now()
+);
 
-DROP TRIGGER IF EXISTS trigger_categories_updated_at ON public.categories;
-CREATE TRIGGER trigger_categories_updated_at BEFORE UPDATE ON public.categories FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+-- ---------- Catalogue ----------
+create table if not exists categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text unique not null,
+  parent_id uuid references categories(id),
+  active boolean default true
+);
 
-DROP TRIGGER IF EXISTS trigger_shops_updated_at ON public.shops;
-CREATE TRIGGER trigger_shops_updated_at BEFORE UPDATE ON public.shops FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+create table if not exists shops (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  owner_user uuid references auth.users(id),
+  commission_pct numeric(5,2) not null default 10 check (commission_pct between 0 and 100),
+  active boolean default true
+);
 
-DROP TRIGGER IF EXISTS trigger_orders_updated_at ON public.orders;
-CREATE TRIGGER trigger_orders_updated_at BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+create table if not exists products (
+  id uuid primary key default gen_random_uuid(),
+  sku text unique,
+  name text not null,
+  description text,
+  category_id uuid references categories(id),
+  shop_id uuid references shops(id),
+  price_rwf integer not null check (price_rwf >= 0),
+  discount_pct numeric(5,2) not null default 0 check (discount_pct between 0 and 100),
+  stock integer not null default 0 check (stock >= 0),
+  images text[] default '{}',
+  variations jsonb default '{}',
+  featured boolean default false,
+  is_new boolean default false,
+  visible boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 
-DROP TRIGGER IF EXISTS trigger_app_settings_updated_at ON public.app_settings;
-CREATE TRIGGER trigger_app_settings_updated_at BEFORE UPDATE ON public.app_settings FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+create index if not exists products_cat_idx on products(category_id);
+create index if not exists products_name_idx on products using gin (to_tsvector('simple', name));
 
--- End of schema
+create table if not exists inventory_logs (
+  id bigserial primary key,
+  product_id uuid not null references products(id),
+  change integer not null,
+  reason text not null,
+  order_id uuid,
+  actor uuid,
+  created_at timestamptz default now()
+);
+
+-- ---------- Coupons ----------
+create table if not exists coupons (
+  code text primary key,
+  kind text not null check (kind in ('percent','fixed')),
+  value integer not null check (value > 0),
+  min_purchase_rwf integer default 0,
+  expires_at timestamptz,
+  usage_limit integer,
+  used_count integer not null default 0,
+  active boolean default true
+);
+
+-- ---------- Delivery zones ----------
+create table if not exists delivery_zones (
+  name text primary key,
+  fee_rwf integer not null check (fee_rwf >= 0),
+  eta text,
+  active boolean default true
+);
+
+insert into delivery_zones(name, fee_rwf, eta) values
+ ('Gasabo', 1500, 'Same Day / Next Day'),
+ ('Nyarugenge', 1500, 'Same Day / Next Day'),
+ ('Kicukiro', 1500, 'Same Day / Next Day'),
+ ('Kigali Express', 2500, '2-4 Hours'),
+ ('Outside Kigali', 3500, '1-2 Days'),
+ ('Store Pickup', 0, 'Instant at Office')
+on conflict (name) do nothing;
+
+-- ---------- Orders & payments ----------
+create sequence if not exists order_no_seq start 1000;
+
+create table if not exists orders (
+  id uuid primary key default gen_random_uuid(),
+  order_no text unique not null default ('CR-' || nextval('order_no_seq')),
+  user_id uuid references auth.users(id),
+  customer_name text not null,
+  phone text not null,
+  email text,
+  zone text references delivery_zones(name),
+  address text,
+  instructions text,
+  subtotal_rwf integer not null,
+  discount_rwf integer not null default 0,
+  delivery_fee_rwf integer not null default 0,
+  total_rwf integer not null,
+  coupon_code text,
+  payment_method text not null,
+  payment_status text not null default 'awaiting_payment' check (payment_status in
+    ('awaiting_payment','submitted','under_verification','verified','rejected','failed','refunded','partially_refunded')),
+  status text not null default 'new' check (status in
+    ('new','awaiting_payment','payment_submitted','payment_verified','confirmed','preparing',
+     'ready_for_delivery','dispatched','out_for_delivery','delivered','completed','cancelled','returned','refunded')),
+  tracking_ref text,
+  idempotency_key text unique,
+  created_at timestamptz default now()
+);
+
+create table if not exists order_items (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references orders(id) on delete cascade,
+  product_id uuid not null references products(id),
+  qty integer not null check (qty > 0),
+  unit_price_rwf integer not null,
+  variation jsonb default '{}'
+);
+
+create table if not exists payments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references orders(id),
+  transaction_id text,
+  payer_phone text,
+  amount_rwf integer,
+  paid_on date,
+  sms_text text,
+  evidence_paths text[] default '{}',
+  status text not null default 'submitted' check (status in ('submitted','under_verification','verified','rejected')),
+  reject_reason text,
+  verified_by uuid,
+  verified_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- Unique index: A transaction reference can only ever be verified once
+create unique index if not exists payments_verified_txn_uq
+  on payments(lower(transaction_id)) where status = 'verified' and transaction_id is not null;
+
+create table if not exists website_settings (
+  key text primary key,
+  value jsonb not null
+);
+
+create table if not exists audit_logs (
+  id bigserial primary key,
+  actor uuid,
+  action text not null,
+  entity text,
+  entity_id text,
+  detail jsonb,
+  created_at timestamptz default now()
+);
+
+-- ---------- Server-side order placement (prices never come from the browser) ----------
+create or replace function place_order(
+  p_items jsonb,            -- [{"product_id":"...","qty":2}]
+  p_name text,
+  p_phone text,
+  p_email text,
+  p_zone text,
+  p_address text,
+  p_instructions text,
+  p_method text,
+  p_coupon text default null,
+  p_idem text default null
+) returns orders
+language plpgsql security definer set search_path = public as $$
+declare
+  it jsonb;
+  prod products;
+  sub int := 0;
+  disc int := 0;
+  fee int := 0;
+  c coupons;
+  o orders;
+begin
+  if p_idem is not null then
+    select * into o from orders where idempotency_key = p_idem;
+    if found then return o; end if;
+  end if;
+
+  select fee_rwf into fee from delivery_zones where name = p_zone and active;
+  if fee is null then
+    fee := 1500; -- default Kigali delivery fee fallback
+  end if;
+
+  insert into orders(user_id, customer_name, phone, email, zone, address, instructions,
+    subtotal_rwf, total_rwf, payment_method, idempotency_key, status)
+  values (auth.uid(), p_name, p_phone, p_email, p_zone, p_address, p_instructions,
+    0, 0, p_method, p_idem, 'awaiting_payment') returning * into o;
+
+  for it in select * from jsonb_array_elements(p_items) loop
+    if (it->>'qty')::int <= 0 then raise exception 'Invalid quantity'; end if;
+    -- atomic stock decrement: fails if not enough stock (no overselling)
+    update products set stock = stock - (it->>'qty')::int, updated_at = now()
+      where id = (it->>'product_id')::uuid and visible and stock >= (it->>'qty')::int
+      returning * into prod;
+    if not found then raise exception 'Product unavailable or insufficient stock'; end if;
+
+    insert into order_items(order_id, product_id, qty, unit_price_rwf)
+      values (o.id, prod.id, (it->>'qty')::int,
+              round(prod.price_rwf * (1 - prod.discount_pct/100)));
+
+    insert into inventory_logs(product_id, change, reason, order_id, actor)
+      values (prod.id, -(it->>'qty')::int, 'order', o.id, auth.uid());
+
+    sub := sub + round(prod.price_rwf * (1 - prod.discount_pct/100))::int * (it->>'qty')::int;
+  end loop;
+
+  if p_coupon is not null then
+    select * into c from coupons where code = upper(p_coupon) and active
+      and (expires_at is null or expires_at > now())
+      and (usage_limit is null or used_count < usage_limit)
+      and sub >= coalesce(min_purchase_rwf,0) for update;
+    if found then
+      disc := case c.kind when 'percent' then sub * c.value / 100 else least(c.value, sub) end;
+      update coupons set used_count = used_count + 1 where code = c.code;
+      update orders set coupon_code = c.code where id = o.id;
+    end if;
+  end if;
+
+  update orders set subtotal_rwf = sub, discount_rwf = disc, delivery_fee_rwf = fee,
+    total_rwf = sub - disc + fee where id = o.id returning * into o;
+  return o;
+end $$;
+
+-- ---------- Customer submits payment evidence (does NOT verify) ----------
+create or replace function submit_payment(
+  p_order uuid,
+  p_txn text,
+  p_phone text,
+  p_amount int,
+  p_date date,
+  p_sms text,
+  p_paths text[] default '{}'
+) returns payments
+language plpgsql security definer set search_path = public as $$
+declare
+  pay payments;
+begin
+  if not exists (select 1 from orders where id = p_order and (user_id = auth.uid() or auth.uid() is null or user_id is null)) then
+    raise exception 'Not your order';
+  end if;
+
+  insert into payments(order_id, transaction_id, payer_phone, amount_rwf, paid_on, sms_text, evidence_paths)
+    values (p_order, p_txn, p_phone, p_amount, p_date, p_sms, coalesce(p_paths,'{}')) returning * into pay;
+
+  update orders set payment_status = 'submitted', status = 'payment_submitted' where id = p_order;
+  return pay;
+end $$;
+
+-- ---------- Staff verify / reject payment ----------
+create or replace function review_payment(
+  p_payment uuid,
+  p_approve boolean,
+  p_reason text default null
+) returns payments
+language plpgsql security definer set search_path = public as $$
+declare
+  pay payments;
+begin
+  if not is_staff(array['owner','administrator','order_manager']) then
+    raise exception 'Not authorised';
+  end if;
+
+  update payments set status = case when p_approve then 'verified' else 'rejected' end,
+    reject_reason = p_reason, verified_by = auth.uid(), verified_at = now()
+    where id = p_payment returning * into pay;
+
+  update orders set
+    payment_status = case when p_approve then 'verified' else 'rejected' end,
+    status = case when p_approve then 'payment_verified' else 'awaiting_payment' end
+    where id = pay.order_id;
+
+  insert into audit_logs(actor, action, entity, entity_id, detail)
+    values (auth.uid(), case when p_approve then 'payment_verified' else 'payment_rejected' end,
+            'payment', p_payment::text, jsonb_build_object('reason', p_reason));
+
+  return pay;
+end $$;
+
+-- ---------- Row Level Security Configuration ----------
+alter table staff_accounts enable row level security;
+alter table profiles enable row level security;
+alter table categories enable row level security;
+alter table shops enable row level security;
+alter table products enable row level security;
+alter table inventory_logs enable row level security;
+alter table coupons enable row level security;
+alter table delivery_zones enable row level security;
+alter table orders enable row level security;
+alter table order_items enable row level security;
+alter table payments enable row level security;
+alter table website_settings enable row level security;
+alter table audit_logs enable row level security;
+
+-- Idempotent RLS Policies (Safe to run repeatedly)
+drop policy if exists "staff read staff" on staff_accounts;
+create policy "staff read staff" on staff_accounts for select using (is_staff(array['owner','administrator']));
+
+drop policy if exists "owner manages staff" on staff_accounts;
+create policy "owner manages staff" on staff_accounts for all using (is_staff(array['owner'])) with check (is_staff(array['owner']));
+
+drop policy if exists "own profile" on profiles;
+create policy "own profile" on profiles for all using (id = auth.uid()) with check (id = auth.uid());
+
+drop policy if exists "staff read profiles" on profiles;
+create policy "staff read profiles" on profiles for select using (is_staff());
+
+drop policy if exists "public read categories" on categories;
+create policy "public read categories" on categories for select using (active or is_staff());
+
+drop policy if exists "public read shops" on shops;
+create policy "public read shops" on shops for select using (active or is_staff());
+
+drop policy if exists "public read products" on products;
+create policy "public read products" on products for select using (visible or is_staff());
+
+drop policy if exists "staff write categories" on categories;
+create policy "staff write categories" on categories for all using (is_staff(array['owner','administrator','product_manager'])) with check (is_staff(array['owner','administrator','product_manager']));
+
+drop policy if exists "staff write shops" on shops;
+create policy "staff write shops" on shops for all using (is_staff(array['owner','administrator','shop_manager'])) with check (is_staff(array['owner','administrator','shop_manager']));
+
+drop policy if exists "staff write products" on products;
+create policy "staff write products" on products for all using (is_staff(array['owner','administrator','product_manager','shop_manager'])) with check (is_staff(array['owner','administrator','product_manager','shop_manager']));
+
+drop policy if exists "staff inventory logs" on inventory_logs;
+create policy "staff inventory logs" on inventory_logs for select using (is_staff());
+
+drop policy if exists "staff coupons" on coupons;
+create policy "staff coupons" on coupons for all using (is_staff(array['owner','administrator'])) with check (is_staff(array['owner','administrator']));
+
+drop policy if exists "public zones" on delivery_zones;
+create policy "public zones" on delivery_zones for select using (true);
+
+drop policy if exists "staff zones" on delivery_zones;
+create policy "staff zones" on delivery_zones for all using (is_staff(array['owner','administrator'])) with check (is_staff(array['owner','administrator']));
+
+drop policy if exists "own orders" on orders;
+create policy "own orders" on orders for select using (user_id = auth.uid());
+
+drop policy if exists "staff orders read" on orders;
+create policy "staff orders read" on orders for select using (is_staff());
+
+drop policy if exists "staff orders update" on orders;
+create policy "staff orders update" on orders for update using (is_staff(array['owner','administrator','order_manager'])) with check (is_staff(array['owner','administrator','order_manager']));
+
+drop policy if exists "own order items" on order_items;
+create policy "own order items" on order_items for select using (exists (select 1 from orders o where o.id = order_id and o.user_id = auth.uid()));
+
+drop policy if exists "staff order items" on order_items;
+create policy "staff order items" on order_items for select using (is_staff());
+
+drop policy if exists "own payments" on payments;
+create policy "own payments" on payments for select using (exists (select 1 from orders o where o.id = order_id and o.user_id = auth.uid()));
+
+drop policy if exists "staff payments" on payments;
+create policy "staff payments" on payments for select using (is_staff());
+
+drop policy if exists "public settings" on website_settings;
+create policy "public settings" on website_settings for select using (key not like 'private.%');
+
+drop policy if exists "staff settings" on website_settings;
+create policy "staff settings" on website_settings for all using (is_staff(array['owner','administrator'])) with check (is_staff(array['owner','administrator']));
+
+drop policy if exists "staff audit read" on audit_logs;
+create policy "staff audit read" on audit_logs for select using (is_staff(array['owner','administrator']));
+
+-- Grant execute on place_order to allow customer and guest order placement
+grant execute on function place_order to anon, authenticated;
+grant execute on function submit_payment to anon, authenticated;
+revoke execute on function review_payment from anon;
+
+-- Automatic updated_at trigger on products
+drop trigger if exists trigger_products_updated_at on public.products;
+create trigger trigger_products_updated_at before update on public.products for each row execute function public.handle_updated_at();

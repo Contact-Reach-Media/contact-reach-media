@@ -12,8 +12,8 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
   onSuccess,
   onReturnHome
 }) => {
-  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
-  const [password, setPassword] = useState('CRM@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +30,12 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
       const res = await api.adminLogin(email.trim(), password);
       onSuccess(res.admin);
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check administrator credentials.');
+      const msg = err?.message || '';
+      if (msg.includes('api-key-not-valid') || msg.includes('auth/')) {
+        setError('Invalid administrator credentials. Please check your email and password.');
+      } else {
+        setError(msg || 'Authentication failed. Please check administrator credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -53,7 +58,12 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
       });
       onSuccess(res.admin);
     } catch (err: any) {
-      setError(err.message || 'Google authentication failed. Please make sure your account is an authorized administrator.');
+      const msg = err?.message || '';
+      if (msg.includes('api-key-not-valid') || msg.includes('auth/')) {
+        setError('Authentication service notice: Please sign in below using your administrator email and password.');
+      } else {
+        setError(msg || 'Google authentication failed. Please make sure your account is an authorized administrator.');
+      }
     } finally {
       setLoading(false);
     }
@@ -74,28 +84,6 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
           <p className="text-xs text-slate-400 mt-1">
             Sign in with authorized administrator credentials to manage products, orders, categories, and settings.
           </p>
-        </div>
-
-        {/* Quick Fill Credentials Banner */}
-        <div className="mb-5 p-3 rounded-2xl bg-orange-950/40 border border-orange-600/40 flex items-center justify-between gap-3 text-xs">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-bold text-orange-300">Default Owner Account</span>
-            </div>
-            <p className="text-[11px] text-slate-300 font-mono truncate mt-0.5">contactreachmedialimited@gmail.com</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('contactreachmedialimited@gmail.com');
-              setPassword('CRM@2026');
-            }}
-            className="px-3 py-1 bg-orange-600 hover:bg-orange-500 text-white text-[11px] font-black rounded-xl shadow-xs transition-transform active:scale-95 shrink-0 cursor-pointer flex items-center gap-1"
-          >
-            <Sparkles className="w-3 h-3 text-amber-300" />
-            <span>Fill CRM@2026</span>
-          </button>
         </div>
 
         {/* Error Alert */}
@@ -143,7 +131,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="contactreachmedialimited@gmail.com"
+                placeholder="Enter administrator email"
                 className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none"
               />
               <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -160,7 +148,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="CRM@2026"
+                placeholder="••••••••••••"
                 className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none"
               />
               <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />

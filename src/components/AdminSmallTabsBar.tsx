@@ -150,27 +150,6 @@ export const AdminSmallTabsBar: React.FC<AdminSmallTabsBarProps> = ({
       group: 'sourcing',
     },
     {
-      id: 'alibaba',
-      label: 'Alibaba Wholesale',
-      shortLabel: 'Alibaba',
-      icon: Globe,
-      group: 'sourcing',
-    },
-    {
-      id: 'cjdropshipping',
-      label: 'CJ Dropshipping',
-      shortLabel: 'CJ Drop',
-      icon: RefreshCw,
-      group: 'sourcing',
-    },
-    {
-      id: 'dsers',
-      label: 'DSers Fulfillment',
-      shortLabel: 'DSers',
-      icon: Globe,
-      group: 'sourcing',
-    },
-    {
       id: 'messages',
       label: 'Customer Chat & SMS',
       shortLabel: 'Chat',

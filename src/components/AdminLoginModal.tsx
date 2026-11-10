@@ -14,7 +14,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onLoginSuccess
 }) => {
-  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       onLoginSuccess(res.admin);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Google authentication failed. Please make sure your account is an authorized administrator.');
+      const msg = err?.message || '';
+      if (msg.includes('api-key-not-valid') || msg.includes('auth/')) {
+        setError('Authentication service notice: Please sign in below using your administrator email and password.');
+      } else {
+        setError(msg || 'Google authentication failed. Please make sure your account is an authorized administrator.');
+      }
     } finally {
       setLoading(false);
     }
@@ -63,7 +68,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       onLoginSuccess(res.admin);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please verify administrator credentials.');
+      const msg = err?.message || '';
+      if (msg.includes('api-key-not-valid') || msg.includes('auth/')) {
+        setError('Invalid administrator credentials. Please verify your email and password.');
+      } else {
+        setError(msg || 'Authentication failed. Please verify administrator credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -150,46 +160,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 </div>
               </div>
 
-              {/* Quick Fill for Primary System Owner (contactreachmedialimited@gmail.com) */}
-              <div className="space-y-2 mb-4">
-                <div className="p-3 rounded-2xl bg-orange-50 border-2 border-orange-300/80 flex items-center justify-between gap-3 shadow-2xs">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#FF6000]" />
-                      <p className="text-xs font-black text-slate-900 truncate">ContactReach Media Ltd (Owner)</p>
-                    </div>
-                    <p className="text-[11px] text-[#FF6000] font-mono font-bold truncate mt-0.5">contactreachmedialimited@gmail.com</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('contactreachmedialimited@gmail.com');
-                      setPassword('CRM@2026');
-                    }}
-                    className="px-3.5 py-1.5 bg-[#FF6000] hover:bg-orange-600 text-white text-xs font-black rounded-xl shadow-xs transition-transform active:scale-95 shrink-0 cursor-pointer"
-                  >
-                    Auto-Fill
-                  </button>
-                </div>
-
-                <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-700 truncate">Thierry Maniriho (Platform Owner)</p>
-                    <p className="text-[10px] text-slate-500 font-mono truncate">manirihocoss@gmail.com</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('manirihocoss@gmail.com');
-                      setPassword('CRM@2026');
-                    }}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-bold rounded-lg border border-slate-300 transition-colors shrink-0 cursor-pointer"
-                  >
-                    Auto-Fill
-                  </button>
-                </div>
-              </div>
-
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -201,7 +171,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="contactreachmedialimited@gmail.com"
+                      placeholder="Enter administrator email"
                       autoComplete="email"
                       className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500 bg-slate-50/50"
                     />

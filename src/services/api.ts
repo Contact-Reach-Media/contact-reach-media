@@ -1137,9 +1137,16 @@ export const api = {
       }
 
       if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
+        const rawErr = parsed.json.error;
+        if (rawErr.includes('api-key-not-valid') || rawErr.includes('auth/')) {
+          throw new Error('Invalid administrator credentials. Please check your email and password.');
+        }
+        throw new Error(rawErr);
       }
     } catch (err: any) {
+      if (err.message?.includes('api-key-not-valid') || err.message?.includes('auth/')) {
+        throw new Error('Invalid administrator credentials. Please verify your email and password.');
+      }
       if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
         throw err;
       }
@@ -1152,7 +1159,7 @@ export const api = {
     const cleanEmail = (user.email || '').trim();
 
     try {
-      let res = await fetch('/api/auth/google-login', {
+      const res = await fetch('/api/auth/google-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1162,18 +1169,6 @@ export const api = {
           idToken: user.idToken
         })
       });
-      if (res.status === 404) {
-        res = await fetch('/api/auth/firebase-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            displayName: user.displayName,
-            uid: user.uid,
-            idToken: user.idToken
-          })
-        });
-      }
       const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
 
       if (res.ok && parsed.isJson && parsed.json?.token) {
@@ -1182,9 +1177,16 @@ export const api = {
       }
 
       if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
+        const rawErr = parsed.json.error;
+        if (rawErr.includes('api-key-not-valid') || rawErr.includes('auth/')) {
+          throw new Error('Please sign in below using your administrator email and password.');
+        }
+        throw new Error(rawErr);
       }
     } catch (fetchErr: any) {
+      if (fetchErr.message?.includes('api-key-not-valid') || fetchErr.message?.includes('auth/')) {
+        throw new Error('Please sign in below using your administrator email and password.');
+      }
       if (fetchErr.message && !fetchErr.message.includes('API endpoint') && !fetchErr.message.includes('fetch')) {
         throw fetchErr;
       }

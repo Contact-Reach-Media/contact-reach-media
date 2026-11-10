@@ -16,7 +16,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   onLoginSuccess,
   onNavigateHome
 }) => {
-  const [email, setEmail] = useState('contactreachmedialimited@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +40,12 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
       }
     } catch (err: any) {
       console.error('Admin password login error:', err);
-      setError(err.message || 'Invalid administrative credentials. Please verify your credentials.');
+      const msg = err?.message || '';
+      if (msg.includes('api-key-not-valid') || msg.includes('auth/')) {
+        setError('Invalid administrative credentials. Please verify your email and password.');
+      } else {
+        setError(msg || 'Invalid administrative credentials. Please verify your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -68,7 +73,12 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
       }
     } catch (err: any) {
       console.error('Google admin login error:', err);
-      setError(err.message || 'Google administrative sign-in failed.');
+      const msg = err?.message || '';
+      if (msg.includes('api-key-not-valid') || msg.includes('auth/')) {
+        setError('Authentication service notice: Please sign in below using your administrator email and password.');
+      } else {
+        setError(msg || 'Google administrative sign-in failed.');
+      }
     } finally {
       setLoading(false);
     }
@@ -158,7 +168,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contactreachmedialimited@gmail.com"
+                  placeholder="Enter administrator email"
                   required
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs"
                 />
