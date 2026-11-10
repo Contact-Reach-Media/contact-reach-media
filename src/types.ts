@@ -419,6 +419,30 @@ export interface AppSettings {
   dsersConfig?: DsersConfig;
   // Supabase Database Integration
   supabaseConfig?: SupabaseConfig;
+  // Global Language & Currency Configuration
+  defaultCurrency?: string;
+  supportedCurrencies?: string[];
+  defaultLanguage?: string;
+  supportedLanguages?: string[];
+  googleTranslateApiKey?: string;
+  hasGoogleTranslateKey?: boolean;
+  currencyApiKey?: string;
+  hasCurrencyApiKey?: boolean;
+  currencyProvider?: string;
+  exchangeRateStatus?: {
+    lastUpdated?: string;
+    source?: 'live' | 'fallback';
+    provider?: string;
+    baseCurrency?: string;
+    ratesCount?: number;
+    error?: string;
+  };
+  translationStatus?: {
+    provider?: string;
+    status?: 'active' | 'configured' | 'error';
+    cachedItemsCount?: number;
+    lastTranslatedAt?: string;
+  };
 }
 
 export interface SupabaseConfig {

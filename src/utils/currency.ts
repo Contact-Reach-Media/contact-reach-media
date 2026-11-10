@@ -133,7 +133,7 @@ export const FALLBACK_RATES: Record<CurrencyCode, number> = {
 export const DEFAULT_EXCHANGE_RATES = FALLBACK_RATES;
 
 /**
- * Converts an amount in base Rwandan Francs (RWF) to the chosen target currency.
+ * Converts an amount in base Rwandan Francs (RWF) to the chosen target currency using live rates.
  */
 export function convertCurrency(
   amountInRwf: number,

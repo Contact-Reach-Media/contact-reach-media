@@ -435,6 +435,20 @@ export const api = {
     };
   },
 
+  // Admin Manual Refresh of Live Exchange Rates
+  async refreshExchangeRates(): Promise<{ success: boolean; rates?: Record<string, number>; source?: string; updatedAt?: string; message?: string }> {
+    try {
+      const res = await fetch('/api/admin/exchange-rates/refresh', { method: 'POST' });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+      return { success: false, message: 'Failed to refresh rates' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Network error refreshing rates' };
+    }
+  },
+
   // Public Categories
   async getCategories(): Promise<Category[]> {
     try {

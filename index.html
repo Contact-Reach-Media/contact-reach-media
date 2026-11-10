@@ -70,8 +70,37 @@
       "priceRange": "FRW 500 - 500000"
     }
     </script>
+
+    <!-- Google Cloud Translation Element Styling (Clean UI, suppress Google banner) -->
+    <style>
+      .goog-te-banner-frame.skiptranslate,
+      .goog-te-banner-frame,
+      iframe.goog-te-banner-frame,
+      .goog-te-balloon-frame {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      body {
+        top: 0px !important;
+        position: static !important;
+      }
+      .goog-tooltip,
+      .goog-tooltip:hover {
+        display: none !important;
+      }
+      .goog-text-highlight {
+        background-color: transparent !important;
+        box-shadow: none !important;
+      }
+      #goog-gt-tt,
+      .goog-te-spinner-pos {
+        display: none !important;
+      }
+    </style>
   </head>
   <body class="font-sans antialiased text-slate-800 bg-[#F8F9FA]">
+    <!-- Hidden Google Website Translation Element for DOM Translation Engine -->
+    <div id="google_translate_element" style="display:none;" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

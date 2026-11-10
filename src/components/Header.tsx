@@ -8,6 +8,7 @@ import { Language, translations, SUPPORTED_LANGUAGES, LanguageOption } from '../
 import { CurrencyCode, SUPPORTED_CURRENCIES, CurrencyOption } from '../utils/currency.ts';
 import { Product, CustomerUser } from '../types.ts';
 import { MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
+import { SearchableLanguageModal } from './SearchableLanguageModal.tsx';
 
 interface HeaderProps {
   currentLang: Language;
@@ -67,6 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [currDropdownOpen, setCurrDropdownOpen] = useState(false);
   const [showLiveSuggestions, setShowLiveSuggestions] = useState(false);
+  const [isLangModalOpen, setIsLangModalOpen] = useState(false);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const langDropdownRef = useRef<HTMLDivElement>(null);
@@ -174,11 +176,32 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               {langDropdownOpen && (
-                <div className="absolute top-full mt-1.5 z-50 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1 max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-1 text-slate-800 start-0">
-                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                    {t.selectLanguage} (10)
+                <div className="absolute top-full mt-1.5 z-50 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 max-h-96 overflow-y-auto animate-in fade-in slide-in-from-top-1 text-slate-800 start-0">
+                  <div className="px-3 py-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                    <span>Popular Languages</span>
+                    <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-mono">134+ Live</span>
                   </div>
-                  {SUPPORTED_LANGUAGES.map((langItem) => {
+
+                  {/* Reset to Original English */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onLanguageChange('en');
+                      setLangDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-start transition-colors cursor-pointer border-b border-slate-100 ${
+                      currentLang === 'en' ? 'bg-orange-50 text-[#FF6000]' : 'text-slate-800 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-base leading-none">🇬🇧</span>
+                      <span>Original (English)</span>
+                    </span>
+                    {currentLang === 'en' && <Check className="w-3.5 h-3.5 text-[#FF6000]" />}
+                  </button>
+
+                  {/* Quick Popular Languages */}
+                  {SUPPORTED_LANGUAGES.filter(l => l.popular && l.code !== 'en').map((langItem) => {
                     const isSelected = currentLang === langItem.code;
                     return (
                       <button
@@ -188,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
                           onLanguageChange(langItem.code);
                           setLangDropdownOpen(false);
                         }}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-start hover:bg-orange-50 hover:text-[#FF6000] transition-colors cursor-pointer ${
+                        className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-start hover:bg-orange-50 hover:text-[#FF6000] transition-colors cursor-pointer ${
                           isSelected ? 'bg-orange-50 text-[#FF6000] font-bold' : 'text-slate-700'
                         }`}
                       >
@@ -201,6 +224,21 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     );
                   })}
+
+                  {/* Open All 134+ Languages Search Modal */}
+                  <div className="pt-1.5 mt-1 border-t border-slate-100 px-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLangDropdownOpen(false);
+                        setIsLangModalOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                    >
+                      <Search className="w-3.5 h-3.5 text-orange-400" />
+                      <span>Search All 134+ Languages...</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -659,17 +697,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <Globe className="w-3.5 h-3.5 text-[#FF6000]" />
                   <span>{t.language}:</span>
                 </span>
-                <select
-                  value={currentLang}
-                  onChange={(e) => onLanguageChange(e.target.value as Language)}
-                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setIsLangModalOpen(true);
+                  }}
+                  className="bg-white border border-slate-300 hover:border-orange-400 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 flex items-center gap-1.5 shadow-2xs cursor-pointer"
                 >
-                  {SUPPORTED_LANGUAGES.map((l) => (
-                    <option key={l.code} value={l.code}>
-                      {l.flag} {l.nativeName} ({l.name})
-                    </option>
-                  ))}
-                </select>
+                  <span>{currentLangObj.flag}</span>
+                  <span>{currentLangObj.nativeName}</span>
+                  <span className="text-[10px] text-orange-600 font-extrabold uppercase">134+</span>
+                </button>
               </div>
 
               <div className="flex items-center justify-between text-xs font-bold text-slate-700">
@@ -812,6 +851,14 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Searchable Worldwide Language Modal */}
+      <SearchableLanguageModal
+        isOpen={isLangModalOpen}
+        onClose={() => setIsLangModalOpen(false)}
+        currentLang={currentLang}
+        onSelectLanguage={onLanguageChange}
+      />
     </header>
   );
 };

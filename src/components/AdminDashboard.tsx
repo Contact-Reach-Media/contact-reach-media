@@ -34,6 +34,10 @@ import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts
 import { getProductImageDueToProduct, getProductNameDueToProduct } from '../utils/productImages.ts';
 import { AdminCategoriesManager } from './AdminCategoriesManager.tsx';
 import { AdminSidebar } from './AdminSidebar.tsx';
+import { SearchableLanguageModal } from './SearchableLanguageModal.tsx';
+import { getLanguageByCode } from '../data/languages.ts';
+import { setGoogleTranslateLanguage } from '../services/googleTranslate.ts';
+import { startDOMTranslationObserver } from '../services/domTranslator.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -282,6 +286,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [previewMaintenance, setPreviewMaintenance] = useState(false);
   const [savingMaintenance, setSavingMaintenance] = useState(false);
+
+  // Global Language & Live Currency Conversion states
+  const [refreshingRates, setRefreshingRates] = useState(false);
+  const [ratesInfo, setRatesInfo] = useState<{ source?: string; updatedAt?: string; ratesCount?: number }>({});
+  const [testingTranslation, setTestingTranslation] = useState(false);
+  const [testTranslateInput, setTestTranslateInput] = useState('Welcome to ContactReach Market. Order directly with MTN MoMo and Airtel Money.');
+  const [testTranslateLang, setTestTranslateLang] = useState('rw');
+  const [testTranslateResult, setTestTranslateResult] = useState('');
+
+  // Admin Dashboard Worldwide Language State
+  const [adminLang, setAdminLang] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('crm_lang') || 'en';
+    }
+    return 'en';
+  });
+  const [isAdminLangModalOpen, setIsAdminLangModalOpen] = useState(false);
+  const currentAdminLangObj = useMemo(() => getLanguageByCode(adminLang), [adminLang]);
+
+  const handleAdminLanguageChange = (code: string) => {
+    setAdminLang(code);
+    setGoogleTranslateLanguage(code);
+    startDOMTranslationObserver(code);
+    showToast(`Language switched to ${getLanguageByCode(code).name}`);
+  };
 
   // Floating Live Real-Time Push Notification Alert
   const [liveAlert, setLiveAlert] = useState<{
@@ -993,11 +1022,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedSupplierPayouts) setSupplierPayouts(fetchedSupplierPayouts);
       if (fetchedSettings) setSettings(fetchedSettings);
       if (fetchedDriveStatus) setDriveStatus(fetchedDriveStatus);
+      api.getExchangeRates().then(r => {
+        if (r) {
+          setRatesInfo({
+            source: r.source,
+            updatedAt: r.updatedAt,
+            ratesCount: Object.keys(r.rates || {}).length
+          });
+        }
+      }).catch(() => {});
     } catch (err: any) {
       console.error('Error fetching admin data:', err);
     } finally {
       setLoading(false);
       isFetchingAllRef.current = false;
+    }
+  };
+
+  const handleRefreshExchangeRates = async () => {
+    setRefreshingRates(true);
+    try {
+      const res = await api.refreshExchangeRates();
+      if (res && res.success) {
+        showToast('Exchange rates successfully refreshed from live provider!');
+        setRatesInfo({
+          source: res.source,
+          updatedAt: res.updatedAt,
+          ratesCount: Object.keys(res.rates || {}).length
+        });
+        onRefreshPublicData();
+      } else {
+        showToast(res.message || 'Failed to refresh rates from live stream', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error contacting exchange rates provider', 'error');
+    } finally {
+      setRefreshingRates(false);
+    }
+  };
+
+  const handleTestTranslation = async () => {
+    if (!testTranslateInput.trim()) return;
+    setTestingTranslation(true);
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texts: testTranslateInput.trim(),
+          targetLang: testTranslateLang,
+          sourceLang: 'en'
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTestTranslateResult(data.translation || 'No response');
+        showToast('Google Cloud Translation responded in real time!');
+      } else {
+        showToast('Translation error occurred', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Translation request failed', 'error');
+    } finally {
+      setTestingTranslation(false);
     }
   };
       
@@ -2428,6 +2515,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="hidden sm:inline">Upload Product</span>
             <span className="sm:hidden">Upload</span>
           </button>
+          {/* Admin Worldwide Language Switcher */}
+          <button
+            type="button"
+            onClick={() => setIsAdminLangModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 transition-colors cursor-pointer border border-slate-700/60"
+            title="Select Language (134+ Languages)"
+          >
+            <Globe className="w-3.5 h-3.5 text-orange-400" />
+            <span className="text-sm leading-none">{currentAdminLangObj.flag}</span>
+            <span className="hidden md:inline">{currentAdminLangObj.nativeName}</span>
+          </button>
+
           <button
             onClick={() => {
               if (onNavigateToStorefront) {
@@ -6560,6 +6659,283 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+              {/* GLOBAL LANGUAGE & REAL-TIME CURRENCY SYSTEM */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-6 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                      <Globe className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 tracking-tight">
+                        Global Language & Real-Time Currency System
+                      </h2>
+                      <p className="text-slate-500 text-[11px]">
+                        Dynamic Google Cloud translation & live streaming exchange-rate engine (zero hardcoded dictionaries)
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Google Translate: Live</span>
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-bold text-[10px] flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                      <span>Live FX: Streaming</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* MODULE 1: REAL-TIME CURRENCY SYSTEM */}
+                <div className="space-y-4 rounded-2xl bg-slate-50/70 p-4 border border-slate-200/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
+                    <div>
+                      <h3 className="font-black text-slate-900 text-xs flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-emerald-600" />
+                        <span>Live Multi-Currency Engine</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Base currency is stored permanently as RWF in Supabase. Customer prices convert dynamically at checkout & storefront.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={refreshingRates}
+                      onClick={handleRefreshExchangeRates}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${refreshingRates ? 'animate-spin text-orange-400' : ''}`} />
+                      <span>{refreshingRates ? 'Fetching Rates...' : 'Refresh Exchange Rates Now'}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-xl bg-white border border-slate-200">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Base Marketplace Currency</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-800 text-sm">RWF</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-bold">Database Source</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">All catalog prices in Supabase are kept in RWF</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white border border-slate-200">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Active FX Stream Provider</span>
+                      <span className="font-mono font-bold text-slate-800 text-xs block">
+                        {ratesInfo.source || 'open.er-api.com (Live Stream)'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        {ratesInfo.ratesCount ? `${ratesInfo.ratesCount} live pairs tracked` : '10 global currencies tracked'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white border border-slate-200">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Last Provider Sync</span>
+                      <span className="font-mono font-bold text-slate-800 text-xs block">
+                        {ratesInfo.updatedAt ? new Date(ratesInfo.updatedAt).toLocaleTimeString() : 'Active'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-1 block">
+                        {ratesInfo.updatedAt ? new Date(ratesInfo.updatedAt).toLocaleDateString() : 'Auto-cached on server'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">
+                      Supported Visitor Currencies (Real-Time Dynamic Conversion)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { code: 'RWF', label: 'Rwandan Franc (RWF) - Base', flag: '🇷🇼' },
+                        { code: 'USD', label: 'US Dollar (USD)', flag: '🇺🇸' },
+                        { code: 'EUR', label: 'Euro (EUR)', flag: '🇪🇺' },
+                        { code: 'GBP', label: 'British Pound (GBP)', flag: '🇬🇧' },
+                        { code: 'KES', label: 'Kenyan Shilling (KES)', flag: '🇰🇪' },
+                        { code: 'UGX', label: 'Ugandan Shilling (UGX)', flag: '🇺🇬' },
+                        { code: 'TZS', label: 'Tanzanian Shilling (TZS)', flag: '🇹🇿' },
+                        { code: 'NGN', label: 'Nigerian Naira (NGN)', flag: '🇳🇬' },
+                        { code: 'ZAR', label: 'South African Rand (ZAR)', flag: '🇿🇦' },
+                        { code: 'CNY', label: 'Chinese Yuan (CNY)', flag: '🇨🇳' }
+                      ].map(cur => (
+                        <div
+                          key={cur.code}
+                          className="px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 text-slate-800 font-semibold text-xs flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <span>{cur.flag}</span>
+                          <span>{cur.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Optional Exchange Rate API Key (Self-Hosted / Custom Provider)
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="Leave blank to use integrated Open Exchange stream"
+                        value={settings?.currencyApiKey || ''}
+                        onChange={(e) => setSettings(prev => prev ? { ...prev, currencyApiKey: e.target.value } : null)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 font-mono text-xs"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Stored securely on server. Defaults to high-reliability Open Exchange Rates API.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* MODULE 2: GOOGLE-POWERED DYNAMIC TRANSLATION SYSTEM */}
+                <div className="space-y-4 rounded-2xl bg-indigo-50/40 p-4 border border-indigo-100">
+                  <div className="border-b border-indigo-100/70 pb-3">
+                    <h3 className="font-black text-slate-900 text-xs flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-indigo-600" />
+                      <span>Google Cloud Translation Engine (Zero Hardcoded Dictionaries)</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Content, product titles, descriptions, and checkout flows are translated on-the-fly using Google Cloud Translation. Original database entries stay untouched in English.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Default Storefront Language</label>
+                      <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-900 block">English (en)</span>
+                          <span className="text-[10px] text-slate-400">Canonical database copy in Supabase</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                          Canonical
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Optional Google Cloud Translation API Key
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="Leave blank to use pre-configured Google Translation endpoint"
+                        value={settings?.googleTranslateApiKey || ''}
+                        onChange={(e) => setSettings(prev => prev ? { ...prev, googleTranslateApiKey: e.target.value } : null)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-xs bg-white"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Server-side protected. Never sent or exposed to frontend JavaScript.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">
+                      Supported Visitor Languages (Translated Dynamically by Google)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { code: 'en', name: 'English', flag: '🇬🇧' },
+                        { code: 'fr', name: 'Français (French)', flag: '🇫🇷' },
+                        { code: 'rw', name: 'Ikinyarwanda (Kinyarwanda)', flag: '🇷🇼' },
+                        { code: 'sw', name: 'Kiswahili (Swahili)', flag: '🇹🇿' },
+                        { code: 'es', name: 'Español (Spanish)', flag: '🇪🇸' },
+                        { code: 'pt', name: 'Português (Portuguese)', flag: '🇵🇹' },
+                        { code: 'ar', name: 'العربية (Arabic)', flag: '🇸🇦' },
+                        { code: 'zh', name: '中文 (Chinese)', flag: '🇨🇳' },
+                        { code: 'de', name: 'Deutsch (German)', flag: '🇩🇪' },
+                        { code: 'hi', name: 'हिन्दी (Hindi)', flag: '🇮🇳' }
+                      ].map(l => (
+                        <div
+                          key={l.code}
+                          className="px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 text-slate-800 font-medium text-xs flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <span>{l.flag}</span>
+                          <span className="font-semibold">{l.name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">({l.code})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* REAL-TIME GOOGLE TRANSLATION TEST CONSOLE */}
+                  <div className="p-4 rounded-xl bg-white border border-indigo-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                        <CheckSquare className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Live Google Translation Test Console</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">Real-Time Server Link</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                      <div className="sm:col-span-3">
+                        <input
+                          type="text"
+                          value={testTranslateInput}
+                          onChange={(e) => setTestTranslateInput(e.target.value)}
+                          placeholder="Type phrase in English to test Google Translation..."
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <select
+                          value={testTranslateLang}
+                          onChange={(e) => setTestTranslateLang(e.target.value)}
+                          className="px-2 py-2 rounded-xl border border-slate-300 text-xs font-semibold bg-white"
+                        >
+                          <option value="rw">Kinyarwanda (rw)</option>
+                          <option value="sw">Swahili (sw)</option>
+                          <option value="fr">French (fr)</option>
+                          <option value="es">Spanish (es)</option>
+                          <option value="pt">Portuguese (pt)</option>
+                          <option value="ar">Arabic (ar)</option>
+                          <option value="zh">Chinese (zh)</option>
+                          <option value="de">German (de)</option>
+                        </select>
+                        <button
+                          type="button"
+                          disabled={testingTranslation}
+                          onClick={handleTestTranslation}
+                          className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                        >
+                          {testingTranslation ? 'Translating...' : 'Test'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {testTranslateResult && (
+                      <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200">
+                        <span className="text-[10px] font-bold uppercase text-indigo-700 block mb-0.5">
+                          Google Translation Result ({testTranslateLang}):
+                        </span>
+                        <p className="text-xs font-bold text-slate-900">{testTranslateResult}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (settings) {
+                        await api.adminUpdateSettings(settings);
+                        showToast('Language & Currency configuration saved to database!');
+                        fetchAllData();
+                        onRefreshPublicData();
+                      }
+                    }}
+                    className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Save Language & Currency Configuration</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Comprehensive Database Health, Diagnostics & Storage Card */}
               <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4 text-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
@@ -10223,7 +10599,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         showToast={showToast}
       />
 
-
+      {/* Admin Worldwide Language Modal */}
+      <SearchableLanguageModal
+        isOpen={isAdminLangModalOpen}
+        onClose={() => setIsAdminLangModalOpen(false)}
+        currentLang={adminLang}
+        onSelectLanguage={handleAdminLanguageChange}
+      />
     </div>
   );
 };

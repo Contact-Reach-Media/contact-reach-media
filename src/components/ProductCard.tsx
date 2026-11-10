@@ -4,6 +4,7 @@ import { Product } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
+import { useProductTranslation } from '../services/translation.ts';
 
 interface ProductCardProps {
   product: Product;
@@ -29,6 +30,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   exchangeRates
 }) => {
   const t = translations[currentLang] || translations.en;
+  const translated = useProductTranslation(product, currentLang);
+  const displayName = translated.name || product.name;
 
   const hasDiscount = Boolean(
     (product.discountPercent !== undefined && product.discountPercent > 0) ||
@@ -142,9 +145,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Product Name - 2 lines clamp, medium text */}
           <h3
             className="text-xs sm:text-sm font-semibold text-slate-800 line-clamp-2 group-hover:text-[#FF6000] transition-colors leading-snug"
-            title={product.name}
+            title={displayName}
           >
-            {product.name}
+            {displayName}
           </h3>
 
           {/* Delivery Note */}

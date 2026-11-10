@@ -12,6 +12,7 @@ import { getYouTubeEmbedUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { useProductTranslation } from '../services/translation.ts';
 
 interface ProductDetailPageProps {
   product: Product | null;
@@ -41,6 +42,10 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   onToggleWishlist
 }) => {
   const t = translations[currentLang] || translations.en;
+  const translated = useProductTranslation(product, currentLang);
+  const displayName = translated.name || product?.name || '';
+  const displayDescription = translated.description || product?.description || '';
+  const displayCategory = translated.category || product?.category || '';
 
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'attributes' | 'description' | 'supplier' | 'reviews' | 'video'>('attributes');
@@ -199,10 +204,10 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             Shop
           </button>
           <span>/</span>
-          <span className="capitalize text-slate-700 font-semibold">{product.category}</span>
+          <span className="capitalize text-slate-700 font-semibold">{displayCategory}</span>
           <span>/</span>
-          <span className="text-slate-400 font-mono truncate max-w-[200px]" title={product.name}>
-            {product.name}
+          <span className="text-slate-400 font-mono truncate max-w-[200px]" title={displayName}>
+            {displayName}
           </span>
         </nav>
 
@@ -323,7 +328,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-[11px] font-bold capitalize">
-                    {product.category}
+                    {displayCategory}
                   </span>
                   {product.shopName && (
                     <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold flex items-center gap-1">
@@ -348,7 +353,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               {/* Title & SKU */}
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
-                  {product.name}
+                  {displayName}
                 </h1>
                 <div className="flex items-center gap-3 text-xs text-slate-500 mt-1.5 flex-wrap">
                   {product.sku && (
@@ -624,7 +629,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             {/* Tab 2: Description */}
             {activeTab === 'description' && (
               <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                <p className="whitespace-pre-line">{product.description || 'No detailed description provided for this product.'}</p>
+                <p className="whitespace-pre-line">{displayDescription || 'No detailed description provided for this product.'}</p>
               </div>
             )}
 

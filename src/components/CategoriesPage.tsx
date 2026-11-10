@@ -4,6 +4,12 @@ import {
 } from 'lucide-react';
 import { MAIN_CATEGORY_DEFINITIONS, MainCategoryDefinition } from '../data/categoryStructure.ts';
 import { Language } from '../translations.ts';
+import { useDynamicText } from '../services/translation.ts';
+
+const CategoryTitle: React.FC<{ text: string; lang: Language }> = ({ text, lang }) => {
+  const dynamic = useDynamicText(text, lang);
+  return <>{dynamic || text}</>;
+};
 
 interface CategoriesPageProps {
   onSelectCategory: (mainCatId: string, subCatId?: string, searchTag?: string) => void;
@@ -106,7 +112,9 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="truncate">{currentLang === 'en' ? cat.name : cat.nameRw}</span>
+                      <span className="truncate">
+                        <CategoryTitle text={cat.name} lang={currentLang} />
+                      </span>
                       <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                         isSelected ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-500'
                       }`}>
@@ -128,7 +136,7 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
                   Selected Department
                 </span>
                 <h2 className="text-xl font-black text-slate-900">
-                  {currentLang === 'en' ? activeCategory.name : activeCategory.nameRw}
+                  <CategoryTitle text={activeCategory.name} lang={currentLang} />
                 </h2>
               </div>
 

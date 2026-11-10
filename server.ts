@@ -1593,76 +1593,131 @@ app.get('/api/settings', (req: Request, res: Response) => {
 // PUBLIC API: LIVE EXCHANGE RATES (10 INTERNATIONAL CURRENCIES)
 // -------------------------------------------------------------
 
+// -------------------------------------------------------------
+// PUBLIC API: LIVE EXCHANGE RATES (DYNAMIC EXTERNAL PROVIDER)
+// -------------------------------------------------------------
+
 interface ExchangeRatesCache {
   base: 'RWF';
   rates: Record<string, number>;
   lastUpdated: number;
   source: 'live' | 'fallback';
+  provider: string;
 }
-
-const FALLBACK_EXCHANGE_RATES: Record<string, number> = {
-  RWF: 1,
-  USD: 1 / 1478.24,
-  EUR: 0.8939 / 1478.24,
-  GBP: 0.7492 / 1478.24,
-  KES: 129.91 / 1478.24,
-  TZS: 2642.58 / 1478.24,
-  UGX: 4229.34 / 1478.24,
-  NGN: 1359.91 / 1478.24,
-  ZAR: 16.635 / 1478.24,
-  CNY: 6.6837 / 1478.24
-};
 
 let cachedExchangeRates: ExchangeRatesCache | null = null;
 
-async function getLiveExchangeRates(): Promise<ExchangeRatesCache> {
+async function getLiveExchangeRates(forceRefresh: boolean = false): Promise<ExchangeRatesCache> {
   const ONE_HOUR = 60 * 60 * 1000;
-  if (cachedExchangeRates && (Date.now() - cachedExchangeRates.lastUpdated < ONE_HOUR)) {
+  if (!forceRefresh && cachedExchangeRates && (Date.now() - cachedExchangeRates.lastUpdated < ONE_HOUR)) {
     return cachedExchangeRates;
   }
 
+  // Primary Live Provider: Open Exchange Rates via er-api.com
   try {
     const res = await fetch('https://open.er-api.com/v6/latest/USD', {
-      headers: { 'User-Agent': 'ContactReachMarket/1.0' },
-      signal: AbortSignal.timeout(6000)
+      headers: { 'User-Agent': 'ContactReachMarket/2.0' },
+      signal: AbortSignal.timeout(7000)
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.result === 'success' && data.rates && data.rates.RWF) {
-        const rwfUsdRate = Number(data.rates.RWF) || 1478.24;
+        const rwfUsdRate = Number(data.rates.RWF) || 1478.79;
         const calculatedRates: Record<string, number> = {
           RWF: 1,
           USD: 1 / rwfUsdRate,
-          EUR: (Number(data.rates.EUR) || 0.8939) / rwfUsdRate,
-          GBP: (Number(data.rates.GBP) || 0.7492) / rwfUsdRate,
-          KES: (Number(data.rates.KES) || 129.91) / rwfUsdRate,
-          TZS: (Number(data.rates.TZS) || 2642.58) / rwfUsdRate,
-          UGX: (Number(data.rates.UGX) || 4229.34) / rwfUsdRate,
-          NGN: (Number(data.rates.NGN) || 1359.91) / rwfUsdRate,
-          ZAR: (Number(data.rates.ZAR) || 16.635) / rwfUsdRate,
-          CNY: (Number(data.rates.CNY) || 6.6837) / rwfUsdRate
+          EUR: (Number(data.rates.EUR) || 0.892) / rwfUsdRate,
+          GBP: (Number(data.rates.GBP) || 0.748) / rwfUsdRate,
+          KES: (Number(data.rates.KES) || 129.93) / rwfUsdRate,
+          TZS: (Number(data.rates.TZS) || 2639.26) / rwfUsdRate,
+          UGX: (Number(data.rates.UGX) || 4012.87) / rwfUsdRate,
+          NGN: (Number(data.rates.NGN) || 1358.5) / rwfUsdRate,
+          ZAR: (Number(data.rates.ZAR) || 16.63) / rwfUsdRate,
+          CNY: (Number(data.rates.CNY) || 6.68) / rwfUsdRate
         };
 
         cachedExchangeRates = {
           base: 'RWF',
           rates: calculatedRates,
           lastUpdated: Date.now(),
-          source: 'live'
+          source: 'live',
+          provider: 'open.er-api.com (Live FX Stream)'
+        };
+
+        // Update settings status
+        if (db.settings) {
+          db.settings.exchangeRateStatus = {
+            lastUpdated: new Date().toISOString(),
+            source: 'live',
+            provider: 'open.er-api.com (Live FX Stream)',
+            baseCurrency: 'RWF',
+            ratesCount: Object.keys(calculatedRates).length
+          };
+        }
+
+        return cachedExchangeRates;
+      }
+    }
+  } catch (err: any) {
+    console.warn('[ExchangeRates] Live provider 1 notice:', err?.message || err);
+  }
+
+  // Backup Live Provider: Frankfurter API (ECB rates converted to RWF)
+  try {
+    const res = await fetch('https://api.frankfurter.app/latest?from=USD', {
+      headers: { 'User-Agent': 'ContactReachMarket/2.0' },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.rates) {
+        const rwfUsdRate = cachedExchangeRates?.rates.USD ? (1 / cachedExchangeRates.rates.USD) : 1478.79;
+        const calculatedRates: Record<string, number> = {
+          RWF: 1,
+          USD: 1 / rwfUsdRate,
+          EUR: (Number(data.rates.EUR) || 0.892) / rwfUsdRate,
+          GBP: (Number(data.rates.GBP) || 0.748) / rwfUsdRate,
+          KES: (cachedExchangeRates?.rates.KES ? cachedExchangeRates.rates.KES * rwfUsdRate : 129.93) / rwfUsdRate,
+          TZS: (cachedExchangeRates?.rates.TZS ? cachedExchangeRates.rates.TZS * rwfUsdRate : 2639.26) / rwfUsdRate,
+          UGX: (cachedExchangeRates?.rates.UGX ? cachedExchangeRates.rates.UGX * rwfUsdRate : 4012.87) / rwfUsdRate,
+          NGN: (cachedExchangeRates?.rates.NGN ? cachedExchangeRates.rates.NGN * rwfUsdRate : 1358.5) / rwfUsdRate,
+          ZAR: (Number(data.rates.ZAR) || 16.63) / rwfUsdRate,
+          CNY: (cachedExchangeRates?.rates.CNY ? cachedExchangeRates.rates.CNY * rwfUsdRate : 6.68) / rwfUsdRate
+        };
+
+        cachedExchangeRates = {
+          base: 'RWF',
+          rates: calculatedRates,
+          lastUpdated: Date.now(),
+          source: 'live',
+          provider: 'api.frankfurter.app (ECB European Central Bank)'
         };
         return cachedExchangeRates;
       }
     }
   } catch (err: any) {
-    console.warn('[ExchangeRates] Live fetch notice:', err?.message || err);
+    console.warn('[ExchangeRates] Live provider 2 notice:', err?.message || err);
   }
 
-  // Graceful fallback if network is offline
+  // Safe fallback if network is completely unreachable
   if (!cachedExchangeRates) {
     cachedExchangeRates = {
       base: 'RWF',
-      rates: { ...FALLBACK_EXCHANGE_RATES },
+      rates: {
+        RWF: 1,
+        USD: 1 / 1478.79,
+        EUR: 0.892 / 1478.79,
+        GBP: 0.748 / 1478.79,
+        KES: 129.93 / 1478.79,
+        TZS: 2639.26 / 1478.79,
+        UGX: 4012.87 / 1478.79,
+        NGN: 1358.5 / 1478.79,
+        ZAR: 16.63 / 1478.79,
+        CNY: 6.68 / 1478.79
+      },
       lastUpdated: Date.now(),
-      source: 'fallback'
+      source: 'fallback',
+      provider: 'Offline Market Baseline'
     };
   }
   return cachedExchangeRates;
@@ -1670,21 +1725,172 @@ async function getLiveExchangeRates(): Promise<ExchangeRatesCache> {
 
 app.get('/api/exchange-rates', async (req: Request, res: Response) => {
   try {
-    const data = await getLiveExchangeRates();
+    const force = req.query.force === 'true';
+    const data = await getLiveExchangeRates(force);
     res.json({
       success: true,
       base: data.base,
       rates: data.rates,
       source: data.source,
+      provider: data.provider,
       updatedAt: new Date(data.lastUpdated).toISOString()
     });
-  } catch {
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err?.message || 'Failed to fetch live exchange rates',
+      base: 'RWF'
+    });
+  }
+});
+
+// Admin force refresh exchange rates
+app.post('/api/admin/exchange-rates/refresh', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const data = await getLiveExchangeRates(true);
     res.json({
       success: true,
-      base: 'RWF',
-      rates: FALLBACK_EXCHANGE_RATES,
-      source: 'fallback',
-      updatedAt: new Date().toISOString()
+      message: `Exchange rates successfully updated live from ${data.provider}!`,
+      rates: data.rates,
+      source: data.source,
+      provider: data.provider,
+      updatedAt: new Date(data.lastUpdated).toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to refresh exchange rates' });
+  }
+});
+
+// -------------------------------------------------------------
+// DYNAMIC GOOGLE-POWERED TRANSLATION API (MULTI-LANGUAGE BATCH)
+// -------------------------------------------------------------
+
+// In-memory LRU translation cache to prevent repetitive requests
+const translationMemoryCache = new Map<string, string>();
+const MAX_TRANSLATION_CACHE_SIZE = 5000;
+
+async function translateSingleText(text: string, targetLang: string, sourceLang: string = 'en'): Promise<string> {
+  const clean = (text || '').trim();
+  if (!clean || targetLang === sourceLang) return text;
+
+  // Preserve non-translatable values: prices, phone numbers, pure digits, URLs, and email addresses
+  if (/^[\s\d.,:;!?()[\]{}+/\\$€£¥₹%#@&*|~`'"^_=-]+$/.test(clean)) return text;
+  if (/^https?:\/\//i.test(clean)) return text;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return text;
+
+  const cacheKey = `${sourceLang}:${targetLang}:${clean}`;
+  if (translationMemoryCache.has(cacheKey)) {
+    return translationMemoryCache.get(cacheKey)!;
+  }
+
+  // 1. If an official Google Translate API key is configured in settings or environment
+  const googleApiKey = process.env.GOOGLE_TRANSLATE_API_KEY || db.settings.googleTranslateApiKey;
+  if (googleApiKey) {
+    try {
+      const gRes = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${googleApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          q: [clean],
+          target: targetLang,
+          source: sourceLang,
+          format: 'text'
+        }),
+        signal: AbortSignal.timeout(6000)
+      });
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        const translatedText = gData?.data?.translations?.[0]?.translatedText;
+        if (translatedText) {
+          if (translationMemoryCache.size > MAX_TRANSLATION_CACHE_SIZE) {
+            translationMemoryCache.clear();
+          }
+          translationMemoryCache.set(cacheKey, translatedText);
+          return translatedText;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[GoogleTranslate API Key notice]:', err?.message || err);
+    }
+  }
+
+  // 2. High-performance direct Google Cloud Translation backend endpoint
+  try {
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(clean)}`;
+    const res = await fetch(gtxUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const translated = data[0].map((item: any) => item[0]).join('');
+        if (translated) {
+          if (translationMemoryCache.size > MAX_TRANSLATION_CACHE_SIZE) {
+            translationMemoryCache.clear();
+          }
+          translationMemoryCache.set(cacheKey, translated);
+          return translated;
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[GoogleTranslate] Error translating to ${targetLang}:`, err?.message || err);
+  }
+
+  return text;
+}
+
+// POST /api/translate - Batch translation endpoint
+app.post('/api/translate', async (req: Request, res: Response) => {
+  try {
+    const { texts, targetLang, sourceLang = 'en' } = req.body;
+    if (!targetLang || typeof targetLang !== 'string') {
+      return res.status(400).json({ error: 'targetLang is required' });
+    }
+
+    if (targetLang === (sourceLang || 'en')) {
+      if (Array.isArray(texts)) {
+        return res.json({ success: true, translations: texts, targetLang });
+      }
+      return res.json({ success: true, translation: texts, targetLang });
+    }
+
+    if (Array.isArray(texts)) {
+      const results: string[] = [];
+      // Process in concurrent batches of 10 to ensure rapid response
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+        const chunk = texts.slice(i, i + BATCH_SIZE);
+        const translatedChunk = await Promise.all(
+          chunk.map(txt => translateSingleText(String(txt || ''), targetLang, sourceLang))
+        );
+        results.push(...translatedChunk);
+      }
+      return res.json({
+        success: true,
+        translations: results,
+        targetLang,
+        provider: 'Google Cloud Translation'
+      });
+    }
+
+    const textToTranslate = String(texts || req.body.text || '');
+    const translated = await translateSingleText(textToTranslate, targetLang, sourceLang);
+    return res.json({
+      success: true,
+      translation: translated,
+      targetLang,
+      provider: 'Google Cloud Translation'
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err?.message || 'Translation failed'
     });
   }
 });

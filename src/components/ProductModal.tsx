@@ -11,6 +11,7 @@ import { api } from '../services/api.ts';
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
+import { useProductTranslation } from '../services/translation.ts';
 
 interface ProductModalProps {
   product: Product | null;
@@ -37,6 +38,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   exchangeRates,
   onShareProduct
 }) => {
+  const translated = useProductTranslation(product, currentLang);
+  const displayName = translated.name || product?.name || '';
+  const displayDescription = translated.description || product?.description || '';
+  const displayCategory = translated.category || product?.category || '';
+
   const [quantity, setQuantity] = useState(1);
   const [pricingTab, setPricingTab] = useState<'wholesale' | 'customization'>('wholesale');
   const [activeTab, setActiveTab] = useState<'attributes' | 'description' | 'supplier' | 'reviews' | 'video'>('attributes');
@@ -488,7 +494,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               {/* Title & Sold Meta */}
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
-                  {product.name}
+                  {displayName}
                 </h1>
                 <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mt-1.5">
                   <div className="flex items-center text-amber-500">
@@ -502,7 +508,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   <span className="font-bold text-slate-700">1,221 sold</span>
                   <span>·</span>
                   <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">
-                    #1 Most popular in {product.category}
+                    #1 Most popular in {displayCategory}
                   </span>
                   <span>·</span>
                   <span
@@ -882,7 +888,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             {activeTab === 'description' && hasDescription && (
               <div className="space-y-4 text-xs">
                 <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
-                  {product.description}
+                  {displayDescription || product.description}
                 </div>
               </div>
             )}

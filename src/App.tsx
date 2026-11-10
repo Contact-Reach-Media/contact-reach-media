@@ -9,8 +9,17 @@ import {
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
 import { initialCategories, initialSettings } from './data/initialData.ts';
 import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
-import { Language, translations, getCategoryTitle } from './translations.ts';
+import {
+  Language,
+  translations,
+  getCategoryTitle,
+  loadLanguageTranslations,
+  subscribeToTranslationUpdates,
+  TranslationDictionary
+} from './translations.ts';
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
+import { initGoogleTranslateScript, setGoogleTranslateLanguage } from './services/googleTranslate.ts';
+import { startDOMTranslationObserver, restoreOriginalEnglish } from './services/domTranslator.ts';
 
 import { Header } from './components/Header.tsx';
 import { ProductCard } from './components/ProductCard.tsx';
@@ -123,10 +132,10 @@ function parseRouteFromLocation() {
   }
 
   // Persisted language preference
-  const storedLang = localStorage.getItem('crm_lang') as Language | null;
-  const resolvedLang = (langParam && SUPPORTED_LANG_CODES.includes(langParam as Language))
-    ? (langParam as Language)
-    : (storedLang && SUPPORTED_LANG_CODES.includes(storedLang) ? storedLang : 'en');
+  const storedLang = localStorage.getItem('crm_lang');
+  const resolvedLang: Language = (langParam && langParam.trim().length >= 2)
+    ? langParam.trim()
+    : (storedLang && storedLang.trim().length >= 2 ? storedLang.trim() : 'en');
 
   // Persisted currency preference
   const storedCurr = localStorage.getItem('crm_currency') as CurrencyCode | null;
@@ -267,7 +276,52 @@ export default function App() {
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const t = translations[currentLang];
+  // Dynamic Google-Powered Translations dictionary state
+  const [activeDictionary, setActiveDictionary] = useState<TranslationDictionary>(() => translations[currentLang]);
+
+  // One-time initialization of official Google Website Translation script
+  useEffect(() => {
+    initGoogleTranslateScript();
+
+    const handleExternalLangEvent = (e: any) => {
+      const code = e.detail?.lang;
+      if (code && code !== currentLang) {
+        setCurrentLang(code);
+      }
+    };
+    window.addEventListener('crm_language_changed', handleExternalLangEvent);
+    return () => {
+      window.removeEventListener('crm_language_changed', handleExternalLangEvent);
+    };
+  }, []);
+
+  // Synchronize Google Translate Element & Continuous DOM Translation Observer on language change
+  useEffect(() => {
+    setActiveDictionary(translations[currentLang]);
+    loadLanguageTranslations(currentLang).then(dict => {
+      setActiveDictionary(dict);
+    }).catch(() => {});
+
+    // Trigger Google Website Translation Element & DOM Text Observer
+    setGoogleTranslateLanguage(currentLang);
+    startDOMTranslationObserver(currentLang);
+
+    const unsubscribe = subscribeToTranslationUpdates((updatedLang, updatedDict) => {
+      if (updatedLang === currentLang) {
+        setActiveDictionary(updatedDict);
+      }
+    });
+    return () => unsubscribe();
+  }, [currentLang]);
+
+  const handleLanguageChange = (newLang: Language) => {
+    setCurrentLang(newLang);
+    setGoogleTranslateLanguage(newLang);
+    startDOMTranslationObserver(newLang);
+    loadLanguageTranslations(newLang).catch(() => {});
+  };
+
+  const t = activeDictionary || translations[currentLang];
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -735,7 +789,7 @@ export default function App() {
           {!(activeView === 'admin' && isAdminLoggedIn) && (
             <Header
               currentLang={currentLang}
-              onLanguageChange={setCurrentLang}
+              onLanguageChange={handleLanguageChange}
               currentCurrency={currentCurrency}
               onCurrencyChange={setCurrentCurrency}
               activeView={activeView}
