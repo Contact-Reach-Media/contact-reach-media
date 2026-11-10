@@ -109,16 +109,6 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
     }
   };
 
-  const handlePasteSampleSms = () => {
-    const mockTxn = `TXN${Math.floor(100000000 + Math.random() * 900000000)}`;
-    const sample = paymentMethod === 'Airtel Money'
-      ? `Airtel Money: You have sent ${amountPaid.toLocaleString()} RWF to Ruth (0780022600). TxId: ${mockTxn}. Fee: 0 RWF. New Balance: 45,000 RWF.`
-      : paymentMethod === 'MTN Merchant Code'
-      ? `Y'ello! You have paid ${amountPaid.toLocaleString()} RWF to ContactReach Market (2328354) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 0 RWF.`
-      : `Y'ello! You have transferred ${amountPaid.toLocaleString()} RWF to ContactReach Market / Ruth (0780022600) on ${new Date().toLocaleDateString()}. TxId: ${mockTxn}. Fee: 100 RWF. Your new balance: 52,400 RWF.`;
-    handleMessageChange(sample);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -505,14 +495,6 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
                           <FileText className="w-3.5 h-3.5 text-orange-600" />
                           <span>2. {currentLang === 'en' ? 'Paste Payment Confirmation Message' : 'Koporora Ubutumwa bwa SMS'}</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={handlePasteSampleSms}
-                          className="text-[10px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer"
-                        >
-                          <Sparkles className="w-3 h-3" />
-                          <span>Sample SMS</span>
-                        </button>
                       </div>
 
                       <div className="relative">

@@ -1031,19 +1031,36 @@ export default function App() {
 
           {/* 6-Column Dense Grid matching Screenshot 6 */}
           {sortedProducts.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center text-slate-500">
-              <ShoppingBag className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-              <h3 className="font-bold text-base text-slate-800">{t.noProductsFound || 'No products found'}</h3>
-              <p className="text-xs text-slate-400 mt-1">Try resetting search keywords or category filters.</p>
-              <button
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setSearchQuery('');
-                }}
-                className="mt-4 px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl"
-              >
-                Reset Filters
-              </button>
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 sm:p-16 text-center text-slate-500 max-w-2xl mx-auto shadow-2xs">
+              <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-[#FF6000] flex items-center justify-center mx-auto mb-4">
+                <ShoppingBag className="w-8 h-8" />
+              </div>
+              <h3 className="font-black text-lg sm:text-xl text-slate-900">
+                {products.length === 0
+                  ? (t.productsComingSoon || 'Catalog Fresh Arrivals Coming Soon')
+                  : (t.noProductsFound || 'No products found')}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+                {products.length === 0
+                  ? (currentLang === 'en'
+                      ? 'Our verified supplier inventory is synced in real-time with Supabase. Fresh items will be displayed as soon as products are added.'
+                      : "Ibicuruzwa bishya biri kongerwamo bivuye mu bacuruzi nyabo i Kigali no mu Rwanda.")
+                  : (currentLang === 'en'
+                      ? 'No items matched your current filter or search terms. Try clearing your filters.'
+                      : "Nta bicuruzwa bihwanye n'ibyo ushatse. Gerageza guhindura amagambo.")}
+              </p>
+              {products.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSelectedCategory('all');
+                    setSelectedSubCategory(null);
+                    setSearchQuery('');
+                  }}
+                  className="mt-5 px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">

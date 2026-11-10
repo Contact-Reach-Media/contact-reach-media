@@ -321,97 +321,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return () => clearTimeout(timer);
   }, [liveAlert]);
 
-  // Simulation handlers for instant live testing
-  const handleSimulateLiveOrder = () => {
-    const testOrderNumber = `CRM-${Math.floor(10000 + Math.random() * 90000)}`;
-    const simulatedOrder: Order = {
-      id: `ord-sim-${Date.now()}`,
-      orderNumber: testOrderNumber,
-      trackingToken: 'sim_token_' + Date.now(),
-      createdAt: new Date().toISOString(),
-      customerName: 'Jean Claude (Kigali Test)',
-      customerPhone: '0780022600',
-      deliveryType: 'delivery',
-      deliveryLocation: 'Gasabo (Kimironko)',
-      deliveryAddress: 'KG 15 Ave',
-      items: products.slice(0, 1).map(p => ({
-        productId: p.id,
-        productName: p.name,
-        price: p.price,
-        quantity: 1,
-        imageUrl: p.imageUrl
-      })),
-      subtotal: 35000,
-      deliveryFee: 1500,
-      shippingCost: 0,
-      totalAmount: 36500,
-      paymentMethod: 'MTN Mobile Money',
-      receiverName: 'Ruth',
-      receiverDetails: '0780022600',
-      shopName: 'ContactReach Market',
-      paymentStatus: 'Pending Payment',
-      status: 'New',
-      stockDeducted: false,
-      statusHistory: [
-        {
-          status: 'New',
-          paymentStatus: 'Pending Payment',
-          timestamp: new Date().toISOString(),
-          note: 'Live real-time order received via storefront checkout.'
-        }
-      ]
-    };
-
-    setOrders(prev => [simulatedOrder, ...prev]);
-    // Persist immediately to Supabase
-    api.createOrder(simulatedOrder).catch(err => {
-      console.warn('Simulated order Supabase sync warning:', err);
-    });
-    playNotificationChime('order');
-    showToast(`🔔 Real-time: New Order #${simulatedOrder.orderNumber} (36,500 RWF) received!`, 'success');
-    sendDesktopNotification('New Order Received!', `Order #${simulatedOrder.orderNumber} from Jean Claude (36,500 RWF)`);
-    setLiveAlert({
-      id: `alert-${Date.now()}`,
-      type: 'order',
-      title: `🔔 Real-Time Order #${simulatedOrder.orderNumber} Received!`,
-      subtitle: `Jean Claude placed an order for 36,500 RWF via MTN MoMo to Kimironko. Received live without reloading!`,
-      timestamp: new Date(),
-      actionTab: 'orders'
-    });
-  };
-
-  const handleSimulateLiveSMS = () => {
-    const testPhone = '0788123456';
-    const simulatedMsg: AdminMessage = {
-      id: `msg-sim-${Date.now()}`,
-      name: 'Marie Claire',
-      email: 'marie@example.com',
-      phone: testPhone,
-      subject: 'Payment MoMo SMS Proof',
-      message: `Y'ello! You have received 36,500 RWF from Marie Claire (0788123456) on ${new Date().toLocaleDateString()}. TxId: ${Math.floor(100000000 + Math.random() * 900000000)}. Fee: 0 RWF.`,
-      orderNumber: orders[0]?.orderNumber || 'CRM-99212',
-      createdAt: new Date().toISOString(),
-      status: 'unread'
-    };
-
-    setMessages(prev => [simulatedMsg, ...prev]);
-    // Persist immediately to Supabase
-    saveMessageToSupabase(simulatedMsg).catch((err: any) => {
-      console.warn('Simulated SMS Supabase sync warning:', err);
-    });
-    playNotificationChime('sms');
-    showToast(`💬 Real-time: New SMS from ${simulatedMsg.phone} received!`, 'success');
-    sendDesktopNotification('New SMS Received!', `${simulatedMsg.name}: ${simulatedMsg.message.slice(0, 80)}`);
-    setLiveAlert({
-      id: `alert-sms-${Date.now()}`,
-      type: 'sms',
-      title: `💬 Real-Time SMS Received from ${simulatedMsg.phone}!`,
-      subtitle: simulatedMsg.message,
-      timestamp: new Date(),
-      actionTab: 'messages'
-    });
-  };
-
   // Filters
   const [productSearch, setProductSearch] = useState('');
   const [productCatFilter, setProductCatFilter] = useState('all');
@@ -2477,25 +2386,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <Bell className={`w-3.5 h-3.5 ${desktopAlertsActive ? 'text-emerald-400 fill-emerald-400/20' : 'text-orange-400'}`} />
           </button>
 
-          {/* Real-time Order & SMS Simulation Test Buttons */}
-          <div className="hidden xl:flex items-center gap-1.5 px-2 py-1 rounded-xl bg-slate-900 border border-slate-700/80 text-[11px]">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Test Push:</span>
-            <button
-              onClick={handleSimulateLiveOrder}
-              className="px-2 py-0.5 rounded-lg bg-orange-600/30 hover:bg-orange-600/50 text-orange-300 font-bold text-[10px] transition-colors cursor-pointer"
-              title="Test receiving an order live without reloading"
-            >
-              + Order
-            </button>
-            <button
-              onClick={handleSimulateLiveSMS}
-              className="px-2 py-0.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 font-bold text-[10px] transition-colors cursor-pointer"
-              title="Test receiving an SMS live without reloading"
-            >
-              + SMS
-            </button>
-          </div>
-
           {/* Quick Maintenance Toggle in Header */}
           <button
             onClick={() => handleToggleMaintenance(!settings?.isMaintenanceMode)}
@@ -2792,7 +2682,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {orders.slice(0, 6).map(ord => (
+                      {orders.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-slate-400">
+                            <Package className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                            <p className="font-bold text-sm text-slate-600">No customer orders placed yet</p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              Real-time customer orders from the storefront will appear here automatically.
+                            </p>
+                          </td>
+                        </tr>
+                      ) : (
+                        orders.slice(0, 6).map(ord => (
                         <tr key={ord.id} className="hover:bg-slate-50/60">
                           <td className="py-3 px-3 font-mono font-bold text-slate-900">
                             {ord.orderNumber}
@@ -2829,7 +2730,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>
@@ -3158,8 +3059,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <tr>
                           <td colSpan={9} className="py-12 text-center text-slate-400">
                             <Package className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                            <p className="font-semibold text-sm text-slate-600">No products found</p>
-                            <p className="text-xs mt-1">Try adjusting your search query or category filters</p>
+                            <p className="font-semibold text-sm text-slate-600">
+                              {products.length === 0 ? 'No products in database yet' : 'No products found'}
+                            </p>
+                            <p className="text-xs mt-1">
+                              {products.length === 0
+                                ? 'Add your first product using "+ Add Product", import via Excel/Sheets, or connect your supplier feed.'
+                                : 'Try adjusting your search query or category filters'}
+                            </p>
                           </td>
                         </tr>
                       ) : (
@@ -4164,8 +4071,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <tr>
                           <td colSpan={11} className="py-12 text-center text-slate-400">
                             <Package className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                            <p className="font-bold text-sm text-slate-600">No orders found matching criteria</p>
-                            <p className="text-xs text-slate-400 mt-0.5">Try clearing filters or search terms</p>
+                            <p className="font-bold text-sm text-slate-600">
+                              {orders.length === 0 ? 'No customer orders placed yet' : 'No orders found matching criteria'}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {orders.length === 0
+                                ? 'Real-time customer orders from your storefront will appear here automatically.'
+                                : 'Try clearing filters or search terms'}
+                            </p>
                           </td>
                         </tr>
                       ) : (

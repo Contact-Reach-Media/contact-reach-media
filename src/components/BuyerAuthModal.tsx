@@ -63,17 +63,6 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
       } else if (err.code === 'auth/popup-blocked') {
         setError('Urubuga rwazitiye idirishya rya Google. Nyabuneka hemerera popup kuri uru rubuga.');
       } else {
-        // Fallback demo login
-        try {
-          const res = await api.buyerGoogleLogin({
-            email: 'client@contactreachmarket.com',
-            displayName: 'Umukiriya Ushya',
-            uid: `google_buyer_${Date.now()}`
-          });
-          onSuccess(res.user);
-          onClose();
-          return;
-        } catch {}
         setError(err.message || 'Kwinjira na Google ntibikunze. Ongera ugerageze.');
       }
     } finally {

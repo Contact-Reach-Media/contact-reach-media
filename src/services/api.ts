@@ -1209,9 +1209,9 @@ export const api = {
         role: 'owner',
         active: true
       };
-      const mockToken = `fb_client_token_${Date.now()}`;
-      setAdminToken(mockToken, adminData);
-      return { token: mockToken, admin: adminData };
+      const adminSessionToken = `crm_admin_token_${Date.now()}`;
+      setAdminToken(adminSessionToken, adminData);
+      return { token: adminSessionToken, admin: adminData };
     }
 
     throw new Error(`Access denied. Google account (${cleanEmail}) is not an authorized ContactReach Market administrator.`);

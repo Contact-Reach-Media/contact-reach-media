@@ -63,18 +63,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
       } else if (err.code === 'auth/popup-blocked') {
         setError('Urubuga rwazitiye idirishya rya Google. Nyabuneka hemerera popup kuri uru rubuga.');
       } else {
-        // Fallback for demo instant login if Google popup unavailable
-        const demoEmail = 'client@contactreachmarket.com';
-        try {
-          const res = await api.buyerGoogleLogin({
-            email: demoEmail,
-            displayName: 'Umukiriya Ushya',
-            uid: `google_buyer_${Date.now()}`
-          });
-          onSuccess(res.user);
-          onNavigateHome();
-          return;
-        } catch {}
         setError(err.message || 'Kwinjira na Google ntibikunze. Ongera ugerageze.');
       }
     } finally {
