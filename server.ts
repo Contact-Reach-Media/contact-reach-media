@@ -780,49 +780,64 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         name: data.name,
         sku: data.sku || null,
         description: data.description || '',
-        price: data.price,
-        price_rwf: Math.round(Number(data.price) || 0),
-        cost_price: data.costPrice ?? null,
+        price: Math.max(0, Number(data.price) || 0),
+        cost_price: data.costPrice !== undefined ? Number(data.costPrice) : null,
         cost_overridden_by_admin: Boolean(data.costOverriddenByAdmin),
-        commission_rate: data.commissionRate ?? 10,
-        profit_margin: data.profitMargin ?? 0,
-        discount_percent: data.discountPercent ?? 0,
-        discount_pct: Number(data.discountPercent) || 0,
-        discount_price: data.discountPrice ?? null,
+        commission_rate: data.commissionRate !== undefined ? Number(data.commissionRate) : 10,
+        profit_margin: data.profitMargin !== undefined ? Number(data.profitMargin) : 0,
+        discount_percent: Number(data.discountPercent) || 0,
+        discount_price: data.discountPrice !== undefined ? Number(data.discountPrice) : null,
         category: data.category || 'clothing',
         subcategory: data.subcategory || null,
         main_category_id: data.mainCategoryId || null,
         sub_category_id: data.subCategoryId || null,
         category_name: data.categoryName || null,
         sub_category_name: data.subCategoryName || null,
-        stock: data.stock ?? 0,
-        stock_quantity: data.stock ?? 0,
+        stock: Math.max(0, Number(data.stock ?? 0)),
         image_url: data.imageUrl || (Array.isArray(data.images) && data.images[0]) || '',
-        images: data.images || [],
+        images: Array.isArray(data.images) ? data.images : (data.imageUrl ? [data.imageUrl] : []),
+        video_url: data.videoUrl || null,
+        youtube_url: data.youtubeUrl || null,
         shop_name: data.shopName || 'ContactReach Market',
         shop_id: data.shopId || null,
+        receiver_name: data.receiverName || null,
+        receiver_phone: data.receiverPhone || null,
+        payment_methods: Array.isArray(data.paymentMethods) ? data.paymentMethods : [],
+        merchant_code: data.merchantCode || null,
+        location: data.location || 'Kigali, Rwanda',
+        delivery_info: data.deliveryInfo || null,
         status: data.status || 'Available',
-        visible: data.status !== 'Out of Stock' && data.status !== 'Hidden',
-        featured: Boolean(data.isFeatured),
-        is_new: Boolean(data.isNewArrival),
         is_featured: Boolean(data.isFeatured),
         is_new_arrival: Boolean(data.isNewArrival),
         is_best_seller: Boolean(data.isBestSeller),
         brand: data.brand || null,
         unit: data.unit || 'Piece',
-        shipping_cost: data.shippingCost || 0,
+        shipping_cost: Math.max(0, Number(data.shippingCost) || 0),
         specifications: data.specifications || null,
-        attributes: data.attributes || [],
-        variations: data.variations || [],
+        storage: data.storage || null,
+        packaging_info: data.packagingInfo || null,
+        attributes: Array.isArray(data.attributes) ? data.attributes : [],
+        variations: Array.isArray(data.variations) ? data.variations : [],
+        rating: Number(data.rating) || 5.0,
+        reviews_count: Number(data.reviewsCount) || 0,
         source: data.source || 'local',
+        review_status: (data as any).reviewStatus || 'Approved',
         alibaba_product_id: data.alibabaProductId || null,
         cj_product_id: data.cjProductId || null,
         updated_at: new Date().toISOString()
       };
       if (data.id) {
-        prodRow.id = data.id;
+        prodRow.id = String(data.id);
       }
-      await supabase.from('products').upsert(prodRow);
+      if (data.createdAt) {
+        prodRow.created_at = data.createdAt;
+      }
+      const { error: sbErr } = await supabase.from('products').upsert(prodRow, { onConflict: 'id' });
+      if (sbErr) {
+        console.error('[Supabase] Product upsert notice:', sbErr.message);
+      } else {
+        console.log(`[Supabase] Live synchronized product "${data.name}" (${data.id}) to Supabase.`);
+      }
     } else if (entityType === 'categories' || entityType === 'category') {
       await supabase.from('categories').upsert({
         id: data.id,
@@ -2216,25 +2231,10 @@ app.post('/api/orders', (req: Request, res: Response) => {
         || ((item as any).productName ? db.products.find(p => p.name.toLowerCase() === (item as any).productName.toLowerCase()) : undefined);
 
       if (!product) {
-        const prodName = (item as any).title || (item as any).productName || (item as any).name || (targetPId.startsWith('prod-') ? targetPId.replace(/^prod-/, '').replace(/-/g, ' ') : 'Marketplace Item');
-        const fallbackProductImg = resolveProductImageDueToProduct({ productName: prodName, image: (item as any).image, imageUrl: (item as any).imageUrl }, db.products);
-        const createdProd: Product = {
-          id: targetPId,
-          name: prodName,
-          description: 'Verified product available on ContactReach Market.',
-          price: Math.max(0, Number((item as any).price) || 15000),
-          category: 'fashion',
-          stock: 50,
-          imageUrl: fallbackProductImg,
-          images: [fallbackProductImg],
-          status: 'Available',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        db.products.push(createdProd);
-        saveDbToDisk();
-        saveToFirestoreAsync('products', createdProd.id, createdProd);
-        product = createdProd;
+        const prodName = (item as any).title || (item as any).productName || (item as any).name || targetPId;
+        return res.status(400).json({
+          error: `Product "${prodName}" is no longer available in the store catalog. Please update your cart.`
+        });
       }
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
       // Concurrency reservation protection: check recent pending orders within 15 minutes that haven't been cancelled or fulfilled
@@ -5096,7 +5096,7 @@ function resolveOrCreateShop(
   return { shopId: newShopRecord.id, shopName: newShopRecord.name, createdShop: newShopRecord };
 }
 
-app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const {
     name,
@@ -5206,7 +5206,8 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     existingBySku.history = existingBySku.history || [];
     existingBySku.history.push({ timestamp: new Date().toISOString(), action: 'Updated via SKU match', user: admin.name });
     saveDbToDisk();
-    saveToFirestoreAsync('products', existingBySku.id, existingBySku);
+    await saveToFirestoreAsync('products', existingBySku.id, existingBySku);
+    broadcastDatabaseEvent('product_updated', { product: existingBySku });
     return res.status(201).json(existingBySku);
   }
 
@@ -5271,11 +5272,12 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
 
     logAudit(admin, 'PRODUCT_CREATED', `Created product "${newProduct.name}" (SKU: ${newProduct.sku}) with stock ${stockNum}`, 'product', newProduct.id);
     saveDbToDisk();
-    saveToFirestoreAsync('products', newProduct.id, newProduct);
+    await saveToFirestoreAsync('products', newProduct.id, newProduct);
+    broadcastDatabaseEvent('product_created', { product: newProduct });
     res.status(201).json(newProduct);
   });
 
-  app.put('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+  app.put('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
     const admin = (req as any).adminUser;
     const productIndex = db.products.findIndex(p => p.id === req.params.id);
     if (productIndex === -1) return res.status(404).json({ error: 'Product not found' });
@@ -5402,12 +5404,13 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
 
   logAudit(admin, 'PRODUCT_UPDATED', `Updated product "${updated.name}"`, 'product', updated.id);
   saveDbToDisk('product_updated', { product: updated });
-  saveToFirestoreAsync('products', updated.id, updated);
+  await saveToFirestoreAsync('products', updated.id, updated);
+  broadcastDatabaseEvent('product_updated', { product: updated });
   res.json(updated);
 });
 
 // Single Product Status Update (Available, Out of Stock, Hidden)
-app.patch('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+app.patch('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { status } = req.body;
   if (!status || !['Available', 'Out of Stock', 'Hidden'].includes(status)) {
@@ -5428,7 +5431,8 @@ app.patch('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUC
 
   logAudit(admin, 'PRODUCT_STATUS_CHANGED', `Changed status of "${product.name}" (${product.sku || product.id}) from ${oldStatus} to ${status}`, 'product', product.id);
   saveDbToDisk('product_status_changed', { product });
-  saveToFirestoreAsync('products', product.id, product);
+  await saveToFirestoreAsync('products', product.id, product);
+  broadcastDatabaseEvent('product_updated', { product });
 
   res.json({
     success: true,
@@ -5438,7 +5442,7 @@ app.patch('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUC
 });
 
 // Instant 1-Click Publish / Unpublish Toggle
-app.patch('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+app.patch('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const product = db.products.find(p => p.id === req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -5455,7 +5459,8 @@ app.patch('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRol
 
   logAudit(admin, newStatus === 'Available' ? 'PRODUCT_PUBLISHED' : 'PRODUCT_UNPUBLISHED', `${newStatus === 'Available' ? 'Published' : 'Unpublished'} product "${product.name}" (${product.sku || product.id})`, 'product', product.id);
   saveDbToDisk('product_publish_toggled', { product });
-  saveToFirestoreAsync('products', product.id, product);
+  await saveToFirestoreAsync('products', product.id, product);
+  broadcastDatabaseEvent('product_updated', { product });
 
   res.json({
     success: true,
@@ -5588,7 +5593,7 @@ app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(PROD
   res.status(201).json(duplicated);
 });
 
-app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const targetId = String(req.params.id);
   const index = db.products.findIndex(p => p.id === targetId);
@@ -5618,8 +5623,8 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMI
   logAudit(admin, 'PRODUCT_DELETED', `Permanently deleted product "${removed.name}" (${removed.sku || removed.id})`, 'product', removed.id);
   saveDbToDisk();
 
-  // Erase from Firestore and write persistent tombstone
-  deleteFromFirestoreAsync('products', removed.id);
+  // Erase from Supabase and write persistent tombstone
+  await deleteFromFirestoreAsync('products', removed.id);
   saveToFirestoreAsync('deletedProducts', removed.id, {
     id: removed.id,
     name: removed.name,
@@ -5645,7 +5650,7 @@ app.delete('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMI
 });
 
 // Bulk delete products simultaneously
-app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { productIds } = req.body;
 
@@ -5667,7 +5672,6 @@ app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(PRODUC
       if (p.alibabaProductId && !db.deletedRecordIds.includes(p.alibabaProductId)) db.deletedRecordIds.push(p.alibabaProductId);
       if (p.cjProductId && !db.deletedRecordIds.includes(p.cjProductId)) db.deletedRecordIds.push(p.cjProductId);
 
-      deleteFromFirestoreAsync('products', p.id);
       saveToFirestoreAsync('deletedProducts', p.id, {
         id: p.id,
         name: p.name,
@@ -5681,6 +5685,9 @@ app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(PRODUC
     }
     return true;
   });
+
+  // Await direct Supabase deletion for all deleted items
+  await Promise.all(deletedProducts.map(p => deleteFromFirestoreAsync('products', p.id)));
 
   // Clean CJ dropshipping staging queue
   if (db.cjPendingProducts) {

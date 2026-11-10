@@ -20,6 +20,7 @@ import {
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
 import { initGoogleTranslateScript, setGoogleTranslateLanguage } from './services/googleTranslate.ts';
 import { startDOMTranslationObserver, restoreOriginalEnglish } from './services/domTranslator.ts';
+import { subscribeToSupabaseTable, mapSupabaseRowToProduct } from './services/supabase.ts';
 
 import { Header } from './components/Header.tsx';
 import { ProductCard } from './components/ProductCard.tsx';
@@ -499,6 +500,61 @@ export default function App() {
 
   useEffect(() => {
     refreshAllData();
+  }, []);
+
+  // Live real-time catalog synchronization across all devices & sessions
+  useEffect(() => {
+    // 1. Supabase Postgres Realtime replication for products
+    const unsubscribeSupabase = subscribeToSupabaseTable('products', (payload) => {
+      const { eventType, new: newRecord, old: oldRecord } = payload;
+      if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+        const mapped = mapSupabaseRowToProduct(newRecord);
+        setProducts(prev => {
+          const exists = prev.some(p => p.id === mapped.id);
+          if (exists) {
+            return prev.map(p => p.id === mapped.id ? mapped : p);
+          }
+          return [mapped, ...prev];
+        });
+      } else if (eventType === 'DELETE' && oldRecord) {
+        const delId = String(oldRecord.id);
+        setProducts(prev => prev.filter(p => p.id !== delId));
+      }
+    });
+
+    // 2. High-speed Server-Sent Events (SSE) live database stream
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/database/stream');
+      eventSource.addEventListener('db_update', (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed?.type === 'product_created' && parsed.payload?.product) {
+            const p: Product = parsed.payload.product;
+            setProducts(prev => {
+              if (prev.some(x => x.id === p.id)) return prev.map(x => x.id === p.id ? p : x);
+              return [p, ...prev];
+            });
+          } else if (parsed?.type === 'product_updated' && parsed.payload?.product) {
+            const p: Product = parsed.payload.product;
+            setProducts(prev => prev.map(x => x.id === p.id ? p : x));
+          } else if (parsed?.type === 'product_deleted' && parsed.payload?.productId) {
+            const delId = parsed.payload.productId;
+            setProducts(prev => prev.filter(x => x.id !== delId));
+          } else if (parsed?.type === 'products_bulk_deleted' && Array.isArray(parsed.payload?.productIds)) {
+            const delSet = new Set(parsed.payload.productIds);
+            setProducts(prev => prev.filter(x => !delSet.has(x.id)));
+          }
+        } catch {}
+      });
+    } catch {}
+
+    return () => {
+      try { unsubscribeSupabase(); } catch {}
+      if (eventSource) {
+        try { eventSource.close(); } catch {}
+      }
+    };
   }, []);
 
   // Fetch live exchange rates from backend (/api/exchange-rates)

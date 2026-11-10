@@ -19,7 +19,7 @@ import {
   GoogleDriveBackupStatus
 } from '../types.ts';
 import { api, getStoredAdminUser } from '../services/api.ts';
-import { saveMessageToSupabase } from '../services/supabase.ts';
+import { saveMessageToSupabase, subscribeToSupabaseTable, mapSupabaseRowToProduct } from '../services/supabase.ts';
 import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/googleDrive.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
@@ -1277,6 +1277,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             } else if (eventType === 'supplier_application_updated' && payload?.application) {
               const updatedApp = payload.application;
               setSupplierApplications(prev => prev.map(a => a.id === updatedApp.id ? updatedApp : a));
+            } else if (eventType === 'product_created' && payload?.product) {
+              const newProd: Product = payload.product;
+              setProducts(prev => {
+                if (prev.some(p => p.id === newProd.id)) return prev.map(p => p.id === newProd.id ? newProd : p);
+                return [newProd, ...prev];
+              });
+              showToast(`📦 Real-time: Product "${newProd.name}" added to catalog!`, 'success');
+            } else if (eventType === 'product_updated' && payload?.product) {
+              const updatedProd: Product = payload.product;
+              setProducts(prev => prev.map(p => p.id === updatedProd.id ? updatedProd : p));
+              showToast(`📦 Real-time: Product "${updatedProd.name}" updated!`, 'info');
+            } else if (eventType === 'product_deleted' && payload?.productId) {
+              const delId = payload.productId;
+              setProducts(prev => prev.filter(p => p.id !== delId));
+              showToast(`🗑️ Real-time: Product removed from catalog`, 'info');
+            } else if (eventType === 'products_bulk_deleted' && Array.isArray(payload?.productIds)) {
+              const delSet = new Set(payload.productIds);
+              setProducts(prev => prev.filter(p => !delSet.has(p.id)));
+              showToast(`🗑️ Real-time: ${payload.productIds.length} products removed`, 'info');
             }
 
             if (parsed?.stats) {
@@ -1308,7 +1327,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     connectSSE();
 
-    // 2. Background fallback sync every 12 seconds (skips when browser tab is inactive)
+    // Direct Supabase Postgres Realtime subscription for products
+    const unsubscribeSupabaseProducts = subscribeToSupabaseTable('products', (payload) => {
+      const { eventType, new: newRecord, old: oldRecord } = payload;
+      if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+        const mapped = mapSupabaseRowToProduct(newRecord);
+        setProducts(prev => {
+          const exists = prev.some(p => p.id === mapped.id);
+          if (exists) return prev.map(p => p.id === mapped.id ? mapped : p);
+          return [mapped, ...prev];
+        });
+      } else if (eventType === 'DELETE' && oldRecord) {
+        const delId = String(oldRecord.id);
+        setProducts(prev => prev.filter(p => p.id !== delId));
+      }
+    });
+
     // 2. Background fallback sync every 10 seconds (reliable multi-device heartbeat)
     const syncInterval = setInterval(() => {
       fetchAllData(true);
@@ -1333,6 +1367,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     return () => {
       isSubscribed = false;
+      try { unsubscribeSupabaseProducts(); } catch {}
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (eventSource) {
         try { eventSource.close(); } catch {}

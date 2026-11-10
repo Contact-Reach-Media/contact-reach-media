@@ -211,6 +211,57 @@ export async function testSupabaseConnection(): Promise<{
 // -------------------------------------------------------------
 // 1. PRODUCTS CRUD & SYNC
 // -------------------------------------------------------------
+export function mapSupabaseRowToProduct(row: any): Product {
+  return {
+    id: String(row.id),
+    name: row.name || 'Product',
+    sku: row.sku || undefined,
+    description: row.description || '',
+    price: Number(row.price_rwf ?? row.price) || 0,
+    costPrice: row.cost_price !== null && row.cost_price !== undefined ? Number(row.cost_price) : undefined,
+    costOverriddenByAdmin: Boolean(row.cost_overridden_by_admin),
+    commissionRate: row.commission_rate !== null && row.commission_rate !== undefined ? Number(row.commission_rate) : 10,
+    discountPercent: Number(row.discount_pct ?? row.discount_percent) || 0,
+    discountPrice: row.discount_price !== null && row.discount_price !== undefined ? Number(row.discount_price) : undefined,
+    category: row.category || 'clothing',
+    subcategory: row.subcategory || undefined,
+    mainCategoryId: row.main_category_id || undefined,
+    subCategoryId: row.sub_category_id || undefined,
+    categoryName: row.category_name || undefined,
+    subCategoryName: row.sub_category_name || undefined,
+    stock: Number(row.stock_quantity ?? row.stock ?? 0),
+    imageUrl: row.image_url || (Array.isArray(row.images) && row.images[0]) || '',
+    images: Array.isArray(row.images) ? row.images : (row.image_url ? [row.image_url] : []),
+    videoUrl: row.video_url || undefined,
+    youtubeUrl: row.youtube_url || undefined,
+    shopName: row.shop_name || 'ContactReach Market',
+    shopId: row.shop_id || undefined,
+    receiverName: row.receiver_name || undefined,
+    receiverPhone: row.receiver_phone || undefined,
+    merchantCode: row.merchant_code || undefined,
+    location: row.location || 'Kigali, Rwanda',
+    deliveryInfo: row.delivery_info || undefined,
+    status: (row.status || (row.visible === false ? 'Out of Stock' : 'Available')) as any,
+    isFeatured: Boolean(row.featured ?? row.is_featured),
+    isNewArrival: Boolean(row.is_new ?? row.is_new_arrival),
+    isBestSeller: Boolean(row.is_best_seller),
+    brand: row.brand || undefined,
+    unit: row.unit || 'Piece',
+    shippingCost: Number(row.shipping_cost) || 0,
+    specifications: row.specifications || undefined,
+    storage: row.storage || undefined,
+    packagingInfo: row.packaging_info || undefined,
+    attributes: Array.isArray(row.attributes) ? row.attributes : [],
+    variations: Array.isArray(row.variations) ? row.variations : [],
+    rating: Number(row.rating) || 5.0,
+    reviewsCount: Number(row.reviews_count) || 0,
+    source: row.source || 'local',
+    alibabaProductId: row.alibaba_product_id || undefined,
+    cjProductId: row.cj_product_id || undefined,
+    createdAt: row.created_at || new Date().toISOString()
+  };
+}
+
 export async function getProductsFromSupabase(): Promise<Product[]> {
   try {
     const { data, error } = await supabase
@@ -219,55 +270,7 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
       .order('created_at', { ascending: false });
 
     if (error || !data) return [];
-
-    return data.map((row: any) => ({
-      id: String(row.id),
-      name: row.name || 'Product',
-      sku: row.sku || undefined,
-      description: row.description || '',
-      price: Number(row.price_rwf ?? row.price) || 0,
-      costPrice: row.cost_price !== null ? Number(row.cost_price) : undefined,
-      costOverriddenByAdmin: Boolean(row.cost_overridden_by_admin),
-      commissionRate: row.commission_rate !== null ? Number(row.commission_rate) : 10,
-      discountPercent: Number(row.discount_pct ?? row.discount_percent) || 0,
-      discountPrice: row.discount_price !== null ? Number(row.discount_price) : undefined,
-      category: row.category || 'clothing',
-      subcategory: row.subcategory || undefined,
-      mainCategoryId: row.main_category_id || undefined,
-      subCategoryId: row.sub_category_id || undefined,
-      categoryName: row.category_name || undefined,
-      subCategoryName: row.sub_category_name || undefined,
-      stock: Number(row.stock_quantity ?? row.stock ?? 0),
-      imageUrl: row.image_url || (Array.isArray(row.images) && row.images[0]) || '',
-      images: Array.isArray(row.images) ? row.images : (row.image_url ? [row.image_url] : []),
-      videoUrl: row.video_url || undefined,
-      youtubeUrl: row.youtube_url || undefined,
-      shopName: row.shop_name || 'ContactReach Market',
-      shopId: row.shop_id || undefined,
-      receiverName: row.receiver_name || undefined,
-      receiverPhone: row.receiver_phone || undefined,
-      merchantCode: row.merchant_code || undefined,
-      location: row.location || 'Kigali, Rwanda',
-      deliveryInfo: row.delivery_info || undefined,
-      status: (row.status || (row.visible === false ? 'Out of Stock' : 'Available')) as any,
-      isFeatured: Boolean(row.featured ?? row.is_featured),
-      isNewArrival: Boolean(row.is_new ?? row.is_new_arrival),
-      isBestSeller: Boolean(row.is_best_seller),
-      brand: row.brand || undefined,
-      unit: row.unit || 'Piece',
-      shippingCost: Number(row.shipping_cost) || 0,
-      specifications: row.specifications || undefined,
-      storage: row.storage || undefined,
-      packagingInfo: row.packaging_info || undefined,
-      attributes: Array.isArray(row.attributes) ? row.attributes : [],
-      variations: Array.isArray(row.variations) ? row.variations : [],
-      rating: Number(row.rating) || 5.0,
-      reviewsCount: Number(row.reviews_count) || 0,
-      source: row.source || 'local',
-      alibabaProductId: row.alibaba_product_id || undefined,
-      cjProductId: row.cj_product_id || undefined,
-      createdAt: row.created_at || new Date().toISOString()
-    }));
+    return data.map(mapSupabaseRowToProduct);
   } catch (err) {
     console.warn('[Supabase] Fetch products error:', err);
     return [];
@@ -280,47 +283,48 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
       name: p.name,
       sku: p.sku || null,
       description: p.description || '',
-      price: p.price,
-      price_rwf: Math.round(Number(p.price) || 0),
-      cost_price: p.costPrice ?? null,
+      price: Math.max(0, Number(p.price) || 0),
+      cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
       cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
-      commission_rate: p.commissionRate ?? 10,
-      profit_margin: p.profitMargin ?? 0,
-      discount_percent: p.discountPercent ?? 0,
-      discount_pct: Number(p.discountPercent) || 0,
-      discount_price: p.discountPrice ?? null,
+      commission_rate: p.commissionRate !== undefined ? Number(p.commissionRate) : 10,
+      profit_margin: p.profitMargin !== undefined ? Number(p.profitMargin) : 0,
+      discount_percent: Number(p.discountPercent) || 0,
+      discount_price: p.discountPrice !== undefined ? Number(p.discountPrice) : null,
       category: p.category || 'clothing',
       subcategory: p.subcategory || null,
       main_category_id: p.mainCategoryId || null,
       sub_category_id: p.subCategoryId || null,
       category_name: p.categoryName || null,
       sub_category_name: p.subCategoryName || null,
-      stock: p.stock ?? 0,
-      stock_quantity: p.stock ?? 0,
+      stock: Math.max(0, Number(p.stock ?? 0)),
       image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
-      images: p.images || [],
+      images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
       video_url: p.videoUrl || null,
       youtube_url: p.youtubeUrl || null,
       shop_name: p.shopName || 'ContactReach Market',
       shop_id: p.shopId || null,
+      receiver_name: p.receiverName || null,
+      receiver_phone: p.receiverPhone || null,
+      payment_methods: Array.isArray(p.paymentMethods) ? p.paymentMethods : [],
+      merchant_code: p.merchantCode || null,
+      location: p.location || 'Kigali, Rwanda',
+      delivery_info: p.deliveryInfo || null,
       status: p.status || 'Available',
-      visible: p.status !== 'Out of Stock' && p.status !== 'Hidden',
-      featured: Boolean(p.isFeatured),
-      is_new: Boolean(p.isNewArrival),
       is_featured: Boolean(p.isFeatured),
       is_new_arrival: Boolean(p.isNewArrival),
       is_best_seller: Boolean(p.isBestSeller),
       brand: p.brand || null,
       unit: p.unit || 'Piece',
-      shipping_cost: p.shippingCost || 0,
+      shipping_cost: Math.max(0, Number(p.shippingCost) || 0),
       specifications: p.specifications || null,
       storage: p.storage || null,
       packaging_info: p.packagingInfo || null,
-      attributes: p.attributes || [],
-      variations: p.variations || [],
-      rating: p.rating || 5.0,
-      reviews_count: p.reviewsCount || 0,
+      attributes: Array.isArray(p.attributes) ? p.attributes : [],
+      variations: Array.isArray(p.variations) ? p.variations : [],
+      rating: Number(p.rating) || 5.0,
+      reviews_count: Number(p.reviewsCount) || 0,
       source: p.source || 'local',
+      review_status: (p as any).reviewStatus || 'Approved',
       alibaba_product_id: p.alibabaProductId || null,
       cj_product_id: p.cjProductId || null,
       updated_at: new Date().toISOString()
@@ -329,13 +333,18 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
     if (p.id) {
       row.id = p.id;
     }
+    if (p.createdAt) {
+      row.created_at = p.createdAt;
+    }
 
-    const { data, error } = await supabase.from('products').upsert(row).select();
+    const { data, error } = await supabase.from('products').upsert(row, { onConflict: 'id' }).select();
     if (error) {
+      console.error('[Supabase] Failed to save product:', error);
       return { success: false, error: error.message };
     }
     return { success: true, data: data?.[0] };
   } catch (err: any) {
+    console.error('[Supabase] Error saving product:', err);
     return { success: false, error: err?.message };
   }
 }
@@ -366,13 +375,12 @@ export async function syncAllProductsToSupabase(products: Product[] = []): Promi
       name: p.name,
       sku: p.sku || null,
       description: p.description || '',
-      price: p.price,
-      cost_price: p.costPrice ?? null,
+      price: Math.max(0, Number(p.price) || 0),
+      cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
       category: p.category,
-      stock: p.stock,
-      stock_quantity: p.stock,
+      stock: Math.max(0, Number(p.stock ?? 0)),
       image_url: p.imageUrl || '',
-      images: p.images || [],
+      images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
       shop_name: p.shopName || null,
       status: p.status || 'Available',
       created_at: p.createdAt || new Date().toISOString(),
