@@ -95,6 +95,7 @@ export type AdminRole =
 export interface AdminUser {
   id: string;
   name: string;
+  username?: string;
   email: string;
   role: AdminRole;
   active: boolean;

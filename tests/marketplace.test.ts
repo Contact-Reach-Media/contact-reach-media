@@ -50,37 +50,38 @@ async function runTests() {
   });
 
   // TEST 2: Admin Authentication Security & Bad Password Rejection
-  await test('Admin auth rejects invalid passwords and prevents backdoors', async () => {
+  await test('Admin auth rejects invalid passwords and prevents unauthorized access', async () => {
     const badLogin = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'contactreachmedialimited@gmail.com', password: 'WrongPassword123' })
+      body: JSON.stringify({ username: 'crmedia', password: 'WrongPassword123' })
     });
     assert.strictEqual(badLogin.status, 401, 'Invalid password should be rejected with 401');
 
     const unauthorizedAccount = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'attacker@evil.com', password: 'SomeHackerPassword123!' })
+      body: JSON.stringify({ username: 'attacker', password: 'SomeHackerPassword123!' })
     });
-    assert(unauthorizedAccount.status === 401 || unauthorizedAccount.status === 403, 'Unauthorized emails should be rejected with 401 or 403');
+    assert.strictEqual(unauthorizedAccount.status, 401, 'Unauthorized usernames should be rejected with 401');
   });
 
-  // TEST 3: Admin Authentication Success with Authorized Credentials
+  // TEST 3: Admin Authentication Success with Authorized Username & Password
   let adminToken = '';
-  await test('Admin login succeeds with verified credentials and issues session token', async () => {
+  await test('Admin login succeeds with verified username credentials and issues session token', async () => {
     const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'contactreachmedialimited@gmail.com',
-        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
+        username: 'crmedia',
+        password: process.env.ADMIN_PASSWORD || 'crm@admin!'
       })
     });
     assert.strictEqual(loginRes.status, 200, 'Admin login should succeed');
     const data = await loginRes.json();
     assert(data.token, 'Session token should be returned');
     assert.strictEqual(data.admin.role, 'owner', 'Role should be owner');
+    assert.strictEqual(data.admin.username, 'crmedia');
     adminToken = data.token;
 
     // Reset maintenance mode to false for initial tests
@@ -94,21 +95,20 @@ async function runTests() {
     });
   });
 
-  // TEST 3B: Admin Google Firebase Authentication Success
-  await test('Admin can sign in with authorized Google account', async () => {
+  // TEST 3B: Admin Google Login Rejection (Google Sign-In is completely disabled for Admin)
+  await test('Admin Google Sign-In is completely disabled and rejected with 403', async () => {
     const googleAdminRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'contactreachmedialimited@gmail.com',
-        displayName: 'Ruth (System Owner)',
+        displayName: 'Administrator',
         uid: 'google-admin-owner-uid-123'
       })
     });
-    assert.strictEqual(googleAdminRes.status, 200, 'Admin Google login should succeed');
+    assert.strictEqual(googleAdminRes.status, 403, 'Admin Google login must be rejected with 403');
     const googleData = await googleAdminRes.json();
-    assert(googleData.token, 'Session token should be returned');
-    assert.strictEqual(googleData.admin.role, 'owner');
+    assert(googleData.error?.includes('disabled'), 'Error must state Google Sign-In is disabled');
   });
 
   // TEST 4: Protected Admin Endpoints Guard
@@ -979,7 +979,7 @@ async function runTests() {
         password: process.env.ADMIN_PASSWORD || 'CRM@2026'
       })
     });
-    assert.strictEqual(staffLoginRes.status, 403, 'Unauthorized email login must be rejected with 403');
+    assert(staffLoginRes.status === 401 || staffLoginRes.status === 403, 'Unauthorized login must be rejected with 401 or 403');
 
     // 2. Direct request without valid authorized token is rejected
     const testReq2 = await fetch(`${BASE_URL}/api/admin/inventory/logs`, {
@@ -1173,8 +1173,8 @@ async function runTests() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'contactreachmedialimited@gmail.com',
-        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
+        username: 'crmedia',
+        password: process.env.ADMIN_PASSWORD || 'crm@admin!'
       })
     });
     assert.strictEqual(loginRes.status, 200);

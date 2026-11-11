@@ -18,7 +18,7 @@ import {
   AdminUser, AdminRole, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority,
   GoogleDriveBackupStatus
 } from '../types.ts';
-import { api, getStoredAdminUser } from '../services/api.ts';
+import { api, getStoredAdminUser, isAuthorizedAdminUser } from '../services/api.ts';
 import { saveMessageToSupabase, subscribeToSupabaseTable, mapSupabaseRowToProduct } from '../services/supabase.ts';
 import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/googleDrive.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
@@ -87,7 +87,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Strict Security Enforcement: Auto-logout any unauthorized account
   useEffect(() => {
     const user = getStoredAdminUser();
-    if (!user || user.email?.toLowerCase().trim() !== 'contactreachmedialimited@gmail.com') {
+    if (!user || !isAuthorizedAdminUser(user)) {
       onLogout();
     }
   }, [onLogout]);

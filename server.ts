@@ -221,8 +221,9 @@ const defaultCoupons: Coupon[] = [
 // Default Initial Admin Users (Only System Owner; other staff loaded from Supabase admin_users)
 const defaultAdminUsers: AdminUser[] = [
   {
-    id: 'adm-owner-ruth',
-    name: 'Ruth (System Owner)',
+    id: 'adm-owner-crmedia',
+    name: 'Administrator',
+    username: 'crmedia',
     email: 'contactreachmedialimited@gmail.com',
     role: 'owner',
     active: true,
@@ -1446,10 +1447,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 app.use(express.json({ limit: '20mb' }));
 
-// Auth & Permissions Config - Strict single-owner admin authorization
+// Auth & Permissions Config - Strict username & password admin authorization
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'crmedia';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'crm@admin!';
 const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || AUTHORIZED_ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CRM@2026';
 
 // Constant-time password comparison to prevent timing attacks
 function timingSafeEqualStr(a: string, b: string): boolean {
@@ -1465,7 +1467,7 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 // Set of explicitly revoked or logged-out tokens to guarantee instant revocation
 const revokedTokens = new Set<string>();
 
-// Middleware to authenticate admin token - strictly enforces that ONLY contactreachmedialimited@gmail.com can access
+// Middleware to authenticate admin token - strictly enforces that only verified administrator sessions can access
 function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -1478,7 +1480,7 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
 
   let session = db.adminTokens.get(token);
 
-  // Fallback: ONLY for recognized test harness session and ONLY mapped to contactreachmedialimited@gmail.com
+  // Fallback: ONLY for recognized test harness session and ONLY mapped to authorized admin
   if (!session && token && !revokedTokens.has(token)) {
     const isRecognizedToken =
       token.startsWith('fb_client_token_') ||
@@ -1486,7 +1488,7 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
 
     if (isRecognizedToken) {
       const fallbackOwner =
-        db.adminUsers.find(u => u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL && u.active) ||
+        db.adminUsers.find(u => (u.username === ADMIN_USERNAME || u.role === 'owner') && u.active) ||
         defaultAdminUsers[0];
 
       if (fallbackOwner && fallbackOwner.active !== false) {
@@ -1504,15 +1506,19 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ error: 'Invalid or expired session token. Please sign in again.' });
   }
 
-  // STRICT SECURITY RESTRICTION: ONLY contactreachmedialimited@gmail.com is authorized
-  const sessionEmail = String(session.user?.email || '').toLowerCase().trim();
-  if (sessionEmail !== AUTHORIZED_ADMIN_EMAIL) {
-    // Automatically log out and revoke this unauthorized token
+  // STRICT SECURITY RESTRICTION: Valid administrator session check
+  const sessionUser = session.user;
+  const isAuthorized = sessionUser && (
+    sessionUser.username?.toLowerCase() === ADMIN_USERNAME.toLowerCase() ||
+    sessionUser.role === 'owner' ||
+    String(sessionUser.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL
+  );
+  if (!isAuthorized) {
     db.adminTokens.delete(token);
     revokedTokens.add(token);
     saveDbToDisk();
     return res.status(403).json({
-      error: 'Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard. Session terminated.'
+      error: 'Access denied: Unauthorized administrator session. Access revoked.'
     });
   }
 
@@ -4424,30 +4430,16 @@ app.post('/api/buyers/logout', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
+  const { username, email, password } = req.body;
+  const rawIdentifier = (username || email || '').trim();
+  if (!rawIdentifier || !password) {
+    return res.status(400).json({ error: 'Username and password are required.' });
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
-
-  // STRICT AUTHORIZATION ENFORCEMENT: ONLY contactreachmedialimited@gmail.com is authorized
-  if (normalizedEmail !== AUTHORIZED_ADMIN_EMAIL) {
-    // Automatically purge and revoke any active tokens for this unauthorized account
-    for (const [t, s] of db.adminTokens.entries()) {
-      if (s.user?.email?.toLowerCase().trim() === normalizedEmail) {
-        db.adminTokens.delete(t);
-        revokedTokens.add(t);
-      }
-    }
-    saveDbToDisk();
-    return res.status(403).json({
-      error: 'Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard. All other accounts are strictly unauthorized.'
-    });
-  }
+  const normalizedIdentifier = rawIdentifier.toLowerCase();
 
   // Rate limiting check
-  const attemptInfo = loginAttempts.get(normalizedEmail);
+  const attemptInfo = loginAttempts.get(normalizedIdentifier);
   if (attemptInfo && attemptInfo.lockoutUntil && Date.now() < attemptInfo.lockoutUntil) {
     const remainingMins = Math.ceil((attemptInfo.lockoutUntil - Date.now()) / 60000);
     return res.status(429).json({
@@ -4455,71 +4447,37 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     });
   }
 
-  let sbAdminRecord: any = null;
-  try {
-    const { data: suAdmin, error: suErr } = await supabase
-      .from('admin_users')
-      .select('*')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
+  // Strict check: username must match 'crmedia' and password must match 'crm@admin!'
+  const isUsernameValid = normalizedIdentifier === ADMIN_USERNAME.toLowerCase();
+  const isPasswordValid = isUsernameValid && timingSafeEqualStr(password, ADMIN_PASSWORD);
 
-    if (!suErr && suAdmin) {
-      sbAdminRecord = suAdmin;
-    }
-  } catch (sbErr) {
-    console.warn('[Supabase admin query error]:', sbErr);
-  }
-
-  const memoryAdmin = db.adminUsers.find(u => u.email.toLowerCase() === normalizedEmail);
-
-  const authorizedAdmin: AdminUser = {
-    id: sbAdminRecord?.id || memoryAdmin?.id || 'adm-owner-ruth',
-    name: sbAdminRecord?.name || memoryAdmin?.name || 'Ruth (System Owner)',
-    email: AUTHORIZED_ADMIN_EMAIL,
-    role: 'owner',
-    active: true,
-    phone: sbAdminRecord?.phone || memoryAdmin?.phone || '0780022600'
-  };
-
-  // Check if account is specifically deactivated
-  if ((sbAdminRecord && sbAdminRecord.active === false) || (memoryAdmin && memoryAdmin.active === false)) {
-    return res.status(403).json({
-      error: 'This administrator account has been deactivated. Access revoked.'
-    });
-  }
-
-  // Validate Password via constant-time comparison against ADMIN_PASSWORD or Supabase Auth
-  let passwordValid = timingSafeEqualStr(password, ADMIN_PASSWORD);
-
-  if (!passwordValid) {
-    try {
-      const { data: sbAuthData, error: sbAuthErr } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: password
-      });
-      if (!sbAuthErr && sbAuthData?.user) {
-        passwordValid = true;
-      }
-    } catch {}
-  }
-
-  if (!passwordValid) {
+  if (!isUsernameValid || !isPasswordValid) {
     const currentAttempts = (attemptInfo?.attempts || 0) + 1;
     if (currentAttempts >= 5) {
-      loginAttempts.set(normalizedEmail, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
+      loginAttempts.set(normalizedIdentifier, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
       return res.status(429).json({ error: 'Too many failed login attempts. Locked for 15 minutes.' });
     } else {
-      loginAttempts.set(normalizedEmail, { attempts: currentAttempts });
+      loginAttempts.set(normalizedIdentifier, { attempts: currentAttempts });
     }
-    return res.status(401).json({ error: 'Invalid administrator password.' });
+    return res.status(401).json({ error: 'Invalid administrator credentials.' });
   }
 
   // Reset rate limiting on success
-  loginAttempts.delete(normalizedEmail);
+  loginAttempts.delete(normalizedIdentifier);
+
+  const authorizedAdmin: AdminUser = {
+    id: 'adm-owner-crmedia',
+    name: 'Administrator',
+    username: ADMIN_USERNAME,
+    email: AUTHORIZED_ADMIN_EMAIL,
+    role: 'owner',
+    active: true,
+    phone: '0780022600',
+    lastLogin: new Date().toISOString()
+  };
 
   // Generate 32-byte session token
   const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
-  authorizedAdmin.lastLogin = new Date().toISOString();
 
   // Ensure ONLY this owner is registered in db.adminUsers
   db.adminUsers = [authorizedAdmin];
@@ -4536,10 +4494,10 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     await supabase.from('admin_users').update({
       last_login: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    }).eq('email', normalizedEmail);
+    }).eq('email', AUTHORIZED_ADMIN_EMAIL);
   } catch {}
 
-  logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Admin signed in successfully from ${req.ip || 'remote'}`);
+  logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Admin signed in successfully using username credentials from ${req.ip || 'remote'}`);
 
   return res.json({
     token,
@@ -4548,80 +4506,26 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
   });
 });
 
-// Authorized Google Sign-In Admin Login Endpoint - ONLY contactreachmedialimited@gmail.com
-const handleGoogleLogin = async (req: Request, res: Response) => {
-  const { email, displayName, uid, idToken } = req.body;
-  if (!email && !idToken) {
-    return res.status(400).json({ error: 'Email or identity token is required.' });
-  }
-
-  const verifiedEmail = (email || '').trim().toLowerCase();
-
-  // STRICT AUTHORIZATION ENFORCEMENT: ONLY contactreachmedialimited@gmail.com is authorized
-  if (verifiedEmail !== AUTHORIZED_ADMIN_EMAIL) {
-    // Automatically purge and revoke any active tokens for this unauthorized account
-    for (const [t, s] of db.adminTokens.entries()) {
-      if (s.user?.email?.toLowerCase().trim() === verifiedEmail) {
-        db.adminTokens.delete(t);
-        revokedTokens.add(t);
-      }
-    }
-    saveDbToDisk();
-    return res.status(403).json({
-      error: `Access denied: Google account (${verifiedEmail}) is not authorized. Only contactreachmedialimited@gmail.com is authorized to access the Admin Dashboard.`
-    });
-  }
-
-  const authorizedAdmin: AdminUser = {
-    id: 'adm-owner-ruth',
-    name: displayName || 'Ruth (System Owner)',
-    email: AUTHORIZED_ADMIN_EMAIL,
-    role: 'owner',
-    active: true,
-    phone: '0780022600'
-  };
-
-  const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
-  authorizedAdmin.lastLogin = new Date().toISOString();
-
-  // Ensure ONLY this owner is registered in db.adminUsers
-  db.adminUsers = [authorizedAdmin];
-
-  db.adminTokens.set(token, {
-    user: authorizedAdmin,
-    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-  });
-  saveDbToDisk();
-
-  try {
-    await supabase.from('admin_users').update({
-      last_login: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }).eq('email', AUTHORIZED_ADMIN_EMAIL);
-  } catch {}
-
-  logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'GOOGLE_ADMIN_LOGIN', `Admin signed in with Google (${verifiedEmail})`);
-
-  return res.json({
-    token,
-    admin: authorizedAdmin,
-    redirectTo: '/admin'
+// Admin Google and external authentication methods are completely disabled
+const handleGoogleLoginDisabled = async (req: Request, res: Response) => {
+  return res.status(403).json({
+    error: 'Google Sign-In is disabled. Administrators must sign in using authorized username and password credentials only.'
   });
 };
 
-app.post('/api/auth/google-login', handleGoogleLogin);
-app.post('/api/auth/firebase-login', handleGoogleLogin);
+app.post('/api/auth/google-login', handleGoogleLoginDisabled);
+app.post('/api/auth/firebase-login', handleGoogleLoginDisabled);
 
 app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
   const user = (req as any).adminUser;
-  if (!user || user.email?.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+  if (!user) {
     const token = req.headers.authorization?.split(' ')[1];
     if (token) {
       db.adminTokens.delete(token);
       revokedTokens.add(token);
       saveDbToDisk();
     }
-    return res.status(403).json({ error: 'Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.' });
+    return res.status(403).json({ error: 'Access denied: Unauthorized administrator session.' });
   }
   res.json(user);
 });

@@ -8,7 +8,7 @@ import {
 
 import { Product, Category, AppSettings, CartItem, Order, PaymentConfirmation, VendorShop, CustomerUser } from './types.ts';
 import { initialCategories, initialSettings } from './data/initialData.ts';
-import { api, getAdminToken, getStoredAdminUser } from './services/api.ts';
+import { api, getAdminToken, getStoredAdminUser, isAuthorizedAdminUser } from './services/api.ts';
 import {
   Language,
   translations,
@@ -250,7 +250,7 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     const token = api.getAdminToken();
     const user = api.getStoredAdminUser();
-    return Boolean(token && user && user.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && user.active !== false);
+    return Boolean(token && user && isAuthorizedAdminUser(user) && user.active !== false);
   });
   const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'products' | 'orders' | 'inventory' | 'settings'>('overview');
   const [autoOpenAddProduct, setAutoOpenAddProduct] = useState(initialRoute.view === 'admin-upload');
@@ -359,7 +359,7 @@ export default function App() {
     else if (view === 'admin-login') targetPath = '/admin/login';
     else if (view === 'admin') {
       const stored = api.getStoredAdminUser();
-      const isAuth = isAdminLoggedIn && stored?.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && stored.active !== false;
+      const isAuth = isAdminLoggedIn && stored && isAuthorizedAdminUser(stored) && stored.active !== false;
       if (!isAuth) {
         resolvedView = 'admin-login';
         targetPath = '/admin/login';
@@ -380,7 +380,7 @@ export default function App() {
     }
     else if (view === 'admin-upload' || view === 'upload-product') {
       const stored = api.getStoredAdminUser();
-      const isAuth = isAdminLoggedIn && stored?.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && stored.active !== false;
+      const isAuth = isAdminLoggedIn && stored && isAuthorizedAdminUser(stored) && stored.active !== false;
       if (isAuth) {
         setIsAdminLoggedIn(true);
         setAdminInitialTab('products');
@@ -596,7 +596,7 @@ export default function App() {
       const route = parseRouteFromLocation();
       if (route.view === 'admin') {
         const stored = api.getStoredAdminUser();
-        const isAuth = isAdminLoggedIn && stored?.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && stored.active !== false;
+        const isAuth = isAdminLoggedIn && stored && isAuthorizedAdminUser(stored) && stored.active !== false;
         if (!isAuth) {
           api.adminLogout().catch(() => {});
           setIsAdminLoggedIn(false);
@@ -958,7 +958,7 @@ export default function App() {
           <SignInPage
             initialMode={activeView === 'register' ? 'register' : 'signin'}
             onSuccess={(user) => {
-              const isAdmin = user.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com';
+              const isAdmin = isAuthorizedAdminUser(user);
               if (isAdmin) {
                 setIsAdminLoggedIn(true);
                 setActiveView('admin');

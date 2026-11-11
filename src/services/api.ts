@@ -112,15 +112,28 @@ const getSupplierPayoutsFromFirestore = getSupplierPayoutsFromSupabase;
 const saveSupplierPayoutToFirestore = async (p: any) => { await saveSupplierPayoutToSupabase(p); };
 const deleteSupplierPayoutFromFirestore = async (id: string) => deleteSupplierPayoutFromSupabase(id);
 
+const AUTHORIZED_ADMIN_USERNAME = 'crmedia';
 const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
 const TOKEN_KEY = 'crm_admin_token';
 const ADMIN_USER_KEY = 'crm_admin_user';
+
+export function isAuthorizedAdminUser(user: any): boolean {
+  if (!user) return false;
+  const username = String(user.username || '').toLowerCase().trim();
+  const role = String(user.role || '').toLowerCase().trim();
+  const email = String(user.email || '').toLowerCase().trim();
+  return (
+    username === AUTHORIZED_ADMIN_USERNAME ||
+    role === 'owner' ||
+    email === AUTHORIZED_ADMIN_EMAIL
+  );
+}
 
 export function getAdminToken(): string | null {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) return null;
   const user = getStoredAdminUser();
-  if (!user || user.email?.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+  if (!user || !isAuthorizedAdminUser(user)) {
     removeAdminToken();
     return null;
   }
@@ -128,9 +141,9 @@ export function getAdminToken(): string | null {
 }
 
 export function setAdminToken(token: string, user?: any) {
-  if (user && user.email && user.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+  if (user && !isAuthorizedAdminUser(user)) {
     removeAdminToken();
-    throw new Error('Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.');
+    throw new Error('Access denied: Unauthorized administrator account.');
   }
   localStorage.setItem(TOKEN_KEY, token);
   if (user) {
@@ -143,7 +156,7 @@ export function getStoredAdminUser(): AdminUser | null {
     const raw = localStorage.getItem(ADMIN_USER_KEY);
     if (!raw) return null;
     const user = JSON.parse(raw);
-    if (user && user.email && user.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+    if (user && !isAuthorizedAdminUser(user)) {
       removeAdminToken();
       return null;
     }
@@ -1120,18 +1133,17 @@ export const api = {
   // ADMIN AUTHENTICATION
   // -----------------------------------------------------------
 
-  async adminLogin(email: string, password: string): Promise<{ token: string; admin: any }> {
-    const cleanEmail = email.trim();
-    if (cleanEmail.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL) {
-      removeAdminToken();
-      throw new Error('Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.');
+  async adminLogin(usernameOrEmail: string, password: string): Promise<{ token: string; admin: any }> {
+    const cleanIdentifier = usernameOrEmail.trim();
+    if (!cleanIdentifier || !password) {
+      throw new Error('Please enter your administrator username and password.');
     }
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password })
+        body: JSON.stringify({ username: cleanIdentifier, email: cleanIdentifier, password })
       });
       const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
 
@@ -1141,86 +1153,27 @@ export const api = {
       }
 
       if (parsed.isJson && parsed.json?.error) {
-        const rawErr = parsed.json.error;
-        if (rawErr.includes('api-key-not-valid') || rawErr.includes('auth/')) {
-          throw new Error('Invalid administrator credentials. Please check your email and password.');
-        }
-        throw new Error(rawErr);
+        throw new Error(parsed.json.error);
       }
     } catch (err: any) {
-      if (err.message?.includes('api-key-not-valid') || err.message?.includes('auth/')) {
-        throw new Error('Invalid administrator credentials. Please verify your email and password.');
-      }
       if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
         throw err;
       }
     }
 
-    throw new Error('Invalid administrator credentials. Please verify your email and password.');
+    throw new Error('Invalid administrator credentials. Please check your username and password.');
   },
 
-  async adminGoogleLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
-    const cleanEmail = (user.email || '').trim().toLowerCase();
-
-    // STRICT AUTHORIZATION CHECK: ONLY contactreachmedialimited@gmail.com is authorized
-    if (cleanEmail !== AUTHORIZED_ADMIN_EMAIL) {
-      removeAdminToken();
-      throw new Error(`Access denied: Google account (${cleanEmail}) is not authorized. Only contactreachmedialimited@gmail.com is authorized to access the Admin Dashboard.`);
-    }
-
-    try {
-      const res = await fetch('/api/auth/google-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          displayName: user.displayName,
-          uid: user.uid,
-          idToken: user.idToken
-        })
-      });
-      const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
-
-      if (res.ok && parsed.isJson && parsed.json?.token) {
-        setAdminToken(parsed.json.token, parsed.json.admin);
-        return { token: parsed.json.token, admin: parsed.json.admin };
-      }
-
-      if (parsed.isJson && parsed.json?.error) {
-        const rawErr = parsed.json.error;
-        if (rawErr.includes('api-key-not-valid') || rawErr.includes('auth/')) {
-          throw new Error('Please sign in below using your administrator email and password.');
-        }
-        throw new Error(rawErr);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message?.includes('api-key-not-valid') || fetchErr.message?.includes('auth/')) {
-        throw new Error('Please sign in below using your administrator email and password.');
-      }
-      if (fetchErr.message && !fetchErr.message.includes('API endpoint') && !fetchErr.message.includes('fetch')) {
-        throw fetchErr;
-      }
-    }
-
-    // Static fallback ONLY for authorized system owner
-    const adminData = {
-      id: user.uid ? `adm-fb-${user.uid}` : 'adm-owner-ruth',
-      name: user.displayName || 'Ruth (System Owner)',
-      email: AUTHORIZED_ADMIN_EMAIL,
-      role: 'owner' as AdminRole,
-      active: true
-    };
-    const adminSessionToken = `crm_admin_token_${Date.now()}`;
-    setAdminToken(adminSessionToken, adminData);
-    return { token: adminSessionToken, admin: adminData };
+  async adminGoogleLogin(_user: any): Promise<{ token: string; admin: any }> {
+    throw new Error('Google Sign-In is disabled for administrators. Please log in using username and password only.');
   },
 
-  async adminFirebaseLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
-    return this.adminGoogleLogin(user);
+  async adminFirebaseLogin(_user: any): Promise<{ token: string; admin: any }> {
+    throw new Error('Firebase login is disabled for administrators. Please log in using username and password only.');
   },
 
-  async adminSupabaseLogin(email: string, pass: string): Promise<{ token: string; admin: any }> {
-    return this.adminLogin(email, pass);
+  async adminSupabaseLogin(username: string, pass: string): Promise<{ token: string; admin: any }> {
+    return this.adminLogin(username, pass);
   },
 
   async adminCheckAuth(): Promise<boolean> {
@@ -1228,7 +1181,7 @@ export const api = {
     if (!token) return false;
 
     const storedUser = getStoredAdminUser();
-    if (!storedUser || storedUser.email?.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+    if (!storedUser || !isAuthorizedAdminUser(storedUser)) {
       removeAdminToken();
       return false;
     }
@@ -1238,8 +1191,8 @@ export const api = {
         headers: { Authorization: `Bearer ${token}` }
       });
       const parsed = await safeParseResponse<any>(res);
-      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.email)) {
-        if (parsed.json?.email?.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.username || parsed.json?.email)) {
+        if (!isAuthorizedAdminUser(parsed.json)) {
           removeAdminToken();
           return false;
         }
@@ -1252,9 +1205,9 @@ export const api = {
       removeAdminToken();
       return false;
     } catch {
-      // In case of transient offline, only maintain session if stored user is the verified owner
+      // In case of transient offline, only maintain session if stored user is authorized
       const liveStored = getStoredAdminUser();
-      return Boolean(liveStored && liveStored.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL && liveStored.active !== false);
+      return Boolean(liveStored && isAuthorizedAdminUser(liveStored) && liveStored.active !== false);
     }
   },
 
