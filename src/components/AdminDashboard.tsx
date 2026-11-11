@@ -758,6 +758,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkDeletingOrders, setBulkDeletingOrders] = useState(false);
 
+  // Multi-select & deletion states across all admin modules
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<string[]>([]);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [selectedShopIds, setSelectedShopIds] = useState<string[]>([]);
+  const [selectedApplicationIds, setSelectedApplicationIds] = useState<string[]>([]);
+  const [selectedPayoutIds, setSelectedPayoutIds] = useState<string[]>([]);
+  const [selectedCouponIds, setSelectedCouponIds] = useState<string[]>([]);
+  const [selectedInventoryLogIds, setSelectedInventoryLogIds] = useState<string[]>([]);
+  const [selectedAuditLogIds, setSelectedAuditLogIds] = useState<string[]>([]);
+  const [selectedAdminUserIds, setSelectedAdminUserIds] = useState<string[]>([]);
+
+  // Generic Confirmation Modal State for permanent deletion
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    itemCount?: number;
+    onConfirm: () => Promise<void> | void;
+    isDeleting?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
   // Messages Filter & Search
   const [messageSearch, setMessageSearch] = useState('');
   const [messageFilter, setMessageFilter] = useState<'all' | 'unread' | 'read' | 'replied'>('all');
@@ -864,33 +893,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleDeletePaymentConfirmation = async (pm: PaymentConfirmation) => {
-    if (!confirm(`Delete payment confirmation #${pm.id} for Order #${pm.orderNumber}?`)) {
-      return;
-    }
-    try {
-      await api.adminDeletePayment(pm.id);
-      showToast('Payment record deleted.');
-      fetchAllData();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to delete payment', 'error');
-    }
+  // Unified Delete Handlers with Confirmation Dialog for All Admin Modules
+  const handleDeletePaymentConfirmation = (pm: PaymentConfirmation) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Payment #${pm.id}`,
+      message: `Are you sure you want to permanently delete payment record for Order #${pm.orderNumber} (${Number(pm.amountPaid || 0).toLocaleString()} RWF)? This cannot be undone.`,
+      onConfirm: async () => {
+        setPayments(prev => prev.filter(p => p.id !== pm.id));
+        setSelectedPaymentIds(prev => prev.filter(id => id !== pm.id));
+        await api.adminDeletePayment(pm.id);
+        showToast('Payment record permanently deleted.');
+        fetchAllData(true);
+      }
+    });
   };
 
-  const handleDeleteCustomerProblem = async (prob: CustomerProblemReport) => {
-    if (!confirm(`Delete customer problem case #${prob.caseNumber}?`)) {
-      return;
-    }
-    try {
-      await api.adminDeleteCustomerReport(prob.id);
-      showToast('Problem case deleted.');
-      if (selectedProblem?.id === prob.id) {
-        setSelectedProblem(null);
+  const handleBulkDeletePayments = () => {
+    if (selectedPaymentIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedPaymentIds.length} Payment Records`,
+      message: `Are you sure you want to permanently delete ${selectedPaymentIds.length} selected payment record(s) from Supabase? This action is permanent and cannot be undone.`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedPaymentIds);
+        setPayments(prev => prev.filter(p => !idSet.has(p.id)));
+        const ids = [...selectedPaymentIds];
+        setSelectedPaymentIds([]);
+        const res = await api.adminBulkDeletePayments(ids);
+        showToast(res.message);
+        fetchAllData(true);
       }
-      fetchAllData();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to delete problem report', 'error');
-    }
+    });
+  };
+
+  const handleDeleteCustomerProblem = (prob: CustomerProblemReport) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Case #${prob.caseNumber}`,
+      message: `Are you sure you want to permanently delete customer problem report #${prob.caseNumber} ("${prob.category}")?`,
+      onConfirm: async () => {
+        setProblems(prev => prev.filter(p => p.id !== prob.id && p.caseNumber !== prob.caseNumber));
+        setSelectedProblemIds(prev => prev.filter(id => id !== prob.id));
+        if (selectedProblem?.id === prob.id) setSelectedProblem(null);
+        await api.adminDeleteCustomerReport(prob.id);
+        showToast('Problem report permanently deleted.');
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteProblems = () => {
+    if (selectedProblemIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedProblemIds.length} Customer Problem Reports`,
+      message: `Are you sure you want to permanently delete ${selectedProblemIds.length} selected customer complaint case(s)?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedProblemIds);
+        setProblems(prev => prev.filter(p => !idSet.has(p.id) && !idSet.has(p.caseNumber)));
+        const ids = [...selectedProblemIds];
+        setSelectedProblemIds([]);
+        if (selectedProblem && idSet.has(selectedProblem.id)) setSelectedProblem(null);
+        const res = await api.adminBulkDeleteCustomerReports(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
   };
 
   const handleOpenEditCustomer = (customer: CustomerUser) => {
@@ -920,17 +989,370 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleDeleteCustomer = async (customer: CustomerUser) => {
-    if (!confirm(`Delete customer "${customer.name}" (${customer.phone})? This will remove their profile.`)) {
+  const handleDeleteCustomer = (customer: CustomerUser) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Customer "${customer.name}"`,
+      message: `Are you sure you want to permanently delete customer account "${customer.name}" (${customer.phone || customer.email})?`,
+      onConfirm: async () => {
+        setCustomers(prev => prev.filter(c => c.id !== customer.id));
+        setSelectedCustomerIds(prev => prev.filter(id => id !== customer.id));
+        if (editingCustomerModal?.id === customer.id) setEditingCustomerModal(null);
+        await api.adminDeleteCustomer(customer.id);
+        showToast(`Customer "${customer.name}" permanently deleted.`);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteCustomers = () => {
+    if (selectedCustomerIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedCustomerIds.length} Customer Accounts`,
+      message: `Are you sure you want to permanently delete ${selectedCustomerIds.length} selected customer account(s)?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedCustomerIds);
+        setCustomers(prev => prev.filter(c => !idSet.has(c.id)));
+        const ids = [...selectedCustomerIds];
+        setSelectedCustomerIds([]);
+        if (editingCustomerModal && idSet.has(editingCustomerModal.id)) setEditingCustomerModal(null);
+        const res = await api.adminBulkDeleteCustomers(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteMessage = (msg: AdminMessage) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Message from ${msg.name || msg.phone}`,
+      message: `Are you sure you want to permanently delete this message record?`,
+      onConfirm: async () => {
+        setMessages(prev => prev.filter(m => m.id !== msg.id));
+        setSelectedMessageIds(prev => prev.filter(id => id !== msg.id));
+        await api.adminDeleteMessage(msg.id);
+        showToast('Message deleted.');
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteMessages = () => {
+    if (selectedMessageIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedMessageIds.length} Messages`,
+      message: `Are you sure you want to permanently delete ${selectedMessageIds.length} selected message(s)?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedMessageIds);
+        setMessages(prev => prev.filter(m => !idSet.has(m.id)));
+        const ids = [...selectedMessageIds];
+        setSelectedMessageIds([]);
+        const res = await api.adminBulkDeleteMessages(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteCategoryWithConfirm = (cat: Category) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Category "${cat.nameEn}"`,
+      message: `Are you sure you want to permanently delete category "${cat.nameEn}"? Any child subcategories will also be removed.`,
+      onConfirm: async () => {
+        setCategories(prev => prev.filter(c => c.id !== cat.id && c.parentId !== cat.id));
+        setSelectedCategoryIds(prev => prev.filter(id => id !== cat.id));
+        try {
+          await api.adminDeleteCategory(cat.id);
+          showToast(`Category "${cat.nameEn}" permanently deleted.`);
+          fetchAllData(true);
+          onRefreshPublicData();
+        } catch (err: any) {
+          showToast(err.message, 'error');
+          fetchAllData(true);
+        }
+      }
+    });
+  };
+
+  const handleBulkDeleteCategories = () => {
+    if (selectedCategoryIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedCategoryIds.length} Categories`,
+      message: `Are you sure you want to permanently delete ${selectedCategoryIds.length} selected categories?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedCategoryIds);
+        setCategories(prev => prev.filter(c => !idSet.has(c.id)));
+        const ids = [...selectedCategoryIds];
+        setSelectedCategoryIds([]);
+        const res = await api.adminBulkDeleteCategories(ids);
+        showToast(res.message);
+        fetchAllData(true);
+        onRefreshPublicData();
+      }
+    });
+  };
+
+  const handleDeleteShopWithConfirm = (shop: VendorShop) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Shop "${shop.name}"`,
+      message: `Are you sure you want to permanently delete shop "${shop.name}"?`,
+      onConfirm: async () => {
+        setShops(prev => prev.filter(s => s.id !== shop.id));
+        setSelectedShopIds(prev => prev.filter(id => id !== shop.id));
+        await api.adminDeleteShop(shop.id);
+        showToast(`Shop "${shop.name}" permanently deleted.`);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteShops = () => {
+    if (selectedShopIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedShopIds.length} Shops`,
+      message: `Are you sure you want to permanently delete ${selectedShopIds.length} selected shops?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedShopIds);
+        setShops(prev => prev.filter(s => !idSet.has(s.id)));
+        const ids = [...selectedShopIds];
+        setSelectedShopIds([]);
+        const res = await api.adminBulkDeleteShops(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteInventoryLogWithConfirm = (log: InventoryLog) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Inventory Log #${log.id}`,
+      message: `Permanently delete stock adjustment record for "${log.productName}" (${log.changeAmount > 0 ? '+' : ''}${log.changeAmount})?`,
+      onConfirm: async () => {
+        setInventoryLogs(prev => prev.filter(l => l.id !== log.id));
+        setSelectedInventoryLogIds(prev => prev.filter(id => id !== log.id));
+        await api.adminDeleteInventoryLog(log.id);
+        showToast('Inventory log deleted.');
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteInventoryLogs = () => {
+    if (selectedInventoryLogIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedInventoryLogIds.length} Inventory Logs`,
+      message: `Permanently delete ${selectedInventoryLogIds.length} selected inventory log records?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedInventoryLogIds);
+        setInventoryLogs(prev => prev.filter(l => !idSet.has(l.id)));
+        const ids = [...selectedInventoryLogIds];
+        setSelectedInventoryLogIds([]);
+        const res = await api.adminBulkDeleteInventoryLogs(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteSupplierAppWithConfirm = (app: any) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Supplier Application`,
+      message: `Permanently delete supplier application from "${app.businessName}" (${app.ownerName})?`,
+      onConfirm: async () => {
+        setSupplierApplications(prev => prev.filter(a => a.id !== app.id));
+        setSelectedApplicationIds(prev => prev.filter(id => id !== app.id));
+        await api.adminDeleteSupplierApplication(app.id);
+        showToast('Supplier application deleted.');
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteSupplierApps = () => {
+    if (selectedApplicationIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedApplicationIds.length} Supplier Applications`,
+      message: `Permanently delete ${selectedApplicationIds.length} selected supplier applications?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedApplicationIds);
+        setSupplierApplications(prev => prev.filter(a => !idSet.has(a.id)));
+        const ids = [...selectedApplicationIds];
+        setSelectedApplicationIds([]);
+        const res = await api.adminBulkDeleteSupplierApplications(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteSupplierPayoutWithConfirm = (payout: any) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Payout Record #${payout.id}`,
+      message: `Permanently delete supplier payout record for "${payout.shopName}" (${Number(payout.payoutAmount || 0).toLocaleString()} RWF)?`,
+      onConfirm: async () => {
+        setSupplierPayouts(prev => prev.filter(p => p.id !== payout.id));
+        setSelectedPayoutIds(prev => prev.filter(id => id !== payout.id));
+        await api.adminDeleteSupplierPayout(payout.id);
+        showToast('Supplier payout deleted.');
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteSupplierPayouts = () => {
+    if (selectedPayoutIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedPayoutIds.length} Supplier Payouts`,
+      message: `Permanently delete ${selectedPayoutIds.length} selected supplier payout records?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedPayoutIds);
+        setSupplierPayouts(prev => prev.filter(p => !idSet.has(p.id)));
+        const ids = [...selectedPayoutIds];
+        setSelectedPayoutIds([]);
+        const res = await api.adminBulkDeleteSupplierPayouts(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteCouponWithConfirm = (coupon: Coupon) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Coupon "${coupon.code}"`,
+      message: `Permanently delete promotional discount code "${coupon.code}"?`,
+      onConfirm: async () => {
+        setCoupons(prev => prev.filter(c => c.id !== coupon.id));
+        setSelectedCouponIds(prev => prev.filter(id => id !== coupon.id));
+        await api.adminDeleteCoupon(coupon.id);
+        showToast(`Coupon "${coupon.code}" deleted.`);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteCoupons = () => {
+    if (selectedCouponIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedCouponIds.length} Coupons`,
+      message: `Permanently delete ${selectedCouponIds.length} selected coupon discount codes?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedCouponIds);
+        setCoupons(prev => prev.filter(c => !idSet.has(c.id)));
+        const ids = [...selectedCouponIds];
+        setSelectedCouponIds([]);
+        const res = await api.adminBulkDeleteCoupons(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteAuditLogWithConfirm = (log: AuditLog) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete Audit Log #${log.id}`,
+      message: `Permanently delete audit log record (${log.action})?`,
+      onConfirm: async () => {
+        setAuditLogs(prev => prev.filter(a => a.id !== log.id));
+        setSelectedAuditLogIds(prev => prev.filter(id => id !== log.id));
+        await api.adminDeleteAuditLog(log.id);
+        showToast('Audit log deleted.');
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteAuditLogs = () => {
+    if (selectedAuditLogIds.length === 0) return;
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${selectedAuditLogIds.length} Audit Logs`,
+      message: `Permanently delete ${selectedAuditLogIds.length} selected audit logs from Supabase?`,
+      onConfirm: async () => {
+        const idSet = new Set(selectedAuditLogIds);
+        setAuditLogs(prev => prev.filter(a => !idSet.has(a.id)));
+        const ids = [...selectedAuditLogIds];
+        setSelectedAuditLogIds([]);
+        const res = await api.adminBulkDeleteAuditLogs(ids);
+        showToast(res.message);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleResetSettingsWithConfirm = () => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: 'Reset Marketplace Settings to Defaults',
+      message: 'Are you sure you want to reset all store settings, fees, receiver information, and USSD dial strings to system factory defaults?',
+      onConfirm: async () => {
+        const res = await api.adminResetSettings();
+        setSettings(res);
+        showToast('Settings reset to system defaults.');
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleDeleteAdminUserWithConfirm = (u: AdminUser) => {
+    if (u.email.toLowerCase() === 'contactreachmedialimited@gmail.com') {
+      showToast('System owner account cannot be deleted.', 'error');
       return;
     }
-    try {
-      await api.adminDeleteCustomer(customer.id);
-      showToast(`Customer "${customer.name}" deleted.`);
-      fetchAllData();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to delete customer', 'error');
+    if (u.email.toLowerCase() === currentUser?.email.toLowerCase()) {
+      showToast('You cannot delete your own administrative account.', 'error');
+      return;
     }
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Remove Administrator: ${u.name}`,
+      message: `Permanently delete administrator account for ${u.name} (${u.email}) from Supabase and revoke all active sessions immediately?`,
+      onConfirm: async () => {
+        setAdminUsers(prev => prev.filter(item => item.id !== u.id));
+        await api.adminDeleteUser(u.id);
+        showToast(`Administrator ${u.name} permanently removed.`);
+        fetchAllData(true);
+      }
+    });
+  };
+
+  const handleBulkDeleteAdminUsers = () => {
+    const validIds = selectedAdminUserIds.filter(id => {
+      const u = adminUsers.find(item => item.id === id);
+      return u && u.email.toLowerCase() !== 'contactreachmedialimited@gmail.com' && u.email.toLowerCase() !== currentUser?.email.toLowerCase();
+    });
+    if (validIds.length === 0) {
+      showToast('No eligible administrative accounts selected for deletion.', 'error');
+      return;
+    }
+    setDeleteConfirmModal({
+      isOpen: true,
+      title: `Delete ${validIds.length} Administrators`,
+      message: `Permanently remove ${validIds.length} administrative team accounts from Supabase and revoke all their sessions?`,
+      onConfirm: async () => {
+        const idSet = new Set(validIds);
+        setAdminUsers(prev => prev.filter(u => !idSet.has(u.id)));
+        setSelectedAdminUserIds([]);
+        await api.adminBulkDeleteUsers(validIds);
+        showToast(`Removed ${validIds.length} administrative accounts.`);
+        fetchAllData(true);
+      }
+    });
   };
 
   // Load All Admin Data (supports silent background real-time updates)
@@ -997,36 +1419,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (fetchedCategories) setCategories(fetchedCategories);
       if (fetchedShops) setShops(fetchedShops);
       if (fetchedPayments && Array.isArray(fetchedPayments)) {
-        setPayments(prev => {
-          const map = new Map<string, PaymentConfirmation>();
-          prev.forEach(p => map.set(p.id, p));
-          fetchedPayments.forEach(p => map.set(p.id, p));
-          const merged = Array.from(map.values()).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-          if (prevPaymentsCountRef.current !== -1 && merged.length > prevPaymentsCountRef.current) {
-            const diff = merged.length - prevPaymentsCountRef.current;
-            showToast(`💳 Real-time: ${diff} new payment proof / SMS received!`, 'success');
-            playNotificationChime('payment');
-            sendDesktopNotification('Payment Received', `${diff} new payment verification(s) received.`);
-          }
-          prevPaymentsCountRef.current = merged.length;
-          return merged;
-        });
+        const sortedPayments = [...fetchedPayments].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        if (prevPaymentsCountRef.current !== -1 && sortedPayments.length > prevPaymentsCountRef.current) {
+          const diff = sortedPayments.length - prevPaymentsCountRef.current;
+          showToast(`💳 Real-time: ${diff} new payment proof / SMS received!`, 'success');
+          playNotificationChime('payment');
+          sendDesktopNotification('Payment Received', `${diff} new payment verification(s) received.`);
+        }
+        prevPaymentsCountRef.current = sortedPayments.length;
+        setPayments(sortedPayments);
       }
       if (fetchedMessages && Array.isArray(fetchedMessages)) {
-        setMessages(prev => {
-          const map = new Map<string, AdminMessage>();
-          prev.forEach(m => map.set(m.id, m));
-          fetchedMessages.forEach(m => map.set(m.id, m));
-          const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          if (prevMessagesCountRef.current !== -1 && merged.length > prevMessagesCountRef.current) {
-            const diff = merged.length - prevMessagesCountRef.current;
-            showToast(`💬 Real-time: ${diff} new SMS / inquiry received!`, 'success');
-            playNotificationChime('sms');
-            sendDesktopNotification('New SMS / Inquiry', `${diff} new customer message(s) received.`);
-          }
-          prevMessagesCountRef.current = merged.length;
-          return merged;
-        });
+        const sortedMessages = [...fetchedMessages].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (prevMessagesCountRef.current !== -1 && sortedMessages.length > prevMessagesCountRef.current) {
+          const diff = sortedMessages.length - prevMessagesCountRef.current;
+          showToast(`💬 Real-time: ${diff} new SMS / inquiry received!`, 'success');
+          playNotificationChime('sms');
+          sendDesktopNotification('New SMS / Inquiry', `${diff} new customer message(s) received.`);
+        }
+        prevMessagesCountRef.current = sortedMessages.length;
+        setMessages(sortedMessages);
       }
       if (fetchedProblems) setProblems(fetchedProblems);
       if (fetchedCoupons) setCoupons(fetchedCoupons);
@@ -1343,21 +1755,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     connectSSE();
 
-    // Direct Supabase Postgres Realtime subscription for products
-    const unsubscribeSupabaseProducts = subscribeToSupabaseTable('products', (payload) => {
-      const { eventType, new: newRecord, old: oldRecord } = payload;
-      if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
-        const mapped = mapSupabaseRowToProduct(newRecord);
-        setProducts(prev => {
-          const exists = prev.some(p => p.id === mapped.id);
-          if (exists) return prev.map(p => p.id === mapped.id ? mapped : p);
-          return [mapped, ...prev];
-        });
-      } else if (eventType === 'DELETE' && oldRecord) {
-        const delId = String(oldRecord.id);
-        setProducts(prev => prev.filter(p => p.id !== delId));
-      }
-    });
+    // Direct Supabase Postgres Realtime multi-table subscriptions for all modules
+    const realtimeTables = [
+      'products',
+      'orders',
+      'payments',
+      'messages',
+      'customer_problems',
+      'categories',
+      'shops',
+      'coupons',
+      'supplier_applications',
+      'supplier_payouts',
+      'inventory_logs',
+      'audit_logs',
+      'users',
+      'admin_users',
+      'app_settings'
+    ];
+    const supabaseUnsubscribers = realtimeTables.map(tbl =>
+      subscribeToSupabaseTable(tbl, (payload) => {
+        if (tbl === 'products') {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+            const mapped = mapSupabaseRowToProduct(newRecord);
+            setProducts(prev => {
+              const exists = prev.some(p => p.id === mapped.id);
+              if (exists) return prev.map(p => p.id === mapped.id ? mapped : p);
+              return [mapped, ...prev];
+            });
+          } else if (eventType === 'DELETE' && oldRecord) {
+            const delId = String(oldRecord.id);
+            setProducts(prev => prev.filter(p => p.id !== delId));
+          }
+        }
+        fetchAllData(true);
+      })
+    );
 
     // 2. Background fallback sync every 10 seconds (reliable multi-device heartbeat)
     const syncInterval = setInterval(() => {
@@ -1383,7 +1817,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     return () => {
       isSubscribed = false;
-      try { unsubscribeSupabaseProducts(); } catch {}
+      supabaseUnsubscribers.forEach(u => { try { u(); } catch {} });
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (eventSource) {
         try { eventSource.close(); } catch {}
@@ -3501,107 +3935,183 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* TAB 4: SAVED SHOPS */}
           {activeTab === 'shops' && (
             <div className="space-y-5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <h1 className="text-xl font-black text-slate-900 tracking-tight">Multiple Saved Shops & Vendors</h1>
                   <p className="text-xs text-slate-500">Manage permanent merchant stores, contact details, and locations</p>
                 </div>
-                <button
-                  onClick={() => {
-                    setEditingShop(null);
-                    setShopForm({
-                      name: '',
-                      category: 'Fashion & Merchandise',
-                      description: '',
-                      location: 'Kigali, Rwanda',
-                      address: 'Fair View Plaza, Kigali',
-                      phone: '0780022600',
-                      email: 'contactreachmedialimited@gmail.com',
-                      deliveryInfo: 'Express same-day Kigali delivery',
-                      logo: 'ShoppingBag',
-                      bannerColor: 'from-orange-500 to-amber-600',
-                      isRecommended: false
-                    });
-                    setShopModalOpen(true);
-                  }}
-                  className="px-4 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-2xl shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Register Saved Shop</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingShop(null);
+                      setShopForm({
+                        name: '',
+                        category: 'Fashion & Merchandise',
+                        description: '',
+                        location: 'Kigali, Rwanda',
+                        address: 'Fair View Plaza, Kigali',
+                        phone: '0780022600',
+                        email: 'contactreachmedialimited@gmail.com',
+                        deliveryInfo: 'Express same-day Kigali delivery',
+                        logo: 'ShoppingBag',
+                        bannerColor: 'from-orange-500 to-amber-600',
+                        isRecommended: false
+                      });
+                      setShopModalOpen(true);
+                    }}
+                    className="px-4 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-2xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Register Saved Shop</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {shops.map(shop => {
-                  const shopProds = products.filter(p => p.shopId === shop.id || p.shopName === shop.name);
-                  return (
-                    <div key={shop.id} className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs">
-                      <div className={`h-14 bg-gradient-to-r ${shop.bannerColor} p-3 flex items-center justify-between text-white`}>
-                        <span className="font-extrabold text-sm">{shop.name}</span>
-                        <div className="flex items-center gap-1.5">
-                          {shop.isRecommended ? (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black">
-                              ★ Recommended
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full bg-black/25 text-white/90 text-[10px] font-medium border border-white/20">
-                              Standard
-                            </span>
-                          )}
-                          {shop.isVerified && (
-                            <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">
-                              Verified
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="p-4 space-y-3 text-xs">
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400">Category</span>
-                          <p className="font-bold text-slate-800">{shop.category}</p>
-                        </div>
-                        <p className="text-slate-500 line-clamp-2">{shop.description}</p>
-                        <div className="space-y-1 text-slate-600">
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{shop.location}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <Phone className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{shop.phone || '0780022600'}</span>
-                          </div>
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                          <span className="font-bold text-slate-700">{shopProds.length} products listed</span>
-                          <button
-                            onClick={() => {
-                              setEditingShop(shop);
-                              setShopForm({
-                                name: shop.name,
-                                category: shop.category,
-                                description: shop.description,
-                                location: shop.location,
-                                address: shop.address || '',
-                                phone: shop.phone || '0780022600',
-                                email: shop.email || 'contactreachmedialimited@gmail.com',
-                                deliveryInfo: shop.deliveryInfo || 'Kigali delivery',
-                                logo: shop.logo,
-                                bannerColor: shop.bannerColor,
-                                isRecommended: Boolean(shop.isRecommended)
-                              });
-                              setShopModalOpen(true);
-                            }}
-                            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg cursor-pointer"
-                          >
-                            Edit Shop
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* Select All & Controls Bar */}
+              <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={shops.length > 0 && selectedShopIds.length === shops.length}
+                      ref={el => {
+                        if (el) el.indeterminate = selectedShopIds.length > 0 && selectedShopIds.length < shops.length;
+                      }}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedShopIds(shops.map(s => s.id));
+                        } else {
+                          setSelectedShopIds([]);
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-[#FF6000] focus:ring-orange-500 cursor-pointer accent-[#FF6000]"
+                    />
+                    <span>Select All ({shops.length} shops)</span>
+                  </label>
+                </div>
+                {selectedShopIds.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600">
+                      {selectedShopIds.length} Selected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleBulkDeleteShops}
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Selected ({selectedShopIds.length})</span>
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {shops.length === 0 ? (
+                <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
+                  <Store className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <h3 className="font-bold text-slate-700 text-sm">No saved shops yet</h3>
+                  <p className="text-xs text-slate-400 mt-1">Register a new shop above to begin organizing merchant products.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {shops.map(shop => {
+                    const shopProds = products.filter(p => p.shopId === shop.id || p.shopName === shop.name);
+                    const isSelected = selectedShopIds.includes(shop.id);
+                    return (
+                      <div
+                        key={shop.id}
+                        className={`bg-white rounded-2xl border transition-all overflow-hidden shadow-2xs ${
+                          isSelected ? 'border-[#FF6000] ring-2 ring-[#FF6000]/20' : 'border-slate-200/90'
+                        }`}
+                      >
+                        <div className={`h-14 bg-gradient-to-r ${shop.bannerColor} p-3 flex items-center justify-between text-white`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setSelectedShopIds(prev =>
+                                  prev.includes(shop.id) ? prev.filter(id => id !== shop.id) : [...prev, shop.id]
+                                );
+                              }}
+                              className="w-4 h-4 rounded border-white text-[#FF6000] focus:ring-orange-500 cursor-pointer accent-[#FF6000] shrink-0"
+                            />
+                            <span className="font-extrabold text-sm truncate">{shop.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {shop.isRecommended ? (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black">
+                                ★ Recommended
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-black/25 text-white/90 text-[10px] font-medium border border-white/20">
+                                Standard
+                              </span>
+                            )}
+                            {shop.isVerified && (
+                              <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">
+                                Verified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-3 text-xs">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400">Category</span>
+                            <p className="font-bold text-slate-800">{shop.category}</p>
+                          </div>
+                          <p className="text-slate-500 line-clamp-2">{shop.description}</p>
+                          <div className="space-y-1 text-slate-600">
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{shop.location}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{shop.phone || '0780022600'}</span>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <span className="font-bold text-slate-700">{shopProds.length} products listed</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingShop(shop);
+                                  setShopForm({
+                                    name: shop.name,
+                                    category: shop.category,
+                                    description: shop.description,
+                                    location: shop.location,
+                                    address: shop.address || '',
+                                    phone: shop.phone || '0780022600',
+                                    email: shop.email || 'contactreachmedialimited@gmail.com',
+                                    deliveryInfo: shop.deliveryInfo || 'Kigali delivery',
+                                    logo: shop.logo,
+                                    bannerColor: shop.bannerColor,
+                                    isRecommended: Boolean(shop.isRecommended)
+                                  });
+                                  setShopModalOpen(true);
+                                }}
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg cursor-pointer"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteShopWithConfirm(shop)}
+                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer transition-colors"
+                                title="Delete Shop"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -3620,6 +4130,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+              {/* Select All & Bulk Action Bar */}
+              <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={supplierApplications.length > 0 && selectedApplicationIds.length === supplierApplications.length}
+                      ref={el => {
+                        if (el) el.indeterminate = selectedApplicationIds.length > 0 && selectedApplicationIds.length < supplierApplications.length;
+                      }}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedApplicationIds(supplierApplications.map(a => a.id));
+                        } else {
+                          setSelectedApplicationIds([]);
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-[#FF6000] focus:ring-orange-500 cursor-pointer accent-[#FF6000]"
+                    />
+                    <span>Select All ({supplierApplications.length} applications)</span>
+                  </label>
+                </div>
+                {selectedApplicationIds.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600">
+                      {selectedApplicationIds.length} Selected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleBulkDeleteSupplierApps}
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Selected ({selectedApplicationIds.length})</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {supplierApplications.length === 0 ? (
                 <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
                   <Store className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -3628,74 +4177,104 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
-                  {supplierApplications.map(app => (
-                    <div key={app.id} className="p-5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-base text-slate-900">{app.businessName}</span>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                              app.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
-                              app.status === 'Rejected' ? 'bg-rose-100 text-rose-800' :
-                              'bg-amber-100 text-amber-800'
-                            }`}>
-                              {app.status}
-                            </span>
+                  {supplierApplications.map(app => {
+                    const isSelected = selectedApplicationIds.includes(app.id);
+                    return (
+                      <div
+                        key={app.id}
+                        className={`p-5 bg-white rounded-2xl border transition-all shadow-2xs space-y-4 ${
+                          isSelected ? 'border-[#FF6000] ring-2 ring-[#FF6000]/20' : 'border-slate-200/90'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setSelectedApplicationIds(prev =>
+                                  prev.includes(app.id) ? prev.filter(id => id !== app.id) : [...prev, app.id]
+                                );
+                              }}
+                              className="w-4 h-4 rounded border-slate-300 text-[#FF6000] focus:ring-orange-500 cursor-pointer accent-[#FF6000]"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-black text-base text-slate-900">{app.businessName}</span>
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                  app.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
+                                  app.status === 'Rejected' ? 'bg-rose-100 text-rose-800' :
+                                  'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {app.status}
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-500 font-medium">Owner: {app.ownerName} · Category: <span className="capitalize">{app.category}</span></span>
+                            </div>
                           </div>
-                          <span className="text-xs text-slate-500 font-medium">Owner: {app.ownerName} · Category: <span className="capitalize">{app.category}</span></span>
-                        </div>
-                        <span className="text-[11px] font-mono text-slate-400">
-                          Applied: {new Date(app.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Phone / Mobile</span>
-                          <span className="font-bold text-slate-800 font-mono">{app.phone}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Location / Address</span>
-                          <span className="font-bold text-slate-800">{app.location}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">TIN / Tax ID</span>
-                          <span className="font-mono text-slate-800">{app.tinNumber || 'Not provided'}</span>
-                        </div>
-                      </div>
-
-                      {app.description && (
-                        <p className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-100">
-                          <span className="font-bold text-slate-500 block text-[10px] uppercase">Business Description:</span>
-                          {app.description}
-                        </p>
-                      )}
-
-                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
-                        {app.status === 'Pending' ? (
-                          <>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono text-slate-400">
+                              Applied: {new Date(app.createdAt).toLocaleDateString()}
+                            </span>
                             <button
-                              onClick={() => handleReviewSupplierApplication(app.id, 'Rejected')}
-                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
+                              type="button"
+                              onClick={() => handleDeleteSupplierAppWithConfirm(app)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer transition-colors"
+                              title="Delete Application"
                             >
-                              Reject Application
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              onClick={() => handleReviewSupplierApplication(app.id, 'Approved')}
-                              className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Approve & Verify Supplier</span>
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-xs font-bold text-slate-400">
-                            Status finalized: <span className="font-black text-slate-700">{app.status}</span>
-                          </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Phone / Mobile</span>
+                            <span className="font-bold text-slate-800 font-mono">{app.phone}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Location / Address</span>
+                            <span className="font-bold text-slate-800">{app.location}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block">TIN / Tax ID</span>
+                            <span className="font-mono text-slate-800">{app.tinNumber || 'Not provided'}</span>
+                          </div>
+                        </div>
+
+                        {app.description && (
+                          <p className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-100">
+                            <span className="font-bold text-slate-500 block text-[10px] uppercase">Business Description:</span>
+                            {app.description}
+                          </p>
                         )}
+
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                          {app.status === 'Pending' ? (
+                            <>
+                              <button
+                                onClick={() => handleReviewSupplierApplication(app.id, 'Rejected')}
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
+                              >
+                                Reject Application
+                              </button>
+                              <button
+                                onClick={() => handleReviewSupplierApplication(app.id, 'Approved')}
+                                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Approve & Verify Supplier</span>
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-400">
+                              Status finalized: <span className="font-black text-slate-700">{app.status}</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -4690,12 +5269,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
+                {/* Bulk Action Banner for Payments */}
+                {selectedPaymentIds.length > 0 && (
+                  <div className="flex items-center justify-between p-3.5 bg-rose-50 border border-rose-200 rounded-2xl animate-in fade-in duration-150">
+                    <span className="font-bold text-rose-900 text-xs">
+                      {selectedPaymentIds.length} payment record(s) selected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleBulkDeletePayments}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Selected ({selectedPaymentIds.length})</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Payments Table */}
                 <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="py-3.5 px-3 w-10 text-center">
+                            <input
+                              type="checkbox"
+                              checked={filteredPaymentsList.length > 0 && selectedPaymentIds.length === filteredPaymentsList.length}
+                              onChange={e => {
+                                if (e.target.checked) setSelectedPaymentIds(filteredPaymentsList.map(p => p.id));
+                                else setSelectedPaymentIds([]);
+                              }}
+                              className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
+                              title="Select all payment records"
+                            />
+                          </th>
                           <th className="py-3.5 px-4">Order ID & Date</th>
                           <th className="py-3.5 px-3">Customer Contact</th>
                           <th className="py-3.5 px-3">Product Details</th>
@@ -4710,7 +5318,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <tbody className="divide-y divide-slate-100">
                         {filteredPaymentsList.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="py-12 text-center text-slate-400">
+                            <td colSpan={10} className="py-12 text-center text-slate-400">
                               <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                               <p className="font-bold text-sm">No payment records matching criteria</p>
                               <p className="text-xs text-slate-400 mt-0.5">Try adjusting the filter or search query</p>
@@ -4731,6 +5339,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                             return (
                               <tr key={pm.id} className="hover:bg-slate-50/70 transition-colors">
+                                <td className="py-3 px-3 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedPaymentIds.includes(pm.id)}
+                                    onChange={e => {
+                                      e.stopPropagation();
+                                      setSelectedPaymentIds(prev =>
+                                        e.target.checked ? [...prev, pm.id] : prev.filter(id => id !== pm.id)
+                                      );
+                                    }}
+                                    className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                  />
+                                </td>
                                 {/* 1. Order ID & Date */}
                                 <td className="py-3 px-4">
                                   <button
@@ -10659,6 +11280,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         currentLang={adminLang}
         onSelectLanguage={handleAdminLanguageChange}
       />
+
+      {/* Universal Permanent Delete Confirmation Modal */}
+      {deleteConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 text-center tracking-tight">
+              {deleteConfirmModal.title || 'Confirm Permanent Deletion'}
+            </h3>
+            <p className="text-xs text-slate-500 text-center mt-2 leading-relaxed">
+              {deleteConfirmModal.message || 'Are you sure you want to permanently delete this? This action cannot be undone and will be synchronized across all admin devices.'}
+            </p>
+            <div className="flex items-center gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmModal.isDeleting}
+                onClick={async () => {
+                  setDeleteConfirmModal(prev => ({ ...prev, isDeleting: true }));
+                  try {
+                    await deleteConfirmModal.onConfirm();
+                  } finally {
+                    setDeleteConfirmModal(prev => ({ ...prev, isOpen: false, isDeleting: false }));
+                  }
+                }}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{deleteConfirmModal.isDeleting ? 'Deleting...' : 'Permanently Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

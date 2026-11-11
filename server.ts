@@ -1046,15 +1046,15 @@ async function deleteFromSupabaseAsync(entityType: string, id: string) {
       await supabase.from('categories').delete().eq('id', id);
     } else if (entityType === 'shops' || entityType === 'shop') {
       await supabase.from('shops').delete().eq('id', id);
-    } else if (entityType === 'payments' || entityType === 'payment') {
+    } else if (entityType === 'payments' || entityType === 'payment' || entityType === 'paymentConfirmations') {
       await supabase.from('payments').delete().eq('id', id);
     } else if (entityType === 'messages' || entityType === 'message') {
       await supabase.from('messages').delete().eq('id', id);
-    } else if (entityType === 'customerProblems' || entityType === 'customer_problems') {
+    } else if (entityType === 'customerProblems' || entityType === 'customer_problems' || entityType === 'reports') {
       await supabase.from('customer_problems').delete().eq('id', id);
     } else if (entityType === 'coupons' || entityType === 'coupon') {
       await supabase.from('coupons').delete().eq('id', id);
-    } else if (entityType === 'users' || entityType === 'customers' || entityType === 'accounts') {
+    } else if (entityType === 'users' || entityType === 'customers' || entityType === 'accounts' || entityType === 'buyers') {
       await supabase.from('users').delete().eq('id', id);
     } else if (entityType === 'adminUsers' || entityType === 'admin_users' || entityType === 'admins') {
       await supabase.from('admin_users').delete().eq('id', id);
@@ -1062,8 +1062,14 @@ async function deleteFromSupabaseAsync(entityType: string, id: string) {
       await supabase.from('supplier_applications').delete().eq('id', id);
     } else if (entityType === 'supplierPayouts' || entityType === 'supplier_payouts') {
       await supabase.from('supplier_payouts').delete().eq('id', id);
+    } else if (entityType === 'inventoryLogs' || entityType === 'inventory_logs' || entityType === 'inventory') {
+      await supabase.from('inventory_logs').delete().eq('id', id);
+    } else if (entityType === 'auditLogs' || entityType === 'audit_logs') {
+      await supabase.from('audit_logs').delete().eq('id', id);
     }
-  } catch {}
+  } catch (err) {
+    console.warn(`[Supabase Delete] Error deleting ${entityType} ${id}:`, err);
+  }
 }
 
 // Hydrate server in-memory database directly from Supabase for all modules
@@ -6278,6 +6284,33 @@ app.delete('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 
   });
 });
 
+app.post('/api/admin/categories/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { categoryIds } = req.body;
+  if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of category IDs to delete.' });
+  }
+
+  const idSet = new Set(categoryIds.map(String));
+  db.deletedRecordIds = db.deletedRecordIds || [];
+
+  const deletedCategories: any[] = [];
+  db.categories = db.categories.filter(c => {
+    if (idSet.has(c.id)) {
+      deletedCategories.push(c);
+      if (!db.deletedRecordIds.includes(c.id)) db.deletedRecordIds.push(c.id);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedCategories.map(c => deleteFromFirestoreAsync('categories', c.id)));
+  logAudit(admin, 'CATEGORIES_BULK_DELETED', `Bulk permanently deleted ${deletedCategories.length} categories`, 'category', Array.from(idSet).join(','));
+  saveDbToDisk('categories_bulk_deleted', { categoryIds });
+
+  res.json({ message: `Successfully deleted ${deletedCategories.length} categories`, count: deletedCategories.length });
+});
+
 // Reassign products between categories
 app.post('/api/admin/categories/reassign-products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
@@ -6457,6 +6490,33 @@ app.delete('/api/admin/shops/:id', requireAdminAuth, requireRole(['owner', 'admi
   saveDbToDisk();
   deleteFromFirestoreAsync('shops', shopId);
   res.json({ message: 'Shop removed', removed });
+});
+
+app.post('/api/admin/shops/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { shopIds } = req.body;
+  if (!Array.isArray(shopIds) || shopIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of shop IDs to delete.' });
+  }
+
+  const idSet = new Set(shopIds.map(String));
+  db.deletedRecordIds = db.deletedRecordIds || [];
+
+  const deletedShops: any[] = [];
+  db.shops = db.shops.filter(s => {
+    if (idSet.has(s.id)) {
+      deletedShops.push(s);
+      if (!db.deletedRecordIds.includes(s.id)) db.deletedRecordIds.push(s.id);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedShops.map(s => deleteFromFirestoreAsync('shops', s.id)));
+  logAudit(admin, 'SHOPS_BULK_DELETED', `Bulk permanently deleted ${deletedShops.length} shops`, 'shop', Array.from(idSet).join(','));
+  saveDbToDisk('shops_bulk_deleted', { shopIds });
+
+  res.json({ message: `Successfully deleted ${deletedShops.length} shops`, count: deletedShops.length });
 });
 
 // -------------------------------------------------------------
@@ -7268,6 +7328,34 @@ app.delete('/api/admin/payments/:id', requireAdminAuth, requireRole(['owner', 'a
   res.json({ message: 'Payment record deleted', removed });
 });
 
+app.post('/api/admin/payments/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { paymentIds } = req.body;
+  if (!Array.isArray(paymentIds) || paymentIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of payment IDs to delete.' });
+  }
+
+  const idSet = new Set(paymentIds.map(String));
+  const deletedPayments: any[] = [];
+  db.paymentConfirmations = db.paymentConfirmations.filter(p => {
+    if (idSet.has(p.id)) {
+      deletedPayments.push(p);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedPayments.map(p => {
+    deleteFromFirestoreAsync('paymentConfirmations', p.id);
+    return deleteFromFirestoreAsync('payments', p.id);
+  }));
+
+  logAudit(admin, 'PAYMENTS_BULK_DELETED', `Bulk permanently deleted ${deletedPayments.length} payment record(s)`, 'payment', Array.from(idSet).join(','));
+  saveDbToDisk('payments_bulk_deleted', { paymentIds });
+
+  res.json({ message: `Successfully deleted ${deletedPayments.length} payment records`, count: deletedPayments.length });
+});
+
 app.post('/api/admin/payment-methods', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { name, type, receiverName, receiverAccount, instructions, isActive } = req.body;
@@ -7344,6 +7432,48 @@ app.post('/api/admin/inventory/adjust', requireAdminAuth, requireRole(PRODUCT_AD
   res.json({ message: 'Stock adjusted successfully', product: prod, log });
 });
 
+// Delete inventory log
+const handleInventoryLogDelete = async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.inventoryLogs.findIndex(l => l.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Inventory log record not found' });
+
+  const removed = db.inventoryLogs.splice(idx, 1)[0];
+  logAudit(admin, 'INVENTORY_LOG_DELETED', `Deleted inventory log #${removed.id} for "${removed.productName}"`, 'inventory_log', removed.id);
+  saveDbToDisk('inventory_log_deleted', { logId: removed.id });
+  deleteFromFirestoreAsync('inventoryLogs', removed.id);
+  res.json({ message: 'Inventory log deleted successfully', removed });
+};
+app.delete('/api/admin/inventory/logs/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleInventoryLogDelete);
+app.delete('/api/admin/inventory-logs/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleInventoryLogDelete);
+
+// Bulk delete inventory logs
+const handleInventoryLogsBulkDelete = async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { logIds } = req.body;
+  if (!Array.isArray(logIds) || logIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of inventory log IDs to delete.' });
+  }
+
+  const idSet = new Set(logIds.map(String));
+  const deletedLogs: any[] = [];
+  db.inventoryLogs = db.inventoryLogs.filter(l => {
+    if (idSet.has(l.id)) {
+      deletedLogs.push(l);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedLogs.map(l => deleteFromFirestoreAsync('inventoryLogs', l.id)));
+  logAudit(admin, 'INVENTORY_LOGS_BULK_DELETED', `Bulk permanently deleted ${deletedLogs.length} inventory log record(s)`, 'inventory_log', Array.from(idSet).join(','));
+  saveDbToDisk('inventory_logs_bulk_deleted', { logIds });
+
+  res.json({ message: `Successfully deleted ${deletedLogs.length} inventory log records`, count: deletedLogs.length });
+};
+app.post('/api/admin/inventory/logs/bulk-delete', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleInventoryLogsBulkDelete);
+app.post('/api/admin/inventory-logs/bulk-delete', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleInventoryLogsBulkDelete);
+
 // -------------------------------------------------------------
 // ADMIN MESSAGES INBOX
 // -------------------------------------------------------------
@@ -7385,6 +7515,33 @@ app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'a
   saveDbToDisk();
   deleteFromFirestoreAsync('messages', removed.id);
   res.json({ message: 'Message deleted', removed });
+});
+
+app.post('/api/admin/messages/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { messageIds } = req.body;
+  if (!Array.isArray(messageIds) || messageIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of message IDs to delete.' });
+  }
+
+  const idSet = new Set(messageIds.map(String));
+  db.deletedRecordIds = db.deletedRecordIds || [];
+
+  const deletedMessages: any[] = [];
+  db.messages = db.messages.filter(m => {
+    if (idSet.has(m.id)) {
+      deletedMessages.push(m);
+      if (!db.deletedRecordIds.includes(m.id)) db.deletedRecordIds.push(m.id);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedMessages.map(m => deleteFromFirestoreAsync('messages', m.id)));
+  logAudit(admin, 'MESSAGES_BULK_DELETED', `Bulk permanently deleted ${deletedMessages.length} message(s)`, 'message', Array.from(idSet).join(','));
+  saveDbToDisk('messages_bulk_deleted', { messageIds });
+
+  res.json({ message: `Successfully deleted ${deletedMessages.length} messages`, count: deletedMessages.length });
 });
 
 // -------------------------------------------------------------
@@ -7622,6 +7779,34 @@ app.delete('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['ow
   res.json({ message: 'Report deleted', removed });
 });
 
+app.post('/api/admin/customer-reports/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { reportIds } = req.body;
+  if (!Array.isArray(reportIds) || reportIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of report IDs to delete.' });
+  }
+
+  const idSet = new Set(reportIds.map(String));
+  const deletedProblems: any[] = [];
+  db.customerProblems = db.customerProblems.filter(p => {
+    if (idSet.has(p.id) || idSet.has(p.caseNumber)) {
+      deletedProblems.push(p);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedProblems.map(p => {
+    deleteFromFirestoreAsync('customerProblems', p.id);
+    return deleteFromFirestoreAsync('reports', p.id);
+  }));
+
+  logAudit(admin, 'CUSTOMER_REPORTS_BULK_DELETED', `Bulk permanently deleted ${deletedProblems.length} customer report(s)`, 'problem_report', Array.from(idSet).join(','));
+  saveDbToDisk('customer_reports_bulk_deleted', { reportIds });
+
+  res.json({ message: `Successfully deleted ${deletedProblems.length} reports`, count: deletedProblems.length });
+});
+
 // -------------------------------------------------------------
 // ADMIN COUPONS & DISCOUNTS
 // -------------------------------------------------------------
@@ -7716,6 +7901,30 @@ app.delete('/api/admin/coupons/:id', requireAdminAuth, requireRole(['owner', 'ad
   saveDbToDisk();
   deleteFromFirestoreAsync('coupons', removed.id);
   res.json({ message: 'Coupon deleted', removed });
+});
+
+app.post('/api/admin/coupons/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { couponIds } = req.body;
+  if (!Array.isArray(couponIds) || couponIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of coupon IDs to delete.' });
+  }
+
+  const idSet = new Set(couponIds.map(String));
+  const deletedCoupons: any[] = [];
+  db.coupons = db.coupons.filter(c => {
+    if (idSet.has(c.id) || idSet.has(c.code)) {
+      deletedCoupons.push(c);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedCoupons.map(c => deleteFromFirestoreAsync('coupons', c.id)));
+  logAudit(admin, 'COUPONS_BULK_DELETED', `Bulk permanently deleted ${deletedCoupons.length} coupon(s)`, 'coupon', Array.from(idSet).join(','));
+  saveDbToDisk('coupons_bulk_deleted', { couponIds });
+
+  res.json({ message: `Successfully deleted ${deletedCoupons.length} coupons`, count: deletedCoupons.length });
 });
 
 // -------------------------------------------------------------
@@ -7904,6 +8113,45 @@ app.delete('/api/admin/customers/:id', requireAdminAuth, requireRole(['owner', '
   res.json({ message: 'Customer removed successfully', removed: sanitizeBuyer(removed) });
 });
 
+app.post('/api/admin/customers/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { customerIds } = req.body;
+  if (!Array.isArray(customerIds) || customerIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of customer IDs to delete.' });
+  }
+
+  const idSet = new Set(customerIds.map(String));
+  const deletedCustomers: any[] = [];
+  db.customers = db.customers.filter(c => {
+    if (idSet.has(c.id)) {
+      deletedCustomers.push(c);
+      return false;
+    }
+    return true;
+  });
+
+  // Invalidate any active session tokens
+  for (const [token, session] of db.customerTokens.entries()) {
+    if (idSet.has(session.customerId)) {
+      db.customerTokens.delete(token);
+    }
+  }
+
+  await Promise.all(deletedCustomers.map(c => {
+    deleteFromFirestoreAsync('customers', c.id);
+    return deleteFromFirestoreAsync('users', c.id);
+  }));
+
+  logAudit(admin, 'CUSTOMERS_BULK_DELETED', `Bulk permanently deleted ${deletedCustomers.length} customer account(s)`, 'customer', Array.from(idSet).join(','));
+  saveDbToDisk('customers_bulk_deleted', { customerIds });
+
+  res.json({ message: `Successfully deleted ${deletedCustomers.length} customer accounts`, count: deletedCustomers.length });
+});
+app.post('/api/admin/buyers/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  // Delegate to customers bulk delete handler
+  return (app as any)._router.handle({ ...req, url: '/api/admin/customers/bulk-delete', method: 'POST' }, res);
+});
+
 app.post('/api/admin/customers', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { name, phone, email, deliveryAddress, status } = req.body;
@@ -7940,6 +8188,40 @@ app.post('/api/admin/customers', requireAdminAuth, requireRole(['owner', 'admini
 
 app.get('/api/admin/audit-logs', requireAdminAuth, (req: Request, res: Response) => {
   res.json(db.auditLogs);
+});
+
+app.delete('/api/admin/audit-logs/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const idx = db.auditLogs.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Audit log record not found' });
+
+  const removed = db.auditLogs.splice(idx, 1)[0];
+  saveDbToDisk('audit_log_deleted', { logId: removed.id });
+  deleteFromFirestoreAsync('auditLogs', removed.id);
+  res.json({ message: 'Audit log deleted successfully', removed });
+});
+
+app.post('/api/admin/audit-logs/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { logIds } = req.body;
+  if (!Array.isArray(logIds) || logIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of audit log IDs to delete.' });
+  }
+
+  const idSet = new Set(logIds.map(String));
+  const deletedLogs: any[] = [];
+  db.auditLogs = db.auditLogs.filter(a => {
+    if (idSet.has(a.id)) {
+      deletedLogs.push(a);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedLogs.map(a => deleteFromFirestoreAsync('auditLogs', a.id)));
+  saveDbToDisk('audit_logs_bulk_deleted', { logIds });
+
+  res.json({ message: `Successfully deleted ${deletedLogs.length} audit logs`, count: deletedLogs.length });
 });
 
 // -------------------------------------------------------------
@@ -8040,8 +8322,51 @@ app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (re
   saveDbToDisk();
   deleteFromFirestoreAsync('adminUsers', removed.id);
   deleteFromFirestoreAsync('admins', removed.id);
+  deleteFromSupabaseAsync('admin_users', removed.id);
 
   res.json({ message: 'Administrator account removed successfully', removed });
+});
+
+app.post('/api/admin/users/bulk-delete', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const userIds: string[] = req.body.userIds || [];
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return res.status(400).json({ error: 'No user IDs provided for deletion.' });
+  }
+
+  const deletedIds: string[] = [];
+  db.deletedRecordIds = db.deletedRecordIds || [];
+
+  for (const id of userIds) {
+    const idx = db.adminUsers.findIndex(u => u.id === id);
+    if (idx !== -1) {
+      const target = db.adminUsers[idx];
+      if (target.email.toLowerCase() === 'contactreachmedialimited@gmail.com') {
+        continue; // Cannot delete master owner
+      }
+      if (target.id === admin?.id || target.email.toLowerCase() === admin?.email?.toLowerCase()) {
+        continue; // Cannot delete self
+      }
+      const removed = db.adminUsers.splice(idx, 1)[0];
+      deletedIds.push(removed.id);
+      if (!db.deletedRecordIds.includes(removed.id)) {
+        db.deletedRecordIds.push(removed.id);
+      }
+      // Revoke sessions
+      for (const [token, session] of db.adminTokens.entries()) {
+        if (session.user.id === removed.id || session.user.email.toLowerCase() === removed.email.toLowerCase()) {
+          db.adminTokens.delete(token);
+          revokedTokens.add(token);
+        }
+      }
+      deleteFromSupabaseAsync('admin_users', removed.id);
+    }
+  }
+
+  logAudit(admin, 'ADMIN_USERS_BULK_DELETED', `Bulk deleted ${deletedIds.length} administrative user account(s)`, 'admin_user');
+  saveDbToDisk();
+
+  res.json({ success: true, count: deletedIds.length, deletedIds });
 });
 
 // -------------------------------------------------------------
@@ -8089,6 +8414,16 @@ app.put('/api/admin/settings', requireAdminAuth, requireRole(['owner', 'administ
     console.error('Failed to update settings:', err);
     res.status(500).json({ error: err?.message || 'Failed to update marketplace settings' });
   }
+});
+
+// Reset website settings to default
+app.post('/api/admin/settings/reset', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  db.settings = { ...initialSettings };
+  logAudit(admin, 'SETTINGS_RESET', 'Reset all marketplace settings and USSD configuration to system defaults', 'settings', 'global');
+  saveDbToDisk('settings_updated', { settings: db.settings });
+  saveToFirestoreAsync('settings', 'global', db.settings);
+  res.json({ message: 'Marketplace settings reset to default', settings: db.settings });
 });
 
 // Dedicated fast Maintenance Mode toggle endpoint
@@ -8181,6 +8516,44 @@ app.patch('/api/admin/supplier-applications/:id', requireAdminAuth, requireRole(
   res.json(application);
 });
 
+app.delete('/api/admin/supplier-applications/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'shop_manager']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  db.supplierApplications = db.supplierApplications || [];
+  const idx = db.supplierApplications.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Supplier application not found' });
+
+  const removed = db.supplierApplications.splice(idx, 1)[0];
+  logAudit(admin, 'SUPPLIER_APPLICATION_DELETED', `Deleted supplier application for "${removed.businessName}"`, 'supplier_application', removed.id);
+  saveDbToDisk('supplier_application_deleted', { applicationId: removed.id });
+  deleteFromFirestoreAsync('supplierApplications', removed.id);
+  res.json({ message: 'Supplier application deleted successfully', removed });
+});
+
+app.post('/api/admin/supplier-applications/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator', 'shop_manager']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { applicationIds } = req.body;
+  if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of application IDs to delete.' });
+  }
+
+  const idSet = new Set(applicationIds.map(String));
+  db.supplierApplications = db.supplierApplications || [];
+  const deletedApps: any[] = [];
+  db.supplierApplications = db.supplierApplications.filter(a => {
+    if (idSet.has(a.id)) {
+      deletedApps.push(a);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedApps.map(a => deleteFromFirestoreAsync('supplierApplications', a.id)));
+  logAudit(admin, 'SUPPLIER_APPLICATIONS_BULK_DELETED', `Bulk permanently deleted ${deletedApps.length} supplier application(s)`, 'supplier_application', Array.from(idSet).join(','));
+  saveDbToDisk('supplier_applications_bulk_deleted', { applicationIds });
+
+  res.json({ message: `Successfully deleted ${deletedApps.length} supplier applications`, count: deletedApps.length });
+});
+
 // -------------------------------------------------------------
 // ADMIN SUPPLIER PAYOUTS & DISBURSEMENTS (PHASE 9)
 // -------------------------------------------------------------
@@ -8227,6 +8600,44 @@ app.post('/api/admin/supplier-payouts/:id/disburse', requireAdminAuth, requireRo
   saveToFirestoreAsync('supplierPayouts', payout.id, payout);
 
   res.json({ message: 'Payout marked as successfully disbursed', payout });
+});
+
+app.delete('/api/admin/supplier-payouts/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  db.supplierPayouts = db.supplierPayouts || [];
+  const idx = db.supplierPayouts.findIndex(p => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Payout record not found' });
+
+  const removed = db.supplierPayouts.splice(idx, 1)[0];
+  logAudit(admin, 'SUPPLIER_PAYOUT_DELETED', `Deleted supplier payout record #${removed.id} for "${removed.shopName}"`, 'supplier_payout', removed.id);
+  saveDbToDisk('supplier_payout_deleted', { payoutId: removed.id });
+  deleteFromFirestoreAsync('supplierPayouts', removed.id);
+  res.json({ message: 'Supplier payout deleted successfully', removed });
+});
+
+app.post('/api/admin/supplier-payouts/bulk-delete', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { payoutIds } = req.body;
+  if (!Array.isArray(payoutIds) || payoutIds.length === 0) {
+    return res.status(400).json({ error: 'Please provide an array of payout IDs to delete.' });
+  }
+
+  const idSet = new Set(payoutIds.map(String));
+  db.supplierPayouts = db.supplierPayouts || [];
+  const deletedPayouts: any[] = [];
+  db.supplierPayouts = db.supplierPayouts.filter(p => {
+    if (idSet.has(p.id)) {
+      deletedPayouts.push(p);
+      return false;
+    }
+    return true;
+  });
+
+  await Promise.all(deletedPayouts.map(p => deleteFromFirestoreAsync('supplierPayouts', p.id)));
+  logAudit(admin, 'SUPPLIER_PAYOUTS_BULK_DELETED', `Bulk permanently deleted ${deletedPayouts.length} supplier payout record(s)`, 'supplier_payout', Array.from(idSet).join(','));
+  saveDbToDisk('supplier_payouts_bulk_deleted', { payoutIds });
+
+  res.json({ message: `Successfully deleted ${deletedPayouts.length} supplier payouts`, count: deletedPayouts.length });
 });
 
 // -------------------------------------------------------------

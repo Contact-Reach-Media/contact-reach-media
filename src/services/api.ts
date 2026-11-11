@@ -38,12 +38,16 @@ import {
   deleteCouponFromSupabase,
   getInventoryLogsFromSupabase,
   saveInventoryLogToSupabase,
+  deleteInventoryLogFromSupabase,
   getAuditLogsFromSupabase,
   saveAuditLogToSupabase,
+  deleteAuditLogFromSupabase,
   getSupplierApplicationsFromSupabase,
   saveSupplierApplicationToSupabase,
+  deleteSupplierApplicationFromSupabase,
   getSupplierPayoutsFromSupabase,
   saveSupplierPayoutToSupabase,
+  deleteSupplierPayoutFromSupabase,
   getSettingsFromSupabase,
   saveSettingsToSupabase,
   getReviewsFromSupabase,
@@ -87,8 +91,10 @@ const saveCouponToFirestore = async (c: any) => { await saveCouponToSupabase(c);
 const deleteCouponFromFirestore = async (id: string) => deleteCouponFromSupabase(id);
 const getInventoryLogsFromFirestore = getInventoryLogsFromSupabase;
 const saveInventoryLogToFirestore = async (l: any) => { await saveInventoryLogToSupabase(l); };
+const deleteInventoryLogFromFirestore = async (id: string) => deleteInventoryLogFromSupabase(id);
 const getAuditLogsFromFirestore = getAuditLogsFromSupabase;
 const saveAuditLogToFirestore = async (l: any) => { await saveAuditLogToSupabase(l); };
+const deleteAuditLogFromFirestore = async (id: string) => deleteAuditLogFromSupabase(id);
 const getCustomersFromFirestore = getAccountsFromSupabase;
 const saveCustomerToFirestore = async (c: any) => { await saveAccountToSupabase(c); };
 const deleteCustomerFromFirestore = async (id: string) => deleteAccountFromSupabase(id);
@@ -101,8 +107,10 @@ const saveSettingsToFirestore = saveSettingsToSupabase;
 const getSupplierApplicationsFromFirestore = getSupplierApplicationsFromSupabase;
 const submitSupplierApplicationToFirestore = async (a: any) => { await saveSupplierApplicationToSupabase(a); };
 const updateSupplierApplicationInFirestore = async (a: any) => { await saveSupplierApplicationToSupabase(a); };
+const deleteSupplierApplicationFromFirestore = async (id: string) => deleteSupplierApplicationFromSupabase(id);
 const getSupplierPayoutsFromFirestore = getSupplierPayoutsFromSupabase;
 const saveSupplierPayoutToFirestore = async (p: any) => { await saveSupplierPayoutToSupabase(p); };
+const deleteSupplierPayoutFromFirestore = async (id: string) => deleteSupplierPayoutFromSupabase(id);
 
 const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
 const TOKEN_KEY = 'crm_admin_token';
@@ -1547,6 +1555,24 @@ export const api = {
     return { message: 'Payment record deleted' };
   },
 
+  async adminBulkDeletePayments(paymentIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(paymentIds.map(id => deletePaymentFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/payments/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ paymentIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { message: `Deleted ${paymentIds.length} payment records`, count: paymentIds.length };
+  },
+
   // Payments
   async adminGetPayments(): Promise<PaymentConfirmation[]> {
     try {
@@ -2054,6 +2080,24 @@ export const api = {
     throw err;
   },
 
+  async adminBulkDeleteCategories(categoryIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(categoryIds.map(id => deleteCategoryFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/categories/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ categoryIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { message: `Deleted ${categoryIds.length} categories`, count: categoryIds.length };
+  },
+
   async adminReassignProducts(productIds: string[], targetMainCategoryId: string, targetSubCategoryId?: string): Promise<any> {
     const res = await fetch('/api/admin/categories/reassign-products', {
       method: 'POST',
@@ -2150,6 +2194,27 @@ export const api = {
         headers: getAuthHeaders()
       });
     } catch {}
+    try {
+      await deleteShopFromFirestore(id);
+    } catch {}
+  },
+
+  async adminBulkDeleteShops(shopIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(shopIds.map(id => deleteShopFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/shops/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ shopIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { message: `Deleted ${shopIds.length} shops`, count: shopIds.length };
   },
 
   // Payment Methods
@@ -2216,6 +2281,34 @@ export const api = {
     return { success: true };
   },
 
+  async adminDeleteInventoryLog(id: string): Promise<void> {
+    try {
+      await fetch(`/api/admin/inventory/logs/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {}
+    try {
+      await deleteInventoryLogFromFirestore(id);
+    } catch {}
+  },
+
+  async adminBulkDeleteInventoryLogs(logIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(logIds.map(id => deleteInventoryLogFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/inventory/logs/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ logIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${logIds.length} inventory logs`, count: logIds.length };
+  },
+
   // Messages Inbox
   async adminGetMessages(): Promise<AdminMessage[]> {
     try {
@@ -2262,6 +2355,22 @@ export const api = {
     try {
       await deleteMessageFromFirestore(id);
     } catch {}
+  },
+
+  async adminBulkDeleteMessages(messageIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(messageIds.map(id => deleteMessageFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/messages/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ messageIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${messageIds.length} messages`, count: messageIds.length };
   },
 
   // Problems & Complaints
@@ -2320,6 +2429,22 @@ export const api = {
     try {
       await deleteCustomerProblemFromFirestore(id);
     } catch {}
+  },
+
+  async adminBulkDeleteCustomerReports(reportIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(reportIds.map(id => deleteCustomerProblemFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/customer-reports/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ reportIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${reportIds.length} reports`, count: reportIds.length };
   },
 
   // Coupons
@@ -2396,6 +2521,22 @@ export const api = {
     } catch {}
   },
 
+  async adminBulkDeleteCoupons(couponIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(couponIds.map(id => deleteCouponFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/coupons/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ couponIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${couponIds.length} coupons`, count: couponIds.length };
+  },
+
   // Customers
   async adminGetCustomers(): Promise<CustomerUser[]> {
     try {
@@ -2467,6 +2608,22 @@ export const api = {
     return { message: 'Customer removed' };
   },
 
+  async adminBulkDeleteCustomers(customerIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(customerIds.map(id => deleteCustomerFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/customers/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ customerIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${customerIds.length} customers`, count: customerIds.length };
+  },
+
   // Audit Logs
   async adminGetAuditLogs(): Promise<AuditLog[]> {
     try {
@@ -2483,6 +2640,34 @@ export const api = {
     } catch {}
 
     return [];
+  },
+
+  async adminDeleteAuditLog(id: string): Promise<void> {
+    try {
+      await fetch(`/api/admin/audit-logs/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {}
+    try {
+      await deleteAuditLogFromFirestore(id);
+    } catch {}
+  },
+
+  async adminBulkDeleteAuditLogs(logIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(logIds.map(id => deleteAuditLogFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/audit-logs/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ logIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${logIds.length} audit logs`, count: logIds.length };
   },
 
   // Settings
@@ -2568,6 +2753,21 @@ export const api = {
     };
   },
 
+  async adminResetSettings(): Promise<AppSettings> {
+    const res = await fetch('/api/admin/settings/reset', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.settings) {
+      throw new Error(parsed.json?.error || 'Failed to reset settings');
+    }
+    try {
+      await saveSettingsToFirestore(parsed.json.settings);
+    } catch {}
+    return parsed.json.settings;
+  },
+
   // Supplier Applications (Phase 9)
   async submitSupplierApplication(payload: {
     businessName: string;
@@ -2646,6 +2846,34 @@ export const api = {
     return updated;
   },
 
+  async adminDeleteSupplierApplication(id: string): Promise<void> {
+    try {
+      await fetch(`/api/admin/supplier-applications/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {}
+    try {
+      await deleteSupplierApplicationFromFirestore(id);
+    } catch {}
+  },
+
+  async adminBulkDeleteSupplierApplications(applicationIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(applicationIds.map(id => deleteSupplierApplicationFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/supplier-applications/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ applicationIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${applicationIds.length} supplier applications`, count: applicationIds.length };
+  },
+
   // Supplier Payouts (Phase 9)
   async adminGetSupplierPayouts(): Promise<any[]> {
     try {
@@ -2689,6 +2917,34 @@ export const api = {
       }
     }
     return { message: 'Payout marked as successfully disbursed' };
+  },
+
+  async adminDeleteSupplierPayout(id: string): Promise<void> {
+    try {
+      await fetch(`/api/admin/supplier-payouts/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {}
+    try {
+      await deleteSupplierPayoutFromFirestore(id);
+    } catch {}
+  },
+
+  async adminBulkDeleteSupplierPayouts(payoutIds: string[]): Promise<{ message: string; count: number }> {
+    try {
+      await Promise.all(payoutIds.map(id => deleteSupplierPayoutFromFirestore(id)));
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/supplier-payouts/bulk-delete', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ payoutIds })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) return parsed.json;
+    } catch {}
+    return { message: `Deleted ${payoutIds.length} supplier payouts`, count: payoutIds.length };
   },
 
   // Exclusive Buyer Google Authentication & Profile
@@ -3154,6 +3410,19 @@ export const api = {
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson) {
       throw new Error(parsed.json?.error || 'Failed to remove admin user');
+    }
+    return parsed.json;
+  },
+
+  async adminBulkDeleteUsers(userIds: string[]): Promise<any> {
+    const res = await fetch('/api/admin/users/bulk-delete', {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userIds })
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson) {
+      throw new Error(parsed.json?.error || 'Failed to bulk delete admin users');
     }
     return parsed.json;
   },

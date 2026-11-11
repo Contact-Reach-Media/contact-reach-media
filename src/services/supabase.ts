@@ -1070,6 +1070,16 @@ export async function saveInventoryLogToSupabase(l: InventoryLog): Promise<void>
   }
 }
 
+export async function deleteInventoryLogFromSupabase(logId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('inventory_logs').delete().eq('id', logId);
+    return !error;
+  } catch (err) {
+    console.warn('[Supabase] Delete inventory log error:', err);
+    return false;
+  }
+}
+
 // -------------------------------------------------------------
 // 11. AUDIT LOGS CRUD
 // -------------------------------------------------------------
@@ -1107,6 +1117,16 @@ export async function saveAuditLogToSupabase(a: AuditLog): Promise<void> {
     }, { onConflict: 'id' });
   } catch (err) {
     console.warn('[Supabase] Save audit log error:', err);
+  }
+}
+
+export async function deleteAuditLogFromSupabase(logId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('audit_logs').delete().eq('id', logId);
+    return !error;
+  } catch (err) {
+    console.warn('[Supabase] Delete audit log error:', err);
+    return false;
   }
 }
 
@@ -1159,6 +1179,16 @@ export async function saveSupplierApplicationToSupabase(a: any): Promise<void> {
   }
 }
 
+export async function deleteSupplierApplicationFromSupabase(appId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('supplier_applications').delete().eq('id', appId);
+    return !error;
+  } catch (err) {
+    console.warn('[Supabase] Delete supplier application error:', err);
+    return false;
+  }
+}
+
 // -------------------------------------------------------------
 // 13. SUPPLIER PAYOUTS CRUD
 // -------------------------------------------------------------
@@ -1207,6 +1237,16 @@ export async function saveSupplierPayoutToSupabase(p: any): Promise<void> {
     }, { onConflict: 'id' });
   } catch (err) {
     console.warn('[Supabase] Save supplier payout error:', err);
+  }
+}
+
+export async function deleteSupplierPayoutFromSupabase(payoutId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('supplier_payouts').delete().eq('id', payoutId);
+    return !error;
+  } catch (err) {
+    console.warn('[Supabase] Delete supplier payout error:', err);
+    return false;
   }
 }
 
