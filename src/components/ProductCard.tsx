@@ -5,6 +5,7 @@ import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
+import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface ProductCardProps {
   product: Product;
@@ -89,7 +90,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Product Image */}
       <div className="relative pt-[100%] bg-slate-50 overflow-hidden">
         <img
-          src={product.imageUrl}
+          src={product.imageUrl ? product.imageUrl : getProductImageDueToProduct(product)}
           alt={product.name}
           referrerPolicy="no-referrer"
           className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
@@ -99,7 +100,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         />
 
         {/* Secondary Angle Preview on Hover (if available) */}
-        {product.images && product.images[1] && product.images[1] !== product.imageUrl && (
+        {product.images && product.images[1] && product.images[1].trim() && product.images[1] !== product.imageUrl && (
           <img
             src={product.images[1]}
             alt={`${product.name} alternate view`}

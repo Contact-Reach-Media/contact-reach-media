@@ -67,14 +67,16 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   // Image Gallery
   const galleryImages = useMemo(() => {
     if (!product) return [];
-    if (product.images && product.images.length > 0) {
-      if (product.imageUrl && !product.images.includes(product.imageUrl)) {
-        return [product.imageUrl, ...product.images];
-      }
-      return product.images;
-    }
+    const validImages = (product.images || []).filter(img => typeof img === 'string' && img.trim().length > 0);
     const resolved = getProductImageDueToProduct(product);
-    return [resolved];
+    if (validImages.length > 0) {
+      if (product.imageUrl && product.imageUrl.trim().length > 0 && !validImages.includes(product.imageUrl)) {
+        return [product.imageUrl, ...validImages];
+      }
+      return validImages;
+    }
+    const mainImg = product.imageUrl && product.imageUrl.trim().length > 0 ? product.imageUrl : resolved;
+    return [mainImg];
   }, [product]);
 
   const effectiveVariations: ProductVariation[] = useMemo(() => {
@@ -249,7 +251,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                         }`}
                       >
                         <img
-                          src={img}
+                          src={img ? img : getProductImageDueToProduct(product)}
                           alt={`${product.name} thumbnail ${idx + 1}`}
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"

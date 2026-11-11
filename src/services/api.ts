@@ -104,14 +104,26 @@ const updateSupplierApplicationInFirestore = async (a: any) => { await saveSuppl
 const getSupplierPayoutsFromFirestore = getSupplierPayoutsFromSupabase;
 const saveSupplierPayoutToFirestore = async (p: any) => { await saveSupplierPayoutToSupabase(p); };
 
+const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
 const TOKEN_KEY = 'crm_admin_token';
 const ADMIN_USER_KEY = 'crm_admin_user';
 
 export function getAdminToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return null;
+  const user = getStoredAdminUser();
+  if (!user || user.email?.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+    removeAdminToken();
+    return null;
+  }
+  return token;
 }
 
 export function setAdminToken(token: string, user?: any) {
+  if (user && user.email && user.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+    removeAdminToken();
+    throw new Error('Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.');
+  }
   localStorage.setItem(TOKEN_KEY, token);
   if (user) {
     localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(user));
@@ -121,7 +133,13 @@ export function setAdminToken(token: string, user?: any) {
 export function getStoredAdminUser(): AdminUser | null {
   try {
     const raw = localStorage.getItem(ADMIN_USER_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    if (user && user.email && user.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+      removeAdminToken();
+      return null;
+    }
+    return user;
   } catch {
     return null;
   }
@@ -333,46 +351,6 @@ const fallbackAdminUsers: AdminUser[] = [
     name: 'Ruth (System Owner)',
     email: 'contactreachmedialimited@gmail.com',
     role: 'owner',
-    active: true,
-    phone: '0780022600'
-  },
-  {
-    id: 'adm-owner-thierry-250',
-    name: 'Thierry Maniriho (Platform Owner)',
-    email: 'manirihothierry250@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-owner-umuhuza',
-    name: 'Umuhuza Market (Platform Owner)',
-    email: 'umuhuzamarket@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0780022600'
-  },
-  {
-    id: 'adm-ops',
-    name: 'Thierry Maniriho (Operations Admin)',
-    email: 'admin@contactreachmedia.rw',
-    role: 'administrator',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-prod-mgr',
-    name: 'Eric Kwizera (Catalog & Inventory)',
-    email: 'products@contactreachmedia.rw',
-    role: 'product_manager',
-    active: true,
-    phone: '0788112233'
-  },
-  {
-    id: 'adm-support',
-    name: 'Clarisse Umutoni (Customer Support)',
-    email: 'support@contactreachmedia.rw',
-    role: 'customer_support',
     active: true,
     phone: '0780022600'
   }
@@ -1136,6 +1114,10 @@ export const api = {
 
   async adminLogin(email: string, password: string): Promise<{ token: string; admin: any }> {
     const cleanEmail = email.trim();
+    if (cleanEmail.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL) {
+      removeAdminToken();
+      throw new Error('Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.');
+    }
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -1170,7 +1152,13 @@ export const api = {
   },
 
   async adminGoogleLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
-    const cleanEmail = (user.email || '').trim();
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+
+    // STRICT AUTHORIZATION CHECK: ONLY contactreachmedialimited@gmail.com is authorized
+    if (cleanEmail !== AUTHORIZED_ADMIN_EMAIL) {
+      removeAdminToken();
+      throw new Error(`Access denied: Google account (${cleanEmail}) is not authorized. Only contactreachmedialimited@gmail.com is authorized to access the Admin Dashboard.`);
+    }
 
     try {
       const res = await fetch('/api/auth/google-login', {
@@ -1206,29 +1194,17 @@ export const api = {
       }
     }
 
-    // Resilient Google Auth fallback if server is offline or in decoupled static mode
-    const isOwner = cleanEmail.toLowerCase() === 'contactreachmedialimited@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'manirihothierry250@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'manirihothierry36@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'manirihothierry6@gmail.com' ||
-                    cleanEmail.toLowerCase() === 'umuhuzamarket@gmail.com' ||
-                    cleanEmail.toLowerCase().startsWith('manirihothierry');
-    const fallbackUser = fallbackAdminUsers.find(a => a.email.toLowerCase() === cleanEmail.toLowerCase());
-
-    if (isOwner || fallbackUser) {
-      const adminData = fallbackUser || {
-        id: user.uid ? `adm-fb-${user.uid}` : 'adm-owner-ruth',
-        name: user.displayName || 'Ruth (System Owner)',
-        email: cleanEmail,
-        role: 'owner',
-        active: true
-      };
-      const adminSessionToken = `crm_admin_token_${Date.now()}`;
-      setAdminToken(adminSessionToken, adminData);
-      return { token: adminSessionToken, admin: adminData };
-    }
-
-    throw new Error(`Access denied. Google account (${cleanEmail}) is not an authorized ContactReach Market administrator.`);
+    // Static fallback ONLY for authorized system owner
+    const adminData = {
+      id: user.uid ? `adm-fb-${user.uid}` : 'adm-owner-ruth',
+      name: user.displayName || 'Ruth (System Owner)',
+      email: AUTHORIZED_ADMIN_EMAIL,
+      role: 'owner' as AdminRole,
+      active: true
+    };
+    const adminSessionToken = `crm_admin_token_${Date.now()}`;
+    setAdminToken(adminSessionToken, adminData);
+    return { token: adminSessionToken, admin: adminData };
   },
 
   async adminFirebaseLogin(user: { email: string; displayName?: string | null; uid?: string; idToken?: string }): Promise<{ token: string; admin: any }> {
@@ -1243,38 +1219,34 @@ export const api = {
     const token = getAdminToken();
     if (!token) return false;
 
+    const storedUser = getStoredAdminUser();
+    if (!storedUser || storedUser.email?.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+      removeAdminToken();
+      return false;
+    }
+
     try {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const parsed = await safeParseResponse<any>(res);
-      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.email || parsed.json?.role)) {
+      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.email)) {
+        if (parsed.json?.email?.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+          removeAdminToken();
+          return false;
+        }
         // Refresh stored admin user profile
         setAdminToken(token, parsed.json);
         return true;
       }
 
-      // Explicit deactivation / revocation guard
-      if (res.status === 401 || res.status === 403) {
-        const errMsg = (parsed.json?.error || '').toLowerCase();
-        if (errMsg.includes('deactivated') || errMsg.includes('revoked')) {
-          removeAdminToken();
-          return false;
-        }
-      }
-
-      // If stored user is active, maintain session to prevent accidental logout on reload
-      const stored = getStoredAdminUser();
-      if (stored && stored.active !== false) {
-        return true;
-      }
-
+      // If server explicitly denied access, remove token immediately
       removeAdminToken();
       return false;
     } catch {
-      // In case of transient network offline or server reboot, keep existing session if stored
-      const stored = getStoredAdminUser();
-      return Boolean(stored && stored.active !== false);
+      // In case of transient offline, only maintain session if stored user is the verified owner
+      const liveStored = getStoredAdminUser();
+      return Boolean(liveStored && liveStored.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL && liveStored.active !== false);
     }
   },
 

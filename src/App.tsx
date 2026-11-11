@@ -250,7 +250,7 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     const token = api.getAdminToken();
     const user = api.getStoredAdminUser();
-    return Boolean(token && user && user.active !== false);
+    return Boolean(token && user && user.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && user.active !== false);
   });
   const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'products' | 'orders' | 'inventory' | 'settings'>('overview');
   const [autoOpenAddProduct, setAutoOpenAddProduct] = useState(initialRoute.view === 'admin-upload');
@@ -358,7 +358,8 @@ export default function App() {
     }
     else if (view === 'admin-login') targetPath = '/admin/login';
     else if (view === 'admin') {
-      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+      const stored = api.getStoredAdminUser();
+      const isAuth = isAdminLoggedIn && stored?.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && stored.active !== false;
       if (!isAuth) {
         resolvedView = 'admin-login';
         targetPath = '/admin/login';
@@ -378,7 +379,8 @@ export default function App() {
       targetPath = '/categories';
     }
     else if (view === 'admin-upload' || view === 'upload-product') {
-      const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+      const stored = api.getStoredAdminUser();
+      const isAuth = isAdminLoggedIn && stored?.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && stored.active !== false;
       if (isAuth) {
         setIsAdminLoggedIn(true);
         setAdminInitialTab('products');
@@ -593,10 +595,15 @@ export default function App() {
     const handlePopState = () => {
       const route = parseRouteFromLocation();
       if (route.view === 'admin') {
-        setActiveView('admin');
-        const isAuth = isAdminLoggedIn || Boolean(api.getAdminToken() && api.getStoredAdminUser()?.active !== false);
+        const stored = api.getStoredAdminUser();
+        const isAuth = isAdminLoggedIn && stored?.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com' && stored.active !== false;
         if (!isAuth) {
+          api.adminLogout().catch(() => {});
+          setIsAdminLoggedIn(false);
+          setActiveView('admin-login');
           setIsAdminLoginOpen(true);
+        } else {
+          setActiveView('admin');
         }
       } else if (route.view === 'track-order') {
         setIsTrackingOpen(true);
@@ -951,9 +958,7 @@ export default function App() {
           <SignInPage
             initialMode={activeView === 'register' ? 'register' : 'signin'}
             onSuccess={(user) => {
-              const isAdmin = (user as any).role === 'admin' || 
-                              (user as any).role === 'owner' || 
-                              user.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com';
+              const isAdmin = user.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com';
               if (isAdmin) {
                 setIsAdminLoggedIn(true);
                 setActiveView('admin');

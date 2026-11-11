@@ -107,11 +107,11 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-orange-500" />
                 <h2 className="font-extrabold text-base sm:text-lg tracking-tight">
-                  Staff Control Panel
+                  Admin Control Panel
                 </h2>
               </div>
               <p className="text-[11px] text-slate-400">
-                ContactReach Market RBAC Security
+                Restricted to <span className="text-orange-400 font-semibold">contactreachmedialimited@gmail.com</span>
               </p>
             </div>
           </div>
@@ -163,7 +163,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Administrator Email
+                    Authorized Administrator Email
                   </label>
                   <div className="relative">
                     <input
@@ -171,7 +171,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter administrator email"
+                      placeholder="contactreachmedialimited@gmail.com"
                       autoComplete="email"
                       className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500 bg-slate-50/50"
                     />

@@ -82,7 +82,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight">ContactReach Admin Portal</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Sign in with authorized administrator credentials to manage products, orders, categories, and settings.
+            Access strictly restricted to authorized owner account <span className="text-orange-400 font-semibold">contactreachmedialimited@gmail.com</span>.
           </p>
         </div>
 
@@ -123,7 +123,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           <div>
             <label className="block text-slate-300 font-bold mb-1">
-              Admin Email
+              Authorized Admin Email
             </label>
             <div className="relative">
               <input
@@ -131,7 +131,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter administrator email"
+                placeholder="contactreachmedialimited@gmail.com"
                 className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none"
               />
               <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />

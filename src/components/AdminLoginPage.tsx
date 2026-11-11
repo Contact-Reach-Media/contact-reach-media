@@ -109,7 +109,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
               Admin Portal
             </h1>
             <p className="text-xs text-slate-500">
-              Authorized staff and executive management login for ContactReach Market.
+              Authorized access restricted exclusively to <span className="font-semibold text-slate-700">contactreachmedialimited@gmail.com</span>.
             </p>
           </div>
 
@@ -161,14 +161,14 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
           <form onSubmit={handlePasswordLogin} className="space-y-4 text-xs">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Admin Email
+                Authorized Admin Email
               </label>
               <div className="relative">
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter administrator email"
+                  placeholder="contactreachmedialimited@gmail.com"
                   required
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs"
                 />

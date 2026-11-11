@@ -12,6 +12,7 @@ import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '.
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
+import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface ProductModalProps {
   product: Product | null;
@@ -63,13 +64,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   // Image Gallery
   const galleryImages = useMemo(() => {
     if (!product) return [];
-    if (product.images && product.images.length > 0) {
-      if (product.imageUrl && !product.images.includes(product.imageUrl)) {
-        return [product.imageUrl, ...product.images];
+    const validImages = (product.images || []).filter(img => typeof img === 'string' && img.trim().length > 0);
+    const fallback = getProductImageDueToProduct(product);
+    if (validImages.length > 0) {
+      if (product.imageUrl && product.imageUrl.trim().length > 0 && !validImages.includes(product.imageUrl)) {
+        return [product.imageUrl, ...validImages];
       }
-      return product.images;
+      return validImages;
     }
-    return product.imageUrl ? [product.imageUrl] : [];
+    const mainImg = product.imageUrl && product.imageUrl.trim().length > 0 ? product.imageUrl : fallback;
+    return [mainImg];
   }, [product]);
 
   // Customer-facing variations: strictly use genuine variations provided by admin (e.g. Color, Storage, Size).
@@ -368,7 +372,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         }`}
                       >
                         <img
-                          src={img}
+                          src={img || getProductImageDueToProduct(product)}
                           alt={`Thumbnail ${idx + 1}`}
                           className="w-full h-full object-cover"
                         />
@@ -380,7 +384,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 {/* Main Product Image */}
                 <div className="relative flex-1 rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 pt-[100%] shadow-inner group/img">
                   <img
-                    src={galleryImages[selectedImageIndex] || product.imageUrl}
+                    src={galleryImages[selectedImageIndex] || getProductImageDueToProduct(product)}
                     alt={product.name}
                     onClick={() => setIsLightboxOpen(true)}
                     className="absolute inset-0 w-full h-full object-contain p-2 cursor-zoom-in transition-transform duration-300 group-hover/img:scale-105"
@@ -585,7 +589,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                                 }`}
                               >
                                 {/* Swatch thumbnail image */}
-                                {thumbImg && (
+                                {thumbImg && thumbImg.trim() && (
                                   <img
                                     src={thumbImg}
                                     alt={opt}

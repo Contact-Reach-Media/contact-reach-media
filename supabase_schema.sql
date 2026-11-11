@@ -17,20 +17,60 @@ begin
 end;
 $$ language plpgsql;
 
--- ---------- Staff & roles ----------
+-- ---------- Staff & Roles - Strict single-owner admin authorization ----------
+-- Database Rule: Only contactreachmedialimited@gmail.com is authorized to hold an admin/staff role
+create table if not exists admin_users (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  email text unique not null check (lower(trim(email)) = 'contactreachmedialimited@gmail.com'),
+  name text not null default 'Ruth (System Owner)',
+  phone text default '0780022600',
+  role text not null default 'owner' check (role in ('owner')),
+  active boolean not null default true,
+  last_login timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Trigger to reject any insertion or update in admin_users if email is not contactreachmedialimited@gmail.com
+create or replace function enforce_authorized_admin_email()
+returns trigger as $$
+begin
+  if lower(trim(new.email)) != 'contactreachmedialimited@gmail.com' then
+    raise exception 'Security violation: Only contactreachmedialimited@gmail.com is authorized as an administrator.';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trigger_enforce_admin_email on admin_users;
+create trigger trigger_enforce_admin_email
+  before insert or update on admin_users
+  for each row execute function enforce_authorized_admin_email();
+
 create table if not exists staff_accounts (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('owner','administrator','product_manager','shop_manager','order_manager','customer_support')),
+  role text not null check (role in ('owner')),
   full_name text,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
+-- Database Security Rule: is_staff strictly checks that the authenticated session email is contactreachmedialimited@gmail.com
 create or replace function is_staff(roles text[] default null) returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from staff_accounts s
-    where s.user_id = auth.uid() and s.active
-      and (roles is null or s.role = any(roles)));
+  select exists (
+    select 1 from auth.users u
+    join staff_accounts s on s.user_id = u.id
+    where u.id = auth.uid()
+      and lower(trim(u.email)) = 'contactreachmedialimited@gmail.com'
+      and s.active
+      and (roles is null or s.role = any(roles))
+  ) or exists (
+    select 1 from auth.users u
+    where u.id = auth.uid()
+      and lower(trim(u.email)) = 'contactreachmedialimited@gmail.com'
+  );
 $$;
 
 -- ---------- Customers & Profiles ----------
@@ -335,8 +375,15 @@ alter table order_items enable row level security;
 alter table payments enable row level security;
 alter table website_settings enable row level security;
 alter table audit_logs enable row level security;
+alter table admin_users enable row level security;
 
 -- Idempotent RLS Policies (Safe to run repeatedly)
+drop policy if exists "only owner can read admin_users" on admin_users;
+create policy "only owner can read admin_users" on admin_users for select using (is_staff(array['owner']));
+
+drop policy if exists "only owner can manage admin_users" on admin_users;
+create policy "only owner can manage admin_users" on admin_users for all using (is_staff(array['owner'])) with check (is_staff(array['owner']));
+
 drop policy if exists "staff read staff" on staff_accounts;
 create policy "staff read staff" on staff_accounts for select using (is_staff(array['owner','administrator']));
 

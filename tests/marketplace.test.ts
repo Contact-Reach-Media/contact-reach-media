@@ -63,7 +63,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'attacker@evil.com', password: 'SomeHackerPassword123!' })
     });
-    assert.strictEqual(unauthorizedAccount.status, 401, 'Unauthorized emails should be rejected');
+    assert(unauthorizedAccount.status === 401 || unauthorizedAccount.status === 403, 'Unauthorized emails should be rejected with 401 or 403');
   });
 
   // TEST 3: Admin Authentication Success with Authorized Credentials
@@ -935,15 +935,14 @@ async function runTests() {
     assert.strictEqual(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin', 'Must include Referrer-Policy');
   });
 
-  // TEST 26: Admin Team Management with Role-Based Access Control
-  let createdStaffId = '';
+  // TEST 26: Strict Single-Owner Security: Non-owner admin user creation is forbidden
   const testStaffEmail = `staff.test.${Date.now()}@contactreachmedia.rw`;
-  await test('Owner can create and manage administrative team accounts with RBAC', async () => {
+  await test('Admin user creation forbids non-owner accounts and preserves single-owner security', async () => {
     // 1. Unauthenticated or non-admin cannot access users endpoint
     const unauthRes = await fetch(`${BASE_URL}/api/admin/users`);
     assert.strictEqual(unauthRes.status, 401, 'Unauthenticated users request must return 401');
 
-    // 2. Owner creates new product_manager account
+    // 2. Attempting to create non-authorized email account is rejected with 403 Forbidden
     const createRes = await fetch(`${BASE_URL}/api/admin/users`, {
       method: 'POST',
       headers: {
@@ -957,24 +956,21 @@ async function runTests() {
         phone: '0788998877'
       })
     });
-    assert.strictEqual(createRes.status, 201, 'Admin user creation should succeed');
-    const created = await createRes.json();
-    assert.strictEqual(created.email, testStaffEmail.toLowerCase());
-    assert.strictEqual(created.role, 'product_manager');
-    createdStaffId = created.id;
+    assert.strictEqual(createRes.status, 403, 'Non-owner admin user creation must be rejected with 403');
 
-    // 3. User appears in team list
+    // 3. Admin users list contains ONLY contactreachmedialimited@gmail.com
     const listRes = await fetch(`${BASE_URL}/api/admin/users`, {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
     assert.strictEqual(listRes.status, 200);
     const users = await listRes.json();
-    assert(users.some((u: any) => u.id === createdStaffId), 'Newly created admin must be in list');
+    assert(Array.isArray(users), 'Users must be an array');
+    assert(users.every((u: any) => u.email === 'contactreachmedialimited@gmail.com'), 'Only authorized owner email can exist in admin users');
   });
 
-  // TEST 27: Immediate Access Revocation upon Account Deactivation
-  await test('Administrative account deactivation revokes access and sessions immediately', async () => {
-    // 1. Staff signs in with password to obtain active token
+  // TEST 27: Immediate Access Rejection for Unauthorized Email Logins
+  await test('Non-owner email logins are strictly denied and rejected with 403 Forbidden', async () => {
+    // 1. Unauthorized email attempt to log in with password is rejected with 403 Forbidden
     const staffLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -983,50 +979,13 @@ async function runTests() {
         password: process.env.ADMIN_PASSWORD || 'CRM@2026'
       })
     });
-    assert.strictEqual(staffLoginRes.status, 200, 'Staff login should succeed while active');
-    const staffData = await staffLoginRes.json();
-    const staffToken = staffData.token;
+    assert.strictEqual(staffLoginRes.status, 403, 'Unauthorized email login must be rejected with 403');
 
-    // 2. Staff token can access inventory logs
-    const testReq1 = await fetch(`${BASE_URL}/api/admin/inventory/logs`, {
-      headers: { Authorization: `Bearer ${staffToken}` }
-    });
-    assert.strictEqual(testReq1.status, 200, 'Active staff can access their role endpoints');
-
-    // 3. Owner deactivates staff account
-    const deactRes = await fetch(`${BASE_URL}/api/admin/users/${createdStaffId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`
-      },
-      body: JSON.stringify({ active: false })
-    });
-    assert.strictEqual(deactRes.status, 200);
-
-    // 4. Staff token is immediately rejected with 403 Forbidden
+    // 2. Direct request without valid authorized token is rejected
     const testReq2 = await fetch(`${BASE_URL}/api/admin/inventory/logs`, {
-      headers: { Authorization: `Bearer ${staffToken}` }
+      headers: { Authorization: `Bearer invalid-token-12345` }
     });
-    assert.strictEqual(testReq2.status, 403, 'Deactivated staff request must be rejected with 403 immediately');
-
-    // 5. Subsequent login is also rejected
-    const staffLoginAgain = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: testStaffEmail,
-        password: process.env.ADMIN_PASSWORD || 'CRM@2026'
-      })
-    });
-    assert.strictEqual(staffLoginAgain.status, 401, 'Deactivated staff login must be rejected');
-
-    // 6. Clean up: Delete test user
-    const delRes = await fetch(`${BASE_URL}/api/admin/users/${createdStaffId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${adminToken}` }
-    });
-    assert.strictEqual(delRes.status, 200);
+    assert(testReq2.status === 401 || testReq2.status === 403, 'Invalid token must be rejected');
   });
 
   // TEST 28: Deletion Tombstones Prevent Deleted Products from Resurrecting
@@ -1705,156 +1664,87 @@ async function runTests() {
     assert(testOrderRes.status === 404 || testOrderRes.status === 403, 'Snooping without phone or token must be rejected');
   });
 
-  // TEST 44: Owner Authorization for manirihocoss@gmail.com
-  let cossToken = '';
-  await test('Platform Owner manirihocoss@gmail.com can sign in and obtain valid owner session', async () => {
+  // TEST 44: Strict Denial for Unauthorized Email manirihocoss@gmail.com
+  await test('Non-owner email manirihocoss@gmail.com is strictly denied and rejected with 403', async () => {
     const loginRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'manirihocoss@gmail.com',
-        displayName: 'Thierry Maniriho (Platform Owner)',
+        displayName: 'Thierry Maniriho (Unauthorized)',
         uid: 'thierry-coss-firebase-uid-789'
       })
     });
-    assert.strictEqual(loginRes.status, 200, 'manirihocoss login must succeed with 200');
+    assert.strictEqual(loginRes.status, 403, 'manirihocoss login must be rejected with 403');
     const data = await loginRes.json();
-    assert.strictEqual(data.admin.role, 'owner', 'Role must be owner');
-    assert(data.token, 'Must return session token');
-    cossToken = data.token;
+    assert(data.error && data.error.includes('authorized'), 'Must return unauthorized security error');
   });
 
-  // TEST 45: Shop Manager & Product Manager Product Creation & Management
-  await test('Shop Manager role can create and update products in the catalog', async () => {
-    // Create a temporary admin with shop_manager role
-    const newAdminEmail = `shopmgr-${Date.now()}@contactreachmedia.rw`;
-    const createAdminRes = await fetch(`${BASE_URL}/api/admin/users`, {
+  // TEST 45: Product Catalog Creation & Management Restricted to Authorized Admin
+  await test('Catalog product creation and updates succeed for authorized admin and reject unauthorized callers', async () => {
+    // 1. Unauthenticated product upload fails
+    const unauthUpload = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Unauthorized Handbag',
+        price: 28000,
+        category: 'ibikapu'
+      })
+    });
+    assert.strictEqual(unauthUpload.status, 401, 'Public user must be rejected with 401');
+
+    // 2. Upload a product as authorized admin
+    const uploadRes = await fetch(`${BASE_URL}/api/admin/products`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`
       },
       body: JSON.stringify({
-        name: 'Gisozi Shop Manager',
-        email: newAdminEmail,
-        role: 'shop_manager',
-        phone: '0788990011'
-      })
-    });
-    assert.strictEqual(createAdminRes.status, 201, 'Creating shop_manager must succeed');
-    const createdAdmin = await createAdminRes.json();
-    assert.strictEqual(createdAdmin.role, 'shop_manager');
-
-    // Sign in as this shop_manager
-    const smLoginRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: newAdminEmail,
-        displayName: 'Gisozi Shop Manager',
-        uid: `uid-${createdAdmin.id}`
-      })
-    });
-    assert.strictEqual(smLoginRes.status, 200);
-    const smAuth = await smLoginRes.json();
-    const smToken = smAuth.token;
-
-    // Upload a product as shop_manager
-    const uploadRes = await fetch(`${BASE_URL}/api/admin/products`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${smToken}`
-      },
-      body: JSON.stringify({
-        name: 'Shop Manager Tested Handbag',
+        name: 'Authorized Owner Tested Handbag',
         price: 28000,
         category: 'ibikapu',
-        description: 'Quality tested leather handbag uploaded by shop manager',
+        description: 'Quality tested leather handbag uploaded by authorized owner',
         stock: 12,
-        shopName: 'Gisozi Boutique'
+        shopName: 'Kigali Boutique'
       })
     });
-    assert.strictEqual(uploadRes.status, 201, 'shop_manager must be permitted to create products');
+    assert.strictEqual(uploadRes.status, 201, 'Authorized owner must be permitted to create products');
     const createdProd = await uploadRes.json();
-    assert.strictEqual(createdProd.name, 'Shop Manager Tested Handbag');
+    assert.strictEqual(createdProd.name, 'Authorized Owner Tested Handbag');
 
-    // Edit product as shop_manager
+    // 3. Edit product as authorized admin
     const editRes = await fetch(`${BASE_URL}/api/admin/products/${createdProd.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${smToken}`
+        Authorization: `Bearer ${adminToken}`
       },
       body: JSON.stringify({
         price: 30000,
         stock: 15
       })
     });
-    assert.strictEqual(editRes.status, 200, 'shop_manager must be permitted to edit products');
+    assert.strictEqual(editRes.status, 200, 'Authorized owner must be permitted to edit products');
     const updatedProd = await editRes.json();
     assert.strictEqual(updatedProd.price, 30000);
     assert.strictEqual(updatedProd.stock, 15);
 
-    // Clean up created product
+    // 4. Clean up created product
     await fetch(`${BASE_URL}/api/admin/products/${createdProd.id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${smToken}` }
+      headers: { Authorization: `Bearer ${adminToken}` }
     });
   });
 
-  // TEST 46: Deactivated Admin Account Revocation
-  await test('Deactivated administrator accounts have session revoked and are denied access', async () => {
-    // Create an admin to deactivate
-    const deactEmail = `deact-${Date.now()}@contactreachmedia.rw`;
-    const crRes = await fetch(`${BASE_URL}/api/admin/users`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`
-      },
-      body: JSON.stringify({
-        name: 'Temporary Admin',
-        email: deactEmail,
-        role: 'administrator'
-      })
-    });
-    const deactUser = await crRes.json();
-
-    // Login to get token
-    const lgRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: deactEmail,
-        displayName: 'Temporary Admin',
-        uid: `uid-${deactUser.id}`
-      })
-    });
-    const { token: userToken } = await lgRes.json();
-
-    // Verify access works before deactivation
+  // TEST 46: Unauthorized Admin Token Access Rejection
+  await test('Unauthorized admin tokens are rejected with 403 Forbidden', async () => {
+    // Non-owner tokens cannot access protected endpoints
     const testWorkRes = await fetch(`${BASE_URL}/api/admin/stats`, {
-      headers: { Authorization: `Bearer ${userToken}` }
+      headers: { Authorization: 'Bearer unauthorized-token-sample' }
     });
-    assert.strictEqual(testWorkRes.status, 200);
-
-    // Deactivate user as owner
-    const deactPatch = await fetch(`${BASE_URL}/api/admin/users/${deactUser.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`
-      },
-      body: JSON.stringify({ active: false })
-    });
-    assert.strictEqual(deactPatch.status, 200);
-
-    // Verify token is immediately revoked
-    const revokedRes = await fetch(`${BASE_URL}/api/admin/stats`, {
-      headers: { Authorization: `Bearer ${userToken}` }
-    });
-    assert.strictEqual(revokedRes.status, 403, 'Deactivated admin token must be rejected with 403');
+    assert(testWorkRes.status === 401 || testWorkRes.status === 403, 'Unauthorized token must be rejected');
   });
 
   await test('Landed cost engine adheres strictly to Rwanda pricing formulas', async () => {

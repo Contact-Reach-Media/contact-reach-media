@@ -9,6 +9,7 @@ import { CurrencyCode, SUPPORTED_CURRENCIES, CurrencyOption } from '../utils/cur
 import { Product, CustomerUser } from '../types.ts';
 import { MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
 import { SearchableLanguageModal } from './SearchableLanguageModal.tsx';
+import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface HeaderProps {
   currentLang: Language;
@@ -474,9 +475,12 @@ export const Header: React.FC<HeaderProps> = ({
                         className="p-2.5 flex items-center gap-3 hover:bg-orange-50/60 cursor-pointer transition-colors"
                       >
                         <img
-                          src={product.imageUrl}
+                          src={product.imageUrl ? product.imageUrl : getProductImageDueToProduct(product)}
                           alt={product.name}
                           className="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = getProductImageDueToProduct(product);
+                          }}
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-900 truncate">

@@ -84,6 +84,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
 
+  // Strict Security Enforcement: Auto-logout any unauthorized account
+  useEffect(() => {
+    const user = getStoredAdminUser();
+    if (!user || user.email?.toLowerCase().trim() !== 'contactreachmedialimited@gmail.com') {
+      onLogout();
+    }
+  }, [onLogout]);
+
   // Toast feedback
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -3237,7 +3245,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div className="flex items-center gap-3">
                                   <div className="relative group shrink-0" onClick={(e) => e.stopPropagation()}>
                                     <img
-                                      src={p.imageUrl}
+                                      src={p.imageUrl || getProductImageDueToProduct(p)}
                                       alt={p.name}
                                       className="w-12 h-12 object-cover rounded-xl border border-slate-200"
                                     />
@@ -8025,14 +8033,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="p-2.5 rounded-xl bg-white border border-red-200 flex items-center justify-between gap-3 shadow-2xs">
                         <div className="flex items-center gap-3">
                           <div className="w-16 h-10 rounded-lg overflow-hidden bg-black shrink-0 relative group">
-                            <img
-                              src={getYouTubeThumbnailUrl(prodForm.videoUrl) || ''}
-                              alt="YouTube Video Thumbnail"
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
+                            {getYouTubeThumbnailUrl(prodForm.videoUrl) ? (
+                              <img
+                                src={getYouTubeThumbnailUrl(prodForm.videoUrl)!}
+                                alt="YouTube Video Thumbnail"
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : null}
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                               <Youtube className="w-4 h-4 text-white" />
                             </div>
@@ -9993,7 +10003,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 .slice(0, 15)
                 .map(p => (
                   <div key={p.id} className="py-1.5 px-2 flex items-center gap-2.5 text-xs">
-                    <img src={p.imageUrl} alt={p.name} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-200" />
+                    <img src={p.imageUrl || getProductImageDueToProduct(p)} alt={p.name} className="w-8 h-8 rounded-lg object-cover shrink-0 border border-slate-200" />
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-slate-800 truncate">{p.name}</p>
                       <p className="text-[10px] text-slate-400 font-mono">{p.sku || p.id} · {p.price.toLocaleString()} FRW · {p.status}</p>
