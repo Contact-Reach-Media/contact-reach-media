@@ -355,6 +355,17 @@ function resolveProductImageDueToProduct(
 // -------------------------------------------------------------
 const sseClients = new Set<Response>();
 
+// Global Site Versioning and Live Catalog Tracking
+export let siteVersion = '2.5.0';
+export let siteBuildTime = Date.now();
+export let lastCatalogUpdate = new Date().toISOString();
+
+export function setSiteVersion(newVersion: string) {
+  siteVersion = newVersion;
+  siteBuildTime = Date.now();
+  broadcastDatabaseEvent('site_version_update', { version: siteVersion, buildTime: siteBuildTime });
+}
+
 export function calculateCurrentStats() {
   const confirmedOrDelivered = db.orders.filter(o =>
     o.paymentStatus === 'Paid' ||
@@ -415,10 +426,14 @@ export function calculateCurrentStats() {
 }
 
 export function broadcastDatabaseEvent(eventType: string = 'database_change', payload?: any) {
+  lastCatalogUpdate = new Date().toISOString();
   if (sseClients.size === 0) return;
   const stats = calculateCurrentStats();
   const messageData = JSON.stringify({
     type: eventType,
+    version: siteVersion,
+    buildTime: siteBuildTime,
+    lastCatalogUpdate,
     timestamp: new Date().toISOString(),
     stats,
     payload: payload || null
@@ -1787,12 +1802,13 @@ app.post('/api/admin/exchange-rates/refresh', requireAdminAuth, async (req: Requ
 });
 
 // -------------------------------------------------------------
+// -------------------------------------------------------------
 // DYNAMIC GOOGLE-POWERED TRANSLATION API (MULTI-LANGUAGE BATCH)
 // -------------------------------------------------------------
 
 // In-memory LRU translation cache to prevent repetitive requests
 const translationMemoryCache = new Map<string, string>();
-const MAX_TRANSLATION_CACHE_SIZE = 5000;
+const MAX_TRANSLATION_CACHE_SIZE = 10000;
 
 async function translateSingleText(text: string, targetLang: string, sourceLang: string = 'en'): Promise<string> {
   const clean = (text || '').trim();
@@ -1808,6 +1824,19 @@ async function translateSingleText(text: string, targetLang: string, sourceLang:
     return translationMemoryCache.get(cacheKey)!;
   }
 
+  // Helper to save to LRU cache
+  const cacheResult = (res: string) => {
+    if (translationMemoryCache.size > MAX_TRANSLATION_CACHE_SIZE) {
+      // Clear oldest half of cache
+      const keys = Array.from(translationMemoryCache.keys());
+      for (let i = 0; i < 2000; i++) {
+        translationMemoryCache.delete(keys[i]);
+      }
+    }
+    translationMemoryCache.set(cacheKey, res);
+    return res;
+  };
+
   // 1. If an official Google Translate API key is configured in settings or environment
   const googleApiKey = process.env.GOOGLE_TRANSLATE_API_KEY || db.settings.googleTranslateApiKey;
   if (googleApiKey) {
@@ -1821,33 +1850,29 @@ async function translateSingleText(text: string, targetLang: string, sourceLang:
           source: sourceLang,
           format: 'text'
         }),
-        signal: AbortSignal.timeout(6000)
+        signal: AbortSignal.timeout(15000)
       });
       if (gRes.ok) {
         const gData = await gRes.json();
         const translatedText = gData?.data?.translations?.[0]?.translatedText;
         if (translatedText) {
-          if (translationMemoryCache.size > MAX_TRANSLATION_CACHE_SIZE) {
-            translationMemoryCache.clear();
-          }
-          translationMemoryCache.set(cacheKey, translatedText);
-          return translatedText;
+          return cacheResult(translatedText);
         }
       }
-    } catch (err: any) {
-      console.warn('[GoogleTranslate API Key notice]:', err?.message || err);
+    } catch {
+      // Gracefully fall through to secondary endpoint
     }
   }
 
-  // 2. High-performance direct Google Cloud Translation backend endpoint
+  // 2. High-performance direct Google Cloud Translation primary endpoint
   try {
     const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(clean)}`;
     const res = await fetch(gtxUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept': 'application/json'
       },
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(15000)
     });
 
     if (res.ok) {
@@ -1855,22 +1880,42 @@ async function translateSingleText(text: string, targetLang: string, sourceLang:
       if (Array.isArray(data) && Array.isArray(data[0])) {
         const translated = data[0].map((item: any) => item[0]).join('');
         if (translated) {
-          if (translationMemoryCache.size > MAX_TRANSLATION_CACHE_SIZE) {
-            translationMemoryCache.clear();
-          }
-          translationMemoryCache.set(cacheKey, translated);
-          return translated;
+          return cacheResult(translated);
         }
       }
     }
-  } catch (err: any) {
-    console.warn(`[GoogleTranslate] Error translating to ${targetLang}:`, err?.message || err);
+  } catch {
+    // Gracefully fall through to secondary fallback
   }
 
-  return text;
+  // 3. Fallback Google Translation endpoint for guaranteed delivery
+  try {
+    const fallbackUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&q=${encodeURIComponent(clean)}`;
+    const res = await fetch(fallbackUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]) {
+        const translated = Array.isArray(data[0]) ? data[0].join('') : String(data[0]);
+        if (translated) {
+          return cacheResult(translated);
+        }
+      }
+    }
+  } catch {
+    // Graceful return original text on any network issue
+  }
+
+  return clean;
 }
 
-// POST /api/translate - Batch translation endpoint
+// POST /api/translate - Resilient Batch translation endpoint
 app.post('/api/translate', async (req: Request, res: Response) => {
   try {
     const { texts, targetLang, sourceLang = 'en' } = req.body;
@@ -1886,16 +1931,40 @@ app.post('/api/translate', async (req: Request, res: Response) => {
     }
 
     if (Array.isArray(texts)) {
-      const results: string[] = [];
-      // Process in concurrent batches of 10 to ensure rapid response
-      const BATCH_SIZE = 10;
-      for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-        const chunk = texts.slice(i, i + BATCH_SIZE);
-        const translatedChunk = await Promise.all(
-          chunk.map(txt => translateSingleText(String(txt || ''), targetLang, sourceLang))
+      const results: string[] = new Array(texts.length);
+      const itemsToFetch: { text: string; index: number }[] = [];
+
+      // 1. Immediately fulfill cached items
+      texts.forEach((rawText, idx) => {
+        const clean = String(rawText || '').trim();
+        if (!clean) {
+          results[idx] = String(rawText || '');
+          return;
+        }
+        const cacheKey = `${sourceLang}:${targetLang}:${clean}`;
+        if (translationMemoryCache.has(cacheKey)) {
+          results[idx] = translationMemoryCache.get(cacheKey)!;
+        } else {
+          itemsToFetch.push({ text: clean, index: idx });
+        }
+      });
+
+      // 2. Process uncached items with concurrency limit of 4 to prevent Google rate-limiting
+      const CONCURRENCY = 4;
+      for (let i = 0; i < itemsToFetch.length; i += CONCURRENCY) {
+        const batch = itemsToFetch.slice(i, i + CONCURRENCY);
+        await Promise.all(
+          batch.map(async (item) => {
+            const translated = await translateSingleText(item.text, targetLang, sourceLang);
+            results[item.index] = translated;
+          })
         );
-        results.push(...translatedChunk);
+        // Micro-pause between batches if many items
+        if (i + CONCURRENCY < itemsToFetch.length) {
+          await new Promise(r => setTimeout(r, 15));
+        }
       }
+
       return res.json({
         success: true,
         translations: results,
@@ -1913,9 +1982,14 @@ app.post('/api/translate', async (req: Request, res: Response) => {
       provider: 'Google Cloud Translation'
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      error: err?.message || 'Translation failed'
+    // Always return clean 200 with fallback to avoid breaking UI
+    const fallbackText = req.body.texts || req.body.text || '';
+    res.json({
+      success: true,
+      translations: Array.isArray(fallbackText) ? fallbackText : [fallbackText],
+      translation: typeof fallbackText === 'string' ? fallbackText : '',
+      targetLang: req.body.targetLang || 'en',
+      provider: 'Google Cloud Translation (Fallback)'
     });
   }
 });
@@ -4562,6 +4636,97 @@ app.post('/api/auth/reset-password-request', (req: Request, res: Response) => {
   // Audit the reset request
   logAudit({ name: 'System', role: 'security' }, 'PASSWORD_RESET_REQUESTED', `Password reset instructions sent for ${email}`);
   res.json({ message: 'If an authorized administrator account exists for this email, password reset instructions have been delivered.' });
+});
+
+// -------------------------------------------------------------
+// PUBLIC GLOBAL REAL-TIME DATABASE STREAM & VERSIONING
+// -------------------------------------------------------------
+
+// Public SSE Stream for all visitors, customers, and devices worldwide
+app.get('/api/database/stream', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders?.();
+
+  // Initial connection handshake with current site version and catalog status
+  const handshake = JSON.stringify({
+    type: 'connected',
+    version: siteVersion,
+    buildTime: siteBuildTime,
+    lastCatalogUpdate,
+    timestamp: new Date().toISOString()
+  });
+  res.write(`event: db_update\ndata: ${handshake}\n\n`);
+
+  sseClients.add(res);
+
+  // Ping every 15s to keep cellular & proxy connections alive worldwide
+  const pingInterval = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(pingInterval);
+      sseClients.delete(res);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    sseClients.delete(res);
+  });
+  req.on('error', () => {
+    clearInterval(pingInterval);
+    sseClients.delete(res);
+  });
+});
+
+// Global Site Version & Sync Status Endpoint (for polling & service workers)
+app.get('/api/version', (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.json({
+    success: true,
+    version: siteVersion,
+    buildTime: siteBuildTime,
+    lastCatalogUpdate,
+    totalProducts: db.products.filter(p => p.status !== 'Hidden').length,
+    totalCategories: db.categories.length,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/sync/status', (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.json({
+    success: true,
+    version: siteVersion,
+    buildTime: siteBuildTime,
+    lastCatalogUpdate,
+    totalProducts: db.products.filter(p => p.status !== 'Hidden').length,
+    totalCategories: db.categories.length,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Admin endpoint to broadcast instant site-wide update to all devices worldwide
+app.post('/api/admin/broadcast-update', requireAdminAuth, (req: Request, res: Response) => {
+  siteBuildTime = Date.now();
+  if (req.body.version) {
+    siteVersion = String(req.body.version);
+  }
+  broadcastDatabaseEvent('site_version_update', {
+    version: siteVersion,
+    buildTime: siteBuildTime,
+    message: req.body.message || 'Latest site update published'
+  });
+  res.json({
+    success: true,
+    message: 'Global update broadcasted to all connected devices worldwide.',
+    version: siteVersion,
+    buildTime: siteBuildTime
+  });
 });
 
 // -------------------------------------------------------------

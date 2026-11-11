@@ -42,12 +42,35 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Handle message events from client for cache invalidation and hot-update
+self.addEventListener('message', (event) => {
+  if (event.data) {
+    if (event.data.type === 'SKIP_WAITING') {
+      self.skipWaiting();
+    }
+    if (event.data.type === 'CLEAR_CACHE') {
+      caches.keys().then((keys) => Promise.all(keys.map(k => caches.delete(k))));
+    }
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
   // Skip non-GET requests
   if (request.method !== 'GET') {
+    return;
+  }
+
+  // Bypass service worker for SSE real-time streams, version checks, and dynamic translation API
+  if (
+    url.pathname.includes('/stream') ||
+    url.pathname.includes('/realtime') ||
+    url.pathname.startsWith('/api/version') ||
+    url.pathname.startsWith('/api/sync') ||
+    url.pathname.startsWith('/api/translate')
+  ) {
     return;
   }
 

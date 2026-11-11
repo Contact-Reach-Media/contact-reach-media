@@ -522,13 +522,45 @@ export default function App() {
       }
     });
 
-    // 2. High-speed Server-Sent Events (SSE) live database stream
+    // 2. High-speed Server-Sent Events (SSE) live database stream for worldwide instant sync
     let eventSource: EventSource | null = null;
+    let lastKnownVersion = '';
+    let lastKnownCatalogUpdate = '';
+
+    const handleSyncRefresh = () => {
+      api.getProducts().then(freshProds => {
+        if (Array.isArray(freshProds) && freshProds.length > 0) {
+          setProducts(freshProds);
+        }
+      }).catch(() => {});
+
+      api.getCategories().then(freshCats => {
+        if (Array.isArray(freshCats) && freshCats.length > 0) {
+          setCategories(freshCats);
+        }
+      }).catch(() => {});
+    };
+
     try {
       eventSource = new EventSource('/api/database/stream');
       eventSource.addEventListener('db_update', (event) => {
         try {
           const parsed = JSON.parse(event.data);
+          if (!parsed) return;
+
+          // Track version updates
+          if (parsed.version && (!lastKnownVersion || parsed.version !== lastKnownVersion)) {
+            lastKnownVersion = parsed.version;
+            if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
+            }
+          }
+
+          if (parsed.lastCatalogUpdate) {
+            lastKnownCatalogUpdate = parsed.lastCatalogUpdate;
+          }
+
+          // Real-time catalog events
           if (parsed?.type === 'product_created' && parsed.payload?.product) {
             const p: Product = parsed.payload.product;
             setProducts(prev => {
@@ -544,13 +576,49 @@ export default function App() {
           } else if (parsed?.type === 'products_bulk_deleted' && Array.isArray(parsed.payload?.productIds)) {
             const delSet = new Set(parsed.payload.productIds);
             setProducts(prev => prev.filter(x => !delSet.has(x.id)));
+          } else if (
+            parsed?.type === 'category_created' ||
+            parsed?.type === 'category_updated' ||
+            parsed?.type === 'category_deleted'
+          ) {
+            api.getCategories().then(freshCats => {
+              if (Array.isArray(freshCats)) setCategories(freshCats);
+            }).catch(() => {});
+          } else if (parsed?.type === 'settings_updated') {
+            api.getSettings().then((st: AppSettings) => {
+              if (st) setSettings(st);
+            }).catch(() => {});
+          } else if (parsed?.type === 'site_version_update' || parsed?.type === 'catalog_update') {
+            handleSyncRefresh();
           }
         } catch {}
       });
     } catch {}
 
+    // 3. Resilient 30s background sync heartbeat (fallback for networks blocking SSE)
+    const syncHeartbeat = setInterval(async () => {
+      try {
+        const res = await fetch('/api/sync/status', { cache: 'no-store' });
+        if (res.ok) {
+          const status = await res.json();
+          if (status?.lastCatalogUpdate && lastKnownCatalogUpdate && status.lastCatalogUpdate !== lastKnownCatalogUpdate) {
+            lastKnownCatalogUpdate = status.lastCatalogUpdate;
+            handleSyncRefresh();
+          }
+          if (status?.version && lastKnownVersion && status.version !== lastKnownVersion) {
+            lastKnownVersion = status.version;
+            if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
+            }
+            handleSyncRefresh();
+          }
+        }
+      } catch {}
+    }, 30000);
+
     return () => {
       try { unsubscribeSupabase(); } catch {}
+      clearInterval(syncHeartbeat);
       if (eventSource) {
         try { eventSource.close(); } catch {}
       }

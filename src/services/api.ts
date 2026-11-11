@@ -1272,6 +1272,32 @@ export const api = {
     return 'Password reset request logged. Please check with the system owner or management.';
   },
 
+  async broadcastSiteUpdate(message?: string): Promise<{ success: boolean; version: string; buildTime: number }> {
+    try {
+      const token = getAdminToken();
+      const res = await fetch('/api/admin/broadcast-update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ message })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return { success: false, version: '', buildTime: 0 };
+  },
+
+  async getSyncStatus(): Promise<any> {
+    try {
+      const res = await fetch('/api/sync/status', { cache: 'no-store' });
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  },
+
   // -----------------------------------------------------------
   // ADMIN DASHBOARD
   // -----------------------------------------------------------
