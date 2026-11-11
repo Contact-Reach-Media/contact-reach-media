@@ -48,7 +48,6 @@ import { CartDrawer } from './components/CartDrawer.tsx';
 import { CheckoutModal } from './components/CheckoutModal.tsx';
 import { PaymentConfirmationModal } from './components/PaymentConfirmationModal.tsx';
 import { OrderTrackingModal } from './components/OrderTrackingModal.tsx';
-import { AdminLoginModal } from './components/AdminLoginModal.tsx';
 import { AdminGatewayCard } from './components/AdminGatewayCard.tsx';
 import { PWAInstallModal } from './components/PWAInstallModal.tsx';
 import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
@@ -264,7 +263,6 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
-  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
   const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
@@ -466,7 +464,7 @@ export default function App() {
       setIsAdminLoggedIn(isAuth);
 
       if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
-        setIsAdminLoginOpen(true);
+        setActiveView('admin-login');
       }
 
       if (initialRoute.productId) {
@@ -601,7 +599,6 @@ export default function App() {
           api.adminLogout().catch(() => {});
           setIsAdminLoggedIn(false);
           setActiveView('admin-login');
-          setIsAdminLoginOpen(true);
         } else {
           setActiveView('admin');
         }
@@ -791,7 +788,7 @@ export default function App() {
         /* VISITOR & BUYER PROFESSIONAL MAINTENANCE SCREEN */
         <MaintenancePage
           settings={settings}
-          onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
+          onOpenAdminLogin={() => handleNavigate('admin-login')}
           onOpenOrderTracking={() => setIsTrackingOpen(true)}
           onCheckStatus={refreshAllData}
           currentLang={currentLang}
@@ -985,7 +982,7 @@ export default function App() {
           products={products}
           onNavigate={handleNavigate}
           onSelectProduct={(p) => handleSelectProduct(p)}
-          onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
+          onOpenAdminLogin={() => handleNavigate('admin-login')}
           onOpenTracking={() => setIsTrackingOpen(true)}
           onSearch={(q) => {
             setSearchQuery(q);
@@ -1639,33 +1636,7 @@ export default function App() {
         />
       )}
 
-      {/* 6. Admin Login Modal */}
-      {isAdminLoginOpen && (
-        <AdminLoginModal
-          isOpen={isAdminLoginOpen}
-          onClose={() => {
-            setIsAdminLoginOpen(false);
-            if (window.location.pathname === '/admin' && !isAdminLoggedIn) {
-              window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
-            }
-          }}
-          onLoginSuccess={(user?: any) => {
-            setIsAdminLoggedIn(true);
-            setActiveView('admin');
-            if (pendingAdminAction === 'upload-product') {
-              setAdminInitialTab('products');
-              setAutoOpenAddProduct(true);
-              setPendingAdminAction(null);
-            }
-            if (window.location.pathname !== '/admin') {
-              window.history.pushState({ view: 'admin' }, '', '/admin');
-            }
-            showToast(`Welcome Administrator ${user?.name || ''}`);
-          }}
-        />
-      )}
-
-      {/* 7. Save to Home Screen / PWA Install Modal */}
+      {/* Save to Home Screen / PWA Install Modal */}
       <PWAInstallModal
         isOpen={isAppDownloadOpen}
         onClose={() => setIsAppDownloadOpen(false)}
