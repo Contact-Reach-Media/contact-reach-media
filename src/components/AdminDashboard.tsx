@@ -582,12 +582,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleRemoveImage = (targetUrl: string) => {
     const currentList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
     const filtered = currentList.filter(u => u !== targetUrl);
-    const newPrimary = prodForm.imageUrl === targetUrl ? (filtered[0] || '') : prodForm.imageUrl;
+    const newPrimary = prodForm.imageUrl === targetUrl 
+      ? (filtered[0] || '') 
+      : (filtered.includes(prodForm.imageUrl) ? prodForm.imageUrl : (filtered[0] || ''));
     setProdForm(prev => ({
       ...prev,
       imageUrl: newPrimary,
       imagesText: filtered.join('\n')
     }));
+    showToast('Image deleted from product gallery');
+  };
+
+  const handleClearAllImages = () => {
+    setProdForm(prev => ({
+      ...prev,
+      imageUrl: '',
+      imagesText: ''
+    }));
+    showToast('All product images deleted');
   };
 
   const handleMoveImage = (index: number, direction: 'left' | 'right') => {
@@ -657,17 +669,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveManageImages = async () => {
     if (!manageImagesProduct) return;
-    if (manageImagesList.length === 0) {
-      showToast('Product must have at least one picture', 'error');
-      return;
-    }
     setSavingManageImages(true);
     try {
       await api.adminUpdateProductImages(manageImagesProduct.id, {
         images: manageImagesList,
-        imageUrl: manageImagesList[0]
+        imageUrl: manageImagesList[0] || ''
       });
-      showToast(`Updated pictures for "${manageImagesProduct.name}"!`);
+      showToast(manageImagesList.length === 0 ? `Cleared all pictures for "${manageImagesProduct.name}"` : `Updated pictures for "${manageImagesProduct.name}"!`);
       setManageImagesProduct(null);
       fetchAllData();
       onRefreshPublicData();
@@ -1532,7 +1540,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category: categories[0]?.id || 'hair-beauty',
       subcategory: '',
       stock: 25,
-      imageUrl: '/src/assets/images/product_hair_curl_cream_1791966366308.jpg',
+      imageUrl: '',
       imagesText: '',
       shopName: defaultShop,
       shopId: defaultShopId,
@@ -1642,8 +1650,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     const imagesList = getParsedImageList(prodForm.imagesText, prodForm.imageUrl);
-    const finalPrimaryImage = prodForm.imageUrl.trim() || imagesList[0] || '/src/assets/images/product_street_sneakers_1791966366958.jpg';
-    if (!imagesList.includes(finalPrimaryImage)) {
+    const finalPrimaryImage = prodForm.imageUrl.trim() || imagesList[0] || '';
+    if (finalPrimaryImage && !imagesList.includes(finalPrimaryImage)) {
       imagesList.unshift(finalPrimaryImage);
     }
 

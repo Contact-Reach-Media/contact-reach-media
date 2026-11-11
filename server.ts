@@ -205,87 +205,26 @@ const defaultPaymentMethods: PaymentMethodConfig[] = [
 ];
 
 // Default Initial Coupons
-const defaultCoupons: Coupon[] = [];
+const defaultCoupons: Coupon[] = [
+  {
+    id: 'coup-welcome10',
+    code: 'WELCOME10',
+    discountType: 'percentage',
+    discountValue: 10,
+    minOrderAmount: 10000,
+    maxDiscount: 20000,
+    isActive: true,
+    timesUsed: 0
+  }
+];
 
-// Default Initial Admin Users
+// Default Initial Admin Users (Only System Owner; other staff loaded from Supabase admin_users)
 const defaultAdminUsers: AdminUser[] = [
   {
     id: 'adm-owner-ruth',
     name: 'Ruth (System Owner)',
     email: 'contactreachmedialimited@gmail.com',
     role: 'owner',
-    active: true,
-    phone: '0780022600'
-  },
-  {
-    id: 'adm-owner-umuhuza',
-    name: 'Umuhuza Market (Platform Owner)',
-    email: 'umuhuzamarket@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0780022600'
-  },
-  {
-    id: 'adm-owner-thierry-coss',
-    name: 'Thierry Maniriho (Platform Owner)',
-    email: 'manirihocoss@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-owner-thierry-250',
-    name: 'Thierry Maniriho (Platform Owner)',
-    email: 'manirihothierry250@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-owner-thierry-primary',
-    name: 'Thierry Maniriho (Platform Owner)',
-    email: 'manirihothierry36@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-owner-thierry',
-    name: 'Thierry Maniriho (Platform Owner)',
-    email: 'manirihothierry6@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-ops',
-    name: 'Thierry Maniriho (Operations Admin)',
-    email: 'admin@contactreachmedia.rw',
-    role: 'administrator',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-ops-thierry',
-    name: 'Thierry Maniriho (Platform Owner)',
-    email: 'manirihothierry11@gmail.com',
-    role: 'owner',
-    active: true,
-    phone: '0792412177'
-  },
-  {
-    id: 'adm-prod-mgr',
-    name: 'Eric Kwizera (Catalog & Inventory)',
-    email: 'products@contactreachmedia.rw',
-    role: 'product_manager',
-    active: true,
-    phone: '0788112233'
-  },
-  {
-    id: 'adm-support',
-    name: 'Clarisse Umutoni (Customer Support)',
-    email: 'support@contactreachmedia.rw',
-    role: 'customer_support',
     active: true,
     phone: '0780022600'
   }
@@ -1043,7 +982,21 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         verified_purchase: Boolean(data.verifiedPurchase),
         created_at: data.createdAt || new Date().toISOString()
       }, { onConflict: 'id' });
-    } else if (entityType === 'accounts' || entityType === 'customers' || entityType === 'adminUsers') {
+    } else if (entityType === 'adminUsers' || entityType === 'admin_users' || entityType === 'admins') {
+      if (data.email) {
+        await supabase.from('admin_users').upsert({
+          id: data.id || `adm-${Date.now()}`,
+          name: data.name || 'Admin User',
+          email: data.email.toLowerCase().trim(),
+          phone: data.phone || null,
+          role: data.role || 'administrator',
+          permissions: data.permissions || ['all'],
+          active: data.active !== false,
+          last_login: data.lastLogin || null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'email' });
+      }
+    } else if (entityType === 'accounts' || entityType === 'customers') {
       if (data.email) {
         const userRow: Record<string, any> = {
           full_name: data.name || data.fullName || 'User',
@@ -1096,6 +1049,8 @@ async function deleteFromSupabaseAsync(entityType: string, id: string) {
       await supabase.from('coupons').delete().eq('id', id);
     } else if (entityType === 'users' || entityType === 'customers' || entityType === 'accounts') {
       await supabase.from('users').delete().eq('id', id);
+    } else if (entityType === 'adminUsers' || entityType === 'admin_users' || entityType === 'admins') {
+      await supabase.from('admin_users').delete().eq('id', id);
     } else if (entityType === 'supplierApplications' || entityType === 'supplier_applications') {
       await supabase.from('supplier_applications').delete().eq('id', id);
     } else if (entityType === 'supplierPayouts' || entityType === 'supplier_payouts') {
@@ -1321,7 +1276,7 @@ export async function loadAllDataFromSupabase() {
 
     // 9. Coupons
     const { data: cpnData, error: cpnErr } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
-    if (!cpnErr && Array.isArray(cpnData)) {
+    if (!cpnErr && Array.isArray(cpnData) && cpnData.length > 0) {
       db.coupons = cpnData.map(c => ({
         id: c.id,
         code: c.code,
@@ -1335,6 +1290,11 @@ export async function loadAllDataFromSupabase() {
         isActive: c.is_active !== false
       }));
       console.log(`[Supabase] Loaded ${db.coupons.length} coupons.`);
+    } else if (db.coupons.length === 0) {
+      db.coupons = [...defaultCoupons];
+      for (const dCpn of defaultCoupons) {
+        saveToSupabaseAsync('coupons', dCpn.id, dCpn).catch(() => {});
+      }
     }
 
     // 10. Inventory Logs
@@ -1427,6 +1387,32 @@ export async function loadAllDataFromSupabase() {
       const tombIds = tombData.map(d => String(d.id));
       db.deletedRecordIds = Array.from(new Set([...(db.deletedRecordIds || []), ...tombIds]));
     }
+
+    // 16. Admin Users (Authorized administrators from Supabase)
+    const { data: suAdminData, error: suAdminErr } = await supabase.from('admin_users').select('*');
+    if (!suAdminErr && Array.isArray(suAdminData)) {
+      db.adminUsers = suAdminData.map(a => ({
+        id: String(a.id),
+        name: a.name || 'Admin User',
+        email: a.email.toLowerCase().trim(),
+        phone: a.phone || undefined,
+        role: (a.role as AdminRole) || 'administrator',
+        active: a.active !== false,
+        lastLogin: a.last_login || undefined
+      }));
+      // Always guarantee system owner contactreachmedialimited@gmail.com is present and active
+      if (!db.adminUsers.some(u => u.email.toLowerCase() === 'contactreachmedialimited@gmail.com')) {
+        db.adminUsers.unshift({
+          id: 'adm-owner-ruth',
+          name: 'Ruth (System Owner)',
+          email: 'contactreachmedialimited@gmail.com',
+          role: 'owner',
+          active: true,
+          phone: '0780022600'
+        });
+      }
+      console.log(`[Supabase] Loaded ${db.adminUsers.length} authorized admin users.`);
+    }
   } catch (err: any) {
     console.warn('[Supabase] Hydration notice:', err?.message || err);
   }
@@ -1494,10 +1480,8 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
 
     if (isRecognizedToken) {
       const fallbackOwner =
-        db.adminUsers.find(u => (u.email.toLowerCase() === 'contactreachmedialimited@gmail.com' || u.email.toLowerCase() === 'manirihothierry11@gmail.com' || u.email.toLowerCase() === 'manirihothierry6@gmail.com' || u.email.toLowerCase() === 'umuhuzamarket@gmail.com' || u.role === 'owner') && u.active) ||
-        db.adminUsers.find(u => u.active && (u.role === 'owner' || u.role === 'administrator')) ||
-        defaultAdminUsers[0] ||
-        defaultAdminUsers[1];
+        db.adminUsers.find(u => u.email.toLowerCase() === 'contactreachmedialimited@gmail.com' && u.active) ||
+        defaultAdminUsers[0];
 
       if (fallbackOwner && fallbackOwner.active !== false) {
         session = {
@@ -4437,69 +4421,11 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     });
   }
 
-  // Strict credentials verification: Owner account with designated password
-  if (!ADMIN_PASSWORD) {
-    return res.status(403).json({
-      error: 'Password-based administrative login is disabled in production. Please sign in using verified Google / Supabase Authentication.'
-    });
-  }
+  // 1. Strict authorization check: Only contactreachmedialimited@gmail.com or active admin in Supabase admin_users
+  let authorizedAdmin: AdminUser | null = null;
+  const isSystemOwner = normalizedEmail === 'contactreachmedialimited@gmail.com';
 
-  const isOwnerEmail = normalizedEmail === 'contactreachmedialimited@gmail.com' ||
-                       normalizedEmail === 'manirihothierry11@gmail.com' ||
-                       normalizedEmail === 'manirihocoss@gmail.com' ||
-                       normalizedEmail === 'manirihothierry250@gmail.com' ||
-                       normalizedEmail === 'manirihothierry36@gmail.com' ||
-                       normalizedEmail === 'manirihothierry6@gmail.com' ||
-                       normalizedEmail === 'umuhuzamarket@gmail.com' ||
-                       normalizedEmail.startsWith('manirihothierry') ||
-                       normalizedEmail === ADMIN_EMAIL.toLowerCase();
-
-  const user = db.adminUsers.find(u => u.email.toLowerCase() === normalizedEmail && u.active);
-  const passwordMatches = (isOwnerEmail || user) && (
-    timingSafeEqualStr(password, ADMIN_PASSWORD) ||
-    timingSafeEqualStr(password, 'ContactReach2025!') ||
-    timingSafeEqualStr(password, 'Kigali2025!') ||
-    timingSafeEqualStr(password, 'CRM@2025') ||
-    timingSafeEqualStr(password, 'CRM@2026')
-  );
-
-  if (passwordMatches) {
-    // Reset rate-limiting on success
-    loginAttempts.delete(normalizedEmail);
-
-    const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
-    const role: AdminRole = isOwnerEmail ? 'owner' : (user ? user.role : 'owner');
-    if (user && isOwnerEmail) {
-      user.role = 'owner';
-    }
-    const adminUser: AdminUser = user || {
-      id: normalizedEmail === 'contactreachmedialimited@gmail.com' ? 'adm-owner-ruth' : 'adm-owner-thierry',
-      name: normalizedEmail === 'contactreachmedialimited@gmail.com' ? 'Ruth (System Owner)' : 'Thierry Maniriho (Platform Owner)',
-      email: normalizedEmail,
-      role: 'owner',
-      active: true,
-      lastLogin: new Date().toISOString()
-    };
-
-    adminUser.role = role;
-    adminUser.lastLogin = new Date().toISOString();
-
-    // 30-day persistent session across browser reloads
-    db.adminTokens.set(token, {
-      user: adminUser,
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-    });
-    saveDbToDisk();
-
-    logAudit({ name: adminUser.name, role: adminUser.role }, 'ADMIN_LOGIN', `Admin signed in successfully from ${req.ip || 'remote'}`);
-
-    return res.json({
-      token,
-      admin: adminUser
-    });
-  }
-
-  // Check Supabase admin_users table for persistent database administrators
+  let sbAdminRecord: any = null;
   try {
     const { data: suAdmin, error: suErr } = await supabase
       .from('admin_users')
@@ -4507,201 +4433,216 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
       .eq('email', normalizedEmail)
       .maybeSingle();
 
-    if (!suErr && suAdmin && suAdmin.active !== false) {
-      const match = (suAdmin.password && timingSafeEqualStr(password, suAdmin.password)) ||
-                    timingSafeEqualStr(password, ADMIN_PASSWORD) ||
-                    timingSafeEqualStr(password, 'CRM@2026') ||
-                    timingSafeEqualStr(password, 'ContactReach2025!');
-      if (match) {
-        loginAttempts.delete(normalizedEmail);
-        const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
-        const adminUser: AdminUser = {
-          id: suAdmin.id ? String(suAdmin.id) : `adm-sb-${Date.now()}`,
-          name: suAdmin.name || suAdmin.full_name || 'Admin User',
-          email: normalizedEmail,
-          role: (suAdmin.role as AdminRole) || 'administrator',
-          active: true,
-          lastLogin: new Date().toISOString()
-        };
-        db.adminTokens.set(token, {
-          user: adminUser,
-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-        });
-        saveDbToDisk();
-        logAudit({ name: adminUser.name, role: adminUser.role }, 'ADMIN_LOGIN', `Admin signed in via Supabase admin record (${normalizedEmail})`);
-        return res.json({ token, admin: adminUser });
-      }
+    if (!suErr && suAdmin) {
+      sbAdminRecord = suAdmin;
     }
   } catch (sbErr) {
     console.warn('[Supabase admin query error]:', sbErr);
   }
 
-  // Check Supabase staff_accounts table
-  try {
-    const { data: staffData, error: staffErr } = await supabase
-      .from('staff_accounts')
-      .select('*')
-      .limit(100);
+  const memoryAdmin = db.adminUsers.find(u => u.email.toLowerCase() === normalizedEmail);
 
-    if (!staffErr && Array.isArray(staffData) && staffData.length > 0) {
-      const isPassMatch = timingSafeEqualStr(password, ADMIN_PASSWORD) ||
-                          timingSafeEqualStr(password, 'CRM@2026') ||
-                          timingSafeEqualStr(password, 'ContactReach2025!');
-      if (isOwnerEmail && isPassMatch) {
-        const staffRec = staffData[0];
-        loginAttempts.delete(normalizedEmail);
-        const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
-        const adminUser: AdminUser = {
-          id: staffRec?.user_id || 'adm-owner-staff',
-          name: staffRec?.full_name || 'Ruth (System Owner)',
-          email: normalizedEmail,
-          role: (staffRec?.role as AdminRole) || 'owner',
-          active: true,
-          lastLogin: new Date().toISOString()
-        };
-        db.adminTokens.set(token, {
-          user: adminUser,
-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-        });
-        saveDbToDisk();
-        logAudit({ name: adminUser.name, role: adminUser.role }, 'ADMIN_LOGIN', `Admin signed in via staff_accounts (${normalizedEmail})`);
-        return res.json({ token, admin: adminUser });
-      }
-    }
-  } catch {}
-
-  // Check Supabase users table with staff/owner/admin roles
-  try {
-    const { data: suUser, error: uErr } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
-
-    if (!uErr && suUser && (suUser.role === 'admin' || suUser.role === 'owner' || suUser.role === 'manager')) {
-      const match = (suUser.password && timingSafeEqualStr(password, suUser.password)) ||
-                    timingSafeEqualStr(password, ADMIN_PASSWORD) ||
-                    timingSafeEqualStr(password, 'CRM@2026') ||
-                    timingSafeEqualStr(password, 'ContactReach2025!');
-      if (match) {
-        loginAttempts.delete(normalizedEmail);
-        const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
-        const adminUser: AdminUser = {
-          id: String(suUser.id),
-          name: suUser.full_name || 'Admin User',
-          email: normalizedEmail,
-          role: (suUser.role as AdminRole) || 'administrator',
-          active: true,
-          lastLogin: new Date().toISOString()
-        };
-        db.adminTokens.set(token, {
-          user: adminUser,
-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-        });
-        saveDbToDisk();
-        logAudit({ name: adminUser.name, role: adminUser.role }, 'ADMIN_LOGIN', `Admin signed in via Supabase user account (${normalizedEmail})`);
-        return res.json({ token, admin: adminUser });
-      }
-    }
-  } catch (sbUserErr) {
-    console.warn('[Supabase user query error]:', sbUserErr);
-  }
-
-  // Check Supabase Auth service
-  try {
-    const { data: sbAuthData, error: sbAuthErr } = await supabase.auth.signInWithPassword({
+  if (isSystemOwner) {
+    authorizedAdmin = {
+      id: sbAdminRecord?.id || memoryAdmin?.id || 'adm-owner-ruth',
+      name: sbAdminRecord?.name || memoryAdmin?.name || 'Ruth (System Owner)',
+      email: 'contactreachmedialimited@gmail.com',
+      role: 'owner',
+      active: true,
+      phone: sbAdminRecord?.phone || memoryAdmin?.phone || '0780022600'
+    };
+  } else if (sbAdminRecord && sbAdminRecord.active !== false) {
+    authorizedAdmin = {
+      id: String(sbAdminRecord.id),
+      name: sbAdminRecord.name || sbAdminRecord.full_name || 'Admin User',
       email: normalizedEmail,
-      password: password
-    });
-    if (!sbAuthErr && sbAuthData?.user) {
-      loginAttempts.delete(normalizedEmail);
-      const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
-      const adminUser: AdminUser = {
-        id: sbAuthData.user.id,
-        name: sbAuthData.user.user_metadata?.full_name || sbAuthData.user.user_metadata?.name || 'Supabase Administrator',
-        email: normalizedEmail,
-        role: isOwnerEmail ? 'owner' : 'administrator',
-        active: true,
-        lastLogin: new Date().toISOString()
-      };
-      db.adminTokens.set(token, {
-        user: adminUser,
-        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-      });
-      saveDbToDisk();
-      logAudit({ name: adminUser.name, role: adminUser.role }, 'ADMIN_LOGIN', `Admin signed in via Supabase Auth (${normalizedEmail})`);
-      return res.json({ token, admin: adminUser });
-    }
-  } catch {}
-
-  // Record failed attempt
-  const currentAttempts = (attemptInfo?.attempts || 0) + 1;
-  if (currentAttempts >= 5) {
-    loginAttempts.set(normalizedEmail, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
-    return res.status(429).json({ error: 'Too many failed login attempts. Locked for 15 minutes.' });
-  } else {
-    loginAttempts.set(normalizedEmail, { attempts: currentAttempts });
+      role: (sbAdminRecord.role as AdminRole) || 'administrator',
+      active: true,
+      phone: sbAdminRecord.phone || undefined
+    };
+  } else if (memoryAdmin && memoryAdmin.active !== false && (memoryAdmin.role === 'owner' || memoryAdmin.role === 'administrator' || memoryAdmin.role === 'product_manager' || memoryAdmin.role === 'order_manager' || memoryAdmin.role === 'customer_support' || memoryAdmin.role === 'shop_manager')) {
+    authorizedAdmin = { ...memoryAdmin };
   }
 
-  return res.status(401).json({ error: 'Invalid administrator credentials.' });
+  // Check if account is specifically deactivated
+  if ((sbAdminRecord && sbAdminRecord.active === false) || (memoryAdmin && memoryAdmin.active === false)) {
+    return res.status(401).json({
+      error: 'This administrator account has been deactivated. Access revoked.'
+    });
+  }
+
+  // If email is not authorized as system owner or in Supabase admin_users, reject immediately
+  if (!authorizedAdmin) {
+    const currentAttempts = (attemptInfo?.attempts || 0) + 1;
+    if (currentAttempts >= 5) {
+      loginAttempts.set(normalizedEmail, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
+      return res.status(429).json({ error: 'Too many failed login attempts. Locked for 15 minutes.' });
+    } else {
+      loginAttempts.set(normalizedEmail, { attempts: currentAttempts });
+    }
+    return res.status(401).json({
+      error: 'Access restricted: Only contactreachmedialimited@gmail.com and administrators explicitly registered in Supabase are authorized to access the Admin Dashboard.'
+    });
+  }
+
+  // 2. Validate Password via constant-time comparison against ADMIN_PASSWORD or Supabase Auth
+  let passwordValid = timingSafeEqualStr(password, ADMIN_PASSWORD);
+
+  if (!passwordValid) {
+    try {
+      const { data: sbAuthData, error: sbAuthErr } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: password
+      });
+      if (!sbAuthErr && sbAuthData?.user) {
+        passwordValid = true;
+      }
+    } catch {}
+  }
+
+  if (!passwordValid) {
+    const currentAttempts = (attemptInfo?.attempts || 0) + 1;
+    if (currentAttempts >= 5) {
+      loginAttempts.set(normalizedEmail, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
+      return res.status(429).json({ error: 'Too many failed login attempts. Locked for 15 minutes.' });
+    } else {
+      loginAttempts.set(normalizedEmail, { attempts: currentAttempts });
+    }
+    return res.status(401).json({ error: 'Invalid administrator password.' });
+  }
+
+  // Reset rate limiting on success
+  loginAttempts.delete(normalizedEmail);
+
+  // Generate 32-byte session token
+  const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
+  authorizedAdmin.lastLogin = new Date().toISOString();
+
+  // Sync to in-memory db.adminUsers
+  const existIdx = db.adminUsers.findIndex(u => u.email.toLowerCase() === normalizedEmail);
+  if (existIdx >= 0) {
+    db.adminUsers[existIdx] = authorizedAdmin;
+  } else {
+    db.adminUsers.push(authorizedAdmin);
+  }
+
+  // 30-day persistent session
+  db.adminTokens.set(token, {
+    user: authorizedAdmin,
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+  });
+  saveDbToDisk();
+
+  // Update Supabase admin_users last_login
+  try {
+    await supabase.from('admin_users').update({
+      last_login: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('email', normalizedEmail);
+  } catch {}
+
+  logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Admin signed in successfully from ${req.ip || 'remote'}`);
+
+  return res.json({
+    token,
+    admin: authorizedAdmin,
+    redirectTo: '/admin'
+  });
 });
 
-// Authorized Google Sign-In Login Endpoint
+// Authorized Google Sign-In Admin Login Endpoint
 const handleGoogleLogin = async (req: Request, res: Response) => {
   const { email, displayName, uid, idToken } = req.body;
   if (!email && !idToken) {
     return res.status(400).json({ error: 'Email or identity token is required.' });
   }
 
-  let verifiedEmail = (email || '').trim().toLowerCase();
-  let verifiedUid = uid;
-  let verifiedDisplayName = displayName;
+  const verifiedEmail = (email || '').trim().toLowerCase();
+  const isSystemOwner = verifiedEmail === 'contactreachmedialimited@gmail.com';
 
-  const isOwner = verifiedEmail === 'contactreachmedialimited@gmail.com' ||
-                  verifiedEmail === 'manirihocoss@gmail.com' ||
-                  verifiedEmail === 'manirihothierry250@gmail.com' ||
-                  verifiedEmail === 'manirihothierry36@gmail.com' ||
-                  verifiedEmail === 'manirihothierry6@gmail.com' ||
-                  verifiedEmail === 'inzozilink@gmail.com' ||
-                  verifiedEmail === 'manirihothierry11@gmail.com' ||
-                  verifiedEmail === 'umuhuzamarket@gmail.com' ||
-                  verifiedEmail.startsWith('manirihothierry') ||
-                  verifiedEmail === ADMIN_EMAIL.toLowerCase();
+  // Check Supabase admin_users table for persistent authorization
+  let sbAdminRecord: any = null;
+  try {
+    const { data: suAdmin, error: suErr } = await supabase
+      .from('admin_users')
+      .select('*')
+      .eq('email', verifiedEmail)
+      .maybeSingle();
 
-  const user = db.adminUsers.find(u => u.email.toLowerCase() === verifiedEmail && u.active);
-  const isDomainAdmin = verifiedEmail.endsWith('@contactreachmedia.rw');
+    if (!suErr && suAdmin) {
+      sbAdminRecord = suAdmin;
+    }
+  } catch (sbErr) {
+    console.warn('[Supabase admin query error]:', sbErr);
+  }
 
-  if (isOwner || user || isDomainAdmin) {
-    const token = crypto.randomBytes(32).toString('hex');
-    const role: AdminRole = isOwner ? 'owner' : (user ? user.role : 'administrator');
-    const adminUser: AdminUser = user || {
-      id: verifiedUid ? `adm-${verifiedUid}` : (verifiedEmail === 'contactreachmedialimited@gmail.com' ? 'adm-owner-ruth' : 'adm-owner-thierry'),
-      name: verifiedDisplayName || (verifiedEmail === 'contactreachmedialimited@gmail.com' ? 'Ruth (System Owner)' : (isOwner ? 'Thierry Maniriho (Platform Owner)' : 'Authorized Administrator')),
-      email: verifiedEmail,
-      role,
+  const memoryAdmin = db.adminUsers.find(u => u.email.toLowerCase() === verifiedEmail);
+
+  let authorizedAdmin: AdminUser | null = null;
+  if (isSystemOwner) {
+    authorizedAdmin = {
+      id: sbAdminRecord?.id || memoryAdmin?.id || 'adm-owner-ruth',
+      name: sbAdminRecord?.name || memoryAdmin?.name || displayName || 'Ruth (System Owner)',
+      email: 'contactreachmedialimited@gmail.com',
+      role: 'owner',
       active: true,
-      lastLogin: new Date().toISOString()
+      phone: sbAdminRecord?.phone || memoryAdmin?.phone || '0780022600'
     };
+  } else if (sbAdminRecord && sbAdminRecord.active !== false) {
+    authorizedAdmin = {
+      id: String(sbAdminRecord.id),
+      name: sbAdminRecord.name || displayName || 'Admin User',
+      email: verifiedEmail,
+      role: (sbAdminRecord.role as AdminRole) || 'administrator',
+      active: true,
+      phone: sbAdminRecord.phone || undefined
+    };
+  } else if (memoryAdmin && memoryAdmin.active !== false && (memoryAdmin.role === 'owner' || memoryAdmin.role === 'administrator' || memoryAdmin.role === 'product_manager' || memoryAdmin.role === 'order_manager' || memoryAdmin.role === 'customer_support' || memoryAdmin.role === 'shop_manager')) {
+    authorizedAdmin = { ...memoryAdmin };
+  }
 
-    adminUser.lastLogin = new Date().toISOString();
-
-    // 30-day persistent session across browser reloads
-    db.adminTokens.set(token, {
-      user: adminUser,
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-    });
-    saveDbToDisk();
-
-    logAudit({ name: adminUser.name, role: adminUser.role }, 'GOOGLE_LOGIN', `Admin signed in with Google (${verifiedEmail})`);
-
-    return res.json({
-      token,
-      admin: adminUser
+  // Check if account is specifically deactivated
+  if ((sbAdminRecord && sbAdminRecord.active === false) || (memoryAdmin && memoryAdmin.active === false)) {
+    return res.status(401).json({
+      error: 'This administrator account has been deactivated. Access revoked.'
     });
   }
 
-  return res.status(403).json({
-    error: `The Google account (${verifiedEmail}) is not authorized as an administrator for ContactReach Market.`
+  if (!authorizedAdmin) {
+    return res.status(401).json({
+      error: `Access restricted: Account (${verifiedEmail}) is not authorized. Only contactreachmedialimited@gmail.com and administrators explicitly registered in Supabase can access the Admin Dashboard.`
+    });
+  }
+
+  const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
+  authorizedAdmin.lastLogin = new Date().toISOString();
+
+  const existIdx = db.adminUsers.findIndex(u => u.email.toLowerCase() === verifiedEmail);
+  if (existIdx >= 0) {
+    db.adminUsers[existIdx] = authorizedAdmin;
+  } else {
+    db.adminUsers.push(authorizedAdmin);
+  }
+
+  db.adminTokens.set(token, {
+    user: authorizedAdmin,
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+  });
+  saveDbToDisk();
+
+  try {
+    await supabase.from('admin_users').update({
+      last_login: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('email', verifiedEmail);
+  } catch {}
+
+  logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'GOOGLE_ADMIN_LOGIN', `Admin signed in with Google (${verifiedEmail})`);
+
+  return res.json({
+    token,
+    admin: authorizedAdmin,
+    redirectTo: '/admin'
   });
 };
 
@@ -5172,11 +5113,10 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
         ? images.split('\n').map((s: string) => s.trim()).filter(Boolean)
         : []);
 
-  const defaultPlaceholder = '/src/assets/images/product_street_sneakers_1791966366958.jpg';
-  const mainImage = imageUrl?.trim() || rawImages[0] || defaultPlaceholder;
+  const mainImage = imageUrl?.trim() || rawImages[0] || '';
   const finalImages = rawImages.length > 0
-    ? (rawImages.includes(mainImage) ? rawImages : [mainImage, ...rawImages])
-    : [mainImage];
+    ? (mainImage && !rawImages.includes(mainImage) ? [mainImage, ...rawImages] : rawImages)
+    : (mainImage ? [mainImage] : []);
   const cleanVideoUrl = videoUrl && typeof videoUrl === 'string' && videoUrl.trim() ? videoUrl.trim() : undefined;
   const normCategory = normalizeCategoryId(category, name);
   const targetSku = sku ? sku.trim() : `CRM-${normCategory.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -5498,7 +5438,7 @@ app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUC
     }
   }
 
-  const primaryImage = updatedImages[0] || product.imageUrl;
+  const primaryImage = updatedImages[0] || (imageUrl !== undefined ? String(imageUrl).trim() : '');
   product.images = updatedImages;
   product.imageUrl = primaryImage;
   product.updatedAt = new Date().toISOString();
@@ -8138,6 +8078,9 @@ app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (re
   if (index === -1) return res.status(404).json({ error: 'Administrator user not found' });
 
   const target = db.adminUsers[index];
+  if (target.email.toLowerCase() === 'contactreachmedialimited@gmail.com') {
+    return res.status(400).json({ error: 'System owner account (contactreachmedialimited@gmail.com) cannot be deleted.' });
+  }
   if (target.id === admin.id || target.email.toLowerCase() === admin.email.toLowerCase()) {
     return res.status(400).json({ error: 'You cannot delete your own administrative account.' });
   }
@@ -9154,7 +9097,7 @@ async function applyGoogleSheetEdits(
         adminName
       );
 
-      const defaultImg = rawImageUrl || '/src/assets/images/product_street_sneakers_1791966366958.jpg';
+      const defaultImg = rawImageUrl || '';
 
       const newProduct: Product = {
         id: targetId,

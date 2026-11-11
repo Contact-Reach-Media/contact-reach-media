@@ -267,6 +267,14 @@ export const Footer: React.FC<FooterProps> = ({
             >
               {t.termsConditions}
             </button>
+            <span>|</span>
+            <button
+              onClick={onOpenAdmin}
+              className="hover:text-slate-200 transition-colors cursor-pointer text-slate-500"
+              title="Authorized Staff Portal"
+            >
+              Staff Portal
+            </button>
           </div>
         </div>
 

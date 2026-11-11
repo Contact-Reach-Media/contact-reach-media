@@ -842,7 +842,7 @@ export default function App() {
           )}
 
           {/* Main Storefront Header (Hidden when inside Admin Portal) */}
-          {!(activeView === 'admin' && isAdminLoggedIn) && (
+          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && (
             <Header
               currentLang={currentLang}
               onLanguageChange={handleLanguageChange}
@@ -881,8 +881,42 @@ export default function App() {
             />
           )}
 
-      {/* VIEW: ADMIN DASHBOARD */}
-      {activeView === 'admin' ? (
+      {/* VIEW: ADMIN LOGIN OR DASHBOARD */}
+      {activeView === 'admin-login' ? (
+        isAdminLoggedIn ? (
+          <AdminDashboard
+            onLogout={async () => {
+              await api.adminLogout();
+              setIsAdminLoggedIn(false);
+              setAutoOpenAddProduct(false);
+              handleNavigate('home');
+              showToast('Logged out of admin portal');
+            }}
+            categories={categories}
+            onRefreshPublicData={refreshAllData}
+            initialTab={adminInitialTab as any}
+            autoOpenAddProduct={autoOpenAddProduct}
+            onNavigateToStorefront={() => handleNavigate('home')}
+          />
+        ) : (
+          <AdminLoginPage
+            onLoginSuccess={(user) => {
+              setIsAdminLoggedIn(true);
+              setActiveView('admin');
+              if (pendingAdminAction === 'upload-product') {
+                setAdminInitialTab('products');
+                setAutoOpenAddProduct(true);
+                setPendingAdminAction(null);
+              }
+              if (typeof window !== 'undefined') {
+                window.history.pushState({ view: 'admin' }, '', '/admin');
+              }
+              showToast(`Welcome Administrator ${user?.name || ''}`);
+            }}
+            onNavigateHome={() => handleNavigate('home')}
+          />
+        )
+      ) : activeView === 'admin' ? (
         isAdminLoggedIn ? (
           <AdminDashboard
             onLogout={async () => {
@@ -903,6 +937,9 @@ export default function App() {
             onSuccess={(user) => {
               setIsAdminLoggedIn(true);
               setActiveView('admin');
+              if (typeof window !== 'undefined') {
+                window.history.pushState({ view: 'admin' }, '', '/admin');
+              }
               showToast(`Welcome Administrator ${user?.name || ''}`);
             }}
             onReturnHome={() => handleNavigate('home')}
@@ -914,9 +951,21 @@ export default function App() {
           <SignInPage
             initialMode={activeView === 'register' ? 'register' : 'signin'}
             onSuccess={(user) => {
-              setBuyerUser(user);
-              handleNavigate('home');
-              showToast(currentLang === 'en' ? `Welcome, ${user.name}!` : `Murakaza neza, ${user.name}!`);
+              const isAdmin = (user as any).role === 'admin' || 
+                              (user as any).role === 'owner' || 
+                              user.email?.toLowerCase().trim() === 'contactreachmedialimited@gmail.com';
+              if (isAdmin) {
+                setIsAdminLoggedIn(true);
+                setActiveView('admin');
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({ view: 'admin' }, '', '/admin');
+                }
+                showToast(`Welcome Administrator ${user.name}`);
+              } else {
+                setBuyerUser(user);
+                handleNavigate('home');
+                showToast(currentLang === 'en' ? `Welcome, ${user.name}!` : `Murakaza neza, ${user.name}!`);
+              }
             }}
             onNavigateHome={() => handleNavigate('home')}
             onOpenVendorApplication={() => setIsSellerModalOpen(true)}
@@ -1447,7 +1496,7 @@ export default function App() {
       )}
 
       {/* FLOATING WHATSAPP SUPPORT TAB (Only for public storefront customers) */}
-      {!(activeView === 'admin' && isAdminLoggedIn) && (
+      {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && (
         <div className="fixed bottom-6 right-0 z-40">
           <a
             href={`https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
@@ -1469,7 +1518,7 @@ export default function App() {
       )}
 
       {/* Footer (Only on public storefront) */}
-      {!(activeView === 'admin' && isAdminLoggedIn) && (
+      {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && (
         <Footer
           settings={settings}
           currentLang={currentLang}
