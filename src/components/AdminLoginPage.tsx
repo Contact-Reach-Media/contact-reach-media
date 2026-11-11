@@ -31,7 +31,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
     setError(null);
 
     try {
-      const res = await api.adminLogin(username.trim(), password);
+      const res = await api.adminLogin(username.trim(), password.trim());
       if (res && res.token && res.admin) {
         onLoginSuccess(res.admin, res.token);
       } else {

@@ -26,7 +26,7 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
 
     setLoading(true);
     try {
-      const res = await api.adminLogin(username.trim(), password);
+      const res = await api.adminLogin(username.trim(), password.trim());
       onSuccess(res.admin);
     } catch (err: any) {
       const msg = err?.message || '';

@@ -31,7 +31,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
     setLoading(true);
     try {
-      const res = await api.adminLogin(username.trim(), password);
+      const res = await api.adminLogin(username.trim(), password.trim());
       onLoginSuccess(res.admin);
       onClose();
     } catch (err: any) {
