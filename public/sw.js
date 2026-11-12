@@ -42,7 +42,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Handle message events from client for cache invalidation and hot-update
+// Handle message events from client for cache invalidation, hot-update, and direct push notification
 self.addEventListener('message', (event) => {
   if (event.data) {
     if (event.data.type === 'SKIP_WAITING') {
@@ -51,7 +51,65 @@ self.addEventListener('message', (event) => {
     if (event.data.type === 'CLEAR_CACHE') {
       caches.keys().then((keys) => Promise.all(keys.map(k => caches.delete(k))));
     }
+    if (event.data.type === 'TRIGGER_NOTIFICATION') {
+      const { title, options } = event.data;
+      self.registration.showNotification(title || '🔔 New Order Received!', options || {
+        body: 'A new customer order has arrived live in the admin dashboard.',
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        tag: `crm-order-${Date.now()}`,
+        requireInteraction: true
+      });
+    }
   }
+});
+
+// Push event handler for Web Push Notifications
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { title: 'ContactReach Market Alert', body: event.data.text() };
+    }
+  }
+
+  const title = data.title || '🔔 New Order Received!';
+  const options = {
+    body: data.body || 'A customer has just placed a new order on ContactReach Market.',
+    icon: data.icon || '/favicon.ico',
+    badge: '/favicon.ico',
+    tag: data.tag || `crm-order-${Date.now()}`,
+    data: data.data || { url: '/?view=admin&tab=orders' },
+    requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200]
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Notification click handler: opens or focuses the admin dashboard and navigates to orders
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/?view=admin&tab=orders';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          if (client.navigate && client.url && !client.url.includes('view=admin')) {
+            client.navigate(targetUrl);
+          }
+          return;
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
 });
 
 self.addEventListener('fetch', (event) => {

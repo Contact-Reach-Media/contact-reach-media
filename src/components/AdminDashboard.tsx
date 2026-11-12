@@ -110,7 +110,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (Notification.permission === 'granted') {
       playNotificationChime('order');
       showToast('🔊 Audio chime & live real-time desktop alerts are active!', 'success');
-      sendDesktopNotification('ContactReach Market Live', 'Real-time alert chime & desktop notification test verified!');
+      sendDesktopNotification(
+        '🔔 ContactReach Live Order Alerts Active',
+        'Desktop web notifications are verified and active. You will receive an immediate browser alert when an order is placed.',
+        { url: '/?view=admin&tab=orders' }
+      );
       return;
     }
     try {
@@ -119,7 +123,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setDesktopAlertsActive(true);
         playNotificationChime('order');
         showToast('🔔 Real-time desktop alerts enabled! Instant popups will trigger for orders and SMS.', 'success');
-        sendDesktopNotification('ContactReach Market Live', 'Real-time alert notifications are now active on your device.');
+        sendDesktopNotification(
+          '🔔 ContactReach Live Order Alerts Enabled',
+          'Instant desktop alerts are now active on this device. New orders will trigger immediate browser notifications.',
+          { url: '/?view=admin&tab=orders' }
+        );
       } else {
         showToast('Notification permission was dismissed or blocked in browser settings.', 'error');
       }
@@ -135,27 +143,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const prevSuppliersCountRef = useRef<number>(-1);
   const isFetchingAllRef = useRef<boolean>(false);
 
-  // Desktop Web Notification Dispatcher (shows OS popups even if admin is in another tab)
-  const sendDesktopNotification = (title: string, body: string) => {
+  // Desktop Web Notification Dispatcher (shows OS popups even if admin is in another tab or minimized)
+  const sendDesktopNotification = (title: string, body: string, data?: any) => {
     try {
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        if (Notification.permission === 'granted') {
-          new Notification(title, {
+      if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+      const triggerNotification = () => {
+        // Option 1: Use ServiceWorker showNotification (modern standard, persistent with action buttons)
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.ready.then((reg) => {
+            reg.showNotification(title, {
+              body,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+              tag: `crm-order-${Date.now()}`,
+              requireInteraction: true,
+              data: data || { url: '/?view=admin&tab=orders' }
+            }).catch(() => {
+              fallbackHTML5Notification();
+            });
+          }).catch(() => {
+            fallbackHTML5Notification();
+          });
+        } else {
+          fallbackHTML5Notification();
+        }
+      };
+
+      const fallbackHTML5Notification = () => {
+        try {
+          const notif = new Notification(title, {
             body,
             icon: '/favicon.ico',
             tag: `crm-${Date.now()}`
           });
-        } else if (Notification.permission === 'default') {
-          Notification.requestPermission().then(perm => {
-            if (perm === 'granted') {
-              new Notification(title, {
-                body,
-                icon: '/favicon.ico',
-                tag: `crm-${Date.now()}`
-              });
-            }
-          }).catch(() => {});
-        }
+          notif.onclick = () => {
+            window.focus();
+            setActiveTab('orders');
+            notif.close();
+          };
+        } catch {}
+      };
+
+      if (Notification.permission === 'granted') {
+        triggerNotification();
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then((perm) => {
+          if (perm === 'granted') {
+            setDesktopAlertsActive(true);
+            triggerNotification();
+          }
+        }).catch(() => {});
       }
     } catch {}
   };
@@ -1714,8 +1752,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }));
               playNotificationChime('order');
               flashTitle(`🔔 (1) NEW ORDER #${newOrd.orderNumber}!`);
-              showToast(`🔔 Real-time: New Order #${newOrd.orderNumber} (${Number(newOrd.totalAmount).toLocaleString()} RWF) from ${newOrd.customerName}!`, 'success');
-              sendDesktopNotification('New Order Received!', `Order #${newOrd.orderNumber} from ${newOrd.customerName} (${Number(newOrd.totalAmount).toLocaleString()} RWF)`);
+              sendDesktopNotification(
+                `🔔 New Order Received: #${newOrd.orderNumber}`,
+                `Customer: ${newOrd.customerName} • Total: ${Number(newOrd.totalAmount).toLocaleString()} RWF via ${newOrd.paymentMethod}. Click to open.`,
+                { orderNumber: newOrd.orderNumber, url: '/?view=admin&tab=orders' }
+              );
               setLiveAlert({
                 id: `ord-${Date.now()}`,
                 type: 'order',
@@ -1904,7 +1945,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             playNotificationChime('order');
             flashTitle(`🔔 (1) NEW ORDER #${mappedOrd.orderNumber}!`);
             showToast(`🔔 Real-time: New Order #${mappedOrd.orderNumber} (${Number(mappedOrd.totalAmount).toLocaleString()} RWF) from ${mappedOrd.customerName}!`, 'success');
-            sendDesktopNotification('New Order Received!', `Order #${mappedOrd.orderNumber} from ${mappedOrd.customerName} (${Number(mappedOrd.totalAmount).toLocaleString()} RWF)`);
+            sendDesktopNotification(
+              `🔔 New Order Received: #${mappedOrd.orderNumber}`,
+              `Customer: ${mappedOrd.customerName} • Total: ${Number(mappedOrd.totalAmount).toLocaleString()} RWF via ${mappedOrd.paymentMethod}. Click to open.`,
+              { orderNumber: mappedOrd.orderNumber, url: '/?view=admin&tab=orders' }
+            );
             setLiveAlert({
               id: `ord-${Date.now()}`,
               type: 'order',
@@ -3315,6 +3360,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       onClick={async () => {
                         playNotificationChime('order');
+                        flashTitle('🔔 (1) TEST ORDER RECEIVED!');
+                        sendDesktopNotification(
+                          '🔔 Real-Time Order Received: #CRM-TEST-9921',
+                          'Test Order: Aline Mugabo placed an order for 39,500 RWF via MTN Mobile Money. Click to open.',
+                          { orderNumber: 'CRM-TEST-9921', url: '/?view=admin&tab=orders' }
+                        );
                         showToast('🔔 Testing Order fanfare chime & dispatching live event...');
                         try {
                           await api.adminTestAlert('order');
