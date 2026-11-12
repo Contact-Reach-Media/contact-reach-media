@@ -1298,6 +1298,19 @@ export const api = {
     return null;
   },
 
+  async adminTestAlert(type: 'order' | 'sms' = 'order'): Promise<any> {
+    try {
+      const res = await fetch('/api/admin/test-alert', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ type })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson) return parsed.json;
+    } catch {}
+    return { success: false };
+  },
+
   // -----------------------------------------------------------
   // ADMIN DASHBOARD
   // -----------------------------------------------------------

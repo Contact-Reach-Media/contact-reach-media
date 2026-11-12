@@ -9,7 +9,7 @@ import {
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders, SlidersHorizontal,
   Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles,
-  Database, Bell, MessageSquare
+  Database, Bell, MessageSquare, Volume2
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
@@ -19,7 +19,7 @@ import {
   GoogleDriveBackupStatus
 } from '../types.ts';
 import { api, getStoredAdminUser, isAuthorizedAdminUser } from '../services/api.ts';
-import { saveMessageToSupabase, subscribeToSupabaseTable, mapSupabaseRowToProduct } from '../services/supabase.ts';
+import { saveMessageToSupabase, subscribeToSupabaseTable, mapSupabaseRowToProduct, mapSupabaseRowToOrder, mapSupabaseRowToMessage } from '../services/supabase.ts';
 import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/googleDrive.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
@@ -146,40 +146,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch {}
   };
 
-  // High-Fidelity Synthesized Web Audio Chimes
+  // High-Fidelity Synthesized Web Audio Chimes & Haptic Feedback
   const playNotificationChime = (type: 'order' | 'sms' | 'payment' | 'alert' = 'order') => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
 
-      if (type === 'sms' || type === 'payment') {
-        // Melodic dual-ping for incoming SMS and payments
-        osc.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
-        osc.frequency.setValueAtTime(987.77, ctx.currentTime + 0.1); // B5
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.42);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.42);
-      } else {
-        // Celebratory tri-tone chime for incoming orders
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.09); // E5
-        osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.18); // G5
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.55);
+        if (type === 'sms') {
+          // Melodic dual-ping for incoming SMS: 880Hz -> 1175Hz (A5 -> D6)
+          const osc1 = ctx.createOscillator();
+          const gain1 = ctx.createGain();
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(880, ctx.currentTime);
+          gain1.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+          osc1.connect(gain1);
+          gain1.connect(ctx.destination);
+          osc1.start(ctx.currentTime);
+          osc1.stop(ctx.currentTime + 0.2);
+
+          const osc2 = ctx.createOscillator();
+          const gain2 = ctx.createGain();
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.1);
+          gain2.gain.setValueAtTime(0.35, ctx.currentTime + 0.1);
+          gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
+          osc2.connect(gain2);
+          gain2.connect(ctx.destination);
+          osc2.start(ctx.currentTime + 0.1);
+          osc2.stop(ctx.currentTime + 0.38);
+        } else if (type === 'payment') {
+          // Cash register chime for payment: E5 -> B5
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(659.25, ctx.currentTime);
+          osc.frequency.setValueAtTime(987.77, ctx.currentTime + 0.12);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.45);
+        } else {
+          // Celebratory bright tri-tone fanfare for incoming orders: C5 (523) -> E5 (659) -> G5 (784) -> C6 (1046)
+          const notes = [523.25, 659.25, 783.99, 1046.50];
+          notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.09);
+            gain.gain.setValueAtTime(0.32, ctx.currentTime + idx * 0.09);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.09 + 0.28);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + idx * 0.09);
+            osc.stop(ctx.currentTime + idx * 0.09 + 0.28);
+          });
+        }
+      }
+
+      // Mobile device physical vibration pulse
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        if (type === 'sms') {
+          navigator.vibrate([80, 50, 80]);
+        } else {
+          navigator.vibrate([120, 60, 120, 60, 200]);
+        }
       }
     } catch {}
   };
@@ -1788,6 +1825,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             const delId = String(oldRecord.id);
             setProducts(prev => prev.filter(p => p.id !== delId));
           }
+        } else if (tbl === 'orders') {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if (eventType === 'INSERT' && newRecord) {
+            const mappedOrd = mapSupabaseRowToOrder(newRecord);
+            setOrders(prev => {
+              if (prev.some(o => o.id === mappedOrd.id || o.orderNumber === mappedOrd.orderNumber)) return prev;
+              return [mappedOrd, ...prev];
+            });
+            playNotificationChime('order');
+            showToast(`🔔 Real-time: New Order #${mappedOrd.orderNumber} (${Number(mappedOrd.totalAmount).toLocaleString()} RWF) from ${mappedOrd.customerName}!`, 'success');
+            sendDesktopNotification('New Order Received!', `Order #${mappedOrd.orderNumber} from ${mappedOrd.customerName} (${Number(mappedOrd.totalAmount).toLocaleString()} RWF)`);
+            setLiveAlert({
+              id: `ord-${Date.now()}`,
+              type: 'order',
+              title: `🔔 Real-Time Order #${mappedOrd.orderNumber} Received!`,
+              subtitle: `${mappedOrd.customerName} placed an order for ${Number(mappedOrd.totalAmount).toLocaleString()} RWF via ${mappedOrd.paymentMethod}. Arrived live in real time!`,
+              timestamp: new Date(),
+              actionTab: 'orders'
+            });
+          } else if (eventType === 'UPDATE' && newRecord) {
+            const mappedOrd = mapSupabaseRowToOrder(newRecord);
+            setOrders(prev => prev.map(o => (o.id === mappedOrd.id || o.orderNumber === mappedOrd.orderNumber) ? mappedOrd : o));
+          } else if (eventType === 'DELETE' && oldRecord) {
+            const delId = String(oldRecord.id);
+            setOrders(prev => prev.filter(o => o.id !== delId));
+          }
+        } else if (tbl === 'messages') {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if (eventType === 'INSERT' && newRecord) {
+            const mappedMsg = mapSupabaseRowToMessage(newRecord);
+            setMessages(prev => {
+              if (prev.some(m => m.id === mappedMsg.id)) return prev;
+              return [mappedMsg, ...prev];
+            });
+            playNotificationChime('sms');
+            showToast(`💬 Real-time: New SMS / Inquiry from ${mappedMsg.name || mappedMsg.phone}!`, 'success');
+            sendDesktopNotification('New SMS / Message Received', `${mappedMsg.name || mappedMsg.phone}: ${mappedMsg.message.slice(0, 80)}`);
+            setLiveAlert({
+              id: `sms-${Date.now()}`,
+              type: 'sms',
+              title: `💬 Real-Time SMS / Message Received!`,
+              subtitle: `From ${mappedMsg.name || mappedMsg.phone}: "${mappedMsg.message.slice(0, 120)}"`,
+              timestamp: new Date(),
+              actionTab: 'messages'
+            });
+          } else if (eventType === 'UPDATE' && newRecord) {
+            const mappedMsg = mapSupabaseRowToMessage(newRecord);
+            setMessages(prev => prev.map(m => m.id === mappedMsg.id ? mappedMsg : m));
+          } else if (eventType === 'DELETE' && oldRecord) {
+            const delId = String(oldRecord.id);
+            setMessages(prev => prev.filter(m => m.id !== delId));
+          }
         }
         fetchAllData(true);
       })
@@ -2980,6 +3069,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }`}
           >
             <Bell className={`w-3.5 h-3.5 ${desktopAlertsActive ? 'text-emerald-400 fill-emerald-400/20' : 'text-orange-400'}`} />
+            <span className="hidden sm:inline">Alerts: {desktopAlertsActive ? 'Active' : 'Enable'}</span>
           </button>
 
           {/* Quick Maintenance Toggle in Header */}
@@ -3127,6 +3217,68 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-xs text-slate-500">
                   Real-time operational marketplace metrics computed directly from persistent Supabase database records.
                 </p>
+              </div>
+
+              {/* Real-Time Live Push & Notification Center Banner */}
+              <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white rounded-2xl p-4 sm:p-5 border border-slate-700/80 shadow-md">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center shrink-0">
+                      <Bell className="w-5 h-5 text-orange-400 animate-bounce" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-sm sm:text-base font-black tracking-tight text-white">
+                          Real-Time Instant Order & SMS Alert Center
+                        </h2>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                          Live Push Active
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Whenever a customer places an order or sends an SMS/message, an instant audio chime, desktop push alert, and top live banner trigger in under 50ms without page reload.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                    <button
+                      onClick={async () => {
+                        playNotificationChime('order');
+                        showToast('🔔 Testing Order fanfare chime & dispatching live event...');
+                        try {
+                          await api.adminTestAlert('order');
+                        } catch {}
+                      }}
+                      className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>Test Order Chime & Alert</span>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        playNotificationChime('sms');
+                        showToast('💬 Testing SMS dual-ping chime & dispatching live event...');
+                        try {
+                          await api.adminTestAlert('sms');
+                        } catch {}
+                      }}
+                      className="flex-1 sm:flex-none px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 hover:text-white font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Test SMS Chime & Alert</span>
+                    </button>
+                    <button
+                      onClick={handleToggleDesktopAlerts}
+                      className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs rounded-xl border border-slate-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      title="Toggle sound & desktop notification permission"
+                    >
+                      <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{desktopAlertsActive ? 'Alerts Enabled' : 'Enable Desktop Alerts'}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* KPI Cards: Financial & Volume Analytics */}

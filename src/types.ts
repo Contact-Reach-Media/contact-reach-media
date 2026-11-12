@@ -322,6 +322,7 @@ export interface Order {
     note?: string;
     updatedBy?: string;
   }[];
+  updatedAt?: string;
 }
 
 export interface PaymentConfirmation {
@@ -650,6 +651,7 @@ export interface AdminMessage {
   orderNumber?: string;
   createdAt: string;
   status: 'unread' | 'read' | 'replied' | 'archived';
+  readAt?: string;
   replyNote?: string;
   repliedAt?: string;
   repliedBy?: string;

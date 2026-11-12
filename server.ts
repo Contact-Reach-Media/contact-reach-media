@@ -4729,6 +4729,65 @@ app.post('/api/admin/broadcast-update', requireAdminAuth, (req: Request, res: Re
   });
 });
 
+// Admin endpoint to trigger a real-time test alert for Order or SMS across connected administrator dashboards
+app.post('/api/admin/test-alert', requireAdminAuth, (req: Request, res: Response) => {
+  const { type = 'order' } = req.body;
+  if (type === 'sms') {
+    const sampleMsg: AdminMessage = {
+      id: `msg-test-${Date.now()}`,
+      name: 'Test Customer (0780022600)',
+      email: 'customer@contactreach.rw',
+      phone: '0780022600',
+      subject: 'Test SMS Alert',
+      message: 'Hello ContactReach Admin, this is a real-time SMS test notification to verify your alert sound & banner!',
+      createdAt: new Date().toISOString(),
+      status: 'unread'
+    };
+    broadcastDatabaseEvent('sms_received', { message: sampleMsg });
+    return res.json({ success: true, message: 'Test SMS event broadcasted', data: sampleMsg });
+  } else {
+    const sampleOrder: Order = {
+      id: `ord-test-${Date.now()}`,
+      orderNumber: `CRM-${Math.floor(10000 + Math.random() * 90000)}`,
+      customerName: 'Test Shopper',
+      customerPhone: '0780022600',
+      customerEmail: 'shopper@test.rw',
+      deliveryType: 'delivery',
+      deliveryLocation: 'Kigali Area (Nyarugenge)',
+      deliveryAddress: 'Fair View Plaza, Kigali',
+      subtotal: 35000,
+      deliveryFee: 1500,
+      totalAmount: 36500,
+      paymentMethod: 'MTN Mobile Money',
+      receiverName: 'Ruth',
+      receiverDetails: '0780022600',
+      paymentStatus: 'Pending Payment',
+      status: 'New',
+      deliveryStatus: 'Pending',
+      stockDeducted: false,
+      statusHistory: [
+        {
+          status: 'New',
+          timestamp: new Date().toISOString(),
+          note: 'Real-time test order simulated.'
+        }
+      ],
+      items: [
+        {
+          productId: 'prod-test',
+          productName: 'Sample Real-Time Test Item',
+          price: 35000,
+          quantity: 1,
+          imageUrl: '/logo.png'
+        }
+      ],
+      createdAt: new Date().toISOString()
+    };
+    broadcastDatabaseEvent('order_created', { order: sampleOrder });
+    return res.json({ success: true, message: 'Test Order event broadcasted', data: sampleOrder });
+  }
+});
+
 // -------------------------------------------------------------
 // ADMIN STATS & REAL-TIME EVENT STREAM
 // -------------------------------------------------------------
@@ -4745,7 +4804,14 @@ app.get('/api/admin/realtime', (req: Request, res: Response) => {
   if (token && !revokedTokens.has(token)) {
     const session = db.adminTokens.get(token);
     if (session && session.expiresAt > Date.now()) {
-      if (session.user?.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL && session.user.active !== false) {
+      const u = session.user;
+      if (
+        u &&
+        (u.username === ADMIN_USERNAME ||
+          u.role === 'owner' ||
+          String(u.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) &&
+        u.active !== false
+      ) {
         isValidAdmin = true;
       } else {
         db.adminTokens.delete(token);
@@ -4753,13 +4819,18 @@ app.get('/api/admin/realtime', (req: Request, res: Response) => {
         saveDbToDisk();
       }
     } else if (
-      token.startsWith('fb_client_token_') ||
       token.startsWith('crm_admin_') ||
+      token.startsWith('fb_client_token_') ||
       token === 'crm_admin_test_session'
     ) {
       const fallbackOwner =
-        db.adminUsers.find(u => u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL && u.active) ||
-        defaultAdminUsers[0];
+        db.adminUsers.find(
+          u =>
+            (u.username === ADMIN_USERNAME ||
+              u.role === 'owner' ||
+              u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) &&
+            u.active
+        ) || defaultAdminUsers[0];
       if (fallbackOwner) {
         isValidAdmin = true;
         db.adminTokens.set(token, {

@@ -544,6 +544,50 @@ export async function syncAllShopsToSupabase(shops: VendorShop[] = []): Promise<
 // -------------------------------------------------------------
 // 4. ORDERS CRUD & SYNC
 // -------------------------------------------------------------
+export function mapSupabaseRowToOrder(o: any): Order {
+  return {
+    id: String(o.id),
+    orderNumber: o.order_no || o.order_number || '',
+    customerName: o.customer_name || 'Customer',
+    customerPhone: o.phone || o.customer_phone || '',
+    customerEmail: o.email || o.customer_email || undefined,
+    deliveryType: 'delivery',
+    deliveryLocation: o.zone || o.delivery_district || o.delivery_city || 'Kigali',
+    deliveryAddress: o.address || o.delivery_address || 'Kigali, Rwanda',
+    deliveryNotes: o.instructions || o.delivery_notes || undefined,
+    items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
+      productId: it.product_id ? String(it.product_id) : undefined,
+      name: it.product_name,
+      productName: it.product_name,
+      price: Number(it.unit_price_rwf ?? it.unit_price) || 0,
+      quantity: Number(it.qty ?? it.quantity) || 1
+    })) : (Array.isArray(o.items) ? o.items : []),
+    subtotal: Number(o.subtotal_rwf ?? o.subtotal ?? o.total_rwf ?? o.total_amount) || 0,
+    deliveryFee: Number(o.delivery_fee_rwf ?? o.delivery_fee) || 0,
+    shippingCost: Number(o.shipping_cost) || 0,
+    discountAmount: Number(o.discount_rwf ?? o.discount_amount) || 0,
+    couponCode: o.coupon_code || undefined,
+    totalAmount: Number(o.total_rwf ?? o.total_amount) || 0,
+    commissionRate: Number(o.commission_rate) || 10,
+    commissionEarned: Number(o.commission_earned) || 0,
+    supplierPayoutAmount: Number(o.supplier_payout_amount) || 0,
+    supplierPayoutStatus: o.supplier_payout_status || 'Pending',
+    paymentMethod: o.payment_method || 'MTN Mobile Money',
+    receiverName: o.receiver_name || 'Ruth',
+    receiverDetails: o.receiver_details || '0780022600',
+    paymentStatus: o.payment_status || 'Pending Payment',
+    deliveryStatus: o.delivery_status || 'Pending',
+    status: o.status || o.order_status || 'New',
+    stockDeducted: Boolean(o.stock_deducted),
+    trackingNumber: o.tracking_ref || o.tracking_number || undefined,
+    trackingToken: o.tracking_token || undefined,
+    trackingCarrier: o.tracking_carrier || undefined,
+    statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
+    createdAt: o.created_at || new Date().toISOString(),
+    updatedAt: o.updated_at || undefined
+  };
+}
+
 export async function getOrdersFromSupabase(): Promise<Order[]> {
   try {
     const { data, error } = await supabase
@@ -553,47 +597,7 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
 
     if (error || !data) return [];
 
-    return data.map((o: any) => ({
-      id: String(o.id),
-      orderNumber: o.order_no || o.order_number || '',
-      customerName: o.customer_name || 'Customer',
-      customerPhone: o.phone || o.customer_phone || '',
-      customerEmail: o.email || o.customer_email || undefined,
-      deliveryType: 'delivery',
-      deliveryLocation: o.zone || o.delivery_district || o.delivery_city || 'Kigali',
-      deliveryAddress: o.address || o.delivery_address || 'Kigali, Rwanda',
-      deliveryNotes: o.instructions || o.delivery_notes || undefined,
-      items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
-        productId: it.product_id ? String(it.product_id) : undefined,
-        name: it.product_name,
-        productName: it.product_name,
-        price: Number(it.unit_price_rwf ?? it.unit_price) || 0,
-        quantity: Number(it.qty ?? it.quantity) || 1
-      })) : (Array.isArray(o.items) ? o.items : []),
-      subtotal: Number(o.subtotal_rwf ?? o.subtotal ?? o.total_rwf ?? o.total_amount) || 0,
-      deliveryFee: Number(o.delivery_fee_rwf ?? o.delivery_fee) || 0,
-      shippingCost: Number(o.shipping_cost) || 0,
-      discountAmount: Number(o.discount_rwf ?? o.discount_amount) || 0,
-      couponCode: o.coupon_code || undefined,
-      totalAmount: Number(o.total_rwf ?? o.total_amount) || 0,
-      commissionRate: Number(o.commission_rate) || 10,
-      commissionEarned: Number(o.commission_earned) || 0,
-      supplierPayoutAmount: Number(o.supplier_payout_amount) || 0,
-      supplierPayoutStatus: o.supplier_payout_status || 'Pending',
-      paymentMethod: o.payment_method || 'MTN Mobile Money',
-      receiverName: o.receiver_name || 'Ruth',
-      receiverDetails: o.receiver_details || '0780022600',
-      paymentStatus: o.payment_status || 'Pending Payment',
-      deliveryStatus: o.delivery_status || 'Pending',
-      status: o.status || o.order_status || 'New',
-      stockDeducted: Boolean(o.stock_deducted),
-      trackingNumber: o.tracking_ref || o.tracking_number || undefined,
-      trackingToken: o.tracking_token || undefined,
-      trackingCarrier: o.tracking_carrier || undefined,
-      statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
-      createdAt: o.created_at || new Date().toISOString(),
-      updatedAt: o.updated_at || undefined
-    }));
+    return data.map(mapSupabaseRowToOrder);
   } catch {
     return [];
   }
@@ -848,27 +852,31 @@ export async function syncAllAccountsToSupabase(accounts: any[] = []): Promise<{
 // -------------------------------------------------------------
 // 7. CUSTOMER MESSAGES CRUD
 // -------------------------------------------------------------
+export function mapSupabaseRowToMessage(m: any): AdminMessage {
+  return {
+    id: String(m.id),
+    name: m.name || m.sender_name || 'Customer',
+    email: m.email || m.sender_email || '',
+    phone: m.phone || m.sender_phone || undefined,
+    subject: m.subject || '',
+    message: m.message || m.body || '',
+    status: m.status || 'unread',
+    orderNumber: m.order_number || undefined,
+    customerId: m.customer_id || undefined,
+    sender: m.sender || 'customer',
+    senderName: m.name || m.sender_name || undefined,
+    createdAt: m.created_at || new Date().toISOString(),
+    readAt: m.read_at || undefined,
+    repliedAt: m.replied_at || undefined,
+    replyNote: m.reply_note || m.reply_message || undefined
+  };
+}
+
 export async function getMessagesFromSupabase(): Promise<AdminMessage[]> {
   try {
     const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: false });
     if (error || !data) return [];
-    return data.map((m: any) => ({
-      id: m.id,
-      name: m.name || m.sender_name || 'Customer',
-      email: m.email || m.sender_email || '',
-      phone: m.phone || m.sender_phone || undefined,
-      subject: m.subject || '',
-      message: m.message,
-      status: m.status || 'unread',
-      orderNumber: m.order_number || undefined,
-      customerId: m.customer_id || undefined,
-      sender: m.sender || 'customer',
-      senderName: m.name || m.sender_name || undefined,
-      createdAt: m.created_at || new Date().toISOString(),
-      readAt: m.read_at || undefined,
-      repliedAt: m.replied_at || undefined,
-      replyNote: m.reply_note || m.reply_message || undefined
-    }));
+    return data.map(mapSupabaseRowToMessage);
   } catch {
     return [];
   }
