@@ -40,6 +40,7 @@ import { SearchableLanguageModal } from './SearchableLanguageModal.tsx';
 import { getLanguageByCode } from '../data/languages.ts';
 import { setGoogleTranslateLanguage } from '../services/googleTranslate.ts';
 import { startDOMTranslationObserver } from '../services/domTranslator.ts';
+import { D3PerformanceAnalytics } from './D3PerformanceAnalytics.tsx';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -68,6 +69,135 @@ type TabType =
   | 'audit'
   | 'team'
   | 'settings';
+
+// Color-coded status badge renderers for high readability
+export const renderOrderStatusBadge = (status?: string, deliveryStatus?: string) => {
+  const norm = (status || '').toLowerCase().trim();
+  const dNorm = (deliveryStatus || '').toLowerCase().trim();
+
+  // 1. Delivered / Completed (Emerald Green)
+  if (norm === 'delivered' || dNorm === 'delivered' || norm === 'completed') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+        Delivered
+      </span>
+    );
+  }
+
+  // 2. Paid / Payment Confirmed (Green / Teal)
+  if (norm === 'paid' || norm === 'payment confirmed') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-teal-100 text-teal-800 border border-teal-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-teal-600" />
+        Paid
+      </span>
+    );
+  }
+
+  // 3. In Transit / Out for Delivery / Shipped (Blue)
+  if (
+    norm === 'out for delivery' ||
+    dNorm === 'out for delivery' ||
+    norm === 'in transit' ||
+    dNorm === 'in transit' ||
+    norm === 'shipped' ||
+    dNorm === 'shipped'
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-blue-100 text-blue-800 border border-blue-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+        {norm === 'out for delivery' || dNorm === 'out for delivery' ? 'Out for Delivery' : 'In Transit'}
+      </span>
+    );
+  }
+
+  // 4. Processing / Preparing / Ready (Indigo)
+  if (
+    norm === 'preparing' ||
+    norm === 'processing' ||
+    dNorm === 'processing' ||
+    norm === 'ready for delivery' ||
+    norm === 'confirmed'
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-indigo-100 text-indigo-800 border border-indigo-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+        Processing
+      </span>
+    );
+  }
+
+  // 5. Cancelled / Rejected (Rose / Red)
+  if (norm === 'cancelled' || dNorm === 'cancelled' || norm.includes('rejected')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-rose-100 text-rose-800 border border-rose-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+        Cancelled
+      </span>
+    );
+  }
+
+  // 6. Pending / Awaiting Payment / New (Amber / Orange)
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-amber-100 text-amber-800 border border-amber-300/80 shadow-2xs">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+      {status === 'New' ? 'Pending (New)' : status || 'Pending'}
+    </span>
+  );
+};
+
+export const renderPaymentStatusBadge = (paymentStatus?: string) => {
+  const norm = (paymentStatus || '').toLowerCase().trim();
+
+  // 1. Paid (Emerald Green)
+  if (norm === 'paid' || norm === 'approved') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+        Paid
+      </span>
+    );
+  }
+
+  // 2. Pending Verification / Under Review (Amber)
+  if (norm.includes('verification') || norm.includes('review') || norm === 'payment submitted') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-amber-100 text-amber-800 border border-amber-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+        Pending Verification
+      </span>
+    );
+  }
+
+  // 3. Failed / Rejected (Rose)
+  if (norm === 'failed' || norm === 'payment rejected' || norm === 'rejected') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-rose-100 text-rose-800 border border-rose-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+        Failed
+      </span>
+    );
+  }
+
+  // 4. Refunded (Purple)
+  if (norm === 'refunded' || norm === 'partially refunded') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-purple-100 text-purple-800 border border-purple-300/80 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+        Refunded
+      </span>
+    );
+  }
+
+  // 5. Default: Pending / Awaiting Payment (Orange / Yellow)
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-orange-100 text-orange-900 border border-orange-300/80 shadow-2xs">
+      <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+      {paymentStatus || 'Pending Payment'}
+    </span>
+  );
+};
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
@@ -3534,6 +3664,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               )}
 
+              {/* D3.js Daily Order Volume & Total Sales Trends Visualization */}
+              <D3PerformanceAnalytics
+                orders={orders}
+                onRefresh={() => fetchAllData(true)}
+                onSelectOrder={(ord) => {
+                  setSelectedOrderModal(ord);
+                }}
+              />
+
               {/* Recent Orders in Dashboard */}
               <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
@@ -3586,18 +3725,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {ord.totalAmount.toLocaleString()} FRW
                           </td>
                           <td className="py-3 px-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                              ord.paymentStatus === 'Paid'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : ord.paymentStatus === 'Pending Verification'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              {ord.paymentStatus}
-                            </span>
+                            {renderPaymentStatusBadge(ord.paymentStatus)}
                           </td>
                           <td className="py-3 px-3">
-                            <span className="font-semibold text-slate-800">{ord.status}</span>
+                            {renderOrderStatusBadge(ord.status, ord.deliveryStatus)}
                           </td>
                           <td className="py-3 px-3 text-right space-x-1">
                             <button
@@ -5231,19 +5362,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                               {/* 5. Payment Status */}
                               <td className="py-3 px-3 whitespace-nowrap">
-                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                  ord.paymentStatus === 'Paid'
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                    : ord.paymentStatus === 'Pending Verification'
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                    : ord.paymentStatus === 'Failed'
-                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                    : ord.paymentStatus === 'Refunded'
-                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                    : 'bg-orange-50 text-orange-800 border border-orange-200'
-                                }`}>
-                                  {ord.paymentStatus || 'Pending Payment'}
-                                </span>
+                                {renderPaymentStatusBadge(ord.paymentStatus)}
                               </td>
 
                               {/* 6. Order Date */}
@@ -5258,21 +5377,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                               {/* 7. Delivery Status */}
                               <td className="py-3 px-3 whitespace-nowrap">
-                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                                  effectiveDelivery === 'Delivered'
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                    : (effectiveDelivery === 'Shipped' || effectiveDelivery === 'In Transit' || effectiveDelivery === 'Out for Delivery')
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                    : effectiveDelivery === 'Processing' || effectiveDelivery === 'Awaiting Shipment'
-                                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                                    : effectiveDelivery === 'Cancelled'
-                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                    : effectiveDelivery === 'Failed Delivery' || effectiveDelivery === 'Returned'
-                                    ? 'bg-red-100 text-red-800 border border-red-200'
-                                    : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                }`}>
-                                  {effectiveDelivery}
-                                </span>
+                                {renderOrderStatusBadge(ord.status, effectiveDelivery)}
                               </td>
 
                               {/* 8. Tracking Number */}
@@ -11052,14 +11157,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <h3 className="text-lg font-black text-slate-900 tracking-tight">
                       Order #{selectedOrderModal.orderNumber}
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-100 text-slate-700">
-                      {selectedOrderModal.status}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                      selectedOrderModal.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {selectedOrderModal.paymentStatus}
-                    </span>
+                    {renderOrderStatusBadge(selectedOrderModal.status, selectedOrderModal.deliveryStatus)}
+                    {renderPaymentStatusBadge(selectedOrderModal.paymentStatus)}
                   </div>
                   <p className="text-xs text-slate-400 font-mono">
                     Placed on {new Date(selectedOrderModal.createdAt).toLocaleString()} · ID: {selectedOrderModal.id}
