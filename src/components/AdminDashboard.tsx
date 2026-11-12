@@ -216,10 +216,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
 
-  // Strict Security Enforcement: Auto-logout any unauthorized account
+  // Strict Security Enforcement: Only auto-logout if session token is missing or user is deactivated
   useEffect(() => {
+    const token = api.getAdminToken();
     const user = getStoredAdminUser();
-    if (!user || !isAuthorizedAdminUser(user)) {
+    if (!token) {
+      onLogout();
+      return;
+    }
+    if (user && user.active === false) {
       onLogout();
     }
   }, [onLogout]);

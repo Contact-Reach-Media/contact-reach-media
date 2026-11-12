@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShoppingBag, Search, Sparkles, Truck, ShieldCheck, CreditCard,
   MessageCircle, Heart, Star, ChevronRight, ChevronLeft, ArrowRight,
@@ -248,8 +248,12 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const token = api.getAdminToken();
+    if (!token) return false;
     const user = api.getStoredAdminUser();
-    return Boolean(token && user && isAuthorizedAdminUser(user) && user.active !== false);
+    if (user) {
+      return isAuthorizedAdminUser(user) && user.active !== false;
+    }
+    return true;
   });
   const [adminInitialTab, setAdminInitialTab] = useState<'overview' | 'products' | 'orders' | 'inventory' | 'settings'>('overview');
   const [autoOpenAddProduct, setAutoOpenAddProduct] = useState(initialRoute.view === 'admin-upload');
@@ -356,9 +360,10 @@ export default function App() {
     }
     else if (view === 'admin-login') targetPath = '/admin/login';
     else if (view === 'admin') {
+      const token = api.getAdminToken();
       const stored = api.getStoredAdminUser();
-      const isAuth = isAdminLoggedIn && stored && isAuthorizedAdminUser(stored) && stored.active !== false;
-      if (!isAuth) {
+      const isAuth = (isAdminLoggedIn || Boolean(token)) && (!stored || (isAuthorizedAdminUser(stored) && stored.active !== false));
+      if (!isAuth && !token) {
         resolvedView = 'admin-login';
         targetPath = '/admin/login';
       } else {
@@ -377,9 +382,10 @@ export default function App() {
       targetPath = '/categories';
     }
     else if (view === 'admin-upload' || view === 'upload-product') {
+      const token = api.getAdminToken();
       const stored = api.getStoredAdminUser();
-      const isAuth = isAdminLoggedIn && stored && isAuthorizedAdminUser(stored) && stored.active !== false;
-      if (isAuth) {
+      const isAuth = (isAdminLoggedIn || Boolean(token)) && (!stored || (isAuthorizedAdminUser(stored) && stored.active !== false));
+      if (isAuth || token) {
         setIsAdminLoggedIn(true);
         setAdminInitialTab('products');
         setAutoOpenAddProduct(true);
@@ -416,6 +422,17 @@ export default function App() {
     setActiveView(resolvedView);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Dedicated manual logout handler - ONLY manual logout ends admin session
+  const handleAdminLogout = useCallback(async () => {
+    try {
+      await api.adminLogout();
+    } catch {}
+    setIsAdminLoggedIn(false);
+    setAutoOpenAddProduct(false);
+    handleNavigate('home');
+    showToast('Logged out of admin portal');
+  }, []);
 
   // Direct product selector with deep-link URL push & replace
   const handleSelectProduct = (product: Product | null) => {
@@ -461,9 +478,11 @@ export default function App() {
       setCategories(fetchedCategories);
       setSettings(fetchedSettings);
       setShops(fetchedShops);
-      setIsAdminLoggedIn(isAuth);
+      const hasToken = Boolean(api.getAdminToken());
+      const effectiveAuth = isAuth || (hasToken && Boolean(api.getStoredAdminUser()));
+      setIsAdminLoggedIn(effectiveAuth);
 
-      if (initialRoute.view === 'admin' && !isAuth && !api.getAdminToken()) {
+      if (initialRoute.view === 'admin' && !effectiveAuth && !hasToken) {
         setActiveView('admin-login');
       }
 
@@ -661,13 +680,13 @@ export default function App() {
     const handlePopState = () => {
       const route = parseRouteFromLocation();
       if (route.view === 'admin') {
+        const token = api.getAdminToken();
         const stored = api.getStoredAdminUser();
-        const isAuth = isAdminLoggedIn && stored && isAuthorizedAdminUser(stored) && stored.active !== false;
-        if (!isAuth) {
-          api.adminLogout().catch(() => {});
-          setIsAdminLoggedIn(false);
+        const isAuth = (isAdminLoggedIn || Boolean(token)) && (!stored || (isAuthorizedAdminUser(stored) && stored.active !== false));
+        if (!isAuth && !token) {
           setActiveView('admin-login');
         } else {
+          setIsAdminLoggedIn(true);
           setActiveView('admin');
         }
       } else if (route.view === 'track-order') {
@@ -957,13 +976,7 @@ export default function App() {
       {activeView === 'admin-login' ? (
         isAdminLoggedIn ? (
           <AdminDashboard
-            onLogout={async () => {
-              await api.adminLogout();
-              setIsAdminLoggedIn(false);
-              setAutoOpenAddProduct(false);
-              handleNavigate('home');
-              showToast('Logged out of admin portal');
-            }}
+            onLogout={handleAdminLogout}
             categories={categories}
             onRefreshPublicData={refreshAllData}
             initialTab={adminInitialTab as any}
@@ -991,13 +1004,7 @@ export default function App() {
       ) : activeView === 'admin' ? (
         isAdminLoggedIn ? (
           <AdminDashboard
-            onLogout={async () => {
-              await api.adminLogout();
-              setIsAdminLoggedIn(false);
-              setAutoOpenAddProduct(false);
-              handleNavigate('home');
-              showToast('Logged out of admin portal');
-            }}
+            onLogout={handleAdminLogout}
             categories={categories}
             onRefreshPublicData={refreshAllData}
             initialTab={adminInitialTab as any}

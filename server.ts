@@ -753,11 +753,56 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         created_at: data.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      const { error: ordErr } = await supabase.from('orders').upsert(orderRow, { onConflict: 'order_number' });
-      if (ordErr) {
-        console.error('[Supabase Order Sync] Error:', ordErr.message);
+      // Safe upsert: check existing record by id or order_number first to prevent orders_pkey or orders_order_number_key duplicate violations
+      const queryParts: string[] = [];
+      if (orderRow.id) queryParts.push(`id.eq.${orderRow.id}`);
+      if (orderRow.order_number) queryParts.push(`order_number.eq.${orderRow.order_number}`);
+
+      let existingOrder: { id: string; order_number: string } | null = null;
+      if (queryParts.length > 0) {
+        const { data: matched } = await supabase
+          .from('orders')
+          .select('id, order_number')
+          .or(queryParts.join(','))
+          .limit(1)
+          .maybeSingle();
+        if (matched) existingOrder = matched;
+      }
+
+      if (existingOrder) {
+        orderRow.id = existingOrder.id;
+        if (existingOrder.order_number) {
+          orderRow.order_number = existingOrder.order_number;
+        }
+        const { error: ordErr } = await supabase
+          .from('orders')
+          .update(orderRow)
+          .eq('id', existingOrder.id);
+        if (ordErr) {
+          console.error('[Supabase Order Sync] Error:', ordErr.message);
+        } else {
+          console.log(`[Supabase] Live synchronized order #${orderRow.order_number} to Supabase.`);
+        }
       } else {
-        console.log(`[Supabase] Live synchronized order #${data.orderNumber} to Supabase.`);
+        const { error: ordErr } = await supabase.from('orders').insert(orderRow);
+        if (ordErr) {
+          if (ordErr.code === '23505' && queryParts.length > 0) {
+            // Concurrency fallback: update matching row
+            const { error: fbErr } = await supabase
+              .from('orders')
+              .update(orderRow)
+              .or(queryParts.join(','));
+            if (fbErr) {
+              console.error('[Supabase Order Sync] Error:', fbErr.message);
+            } else {
+              console.log(`[Supabase] Live synchronized order #${orderRow.order_number} to Supabase.`);
+            }
+          } else {
+            console.error('[Supabase Order Sync] Error:', ordErr.message);
+          }
+        } else {
+          console.log(`[Supabase] Live synchronized order #${orderRow.order_number} to Supabase.`);
+        }
       }
     } else if (entityType === 'products' || entityType === 'product') {
       const prodRow: Record<string, any> = {
@@ -10038,21 +10083,48 @@ app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: 
       if (!error) syncedProducts += chunk.length;
     }
 
-    // Sync orders
-    for (let i = 0; i < db.orders.length; i += 50) {
-      const chunk = db.orders.slice(i, i + 50).map(o => ({
-        id: o.id,
-        order_number: o.orderNumber,
-        customer_name: o.customerName,
-        customer_phone: o.customerPhone,
-        total_amount: o.totalAmount,
+    // Sync orders safely without orders_pkey duplicate conflicts
+    for (const o of db.orders) {
+      const orderRow: Record<string, any> = {
+        id: String(o.id || `ord-${Date.now()}`),
+        order_number: String(o.orderNumber || (o as any).order_number),
+        customer_name: o.customerName || 'Customer',
+        customer_phone: o.customerPhone || '0780000000',
+        total_amount: Number(o.totalAmount) || 0,
         payment_status: o.paymentStatus || 'Pending Payment',
         status: o.status || 'New',
         items: o.items || [],
         created_at: o.createdAt || new Date().toISOString()
-      }));
-      const { error } = await supabase.from('orders').upsert(chunk, { onConflict: 'id' });
-      if (!error) syncedOrders += chunk.length;
+      };
+      const queryParts: string[] = [];
+      if (orderRow.id) queryParts.push(`id.eq.${orderRow.id}`);
+      if (orderRow.order_number) queryParts.push(`order_number.eq.${orderRow.order_number}`);
+
+      let existingOrder: { id: string; order_number: string } | null = null;
+      if (queryParts.length > 0) {
+        const { data: matched } = await supabase
+          .from('orders')
+          .select('id, order_number')
+          .or(queryParts.join(','))
+          .limit(1)
+          .maybeSingle();
+        if (matched) existingOrder = matched;
+      }
+
+      if (existingOrder) {
+        orderRow.id = existingOrder.id;
+        orderRow.order_number = existingOrder.order_number;
+        const { error: updErr } = await supabase.from('orders').update(orderRow).eq('id', existingOrder.id);
+        if (!updErr) syncedOrders++;
+      } else {
+        const { error: insErr } = await supabase.from('orders').insert(orderRow);
+        if (!insErr) {
+          syncedOrders++;
+        } else if (insErr.code === '23505' && queryParts.length > 0) {
+          const { error: fbErr } = await supabase.from('orders').update(orderRow).or(queryParts.join(','));
+          if (!fbErr) syncedOrders++;
+        }
+      }
     }
 
     // Sync accounts

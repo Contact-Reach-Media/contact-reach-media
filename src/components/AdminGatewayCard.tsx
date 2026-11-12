@@ -16,6 +16,19 @@ export const AdminGatewayCard: React.FC<AdminGatewayCardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // If already logged in, automatically resolve to dashboard
+  React.useEffect(() => {
+    const token = api.getAdminToken();
+    const user = api.getStoredAdminUser();
+    if (token && user && user.active !== false) {
+      api.adminCheckAuth().then((isValid) => {
+        if (isValid) {
+          onSuccess(user);
+        }
+      }).catch(() => {});
+    }
+  }, [onSuccess]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);

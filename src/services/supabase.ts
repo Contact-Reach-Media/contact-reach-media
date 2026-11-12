@@ -672,17 +672,62 @@ export async function saveOrderToSupabase(order: any): Promise<{ success: boolea
       updated_at: new Date().toISOString()
     };
 
-    const { data: savedOrder, error } = await supabase
-      .from('orders')
-      .upsert(orderRecord, { onConflict: 'order_number' })
-      .select();
+    // Safe upsert: check existing record by id or order_number first to avoid orders_pkey constraint conflict
+    const queryParts: string[] = [];
+    if (orderRecord.id) queryParts.push(`id.eq.${orderRecord.id}`);
+    if (orderRecord.order_number) queryParts.push(`order_number.eq.${orderRecord.order_number}`);
 
-    if (error) {
-      console.error('[Supabase Save Order] Error:', error.message);
-      return { success: false, error: error.message };
+    let existingOrder: { id: string; order_number: string } | null = null;
+    if (queryParts.length > 0) {
+      const { data: matched } = await supabase
+        .from('orders')
+        .select('id, order_number')
+        .or(queryParts.join(','))
+        .limit(1)
+        .maybeSingle();
+      if (matched) existingOrder = matched;
     }
 
-    return { success: true, data: savedOrder?.[0] };
+    if (existingOrder) {
+      orderRecord.id = existingOrder.id;
+      if (existingOrder.order_number) {
+        orderRecord.order_number = existingOrder.order_number;
+      }
+      const { data: updatedOrder, error: updateErr } = await supabase
+        .from('orders')
+        .update(orderRecord)
+        .eq('id', existingOrder.id)
+        .select();
+
+      if (updateErr) {
+        console.error('[Supabase Save Order] Error:', updateErr.message);
+        return { success: false, error: updateErr.message };
+      }
+      return { success: true, data: updatedOrder?.[0] };
+    } else {
+      const { data: insertedOrder, error: insertErr } = await supabase
+        .from('orders')
+        .insert(orderRecord)
+        .select();
+
+      if (insertErr) {
+        if (insertErr.code === '23505' && queryParts.length > 0) {
+          const { data: fallbackOrder, error: fbErr } = await supabase
+            .from('orders')
+            .update(orderRecord)
+            .or(queryParts.join(','))
+            .select();
+          if (fbErr) {
+            console.error('[Supabase Save Order] Error:', fbErr.message);
+            return { success: false, error: fbErr.message };
+          }
+          return { success: true, data: fallbackOrder?.[0] };
+        }
+        console.error('[Supabase Save Order] Error:', insertErr.message);
+        return { success: false, error: insertErr.message };
+      }
+      return { success: true, data: insertedOrder?.[0] };
+    }
   } catch (err: any) {
     return { success: false, error: err?.message };
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Lock, User, ArrowRight, ShieldCheck, AlertCircle, ArrowLeft,
   Shield
@@ -19,6 +19,19 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // If already logged in, automatically resolve to dashboard
+  useEffect(() => {
+    const token = api.getAdminToken();
+    const user = api.getStoredAdminUser();
+    if (token && user && user.active !== false) {
+      api.adminCheckAuth().then((isValid) => {
+        if (isValid) {
+          onLoginSuccess(user, token);
+        }
+      }).catch(() => {});
+    }
+  }, [onLoginSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
