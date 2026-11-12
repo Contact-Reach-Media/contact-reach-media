@@ -138,25 +138,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Desktop Web Notification Dispatcher (shows OS popups even if admin is in another tab)
   const sendDesktopNotification = (title: string, body: string) => {
     try {
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {
-          body,
-          icon: '/favicon.ico',
-          tag: `crm-${Date.now()}`
-        });
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification(title, {
+            body,
+            icon: '/favicon.ico',
+            tag: `crm-${Date.now()}`
+          });
+        } else if (Notification.permission === 'default') {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+              new Notification(title, {
+                body,
+                icon: '/favicon.ico',
+                tag: `crm-${Date.now()}`
+              });
+            }
+          }).catch(() => {});
+        }
       }
     } catch {}
   };
 
+  // Flashing document title when order arrives while admin is in another tab
+  const flashTitle = (msg: string) => {
+    if (typeof document === 'undefined') return;
+    let count = 0;
+    const interval = setInterval(() => {
+      count++;
+      document.title = count % 2 === 1 ? msg : 'ContactReach Admin';
+      if (count >= 12) {
+        clearInterval(interval);
+        document.title = 'ContactReach Admin';
+      }
+    }, 900);
+    const handleFocus = () => {
+      clearInterval(interval);
+      document.title = 'ContactReach Admin';
+      window.removeEventListener('focus', handleFocus);
+    };
+    window.addEventListener('focus', handleFocus);
+  };
+
   // High-Fidelity Synthesized Web Audio Chimes & Haptic Feedback
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const getAudioContext = (): AudioContext | null => {
+    try {
+      if (typeof window === 'undefined') return null;
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new AudioCtx();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+      return audioContextRef.current;
+    } catch {
+      return null;
+    }
+  };
+
   const playNotificationChime = (type: 'order' | 'sms' | 'payment' | 'alert' = 'order') => {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
-        if (ctx.state === 'suspended') {
-          ctx.resume().catch(() => {});
-        }
+      const ctx = getAudioContext();
+      if (ctx) {
 
         if (type === 'sms') {
           // Melodic dual-ping for incoming SMS: 880Hz -> 1175Hz (A5 -> D6)
@@ -223,26 +270,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch {}
   };
 
-  // One-time mobile audio unlock: enables crystal chime playback on iOS Safari & Android Chrome after first user gesture
+  // One-time mobile & browser audio unlock: enables crystal chime playback after first user gesture
   useEffect(() => {
     const unlockAudio = () => {
       try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          if (ctx.state === 'suspended') {
-            ctx.resume().catch(() => {});
-          }
+        const ctx = getAudioContext();
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
         }
       } catch {}
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
     };
     window.addEventListener('click', unlockAudio, { once: true });
     window.addEventListener('touchstart', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
     return () => {
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
     };
   }, []);
 
@@ -1629,7 +1676,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       try {
         const token = api.getAdminToken() || 'crm_admin_test_session';
-        eventSource = new EventSource(`/api/admin/realtime?token=${encodeURIComponent(token)}`);
+        const sseUrl = reconnectAttempts > 0 && reconnectAttempts % 2 === 1
+          ? '/api/database/stream'
+          : `/api/admin/realtime?token=${encodeURIComponent(token)}`;
+        eventSource = new EventSource(sseUrl);
 
         eventSource.addEventListener('open', () => {
           if (!isSubscribed) return;
@@ -1651,10 +1701,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             if (eventType === 'order_created' && payload?.order) {
               const newOrd: Order = payload.order;
               setOrders(prev => {
-                if (prev.some(o => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) return prev;
+                if (prev.some(o => o.id === newOrd.id || o.orderNumber === newOrd.orderNumber)) {
+                  return prev.map(o => (o.id === newOrd.id || o.orderNumber === newOrd.orderNumber) ? newOrd : o);
+                }
                 return [newOrd, ...prev];
               });
+              setStats((prev: any) => ({
+                ...prev,
+                totalOrders: (prev.totalOrders || 0) + 1,
+                totalSalesFrw: (prev.totalSalesFrw || 0) + (newOrd.totalAmount || 0),
+                awaitingPaymentOrders: newOrd.paymentStatus === 'Pending Payment' ? (prev.awaitingPaymentOrders || 0) + 1 : (prev.awaitingPaymentOrders || 0)
+              }));
               playNotificationChime('order');
+              flashTitle(`🔔 (1) NEW ORDER #${newOrd.orderNumber}!`);
               showToast(`🔔 Real-time: New Order #${newOrd.orderNumber} (${Number(newOrd.totalAmount).toLocaleString()} RWF) from ${newOrd.customerName}!`, 'success');
               sendDesktopNotification('New Order Received!', `Order #${newOrd.orderNumber} from ${newOrd.customerName} (${Number(newOrd.totalAmount).toLocaleString()} RWF)`);
               setLiveAlert({
@@ -1832,10 +1891,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           if (eventType === 'INSERT' && newRecord) {
             const mappedOrd = mapSupabaseRowToOrder(newRecord);
             setOrders(prev => {
-              if (prev.some(o => o.id === mappedOrd.id || o.orderNumber === mappedOrd.orderNumber)) return prev;
+              if (prev.some(o => o.id === mappedOrd.id || o.orderNumber === mappedOrd.orderNumber)) {
+                return prev.map(o => (o.id === mappedOrd.id || o.orderNumber === mappedOrd.orderNumber) ? mappedOrd : o);
+              }
               return [mappedOrd, ...prev];
             });
+            setStats((prev: any) => ({
+              ...prev,
+              totalOrders: (prev.totalOrders || 0) + 1,
+              totalSalesFrw: (prev.totalSalesFrw || 0) + (mappedOrd.totalAmount || 0)
+            }));
             playNotificationChime('order');
+            flashTitle(`🔔 (1) NEW ORDER #${mappedOrd.orderNumber}!`);
             showToast(`🔔 Real-time: New Order #${mappedOrd.orderNumber} (${Number(mappedOrd.totalAmount).toLocaleString()} RWF) from ${mappedOrd.customerName}!`, 'success');
             sendDesktopNotification('New Order Received!', `Order #${mappedOrd.orderNumber} from ${mappedOrd.customerName} (${Number(mappedOrd.totalAmount).toLocaleString()} RWF)`);
             setLiveAlert({
