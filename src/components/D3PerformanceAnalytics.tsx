@@ -25,7 +25,7 @@ interface DailyAggregate {
 }
 
 export const D3PerformanceAnalytics: React.FC<D3PerformanceAnalyticsProps> = ({
-  orders,
+  orders = [],
   onRefresh,
 }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
@@ -38,7 +38,8 @@ export const D3PerformanceAnalytics: React.FC<D3PerformanceAnalyticsProps> = ({
 
   // 1. Process orders into aggregated daily data
   const aggregatedData = useMemo(() => {
-    if (!orders || orders.length === 0) return [];
+    const safeOrders = Array.isArray(orders) ? orders : [];
+    if (safeOrders.length === 0) return [];
 
     // Filter by timeframe
     const now = new Date();
@@ -137,10 +138,11 @@ export const D3PerformanceAnalytics: React.FC<D3PerformanceAnalyticsProps> = ({
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || aggregatedData.length === 0) return;
 
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove(); // Clear previous render
+    try {
+      const svg = d3.select(svgRef.current);
+      svg.selectAll('*').remove(); // Clear previous render
 
-    const width = containerRef.current.clientWidth || 800;
+      const width = containerRef.current.clientWidth || 800;
     const height = 340;
     const margin = { top: 25, right: 65, bottom: 45, left: 70 };
     const innerWidth = width - margin.left - margin.right;
@@ -472,6 +474,9 @@ export const D3PerformanceAnalytics: React.FC<D3PerformanceAnalyticsProps> = ({
         setHoveredPoint(null);
         setTooltipPos(null);
       });
+    } catch (d3Err) {
+      console.warn('D3 chart render notice:', d3Err);
+    }
   }, [aggregatedData, metricMode]);
 
   // Window resize observer

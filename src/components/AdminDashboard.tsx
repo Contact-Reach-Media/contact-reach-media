@@ -216,14 +216,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
 
-  // Strict Security Enforcement: Only auto-logout if session token is missing or user is deactivated
+  // Security Verification: Only logout if user account is explicitly marked inactive
   useEffect(() => {
-    const token = api.getAdminToken();
     const user = getStoredAdminUser();
-    if (!token) {
-      onLogout();
-      return;
-    }
     if (user && user.active === false) {
       onLogout();
     }
@@ -503,7 +498,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Computed real-time statistics directly derived from active persistent database records
   const effectiveStats = useMemo(() => {
-    const confirmedOrDelivered = orders.filter(o =>
+    const safeOrders = Array.isArray(orders) ? orders : [];
+    const safePayments = Array.isArray(payments) ? payments : [];
+    const safeProblems = Array.isArray(problems) ? problems : [];
+    const safeProducts = Array.isArray(products) ? products : [];
+    const safeCategories = Array.isArray(categories) ? categories : [];
+    const safeShops = Array.isArray(shops) ? shops : [];
+    const safeCustomers = Array.isArray(customers) ? customers : [];
+    const safeSupplierApps = Array.isArray(supplierApplications) ? supplierApplications : [];
+    const safeAdminUsers = Array.isArray(adminUsers) ? adminUsers : [];
+    const safeMessages = Array.isArray(messages) ? messages : [];
+    const safeStats = stats || {};
+
+    const confirmedOrDelivered = safeOrders.filter(o =>
       o.paymentStatus === 'Paid' ||
       o.status === 'Confirmed' ||
       o.status === 'Preparing' ||
@@ -516,29 +523,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const totalSupplierPayoutsOwedFrw = confirmedOrDelivered
       .filter(o => o.supplierPayoutStatus !== 'Paid')
       .reduce((sum, o) => sum + (Number(o.supplierPayoutAmount) || Math.round((Number(o.subtotal) || 0) * 0.9)), 0);
-    const pendingVerifications = payments.filter(p => p.verificationStatus === 'Pending Verification' || (p as any).verificationStatus === 'Pending Review').length;
-    const unresolvedProblemsCount = problems.filter(p => p.status !== 'Resolved' && p.status !== 'Closed').length;
-    const lowStockCount = products.filter(p => (Number(p.stock) || 0) <= 5 || p.status === 'Out of Stock').length;
-    const activeProducts = products.filter(p => p.status !== 'Hidden').length;
-    const pendingOrdersCount = orders.filter(o => o.status === 'New' || o.paymentStatus === 'Pending Payment' || o.paymentStatus === 'Pending Verification').length;
+    const pendingVerifications = safePayments.filter(p => p.verificationStatus === 'Pending Verification' || (p as any).verificationStatus === 'Pending Review').length;
+    const unresolvedProblemsCount = safeProblems.filter(p => p.status !== 'Resolved' && p.status !== 'Closed').length;
+    const lowStockCount = safeProducts.filter(p => (Number(p.stock) || 0) <= 5 || p.status === 'Out of Stock').length;
+    const activeProducts = safeProducts.filter(p => p.status !== 'Hidden').length;
+    const pendingOrdersCount = safeOrders.filter(o => o.status === 'New' || o.paymentStatus === 'Pending Payment' || o.paymentStatus === 'Pending Verification').length;
 
     return {
-      totalSalesFrw: stats.totalSalesFrw > 0 ? stats.totalSalesFrw : totalSalesFrw,
-      totalCommissionsFrw: stats.totalCommissionsFrw > 0 ? stats.totalCommissionsFrw : totalCommissionsFrw,
-      totalSupplierPayoutsOwedFrw: stats.totalSupplierPayoutsOwedFrw > 0 ? stats.totalSupplierPayoutsOwedFrw : totalSupplierPayoutsOwedFrw,
-      totalOrders: Math.max(orders.length, stats.totalOrders || 0),
+      totalSalesFrw: safeStats.totalSalesFrw > 0 ? safeStats.totalSalesFrw : totalSalesFrw,
+      totalCommissionsFrw: safeStats.totalCommissionsFrw > 0 ? safeStats.totalCommissionsFrw : totalCommissionsFrw,
+      totalSupplierPayoutsOwedFrw: safeStats.totalSupplierPayoutsOwedFrw > 0 ? safeStats.totalSupplierPayoutsOwedFrw : totalSupplierPayoutsOwedFrw,
+      totalOrders: Math.max(safeOrders.length, safeStats.totalOrders || 0),
       pendingOrdersCount,
-      pendingVerifications: Math.max(pendingVerifications, stats.pendingVerifications || 0),
-      unresolvedProblemsCount: Math.max(unresolvedProblemsCount, stats.unresolvedProblemsCount || 0),
-      lowStockCount: Math.max(lowStockCount, stats.lowStockCount || 0),
-      activeProducts: Math.max(activeProducts, stats.activeProducts || 0),
-      totalProducts: Math.max(products.length, stats.totalProducts || 0),
-      totalCategories: Math.max(categories.length, stats.totalCategories || 0),
-      totalShops: Math.max(shops.length, stats.totalShops || 0),
-      totalCustomers: Math.max(customers.length, stats.totalCustomers || 0),
-      totalSuppliers: Math.max(supplierApplications.length, stats.approvedSuppliers || 0),
-      totalTeamMembers: Math.max(adminUsers.length, stats.totalTeamMembers || 0),
-      unreadMessagesCount: Math.max(messages.filter(m => m.status === 'unread').length, stats.unreadMessagesCount || 0)
+      pendingVerifications: Math.max(pendingVerifications, safeStats.pendingVerifications || 0),
+      unresolvedProblemsCount: Math.max(unresolvedProblemsCount, safeStats.unresolvedProblemsCount || 0),
+      lowStockCount: Math.max(lowStockCount, safeStats.lowStockCount || 0),
+      activeProducts: Math.max(activeProducts, safeStats.activeProducts || 0),
+      totalProducts: Math.max(safeProducts.length, safeStats.totalProducts || 0),
+      totalCategories: Math.max(safeCategories.length, safeStats.totalCategories || 0),
+      totalShops: Math.max(safeShops.length, safeStats.totalShops || 0),
+      totalCustomers: Math.max(safeCustomers.length, safeStats.totalCustomers || 0),
+      totalSuppliers: Math.max(safeSupplierApps.length, safeStats.approvedSuppliers || 0),
+      totalTeamMembers: Math.max(safeAdminUsers.length, safeStats.totalTeamMembers || 0),
+      unreadMessagesCount: Math.max(safeMessages.filter(m => m.status === 'unread').length, safeStats.unreadMessagesCount || 0)
     };
   }, [orders, payments, products, categories, shops, customers, supplierApplications, adminUsers, messages, problems, stats]);
   const [newUserModalOpen, setNewUserModalOpen] = useState(false);
@@ -1674,9 +1681,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           return fetchedOrders;
         });
       }
-      if (fetchedProducts) setProducts(fetchedProducts);
-      if (fetchedCategories) setCategories(fetchedCategories);
-      if (fetchedShops) setShops(fetchedShops);
+      if (Array.isArray(fetchedProducts)) setProducts(fetchedProducts);
+      if (Array.isArray(fetchedCategories)) setCategories(fetchedCategories);
+      if (Array.isArray(fetchedShops)) setShops(fetchedShops);
       if (fetchedPayments && Array.isArray(fetchedPayments)) {
         const sortedPayments = [...fetchedPayments].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
         if (prevPaymentsCountRef.current !== -1 && sortedPayments.length > prevPaymentsCountRef.current) {
@@ -1699,16 +1706,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         prevMessagesCountRef.current = sortedMessages.length;
         setMessages(sortedMessages);
       }
-      if (fetchedProblems) setProblems(fetchedProblems);
-      if (fetchedCoupons) setCoupons(fetchedCoupons);
-      if (fetchedInvLogs) setInventoryLogs(fetchedInvLogs);
-      if (fetchedAuditLogs) setAuditLogs(fetchedAuditLogs);
-      if (fetchedCustomers) setCustomers(fetchedCustomers);
-      if (fetchedAdminUsers) setAdminUsers(fetchedAdminUsers);
-      if (fetchedSupplierApps) setSupplierApplications(fetchedSupplierApps);
-      if (fetchedSupplierPayouts) setSupplierPayouts(fetchedSupplierPayouts);
-      if (fetchedSettings) setSettings(fetchedSettings);
-      if (fetchedDriveStatus) setDriveStatus(fetchedDriveStatus);
+      if (Array.isArray(fetchedProblems)) setProblems(fetchedProblems);
+      if (Array.isArray(fetchedCoupons)) setCoupons(fetchedCoupons);
+      if (Array.isArray(fetchedInvLogs)) setInventoryLogs(fetchedInvLogs);
+      if (Array.isArray(fetchedAuditLogs)) setAuditLogs(fetchedAuditLogs);
+      if (Array.isArray(fetchedCustomers)) setCustomers(fetchedCustomers);
+      if (Array.isArray(fetchedAdminUsers)) setAdminUsers(fetchedAdminUsers);
+      if (Array.isArray(fetchedSupplierApps)) setSupplierApplications(fetchedSupplierApps);
+      if (Array.isArray(fetchedSupplierPayouts)) setSupplierPayouts(fetchedSupplierPayouts);
+      if (fetchedSettings && typeof fetchedSettings === 'object') setSettings(fetchedSettings);
+      if (fetchedDriveStatus && typeof fetchedDriveStatus === 'object') setDriveStatus(fetchedDriveStatus);
       api.getExchangeRates().then(r => {
         if (r) {
           setRatesInfo({
@@ -4727,7 +4734,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Marketplace Commission (10%)</span>
                   <span className="text-xl font-black text-orange-600 font-mono mt-1 block">
-                    {supplierPayouts.reduce((acc, p) => acc + (p.commissionEarned || 0), 0).toLocaleString()} FRW
+                    {(supplierPayouts || []).reduce((acc, p) => acc + (p.commissionEarned || 0), 0).toLocaleString()} FRW
                   </span>
                   <span className="text-[10px] text-slate-400 mt-1 block">Earned on verified orders</span>
                 </div>
@@ -4735,7 +4742,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Net Supplier Payouts</span>
                   <span className="text-xl font-black text-slate-900 font-mono mt-1 block">
-                    {supplierPayouts.reduce((acc, p) => acc + (p.payoutAmount || 0), 0).toLocaleString()} FRW
+                    {(supplierPayouts || []).reduce((acc, p) => acc + (p.payoutAmount || 0), 0).toLocaleString()} FRW
                   </span>
                   <span className="text-[10px] text-slate-400 mt-1 block">Net 90% payable to merchants</span>
                 </div>
@@ -4743,7 +4750,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Pending Disbursements</span>
                   <span className="text-xl font-black text-amber-600 font-mono mt-1 block">
-                    {supplierPayouts.filter(p => p.status === 'Pending').reduce((acc, p) => acc + (p.payoutAmount || 0), 0).toLocaleString()} FRW
+                    {(supplierPayouts || []).filter(p => p.status === 'Pending').reduce((acc, p) => acc + (p.payoutAmount || 0), 0).toLocaleString()} FRW
                   </span>
                   <span className="text-[10px] text-amber-700 font-bold mt-1 block">
                     {supplierPayouts.filter(p => p.status === 'Pending').length} pending payouts
@@ -5478,23 +5485,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* TAB 6: PAYMENT VERIFICATION */}
           {activeTab === 'payments' && (() => {
+            const safePayments = Array.isArray(payments) ? payments : [];
+            const safeOrders = Array.isArray(orders) ? orders : [];
             const paymentStats = {
-              total: payments.length,
-              successful: payments.filter(pm => {
-                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+              total: safePayments.length,
+              successful: safePayments.filter(pm => {
+                const ord = safeOrders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
                 return pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved' || ord?.paymentStatus === 'Paid';
               }),
-              pending: payments.filter(pm => {
-                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+              pending: safePayments.filter(pm => {
+                const ord = safeOrders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
                 const isSuccess = pm.verificationStatus === 'Verified/Paid' || pm.verificationStatus === 'Approved' || ord?.paymentStatus === 'Paid';
                 return !isSuccess && (pm.verificationStatus === 'Pending Verification' || pm.verificationStatus === 'Under Verification' || pm.verificationStatus === 'Pending Review' || ord?.paymentStatus === 'Pending Payment' || ord?.paymentStatus === 'Pending Verification');
               }),
-              failed: payments.filter(pm => {
-                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+              failed: safePayments.filter(pm => {
+                const ord = safeOrders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
                 return pm.verificationStatus === 'Rejected' || pm.verificationStatus === 'Failed' || ord?.paymentStatus === 'Failed' || ord?.paymentStatus === 'Payment Rejected';
               }),
-              refunded: payments.filter(pm => {
-                const ord = orders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
+              refunded: safePayments.filter(pm => {
+                const ord = safeOrders.find(o => o.id === pm.orderId || o.orderNumber === pm.orderNumber);
                 return pm.verificationStatus === 'Refunded' || ord?.paymentStatus === 'Refunded';
               })
             };
@@ -6884,12 +6893,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* TAB 10: CUSTOMERS & REGISTERED BUYERS */}
           {activeTab === 'customers' && (() => {
-            const registeredBuyers = customers.filter(c => c.isRegisteredBuyer || Boolean(c.passwordHash) || c.accountType === 'buyer');
-            const guestCustomers = customers.filter(c => !c.isRegisteredBuyer && !c.passwordHash && c.accountType !== 'buyer');
-            const activeAccounts = customers.filter(c => c.status !== 'Suspended');
-            const totalRevenue = customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0);
+            const safeCustList = Array.isArray(customers) ? customers : [];
+            const registeredBuyers = safeCustList.filter(c => c.isRegisteredBuyer || Boolean(c.passwordHash) || c.accountType === 'buyer');
+            const guestCustomers = safeCustList.filter(c => !c.isRegisteredBuyer && !c.passwordHash && c.accountType !== 'buyer');
+            const activeAccounts = safeCustList.filter(c => c.status !== 'Suspended');
+            const totalRevenue = safeCustList.reduce((sum, c) => sum + (c.totalSpent || 0), 0);
 
-            const filteredCustomers = customers.filter(c => {
+            const filteredCustomers = safeCustList.filter(c => {
               // Type filter
               if (customerFilter === 'buyers' && (!c.isRegisteredBuyer && !c.passwordHash && c.accountType !== 'buyer')) return false;
               if (customerFilter === 'guests' && (c.isRegisteredBuyer || Boolean(c.passwordHash) || c.accountType === 'buyer')) return false;

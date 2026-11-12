@@ -48,7 +48,7 @@ import { CartDrawer } from './components/CartDrawer.tsx';
 import { CheckoutModal } from './components/CheckoutModal.tsx';
 import { PaymentConfirmationModal } from './components/PaymentConfirmationModal.tsx';
 import { OrderTrackingModal } from './components/OrderTrackingModal.tsx';
-import { AdminGatewayCard } from './components/AdminGatewayCard.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { PWAInstallModal } from './components/PWAInstallModal.tsx';
 import { BuyerAuthModal } from './components/BuyerAuthModal.tsx';
 import { BuyerAccountModal } from './components/BuyerAccountModal.tsx';
@@ -80,12 +80,17 @@ function parseRouteFromLocation() {
   const orderParam = searchParams.get('order') || searchParams.get('ref');
   const langParam = searchParams.get('lang');
   const currParam = searchParams.get('currency');
+  const viewParam = searchParams.get('view');
 
   let view = 'home';
   let productId = '';
   let category = catParam || 'all';
 
-  if (rawPath === '/shop' || rawPath === '/products' || rawPath === '/catalog') {
+  if (viewParam === 'admin' || rawPath === '/admin' || rawPath === '/dashboard') {
+    view = 'admin';
+  } else if (viewParam === 'admin-login' || rawPath === '/admin/login') {
+    view = 'admin-login';
+  } else if (viewParam === 'shop' || rawPath === '/shop' || rawPath === '/products' || rawPath === '/catalog') {
     view = 'shop';
   } else if (rawPath === '/shops' || rawPath === '/stores' || rawPath === '/vendors') {
     view = 'shops';
@@ -93,11 +98,7 @@ function parseRouteFromLocation() {
     view = 'how-to-buy';
   } else if (rawPath === '/contact' || rawPath === '/support' || rawPath === '/about') {
     view = 'contact';
-  } else if (rawPath === '/admin/login') {
-    view = 'admin-login';
-  } else if (rawPath === '/admin' || rawPath === '/dashboard') {
-    view = 'admin';
-  } else if (rawPath === '/orders' || rawPath === '/track' || rawPath === '/track-order') {
+  } else if (viewParam === 'track' || rawPath === '/orders' || rawPath === '/track' || rawPath === '/track-order') {
     view = 'track-order';
   } else if (rawPath === '/login' || rawPath === '/signin' || rawPath === '/auth') {
     view = 'login';
@@ -973,16 +974,18 @@ export default function App() {
           )}
 
       {/* VIEW: ADMIN LOGIN OR DASHBOARD */}
-      {activeView === 'admin-login' ? (
+      {activeView === 'admin' || activeView === 'admin-login' ? (
         isAdminLoggedIn ? (
-          <AdminDashboard
-            onLogout={handleAdminLogout}
-            categories={categories}
-            onRefreshPublicData={refreshAllData}
-            initialTab={adminInitialTab as any}
-            autoOpenAddProduct={autoOpenAddProduct}
-            onNavigateToStorefront={() => handleNavigate('home')}
-          />
+          <ErrorBoundary fallbackTitle="ContactReach Admin Dashboard">
+            <AdminDashboard
+              onLogout={handleAdminLogout}
+              categories={categories}
+              onRefreshPublicData={refreshAllData}
+              initialTab={adminInitialTab as any}
+              autoOpenAddProduct={autoOpenAddProduct}
+              onNavigateToStorefront={() => handleNavigate('home')}
+            />
+          </ErrorBoundary>
         ) : (
           <AdminLoginPage
             onLoginSuccess={(user) => {
@@ -999,29 +1002,6 @@ export default function App() {
               showToast(`Welcome Administrator ${user?.name || ''}`);
             }}
             onNavigateHome={() => handleNavigate('home')}
-          />
-        )
-      ) : activeView === 'admin' ? (
-        isAdminLoggedIn ? (
-          <AdminDashboard
-            onLogout={handleAdminLogout}
-            categories={categories}
-            onRefreshPublicData={refreshAllData}
-            initialTab={adminInitialTab as any}
-            autoOpenAddProduct={autoOpenAddProduct}
-            onNavigateToStorefront={() => handleNavigate('home')}
-          />
-        ) : (
-          <AdminGatewayCard
-            onSuccess={(user) => {
-              setIsAdminLoggedIn(true);
-              setActiveView('admin');
-              if (typeof window !== 'undefined') {
-                window.history.pushState({ view: 'admin' }, '', '/admin');
-              }
-              showToast(`Welcome Administrator ${user?.name || ''}`);
-            }}
-            onReturnHome={() => handleNavigate('home')}
           />
         )
       ) : activeView === 'login' || activeView === 'register' ? (
