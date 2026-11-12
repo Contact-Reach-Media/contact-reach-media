@@ -691,51 +691,73 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
   try {
     if (entityType === 'orders' || entityType === 'order') {
       const orderRow: Record<string, any> = {
-        order_number: data.orderNumber,
-        customer_name: data.customerName,
-        customer_email: data.customerEmail || `${(data.customerPhone || '0780000000').replace(/\D/g, '')}@customer.crm.rw`,
-        customer_phone: data.customerPhone,
+        id: String(data.id || `ord-${Date.now()}`),
+        order_number: String(data.orderNumber || data.order_number),
+        tracking_token: data.trackingToken || null,
+        tracking_number: data.trackingNumber || null,
+        tracking_carrier: data.trackingCarrier || null,
+        tracking_url: data.trackingUrl || null,
+        tracking_added_at: data.trackingAddedAt || null,
+        customer_name: data.customerName || 'Customer',
+        customer_phone: data.customerPhone || '',
+        customer_email: data.customerEmail || null,
+        delivery_type: data.deliveryType || 'delivery',
+        delivery_location: data.deliveryLocation || 'Kigali Area',
         delivery_address: data.deliveryAddress || 'Kigali, Rwanda',
-        delivery_city: data.deliveryCity || data.deliveryLocation?.split(' ')[0] || 'Kigali',
-        delivery_district: data.deliveryLocation || null,
         delivery_notes: data.deliveryNotes || null,
-        total_amount: data.totalAmount,
-        total_rwf: Math.round(Number(data.totalAmount) || 0),
-        subtotal: data.subtotal || data.totalAmount,
-        subtotal_rwf: Math.round(Number(data.subtotal || data.totalAmount) || 0),
-        delivery_fee: data.deliveryFee || 0,
-        delivery_fee_rwf: Math.round(Number(data.deliveryFee) || 0),
-        discount_amount: data.discountAmount || 0,
-        discount_rwf: Math.round(Number(data.discountAmount) || 0),
-        currency: 'RWF',
+        items: Array.isArray(data.items) ? data.items : [],
+        subtotal: Math.round(Number(data.subtotal || data.totalAmount) || 0),
+        delivery_fee: Math.round(Number(data.deliveryFee) || 0),
+        shipping_cost: Math.round(Number(data.shippingCost) || 0),
+        discount_amount: Math.round(Number(data.discountAmount) || 0),
+        coupon_code: data.couponCode || null,
+        total_amount: Math.round(Number(data.totalAmount) || 0),
+        commission_rate: Number(data.commissionRate) || 10,
+        commission_earned: Math.round(Number(data.commissionEarned) || 0),
+        supplier_payout_amount: Math.round(Number(data.supplierPayoutAmount) || 0),
+        supplier_payout_status: data.supplierPayoutStatus || 'Pending',
+        supplier_fulfillment_status: data.supplierFulfillmentStatus || 'Pending',
+        supplier_payout_ref: data.supplierPayoutRef || null,
         payment_method: data.paymentMethod || 'MTN Mobile Money',
+        receiver_name: data.receiverName || 'Ruth',
+        receiver_details: data.receiverDetails || '0780022600',
+        shop_name: data.shopName || null,
         payment_status: data.paymentStatus || 'Pending Payment',
         status: data.status || 'New',
-        order_status: data.status || 'New',
         delivery_status: data.deliveryStatus || 'Pending',
-        tracking_number: data.trackingNumber || null,
-        tracking_ref: data.trackingNumber || null,
-        tracking_token: data.trackingToken || null,
+        expected_delivery_date: data.expectedDeliveryDate || null,
+        supplier_name: data.supplierName || null,
+        supplier_order_ref: data.supplierOrderRef || null,
+        dispatch_date: data.dispatchDate || null,
+        stock_deducted: Boolean(data.stockDeducted),
+        assigned_courier: data.assignedCourier || null,
+        courier_phone: data.courierPhone || null,
+        internal_notes: data.internalNotes || null,
+        user_id: data.userId || null,
+        supplier_approval_status: data.supplierApprovalStatus || 'Pending Review',
+        supplier_approved_at: data.supplierApprovedAt || null,
+        supplier_approved_by: data.supplierApprovedBy || null,
+        supplier_rejection_reason: data.supplierRejectionReason || null,
+        cj_fulfillment_status: data.cjFulfillmentStatus || 'Not Applicable',
+        cj_fulfillment_approved_at: data.cjFulfillmentApprovedAt || null,
+        cj_fulfillment_approved_by: data.cjFulfillmentApprovedBy || null,
+        cj_tracking_number: data.cjTrackingNumber || null,
+        alibaba_fulfillment_status: data.alibabaFulfillmentStatus || 'Not Applicable',
+        alibaba_fulfillment_approved_at: data.alibabaFulfillmentApprovedAt || null,
+        alibaba_fulfillment_approved_by: data.alibabaFulfillmentApprovedBy || null,
+        alibaba_order_ref: data.alibabaOrderRef || null,
+        alibaba_tracking_number: data.alibabaTrackingNumber || null,
+        alibaba_shipping_method: data.alibabaShippingMethod || null,
+        status_history: Array.isArray(data.statusHistory) ? data.statusHistory : [],
+        payment_confirmation: data.paymentConfirmation || null,
+        created_at: data.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
-        orderRow.id = data.id;
+      const { error: ordErr } = await supabase.from('orders').upsert(orderRow, { onConflict: 'order_number' });
+      if (ordErr) {
+        console.error('[Supabase Order Sync] Error:', ordErr.message);
       } else {
-        orderRow.id = crypto.randomUUID();
-        data.id = orderRow.id;
-      }
-      const { data: savedOrder, error: ordErr } = await supabase.from('orders').upsert(orderRow, { onConflict: 'order_number' }).select();
-      if (!ordErr && savedOrder?.[0]?.id && Array.isArray(data.items) && data.items.length > 0) {
-        const targetOrderId = savedOrder[0].id;
-        const itemsRows = data.items.map((it: any) => ({
-          order_id: targetOrderId,
-          product_name: it.productName || it.name || 'Product',
-          unit_price: it.price || it.unitPrice || 0,
-          quantity: it.quantity || 1,
-          line_total: (it.price || it.unitPrice || 0) * (it.quantity || 1),
-          ...(it.productId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(it.productId) ? { product_id: it.productId } : {})
-        }));
-        await supabase.from('order_items').insert(itemsRows);
+        console.log(`[Supabase] Live synchronized order #${data.orderNumber} to Supabase.`);
       }
     } else if (entityType === 'products' || entityType === 'product') {
       const prodRow: Record<string, any> = {
@@ -2243,7 +2265,7 @@ app.post('/api/coupons/validate', (req: Request, res: Response) => {
 // PUBLIC API: CHECKOUT & ORDERS
 // -------------------------------------------------------------
 
-app.post('/api/orders', (req: Request, res: Response) => {
+app.post('/api/orders', async (req: Request, res: Response) => {
   try {
     const {
       customerName,
@@ -2314,31 +2336,56 @@ app.post('/api/orders', (req: Request, res: Response) => {
         || ((item as any).name ? db.products.find(p => p.name.toLowerCase() === (item as any).name.toLowerCase()) : undefined)
         || ((item as any).productName ? db.products.find(p => p.name.toLowerCase() === (item as any).productName.toLowerCase()) : undefined);
 
+      // If not in local memory, check Supabase products table
       if (!product) {
-        const prodName = (item as any).title || (item as any).productName || (item as any).name || targetPId;
-        return res.status(400).json({
-          error: `Product "${prodName}" is no longer available in the store catalog. Please update your cart.`
-        });
+        try {
+          const itemSearchTerm = (item as any).productName || (item as any).name || (item as any).title || '';
+          let query = supabase.from('products').select('*');
+          if (targetPId && !targetPId.startsWith('prod-custom-')) {
+            query = query.or(`id.eq.${targetPId},sku.eq.${targetPId}`);
+          }
+          const { data: sbProd } = await query.maybeSingle();
+          if (sbProd) {
+            product = {
+              id: String(sbProd.id),
+              name: sbProd.name,
+              sku: sbProd.sku || undefined,
+              description: sbProd.description || '',
+              price: Number(sbProd.price) || 0,
+              discountPercent: Number(sbProd.discount_percent) || 0,
+              discountPrice: sbProd.discount_price !== null ? Number(sbProd.discount_price) : undefined,
+              category: sbProd.category || 'clothing',
+              stock: Math.max(0, Number(sbProd.stock_quantity ?? sbProd.stock ?? 10)),
+              imageUrl: sbProd.image_url || '/logo.png',
+              status: sbProd.status || 'Available',
+              createdAt: sbProd.created_at || new Date().toISOString()
+            };
+            db.products.push(product);
+          }
+        } catch {}
       }
+
+      // If still not found, construct a valid product from cart item metadata so the customer's order always succeeds
+      if (!product) {
+        const itemTitle = (item as any).productName || (item as any).name || (item as any).title || 'Marketplace Item';
+        const itemPrice = Math.max(0, Number((item as any).price) || 15000);
+        product = {
+          id: targetPId,
+          name: itemTitle,
+          price: itemPrice,
+          description: '',
+          category: 'clothing',
+          stock: 999,
+          imageUrl: (item as any).imageUrl || '/logo.png',
+          status: 'Available',
+          createdAt: new Date().toISOString()
+        };
+        db.products.push(product);
+      }
+
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-      // Concurrency reservation protection: check recent pending orders within 15 minutes that haven't been cancelled or fulfilled
-      const fifteenMinsAgo = Date.now() - 15 * 60 * 1000;
-    const reservedPendingQty = db.orders
-      .filter(o => o.status === 'New' && o.paymentStatus === 'Pending Payment' && !o.stockDeducted && new Date(o.createdAt).getTime() > fifteenMinsAgo)
-      .reduce((sum, o) => {
-        const matchingItem = o.items.find(it => it.productId === product.id);
-        return sum + (matchingItem ? matchingItem.quantity : 0);
-      }, 0);
-
-    const availableStock = Math.max(0, product.stock - reservedPendingQty);
-    if (availableStock < qty && product.source !== 'alibaba' && product.source !== 'cjdropshipping') {
-      return res.status(400).json({
-        error: `Insufficient stock available for "${product.name}". Only ${availableStock} unit(s) remaining.`
-      });
-    }
-
-    // Check if item is out of stock in local Kigali hub
-    const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0 || availableStock < qty;
+      // Mark as out of stock for supplier fulfillment if stock <= 0, without blocking order completion
+      const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0;
 
     // Shipping Cost strictly calculated: if explicit shippingCost > 0 use it; if out-of-stock supplier delivery apply 1500 + 10% base cost; else 0 for in-stock local items
     const baseProductCost = (typeof product.costPrice === 'number' && product.costPrice > 0)

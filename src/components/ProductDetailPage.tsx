@@ -13,6 +13,7 @@ import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { useProductTranslation } from '../services/translation.ts';
+import { FormattedProductDescription } from './FormattedProductDescription.tsx';
 
 interface ProductDetailPageProps {
   product: Product | null;
@@ -630,8 +631,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
             {/* Tab 2: Description */}
             {activeTab === 'description' && (
-              <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                <p className="whitespace-pre-line">{displayDescription || 'No detailed description provided for this product.'}</p>
+              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
+                <FormattedProductDescription content={displayDescription || product?.description || ''} />
               </div>
             )}
 

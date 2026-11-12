@@ -218,7 +218,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryNotes: deliveryNotes.trim() || undefined,
         items: cart.map(item => ({
           productId: item.product.id,
-          quantity: item.quantity
+          productName: item.product.name,
+          name: item.product.name,
+          price: (item.product.discountPrice && item.product.discountPrice > 0 ? item.product.discountPrice : item.product.price) || 0,
+          quantity: item.quantity,
+          imageUrl: item.product.imageUrl || '/logo.png',
+          variation: item.variation || item.selectedVariation
         })),
         shippingCost,
         paymentMethod,

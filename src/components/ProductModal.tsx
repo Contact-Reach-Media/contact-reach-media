@@ -13,6 +13,7 @@ import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { FormattedProductDescription } from './FormattedProductDescription.tsx';
 
 interface ProductModalProps {
   product: Product | null;
@@ -891,8 +892,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             {/* TAB 2: DESCRIPTION (Only displayed if non-empty) */}
             {activeTab === 'description' && hasDescription && (
               <div className="space-y-4 text-xs">
-                <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
-                  {displayDescription || product.description}
+                <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 leading-relaxed max-h-96 overflow-y-auto">
+                  <FormattedProductDescription content={displayDescription || product.description} />
                 </div>
               </div>
             )}

@@ -34,6 +34,8 @@ import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts
 import { getProductImageDueToProduct, getProductNameDueToProduct } from '../utils/productImages.ts';
 import { AdminCategoriesManager } from './AdminCategoriesManager.tsx';
 import { AdminSidebar } from './AdminSidebar.tsx';
+import { ProductDescriptionEditor } from './ProductDescriptionEditor.tsx';
+import { FormattedProductDescription } from './FormattedProductDescription.tsx';
 import { SearchableLanguageModal } from './SearchableLanguageModal.tsx';
 import { getLanguageByCode } from '../data/languages.ts';
 import { setGoogleTranslateLanguage } from '../services/googleTranslate.ts';
@@ -8817,13 +8819,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1 text-xs">Product Description (optional - hidden if empty)</label>
-                <textarea
-                  rows={3}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-bold text-slate-800 text-xs">
+                    Product Description (Custom Formatted)
+                  </label>
+                  <span className="text-[11px] font-semibold text-orange-600">
+                    Supports Markdown, Headings, Tables & Checkmarks
+                  </span>
+                </div>
+                <ProductDescriptionEditor
                   value={prodForm.description}
-                  onChange={(e) => setProdForm({ ...prodForm, description: e.target.value })}
-                  placeholder="Comprehensive description. If left empty, the Description tab is automatically hidden from customers..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
+                  onChange={(val) => setProdForm({ ...prodForm, description: val })}
+                  placeholder="Write a custom-formatted description using headings, bold accents, bullet lists, checkmarks, and specification tables..."
+                  rows={6}
                 />
               </div>
 

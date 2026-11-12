@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import {
+import type {
   Product,
   Category,
   VendorShop,
@@ -552,22 +552,25 @@ export function mapSupabaseRowToOrder(o: any): Order {
     customerPhone: o.phone || o.customer_phone || '',
     customerEmail: o.email || o.customer_email || undefined,
     deliveryType: 'delivery',
-    deliveryLocation: o.zone || o.delivery_district || o.delivery_city || 'Kigali',
-    deliveryAddress: o.address || o.delivery_address || 'Kigali, Rwanda',
-    deliveryNotes: o.instructions || o.delivery_notes || undefined,
-    items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
-      productId: it.product_id ? String(it.product_id) : undefined,
-      name: it.product_name,
-      productName: it.product_name,
-      price: Number(it.unit_price_rwf ?? it.unit_price) || 0,
-      quantity: Number(it.qty ?? it.quantity) || 1
-    })) : (Array.isArray(o.items) ? o.items : []),
-    subtotal: Number(o.subtotal_rwf ?? o.subtotal ?? o.total_rwf ?? o.total_amount) || 0,
-    deliveryFee: Number(o.delivery_fee_rwf ?? o.delivery_fee) || 0,
+    deliveryLocation: o.delivery_location || o.zone || o.delivery_district || o.delivery_city || 'Kigali',
+    deliveryAddress: o.delivery_address || o.address || 'Kigali, Rwanda',
+    deliveryNotes: o.delivery_notes || o.instructions || undefined,
+    items: Array.isArray(o.items) && o.items.length > 0
+      ? o.items
+      : (Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
+          productId: it.product_id ? String(it.product_id) : undefined,
+          name: it.product_name,
+          productName: it.product_name,
+          price: Number(it.unit_price_rwf ?? it.unit_price) || 0,
+          quantity: Number(it.qty ?? it.quantity) || 1,
+          imageUrl: it.image_url || '/logo.png'
+        })) : []),
+    subtotal: Number(o.subtotal ?? o.total_amount ?? o.subtotal_rwf ?? o.total_rwf) || 0,
+    deliveryFee: Number(o.delivery_fee ?? o.delivery_fee_rwf) || 0,
     shippingCost: Number(o.shipping_cost) || 0,
-    discountAmount: Number(o.discount_rwf ?? o.discount_amount) || 0,
+    discountAmount: Number(o.discount_amount ?? o.discount_rwf) || 0,
     couponCode: o.coupon_code || undefined,
-    totalAmount: Number(o.total_rwf ?? o.total_amount) || 0,
+    totalAmount: Number(o.total_amount ?? o.total ?? o.total_rwf) || 0,
     commissionRate: Number(o.commission_rate) || 10,
     commissionEarned: Number(o.commission_earned) || 0,
     supplierPayoutAmount: Number(o.supplier_payout_amount) || 0,
@@ -579,7 +582,7 @@ export function mapSupabaseRowToOrder(o: any): Order {
     deliveryStatus: o.delivery_status || 'Pending',
     status: o.status || o.order_status || 'New',
     stockDeducted: Boolean(o.stock_deducted),
-    trackingNumber: o.tracking_ref || o.tracking_number || undefined,
+    trackingNumber: o.tracking_number || o.tracking_ref || undefined,
     trackingToken: o.tracking_token || undefined,
     trackingCarrier: o.tracking_carrier || undefined,
     statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
@@ -592,7 +595,7 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
   try {
     const { data, error } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error || !data) return [];
@@ -606,45 +609,68 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
 export async function saveOrderToSupabase(order: any): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const orderRecord: Record<string, any> = {
-      order_number: order.orderNumber,
-      order_no: order.orderNumber,
-      customer_name: order.customerName,
-      customer_phone: order.customerPhone,
-      phone: order.customerPhone,
-      customer_email: order.customerEmail || `${(order.customerPhone || '0780000000').replace(/\D/g, '')}@customer.crm.rw`,
-      email: order.customerEmail || `${(order.customerPhone || '0780000000').replace(/\D/g, '')}@customer.crm.rw`,
+      id: String(order.id || `ord-${Date.now()}`),
+      order_number: String(order.orderNumber || order.order_number),
+      tracking_token: order.trackingToken || null,
+      tracking_number: order.trackingNumber || null,
+      tracking_carrier: order.trackingCarrier || null,
+      tracking_url: order.trackingUrl || null,
+      tracking_added_at: order.trackingAddedAt || null,
+      customer_name: order.customerName || 'Customer',
+      customer_phone: order.customerPhone || '',
+      customer_email: order.customerEmail || null,
+      delivery_type: order.deliveryType || 'delivery',
+      delivery_location: order.deliveryLocation || 'Kigali Area',
       delivery_address: order.deliveryAddress || 'Kigali, Rwanda',
-      address: order.deliveryAddress || 'Kigali, Rwanda',
-      delivery_city: order.deliveryCity || order.deliveryLocation?.split(' ')[0] || 'Kigali',
-      delivery_district: order.deliveryLocation || 'Gasabo',
-      zone: order.deliveryLocation || 'Gasabo',
       delivery_notes: order.deliveryNotes || null,
-      instructions: order.deliveryNotes || null,
-      items: order.items || [],
-      total_amount: order.totalAmount,
-      total_rwf: Math.round(Number(order.totalAmount) || 0),
-      subtotal: order.subtotal || order.totalAmount,
-      subtotal_rwf: Math.round(Number(order.subtotal || order.totalAmount) || 0),
-      delivery_fee: order.deliveryFee || 0,
-      delivery_fee_rwf: Math.round(Number(order.deliveryFee) || 0),
-      discount_amount: order.discountAmount || 0,
-      discount_rwf: Math.round(Number(order.discountAmount) || 0),
+      items: Array.isArray(order.items) ? order.items : [],
+      subtotal: Math.round(Number(order.subtotal || order.totalAmount) || 0),
+      delivery_fee: Math.round(Number(order.deliveryFee) || 0),
+      shipping_cost: Math.round(Number(order.shippingCost) || 0),
+      discount_amount: Math.round(Number(order.discountAmount) || 0),
       coupon_code: order.couponCode || null,
-      currency: 'RWF',
+      total_amount: Math.round(Number(order.totalAmount || order.total) || 0),
+      commission_rate: Number(order.commissionRate) || 10,
+      commission_earned: Math.round(Number(order.commissionEarned) || 0),
+      supplier_payout_amount: Math.round(Number(order.supplierPayoutAmount) || 0),
+      supplier_payout_status: order.supplierPayoutStatus || 'Pending',
+      supplier_fulfillment_status: order.supplierFulfillmentStatus || 'Pending',
+      supplier_payout_ref: order.supplierPayoutRef || null,
       payment_method: order.paymentMethod || 'MTN Mobile Money',
+      receiver_name: order.receiverName || 'Ruth',
+      receiver_details: order.receiverDetails || '0780022600',
+      shop_name: order.shopName || null,
       payment_status: order.paymentStatus || 'Pending Payment',
       status: order.status || 'New',
-      order_status: order.status || 'New',
       delivery_status: order.deliveryStatus || 'Pending',
-      tracking_number: order.trackingNumber || null,
-      tracking_ref: order.trackingNumber || null,
-      tracking_token: order.trackingToken || null,
+      expected_delivery_date: order.expectedDeliveryDate || null,
+      supplier_name: order.supplierName || null,
+      supplier_order_ref: order.supplierOrderRef || null,
+      dispatch_date: order.dispatchDate || null,
+      stock_deducted: Boolean(order.stockDeducted),
+      assigned_courier: order.assignedCourier || null,
+      courier_phone: order.courierPhone || null,
+      internal_notes: order.internalNotes || null,
+      user_id: order.userId || null,
+      supplier_approval_status: order.supplierApprovalStatus || 'Pending Review',
+      supplier_approved_at: order.supplierApprovedAt || null,
+      supplier_approved_by: order.supplierApprovedBy || null,
+      supplier_rejection_reason: order.supplierRejectionReason || null,
+      cj_fulfillment_status: order.cjFulfillmentStatus || 'Not Applicable',
+      cj_fulfillment_approved_at: order.cjFulfillmentApprovedAt || null,
+      cj_fulfillment_approved_by: order.cjFulfillmentApprovedBy || null,
+      cj_tracking_number: order.cjTrackingNumber || null,
+      alibaba_fulfillment_status: order.alibabaFulfillmentStatus || 'Not Applicable',
+      alibaba_fulfillment_approved_at: order.alibabaFulfillmentApprovedAt || null,
+      alibaba_fulfillment_approved_by: order.alibabaFulfillmentApprovedBy || null,
+      alibaba_order_ref: order.alibabaOrderRef || null,
+      alibaba_tracking_number: order.alibabaTrackingNumber || null,
+      alibaba_shipping_method: order.alibabaShippingMethod || null,
+      status_history: Array.isArray(order.statusHistory) ? order.statusHistory : [],
+      payment_confirmation: order.paymentConfirmation || null,
+      created_at: order.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-
-    if (order.id) {
-      orderRecord.id = order.id;
-    }
 
     const { data: savedOrder, error } = await supabase
       .from('orders')
@@ -652,22 +678,8 @@ export async function saveOrderToSupabase(order: any): Promise<{ success: boolea
       .select();
 
     if (error) {
+      console.error('[Supabase Save Order] Error:', error.message);
       return { success: false, error: error.message };
-    }
-
-    const targetOrderId = savedOrder?.[0]?.id || order.id;
-    if (targetOrderId && Array.isArray(order.items) && order.items.length > 0) {
-      try {
-        const itemsRows = order.items.map((it: any) => ({
-          order_id: targetOrderId,
-          product_name: it.productName || it.name || 'Product',
-          unit_price: it.price || it.unitPrice || 0,
-          quantity: it.quantity || 1,
-          line_total: (it.price || it.unitPrice || 0) * (it.quantity || 1),
-          ...(it.productId ? { product_id: it.productId } : {})
-        }));
-        await supabase.from('order_items').insert(itemsRows);
-      } catch {}
     }
 
     return { success: true, data: savedOrder?.[0] };
