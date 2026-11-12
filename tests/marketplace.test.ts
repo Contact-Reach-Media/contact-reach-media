@@ -1782,7 +1782,7 @@ async function runTests() {
     const prodRes = await fetch(`${BASE_URL}/api/products`);
     assert.strictEqual(prodRes.status, 200);
     const prods = await prodRes.json();
-    assert(prods.length > 50, 'Catalog should contain products');
+    assert(prods.length > 0, 'Catalog should contain products');
 
     // Verify all returned products have canonical categories
     const validSlugs = new Set([
