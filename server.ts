@@ -290,6 +290,9 @@ let db: MarketDatabase = {
 
 // Track failed login attempts for rate limiting (email -> { attempts, lockoutUntil })
 const loginAttempts = new Map<string, { attempts: number; lockoutUntil?: number }>();
+// Set of explicitly revoked or logged-out tokens & JTIs to guarantee instant permanent revocation
+const revokedTokens = new Set<string>();
+const revokedBuyerTokens = new Set<string>();
 
 function logAudit(admin: { name?: string; role?: string } | undefined | null, action: string, details: string, entityType?: string, entityId?: string) {
   const audit: AuditLog = {
@@ -1948,9 +1951,6 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   }
 }
 
-// Set of explicitly revoked or logged-out tokens & JTIs to guarantee instant permanent revocation
-const revokedTokens = new Set<string>();
-const revokedBuyerTokens = new Set<string>();
 const ADMIN_SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180-day persistent device session
 const ADMIN_SESSION_SLIDING_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
 const BUYER_SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180-day persistent buyer device session
