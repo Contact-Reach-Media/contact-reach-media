@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Category, Product } from '../types.ts';
 import { api } from '../services/api.ts';
-import { MAIN_CATEGORY_DEFINITIONS, mapProductToCategoryHierarchy } from '../data/categoryStructure.ts';
+import { MAIN_CATEGORY_DEFINITIONS, mapProductToCategoryHierarchy, doesProductMatchSubCategory } from '../data/categoryStructure.ts';
 
 interface AdminCategoriesManagerProps {
   categories: Category[];
@@ -62,7 +62,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
   // Main Categories (level 1)
   const mainCategories = useMemo(() => {
     return categories
-      .filter(c => c.level === 1 || !c.parentId)
+      .filter(c => !c.parentId && c.level !== 2)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [categories]);
 
@@ -70,7 +70,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
   const subcategoriesByParent = useMemo(() => {
     const map = new Map<string, Category[]>();
     categories
-      .filter(c => c.level === 2 && c.parentId)
+      .filter(c => Boolean(c.parentId))
       .forEach(sub => {
         const pId = sub.parentId!;
         if (!map.has(pId)) map.set(pId, []);
@@ -87,25 +87,32 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
       if (catKey) {
         counts[catKey] = (counts[catKey] || 0) + 1;
       }
+      if (p.category && p.category !== catKey) {
+        counts[p.category] = (counts[p.category] || 0) + 1;
+      }
     });
     return counts;
   }, [products]);
 
   const productCountBySubCategory = useMemo(() => {
     const counts: Record<string, number> = {};
-    products.forEach(p => {
-      if (p.subCategoryId) {
-        counts[p.subCategoryId] = (counts[p.subCategoryId] || 0) + 1;
-      }
+    const subs = categories.filter(c => Boolean(c.parentId));
+    subs.forEach(sub => {
+      counts[sub.id] = products.filter(p =>
+        doesProductMatchSubCategory(p, sub.id, sub.parentId, categories)
+      ).length;
     });
     return counts;
-  }, [products]);
+  }, [products, categories]);
 
-  // Products for review (missing mainCategoryId or mapped with low confidence)
+  // Products for review (missing mainCategoryId or subcategory)
   const reviewProducts = useMemo(() => {
     return products.filter(p => {
-      const hasMain = Boolean(p.mainCategoryId && mainCategories.some(m => m.id === p.mainCategoryId));
-      const hasSub = Boolean(p.subCategoryId);
+      const hasMain = Boolean(
+        (p.mainCategoryId && mainCategories.some(m => m.id === p.mainCategoryId)) ||
+        (p.category && mainCategories.some(m => m.id === p.category))
+      );
+      const hasSub = Boolean(p.subCategoryId || p.subcategory || p.subCategoryName);
       if (reviewFilter === 'unassigned') {
         return !hasMain || !hasSub;
       }
@@ -216,10 +223,6 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
   };
 
   const handleOpenDelete = (cat: Category) => {
-    const count = cat.level === 1
-      ? (productCountByMainCategory[cat.id] || 0)
-      : (productCountBySubCategory[cat.id] || 0);
-
     setDeleteModalCat(cat);
     const fallbackTarget = mainCategories.find(m => m.id !== cat.id)?.id || 'clothing';
     setDeleteReassignTo(fallbackTarget);
@@ -263,8 +266,9 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
         category: mainId,
         mainCategoryId: mainId,
         categoryName: mainCat?.nameEn || mainId,
-        subCategoryId: subId || undefined,
-        subCategoryName: subCat?.nameEn || undefined
+        subcategory: subId || '',
+        subCategoryId: subId || '',
+        subCategoryName: subCat?.nameEn || ''
       });
       showToast(`Reassigned "${product.name.slice(0, 20)}..." to ${mainCat?.nameEn}!`, 'success');
       onRefresh();
@@ -348,7 +352,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
           <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
             <span className="text-[11px] font-bold text-slate-400 block uppercase">Total Subcategories</span>
             <span className="text-xl font-black text-slate-900 mt-0.5 block">
-              {categories.filter(c => c.level === 2).length}
+              {categories.filter(c => Boolean(c.parentId)).length}
             </span>
             <span className="text-[10px] text-slate-500 font-medium">Nested category tiers</span>
           </div>

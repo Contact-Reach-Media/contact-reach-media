@@ -49,6 +49,13 @@ import { getLanguageByCode } from '../data/languages.ts';
 import { setGoogleTranslateLanguage } from '../services/googleTranslate.ts';
 import { startDOMTranslationObserver } from '../services/domTranslator.ts';
 import { D3PerformanceAnalytics } from './D3PerformanceAnalytics.tsx';
+import {
+  getSubcategoriesForDepartment,
+  resolveSubCategoryRecord,
+  resolveDepartmentDefinitions,
+  LEGACY_CATEGORY_ALIAS_IDS,
+  MAIN_CATEGORY_DEFINITIONS
+} from '../data/categoryStructure.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -2474,16 +2481,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditingProduct(null);
     const defaultShop = shops[0]?.name || 'ContactReach Market';
     const defaultShopId = shops[0]?.id || '';
+    const firstMainCat = categories.find(c => !c.parentId && !LEGACY_CATEGORY_ALIAS_IDS.has(c.id))?.id || 'clothing';
     setProdForm({
       name: '',
-      sku: `CRM-${(categories[0]?.id || 'PROD').toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      sku: `CRM-${firstMainCat.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`,
       description: '',
       price: 15000,
       costPrice: '',
       shippingCost: '',
       discountPercent: '',
       discountPrice: '',
-      category: categories[0]?.id || 'hair-beauty',
+      category: firstMainCat,
       subcategory: '',
       stock: 25,
       imageUrl: '',
@@ -2527,6 +2535,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const existingPercent = p.discountPercent || (p.discountPrice && p.price > 0 && p.discountPrice < p.price
       ? Math.round(((p.price - p.discountPrice) / p.price) * 100)
       : '');
+
+    const availableMains = resolveDepartmentDefinitions(categories, true);
+    const resolvedMainCat =
+      (p.mainCategoryId && availableMains.some(m => m.id === p.mainCategoryId) ? p.mainCategoryId : null) ||
+      (p.category && availableMains.some(m => m.id === p.category) ? p.category : null) ||
+      p.mainCategoryId ||
+      p.category ||
+      'clothing';
+
+    const rawSubValue = p.subCategoryId || p.subcategory || p.subCategoryName || '';
+    const resolvedSub = rawSubValue
+      ? resolveSubCategoryRecord(rawSubValue, resolvedMainCat, categories)
+      : null;
+
     setProdForm({
       name: p.name,
       sku: p.sku || '',
@@ -2536,8 +2558,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       shippingCost: p.shippingCost !== undefined && p.shippingCost !== null ? p.shippingCost : '',
       discountPercent: existingPercent,
       discountPrice: p.discountPrice || '',
-      category: p.category,
-      subcategory: p.subcategory || '',
+      category: resolvedMainCat,
+      subcategory: resolvedSub?.id || rawSubValue,
       stock: p.stock,
       imageUrl: p.imageUrl,
       imagesText: p.images ? p.images.join('\n') : '',
@@ -2649,6 +2671,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     }
 
+    const departments = resolveDepartmentDefinitions(categories, true);
+    const selectedMain = departments.find(d => d.id === prodForm.category)
+      || categories.find(c => c.id === prodForm.category)
+      || MAIN_CATEGORY_DEFINITIONS.find(m => m.id === prodForm.category);
+    const rawSubInput = prodForm.subcategory.trim();
+    const resolvedSub = rawSubInput
+      ? resolveSubCategoryRecord(rawSubInput, prodForm.category, categories)
+      : null;
+
     const payload: any = {
       name: prodForm.name.trim(),
       sku: prodForm.sku.trim(),
@@ -2660,11 +2691,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       discountPercent: numPercent,
       discountPrice: finalDiscountPrice,
       category: prodForm.category,
-      mainCategoryId: categories.find(c => c.id === prodForm.category)?.parentId || prodForm.category,
-      categoryName: categories.find(c => c.id === prodForm.category)?.nameEn || prodForm.category,
-      subcategory: prodForm.subcategory.trim() || undefined,
-      subCategoryId: prodForm.subcategory.trim() || undefined,
-      subCategoryName: categories.find(c => c.id === prodForm.subcategory)?.nameEn || (prodForm.subcategory.trim() || undefined),
+      mainCategoryId: prodForm.category,
+      categoryName: (selectedMain as any)?.name || (selectedMain as any)?.nameEn || prodForm.category,
+      subcategory: resolvedSub?.id || rawSubInput,
+      subCategoryId: resolvedSub?.id || rawSubInput,
+      subCategoryName: resolvedSub?.name || rawSubInput,
       stock: Math.max(0, parseInt(String(prodForm.stock), 10) || 0),
       imageUrl: finalPrimaryImage,
       images: imagesList,
@@ -9061,7 +9092,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     value={prodForm.category}
                     onChange={(e) => {
                       const newCat = e.target.value;
-                      const subs = categories.filter(c => c.parentId === newCat);
+                      const subs = getSubcategoriesForDepartment(newCat, categories);
                       setProdForm({
                         ...prodForm,
                         category: newCat,
@@ -9070,8 +9101,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-xs bg-white focus:ring-2 focus:ring-orange-500"
                   >
-                    {categories.filter(c => c.level === 1 || !c.parentId).map(c => (
-                      <option key={c.id} value={c.id}>{c.nameEn} ({c.nameRw || ''})</option>
+                    {resolveDepartmentDefinitions(categories, true).map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.nameRw || ''})</option>
                     ))}
                   </select>
                 </div>
@@ -9083,9 +9114,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-xs bg-white focus:ring-2 focus:ring-orange-500"
                   >
                     <option value="">-- No Subcategory --</option>
-                    {categories.filter(c => c.parentId === prodForm.category).map(sub => (
-                      <option key={sub.id} value={sub.id}>{sub.nameEn}</option>
-                    ))}
+                    {(() => {
+                      const deptSubs = getSubcategoriesForDepartment(prodForm.category, categories);
+                      const hasCurrent = !prodForm.subcategory || deptSubs.some(s => s.id === prodForm.subcategory);
+                      return (
+                        <>
+                          {deptSubs.map(sub => (
+                            <option key={sub.id} value={sub.id}>{sub.name}</option>
+                          ))}
+                          {!hasCurrent && (
+                            <option value={prodForm.subcategory}>{prodForm.subcategory}</option>
+                          )}
+                        </>
+                      );
+                    })()}
                   </select>
                 </div>
                 <div>

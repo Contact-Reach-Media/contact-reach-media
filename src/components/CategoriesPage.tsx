@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import {
   Grid, Search, ChevronRight, Tag, ArrowRight, ArrowLeft, Package
 } from 'lucide-react';
-import { MAIN_CATEGORY_DEFINITIONS, MainCategoryDefinition } from '../data/categoryStructure.ts';
+import { resolveDepartmentDefinitions, MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
+import { Category } from '../types.ts';
 import { Language } from '../translations.ts';
 import { useDynamicText } from '../services/translation.ts';
 
@@ -15,17 +16,23 @@ interface CategoriesPageProps {
   onSelectCategory: (mainCatId: string, subCatId?: string, searchTag?: string) => void;
   onNavigate: (view: string) => void;
   currentLang: Language;
+  categories?: Category[];
 }
 
 export const CategoriesPage: React.FC<CategoriesPageProps> = ({
   onSelectCategory,
   onNavigate,
-  currentLang
+  currentLang,
+  categories = []
 }) => {
+  const departments = React.useMemo(
+    () => resolveDepartmentDefinitions(categories, true),
+    [categories]
+  );
   const [activeMainId, setActiveMainId] = useState<string>(MAIN_CATEGORY_DEFINITIONS[0].id);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredCategories = MAIN_CATEGORY_DEFINITIONS.filter(cat => {
+  const filteredCategories = departments.filter(cat => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     if (cat.name.toLowerCase().includes(q) || cat.nameRw.toLowerCase().includes(q)) return true;
@@ -35,7 +42,7 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
     );
   });
 
-  const activeCategory = MAIN_CATEGORY_DEFINITIONS.find(c => c.id === activeMainId) || MAIN_CATEGORY_DEFINITIONS[0];
+  const activeCategory = departments.find(c => c.id === activeMainId) || departments[0];
 
   return (
     <div className="bg-slate-50 min-h-screen py-6 sm:py-10">
@@ -153,12 +160,12 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {activeCategory.subcategories.map(sub => (
                 <div
-                  key={sub.name}
+                  key={sub.id}
                   className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5"
                 >
                   <button
                     type="button"
-                    onClick={() => onSelectCategory(activeCategory.id, sub.name)}
+                    onClick={() => onSelectCategory(activeCategory.id, sub.id)}
                     className="font-black text-xs text-slate-900 hover:text-orange-600 transition-colors flex items-center justify-between w-full text-left cursor-pointer"
                   >
                     <span>{sub.name}</span>
@@ -170,7 +177,7 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
                       <button
                         key={it}
                         type="button"
-                        onClick={() => onSelectCategory(activeCategory.id, sub.name, it)}
+                        onClick={() => onSelectCategory(activeCategory.id, sub.id, it)}
                         className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600 hover:text-orange-600 hover:border-orange-300 transition-colors cursor-pointer"
                       >
                         {it}

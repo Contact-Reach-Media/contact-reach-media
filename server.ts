@@ -24,7 +24,12 @@ import { initialProducts, initialCategories, initialSettings, initialShops } fro
 import {
   MAIN_CATEGORY_DEFINITIONS,
   generateFlatCategoryRecords,
-  mapProductToCategoryHierarchy
+  mapProductToCategoryHierarchy,
+  toCategorySlug,
+  buildSubCategoryId,
+  resolveSubCategoryRecord,
+  getSubcategoriesForDepartment,
+  doesProductMatchSubCategory
 } from './src/data/categoryStructure.ts';
 import * as XLSX from 'xlsx';
 import {
@@ -1277,9 +1282,11 @@ export async function loadAllDataFromSupabase() {
         nameEn: c.name_en || c.name || '',
         nameRw: c.name_rw || c.name_en || c.name || '',
         icon: c.icon || 'Tag',
+        slug: c.slug || toCategorySlug(c.name_en || c.name || c.id),
+        level: c.parent_id ? 2 : 1,
         imageUrl: c.image_url || undefined,
         description: c.description || undefined,
-        parentId: c.parent_id || undefined,
+        parentId: c.parent_id || null,
         sortOrder: c.sort_order || 0,
         isActive: c.is_active !== false,
         subcategories: Array.isArray(c.subcategories) ? c.subcategories : []
@@ -2363,11 +2370,16 @@ app.get('/api/categories', (req: Request, res: Response) => {
   const activeCategories = db.categories
     .filter(c => c.isActive !== false && c.active !== false)
     .map(c => {
-      const isMain = !c.parentId || c.level === 1;
+      const isMain = !c.parentId;
       const count = isMain
         ? db.products.filter(p => (p.mainCategoryId === c.id || normalizeCategoryId(p.category, p.name) === c.id) && p.status !== 'Hidden').length
-        : db.products.filter(p => (p.subCategoryId === c.id || (p.subCategoryName && p.subCategoryName.toLowerCase() === c.nameEn.toLowerCase())) && p.status !== 'Hidden').length;
-      return { ...c, itemCount: count };
+        : db.products.filter(p => doesProductMatchSubCategory(p, c.id, c.parentId, db.categories) && p.status !== 'Hidden').length;
+      return {
+        ...c,
+        level: isMain ? 1 : 2,
+        slug: c.slug || toCategorySlug(c.nameEn || c.id),
+        itemCount: count
+      };
     });
   res.json(activeCategories);
 });
@@ -2375,21 +2387,22 @@ app.get('/api/categories', (req: Request, res: Response) => {
 // Category Tree Endpoint (returns 13 Main Categories with nested subcategories & product counts)
 app.get('/api/categories/tree', (req: Request, res: Response) => {
   const tree = MAIN_CATEGORY_DEFINITIONS.map(main => {
+    const liveMain = db.categories.find(c => c.id === main.id && !c.parentId);
     const mainProductCount = db.products.filter(p =>
       (p.mainCategoryId === main.id || normalizeCategoryId(p.category, p.name) === main.id) && p.status !== 'Hidden'
     ).length;
 
-    const subcategoriesWithCounts = main.subcategories.map(sub => {
-      const subId = `${main.id}-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+    const mergedSubs = getSubcategoriesForDepartment(main.id, db.categories);
+    const subcategoriesWithCounts = mergedSubs.map(sub => {
       const subCount = db.products.filter(p =>
-        (p.subCategoryId === subId || (p.subCategoryName && p.subCategoryName.toLowerCase() === sub.name.toLowerCase())) &&
+        doesProductMatchSubCategory(p, sub.id, main.id, db.categories) &&
         p.status !== 'Hidden'
       ).length;
 
       return {
-        id: subId,
+        id: sub.id,
         name: sub.name,
-        slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+        slug: sub.slug,
         items: sub.items,
         itemCount: subCount
       };
@@ -2397,13 +2410,13 @@ app.get('/api/categories/tree', (req: Request, res: Response) => {
 
     return {
       id: main.id,
-      name: main.name,
-      nameRw: main.nameRw,
+      name: liveMain?.nameEn || main.name,
+      nameRw: liveMain?.nameRw || main.nameRw,
       slug: main.id,
-      icon: main.icon,
-      image: main.image,
-      description: main.description,
-      sortOrder: main.sortOrder,
+      icon: liveMain?.icon || main.icon,
+      image: liveMain?.imageUrl || main.image,
+      description: liveMain?.description || main.description,
+      sortOrder: liveMain?.sortOrder || main.sortOrder,
       itemCount: mainProductCount,
       subcategories: subcategoriesWithCounts
     };
@@ -2439,9 +2452,15 @@ app.get('/api/products', (req: Request, res: Response) => {
   let filtered = db.products.filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected');
 
   // Filter by main category
-  const targetMain = (mainCategoryId && mainCategoryId !== 'all') ? String(mainCategoryId) : (category && category !== 'all' ? normalizeCategoryId(String(category)) : null);
+  const rawMainParam = (mainCategoryId && mainCategoryId !== 'all')
+    ? String(mainCategoryId).trim()
+    : (category && category !== 'all' ? String(category).trim() : null);
+  const targetMain = rawMainParam
+    ? (db.categories.some(c => !c.parentId && c.id === rawMainParam) ? rawMainParam : normalizeCategoryId(rawMainParam))
+    : null;
   if (targetMain) {
     filtered = filtered.filter(p => {
+      if (p.mainCategoryId && p.mainCategoryId === targetMain) return true;
       const canonicalCat = (p.mainCategoryId && MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId))
         ? p.mainCategoryId
         : normalizeCategoryId(p.category, p.name);
@@ -2452,13 +2471,7 @@ app.get('/api/products', (req: Request, res: Response) => {
   // Filter by subcategory
   const targetSub = (subCategoryId && subCategoryId !== 'all') ? String(subCategoryId) : (subcategory && subcategory !== 'all' ? String(subcategory) : null);
   if (targetSub) {
-    const cleanSub = targetSub.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    filtered = filtered.filter(p => {
-      const pSubId = (p.subCategoryId || '').toLowerCase();
-      const pSubName = (p.subCategoryName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const pLegacySub = (p.subcategory || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      return pSubId === cleanSub || pSubId.endsWith(`-${cleanSub}`) || pSubName === cleanSub || pLegacySub === cleanSub;
-    });
+    filtered = filtered.filter(p => doesProductMatchSubCategory(p, targetSub, targetMain, db.categories));
   }
 
   if (shopId) {
@@ -2489,6 +2502,7 @@ app.get('/api/products', (req: Request, res: Response) => {
       p.name.toLowerCase().includes(q) ||
       p.description.toLowerCase().includes(q) ||
       p.category.toLowerCase().includes(q) ||
+      (p.subCategoryName && p.subCategoryName.toLowerCase().includes(q)) ||
       (p.sku && p.sku.toLowerCase().includes(q)) ||
       (p.brand && p.brand.toLowerCase().includes(q)) ||
       (p.shopName && p.shopName.toLowerCase().includes(q))
@@ -2506,12 +2520,23 @@ app.get('/api/products', (req: Request, res: Response) => {
     filtered.sort((a, b) => (b.reviewsCount || 0) - (a.reviewsCount || 0));
   }
 
-  const sanitized = filtered.map(p => ({
-    ...p,
-    category: (p.mainCategoryId && MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId))
+  const sanitized = filtered.map(p => {
+    const canonicalCat = (p.mainCategoryId && MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId))
       ? p.mainCategoryId
-      : normalizeCategoryId(p.category, p.name)
-  }));
+      : normalizeCategoryId(p.category, p.name);
+    const effectiveMain = p.mainCategoryId || canonicalCat;
+    const rawSub = p.subCategoryId || p.subCategoryName || p.subcategory;
+    const resolvedSub = rawSub ? resolveSubCategoryRecord(rawSub, effectiveMain, db.categories) : null;
+    return {
+      ...p,
+      category: canonicalCat,
+      ...(resolvedSub ? {
+        subCategoryId: p.subCategoryId || resolvedSub.id,
+        subCategoryName: p.subCategoryName || resolvedSub.name,
+        subcategory: p.subcategory || resolvedSub.id
+      } : {})
+    };
+  });
   res.json(sanitized);
 });
 
@@ -5721,7 +5746,8 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     ? (mainImage && !rawImages.includes(mainImage) ? [mainImage, ...rawImages] : rawImages)
     : (mainImage ? [mainImage] : []);
   const cleanVideoUrl = videoUrl && typeof videoUrl === 'string' && videoUrl.trim() ? videoUrl.trim() : undefined;
-  const normCategory = normalizeCategoryId(category, name);
+  const resolvedHierarchy = resolveProductCategoryFields(req.body, undefined, name);
+  const normCategory = resolvedHierarchy.category;
   const targetSku = sku ? sku.trim() : `CRM-${normCategory.toUpperCase().slice(0, 3)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const existingBySku = db.products.find(p => p.sku && p.sku.trim().toLowerCase() === targetSku.toLowerCase());
@@ -5737,8 +5763,13 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
         ? Math.max(0, Number(req.body.shippingCost))
         : undefined;
     }
-    existingBySku.category = normCategory;
-    existingBySku.subcategory = subcategory?.trim() || existingBySku.subcategory;
+    const existingResolved = resolveProductCategoryFields(req.body, existingBySku, name);
+    existingBySku.category = existingResolved.category;
+    existingBySku.mainCategoryId = existingResolved.mainCategoryId;
+    existingBySku.categoryName = existingResolved.categoryName;
+    existingBySku.subcategory = existingResolved.subcategory;
+    existingBySku.subCategoryId = existingResolved.subCategoryId;
+    existingBySku.subCategoryName = existingResolved.subCategoryName;
     existingBySku.stock = stockNum;
     existingBySku.status = prodStatus;
     existingBySku.reviewStatus = 'Approved';
@@ -5766,8 +5797,12 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
       : undefined,
     discountPercent: finalDiscountPercent,
     discountPrice: finalDiscountPrice,
-    category: normCategory,
-    subcategory: subcategory?.trim(),
+    category: resolvedHierarchy.category,
+    mainCategoryId: resolvedHierarchy.mainCategoryId,
+    categoryName: resolvedHierarchy.categoryName,
+    subcategory: resolvedHierarchy.subcategory,
+    subCategoryId: resolvedHierarchy.subCategoryId,
+    subCategoryName: resolvedHierarchy.subCategoryName,
     stock: stockNum,
     imageUrl: mainImage,
     images: finalImages,
@@ -5819,6 +5854,112 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     broadcastDatabaseEvent('product_created', { product: newProduct });
     res.status(201).json(newProduct);
   });
+
+  function resolveProductCategoryFields(
+    body: Record<string, any>,
+    existing?: Product,
+    productName?: string
+  ): {
+    category: string;
+    mainCategoryId: string;
+    categoryName: string;
+    subcategory?: string;
+    subCategoryId?: string;
+    subCategoryName?: string;
+  } {
+    const nameStr = String(productName || body?.name || existing?.name || '');
+    const rawMainInput = body?.mainCategoryId !== undefined
+      ? String(body.mainCategoryId || '').trim()
+      : (body?.category !== undefined ? String(body.category || '').trim() : String(existing?.mainCategoryId || existing?.category || ''));
+
+    // Check if caller passed a custom main category ID in db.categories
+    const customMainMatch = rawMainInput
+      ? db.categories.find(c => !c.parentId && (c.id === rawMainInput || c.nameEn.toLowerCase() === rawMainInput.toLowerCase()))
+      : undefined;
+
+    // Also handle edge case where a subcategory ID was passed in `category`
+    const subPassedAsMain = rawMainInput
+      ? db.categories.find(c => Boolean(c.parentId) && c.id === rawMainInput)
+      : undefined;
+
+    const effectiveMainId = subPassedAsMain?.parentId
+      || customMainMatch?.id
+      || normalizeCategoryId(rawMainInput, nameStr);
+
+    const canonicalCat = MAIN_CATEGORY_DEFINITIONS.some(m => m.id === effectiveMainId)
+      ? effectiveMainId
+      : normalizeCategoryId(body?.category ?? existing?.category ?? rawMainInput, nameStr);
+
+    const liveMainCat = db.categories.find(c => c.id === effectiveMainId && !c.parentId);
+    const staticMainCat = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === effectiveMainId);
+    const categoryName = (body?.categoryName && String(body.categoryName).trim())
+      || liveMainCat?.nameEn
+      || staticMainCat?.name
+      || existing?.categoryName
+      || canonicalCat;
+
+    const hasSubKeys =
+      body !== undefined &&
+      ('subcategory' in body || 'subCategoryId' in body || 'subCategoryName' in body);
+
+    const candidateSubRaw =
+      (body?.subCategoryId !== undefined ? String(body.subCategoryId || '').trim() : '') ||
+      (body?.subcategory !== undefined ? String(body.subcategory || '').trim() : '') ||
+      (body?.subCategoryName !== undefined ? String(body.subCategoryName || '').trim() : '') ||
+      (subPassedAsMain ? subPassedAsMain.id : '');
+
+    if (hasSubKeys && !candidateSubRaw && !subPassedAsMain) {
+      return {
+        category: canonicalCat,
+        mainCategoryId: effectiveMainId,
+        categoryName,
+        subcategory: undefined,
+        subCategoryId: undefined,
+        subCategoryName: undefined
+      };
+    }
+
+    const effectiveRawSub = candidateSubRaw || (!hasSubKeys
+      ? (existing?.subCategoryId || existing?.subcategory || existing?.subCategoryName || '')
+      : '');
+
+    if (!effectiveRawSub) {
+      return {
+        category: canonicalCat,
+        mainCategoryId: effectiveMainId,
+        categoryName,
+        subcategory: undefined,
+        subCategoryId: undefined,
+        subCategoryName: undefined
+      };
+    }
+
+    const resolvedSub = resolveSubCategoryRecord(effectiveRawSub, effectiveMainId, db.categories);
+    if (resolvedSub) {
+      return {
+        category: canonicalCat,
+        mainCategoryId: effectiveMainId,
+        categoryName,
+        subcategory: resolvedSub.id,
+        subCategoryId: resolvedSub.id,
+        subCategoryName: resolvedSub.name
+      };
+    }
+
+    // Custom/unlisted subcategory string fallback
+    const customSubId = effectiveRawSub.includes('-') && effectiveRawSub.startsWith(`${effectiveMainId}-`)
+      ? toCategorySlug(effectiveRawSub)
+      : buildSubCategoryId(effectiveMainId, effectiveRawSub);
+    const customSubName = (body?.subCategoryName && String(body.subCategoryName).trim()) || effectiveRawSub;
+    return {
+      category: canonicalCat,
+      mainCategoryId: effectiveMainId,
+      categoryName,
+      subcategory: customSubId,
+      subCategoryId: customSubId,
+      subCategoryName: customSubName
+    };
+  }
 
   async function findOrLoadProduct(rawId: string): Promise<Product | undefined> {
     const cleanId = decodeURIComponent(String(rawId || '')).trim();
@@ -5980,9 +6121,17 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
         : undefined;
     }
 
+    const resolvedCat = resolveProductCategoryFields(req.body, existing, req.body.name || existing.name);
+
     const updated: Product = {
       ...existing,
       ...req.body,
+      category: resolvedCat.category,
+      mainCategoryId: resolvedCat.mainCategoryId,
+      categoryName: resolvedCat.categoryName,
+      subcategory: resolvedCat.subcategory,
+      subCategoryId: resolvedCat.subCategoryId,
+      subCategoryName: resolvedCat.subCategoryName,
       imageUrl: finalImageUrl,
       images: finalImages,
       videoUrl: finalVideoUrl,
@@ -6726,11 +6875,16 @@ app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUC
 
 app.get('/api/admin/categories', requireAdminAuth, (req: Request, res: Response) => {
   const categoriesWithCounts = db.categories.map(c => {
-    const isMain = !c.parentId || c.level === 1;
+    const isMain = !c.parentId;
     const count = isMain
-      ? db.products.filter(p => p.mainCategoryId === c.id || p.category === c.id).length
-      : db.products.filter(p => p.subCategoryId === c.id || (p.subCategoryName && p.subCategoryName.toLowerCase() === c.nameEn.toLowerCase())).length;
-    return { ...c, itemCount: count };
+      ? db.products.filter(p => p.mainCategoryId === c.id || normalizeCategoryId(p.category, p.name) === c.id).length
+      : db.products.filter(p => doesProductMatchSubCategory(p, c.id, c.parentId, db.categories)).length;
+    return {
+      ...c,
+      level: isMain ? 1 : 2,
+      slug: c.slug || toCategorySlug(c.nameEn || c.id),
+      itemCount: count
+    };
   });
   res.json(categoriesWithCounts);
 });
@@ -6740,8 +6894,8 @@ app.post('/api/admin/categories', requireAdminAuth, requireRole(PRODUCT_ADMIN_RO
   const { nameEn, nameRw, icon, description, subcategories, imageUrl, parentId, level, sortOrder } = req.body;
   if (!nameEn || !nameEn.trim()) return res.status(400).json({ error: 'Category name is required.' });
 
-  const rawSlug = nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const id = parentId ? `${parentId}-${rawSlug}` : rawSlug;
+  const rawSlug = toCategorySlug(nameEn);
+  const id = parentId ? buildSubCategoryId(parentId, nameEn) : rawSlug;
 
   if (db.categories.some(c => c.id === id)) {
     return res.status(400).json({ error: `A category with identifier "${id}" already exists.` });
@@ -6792,6 +6946,7 @@ app.post('/api/admin/categories', requireAdminAuth, requireRole(PRODUCT_ADMIN_RO
   logAudit(admin, 'CATEGORY_CREATED', `Created ${isSubcategory ? 'subcategory' : 'main category'} "${newCat.nameEn}" (${newCat.id})`, 'category', newCat.id);
   saveDbToDisk();
   saveToFirestoreAsync('categories', newCat.id, newCat);
+  broadcastDatabaseEvent('category_created', { category: newCat });
   res.status(201).json(newCat);
 });
 
@@ -6802,6 +6957,8 @@ app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN
 
   const oldNameEn = cat.nameEn;
   Object.assign(cat, req.body);
+  cat.level = cat.parentId ? 2 : 1;
+  cat.slug = toCategorySlug(cat.nameEn || cat.id);
   cat.updatedAt = new Date().toISOString();
 
   if (req.body.imageUrl !== undefined) {
@@ -6820,8 +6977,11 @@ app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN
       }
       // Update linked products
       db.products.forEach(p => {
-        if (p.subCategoryId === cat.id || p.subCategoryName === oldNameEn) {
+        if (p.subCategoryId === cat.id || p.subCategoryName === oldNameEn || p.subcategory === oldNameEn || p.subcategory === cat.id) {
+          p.subCategoryId = cat.id;
           p.subCategoryName = cat.nameEn;
+          p.subcategory = cat.id;
+          p.updatedAt = new Date().toISOString();
           saveToFirestoreAsync('products', p.id, p);
         }
       });
@@ -6830,6 +6990,7 @@ app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN
       db.products.forEach(p => {
         if (p.mainCategoryId === cat.id || p.category === cat.id) {
           p.categoryName = cat.nameEn;
+          p.updatedAt = new Date().toISOString();
           saveToFirestoreAsync('products', p.id, p);
         }
       });
@@ -6839,6 +7000,7 @@ app.put('/api/admin/categories/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN
   logAudit(admin, 'CATEGORY_UPDATED', `Updated category "${cat.nameEn}" (${cat.id})`, 'category', cat.id);
   saveDbToDisk();
   saveToFirestoreAsync('categories', cat.id, cat);
+  broadcastDatabaseEvent('category_updated', { category: cat });
   res.json(cat);
 });
 
@@ -6912,6 +7074,7 @@ app.patch('/api/admin/categories/:id/move', requireAdminAuth, requireRole(PRODUC
   saveDbToDisk();
   saveToFirestoreAsync('categories', subcat.id, subcat);
   saveToFirestoreAsync('categories', newParent.id, newParent);
+  broadcastDatabaseEvent('category_updated', { category: subcat });
 
   res.json({
     success: true,
@@ -7009,6 +7172,7 @@ app.delete('/api/admin/categories/:id', requireAdminAuth, requireRole(['owner', 
 
   saveDbToDisk();
   deleteFromFirestoreAsync('categories', catId);
+  broadcastDatabaseEvent('category_deleted', { categoryId: catId });
 
   res.json({
     message: `Category "${targetCategory.nameEn}" removed successfully.${linkedProducts.length > 0 ? ` ${linkedProducts.length} product(s) were reassigned.` : ''}`,

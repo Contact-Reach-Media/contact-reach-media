@@ -1,4 +1,34 @@
-import { Category } from '../types.ts';
+import { Category, Product } from '../types.ts';
+
+export const LEGACY_CATEGORY_ALIAS_IDS = new Set([
+  'hair-beauty',
+  'fashion',
+  'amatara',
+  'impano',
+  'abana',
+  'amasaha',
+  'ibikapu',
+  'sports',
+  'books',
+  'supermarket'
+]);
+
+export function toCategorySlug(value?: string | null): string {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+export function buildSubCategoryId(mainId: string, subName: string): string {
+  const cleanMain = toCategorySlug(mainId);
+  const cleanSub = toCategorySlug(subName);
+  if (!cleanMain) return cleanSub;
+  if (!cleanSub) return cleanMain;
+  if (cleanSub.startsWith(`${cleanMain}-`)) return cleanSub;
+  return `${cleanMain}-${cleanSub}`;
+}
 
 export interface CategoryNode {
   id: string; // e.g. "clothing", "clothing-womens"
@@ -780,21 +810,22 @@ export function generateFlatCategoryRecords(): Category[] {
       subcategories: main.subcategories.map(s => s.name),
       isActive: true,
       order: main.sortOrder,
+      sortOrder: main.sortOrder,
       level: 1,
       parentId: null,
       slug: main.id,
       subcategoriesList: main.subcategories.map(sub => ({
-        id: `${main.id}-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`,
+        id: buildSubCategoryId(main.id, sub.name),
         name: sub.name,
-        slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+        slug: toCategorySlug(sub.name),
         items: sub.items
       }))
     };
     records.push(mainRecord);
 
-    // Also generate Level 2 child categories if needed
+    // Also generate Level 2 child categories
     for (const sub of main.subcategories) {
-      const subId = `${main.id}-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+      const subId = buildSubCategoryId(main.id, sub.name);
       const subRecord: Category = {
         id: subId,
         nameEn: sub.name,
@@ -805,15 +836,289 @@ export function generateFlatCategoryRecords(): Category[] {
         subcategories: sub.items,
         isActive: true,
         order: main.sortOrder * 10,
+        sortOrder: main.sortOrder * 10,
         level: 2,
         parentId: main.id,
-        slug: sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+        slug: toCategorySlug(sub.name)
       };
       records.push(subRecord);
     }
   }
 
   return records;
+}
+
+export interface ResolvedSubcategoryOption {
+  id: string;
+  name: string;
+  nameRw: string;
+  slug: string;
+  parentId: string;
+  items: string[];
+}
+
+export interface ResolvedMainDepartment extends Omit<MainCategoryDefinition, 'subcategories'> {
+  subcategories: ResolvedSubcategoryOption[];
+}
+
+export function getSubcategoriesForDepartment(
+  mainId: string,
+  liveCategories: Category[] = []
+): ResolvedSubcategoryOption[] {
+  const staticMain = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === mainId);
+  const hasLiveLevel2 = liveCategories.some(c => Boolean(c.parentId) || c.level === 2);
+
+  const liveSubs = liveCategories.filter(
+    c => c.parentId === mainId && c.isActive !== false && c.active !== false
+  );
+
+  if (liveSubs.length > 0 || (hasLiveLevel2 && !staticMain)) {
+    const byId = new Map<string, ResolvedSubcategoryOption>();
+    for (const sub of liveSubs) {
+      const subSlug = toCategorySlug(sub.slug || sub.nameEn || sub.id);
+      const staticMatch = staticMain?.subcategories.find(
+        s => buildSubCategoryId(mainId, s.name) === sub.id || toCategorySlug(s.name) === subSlug
+      );
+      const staticItems = staticMatch?.items || [];
+      const fallbackItems = Array.isArray(sub.subcategories)
+        ? sub.subcategories.filter((item): item is string => typeof item === 'string')
+        : [];
+      byId.set(sub.id, {
+        id: sub.id,
+        name: sub.nameEn || sub.id,
+        nameRw: sub.nameRw || sub.nameEn || sub.id,
+        slug: subSlug,
+        parentId: mainId,
+        items: staticItems.length > 0 ? staticItems : fallbackItems
+      });
+    }
+    return Array.from(byId.values());
+  }
+
+  if (!staticMain) return [];
+  return staticMain.subcategories.map(sub => ({
+    id: buildSubCategoryId(mainId, sub.name),
+    name: sub.name,
+    nameRw: sub.name,
+    slug: toCategorySlug(sub.name),
+    parentId: mainId,
+    items: sub.items
+  }));
+}
+
+export function resolveDepartmentDefinitions(
+  liveCategories: Category[] = [],
+  includeCustomMain = true
+): ResolvedMainDepartment[] {
+  const result: ResolvedMainDepartment[] = MAIN_CATEGORY_DEFINITIONS.map(main => {
+    const liveMain = liveCategories.find(c => c.id === main.id && !c.parentId);
+    return {
+      id: main.id,
+      name: liveMain?.nameEn || main.name,
+      nameRw: liveMain?.nameRw || main.nameRw,
+      icon: liveMain?.icon || main.icon,
+      image: liveMain?.imageUrl || main.image,
+      description: liveMain?.description || main.description,
+      sortOrder: liveMain?.sortOrder || main.sortOrder,
+      subcategories: getSubcategoriesForDepartment(main.id, liveCategories)
+    };
+  });
+
+  if (includeCustomMain) {
+    const knownMainIds = new Set(MAIN_CATEGORY_DEFINITIONS.map(m => m.id));
+    const customMains = liveCategories.filter(
+      c =>
+        !c.parentId &&
+        c.level !== 2 &&
+        !knownMainIds.has(c.id) &&
+        !LEGACY_CATEGORY_ALIAS_IDS.has(c.id) &&
+        c.isActive !== false &&
+        c.active !== false
+    );
+    for (const c of customMains) {
+      result.push({
+        id: c.id,
+        name: c.nameEn || c.id,
+        nameRw: c.nameRw || c.nameEn || c.id,
+        icon: c.icon || 'Tag',
+        image: c.imageUrl || 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&w=500&q=80',
+        description: c.description || `${c.nameEn} department`,
+        sortOrder: c.sortOrder || 99,
+        subcategories: getSubcategoriesForDepartment(c.id, liveCategories)
+      });
+    }
+  }
+
+  return result;
+}
+
+export function resolveSubCategoryRecord(
+  subInput?: string | null,
+  mainCategoryId?: string | null,
+  liveCategories: Category[] = []
+): ResolvedSubcategoryOption | null {
+  const raw = String(subInput || '').trim();
+  if (!raw || raw.toLowerCase() === 'all') return null;
+
+  const rawLower = raw.toLowerCase();
+  const slug = toCategorySlug(raw);
+  const scopedMains = mainCategoryId && mainCategoryId !== 'all'
+    ? [mainCategoryId]
+    : Array.from(new Set([
+        ...MAIN_CATEGORY_DEFINITIONS.map(m => m.id),
+        ...liveCategories.filter(c => !c.parentId).map(c => c.id)
+      ]));
+
+  // 1. Check live Level-2 categories scoped to mainCategoryId first, then all Level-2 categories
+  const liveSubs = liveCategories.filter(c => Boolean(c.parentId) || c.level === 2);
+  const candidates = [
+    ...liveSubs.filter(c => !mainCategoryId || mainCategoryId === 'all' || c.parentId === mainCategoryId),
+    ...liveSubs
+  ];
+
+  for (const c of candidates) {
+    const cId = c.id.toLowerCase();
+    const cSlug = toCategorySlug(c.slug || c.nameEn);
+    const cName = (c.nameEn || '').toLowerCase().trim();
+    const cNameRw = (c.nameRw || '').toLowerCase().trim();
+    const parent = c.parentId || mainCategoryId || '';
+    const builtId = buildSubCategoryId(parent, c.nameEn || c.id);
+
+    if (
+      cId === rawLower ||
+      cId === slug ||
+      builtId === slug ||
+      cSlug === slug ||
+      cName === rawLower ||
+      cNameRw === rawLower ||
+      (parent && buildSubCategoryId(parent, raw) === cId)
+    ) {
+      const staticMain = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === parent);
+      const staticMatch = staticMain?.subcategories.find(
+        s => buildSubCategoryId(parent, s.name) === c.id || toCategorySlug(s.name) === cSlug
+      );
+      return {
+        id: c.id,
+        name: c.nameEn || c.id,
+        nameRw: c.nameRw || c.nameEn || c.id,
+        slug: cSlug,
+        parentId: parent,
+        items: staticMatch?.items || (Array.isArray(c.subcategories) ? c.subcategories : [])
+      };
+    }
+  }
+
+  // 2. Fallback to static MAIN_CATEGORY_DEFINITIONS
+  for (const mId of scopedMains) {
+    const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === mId);
+    if (!main) continue;
+    for (const s of main.subcategories) {
+      const sId = buildSubCategoryId(main.id, s.name);
+      const sSlug = toCategorySlug(s.name);
+      if (
+        sId === rawLower ||
+        sId === slug ||
+        sSlug === slug ||
+        s.name.toLowerCase() === rawLower
+      ) {
+        return {
+          id: sId,
+          name: s.name,
+          nameRw: s.name,
+          slug: sSlug,
+          parentId: main.id,
+          items: s.items
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function resolveSubCategoryLabel(
+  subInput?: string | null,
+  mainCategoryId?: string | null,
+  liveCategories: Category[] = []
+): string {
+  if (!subInput) return '';
+  const resolved = resolveSubCategoryRecord(subInput, mainCategoryId, liveCategories);
+  return resolved?.name || subInput;
+}
+
+export function doesProductMatchCategory(
+  product: Partial<Product>,
+  targetCategory?: string | null
+): boolean {
+  if (!targetCategory || targetCategory === 'all') return true;
+  const tLower = targetCategory.toLowerCase().trim();
+  if (product.category && product.category.toLowerCase().trim() === tLower) return true;
+  if (product.mainCategoryId && product.mainCategoryId.toLowerCase().trim() === tLower) return true;
+  if (product.categoryName && toCategorySlug(product.categoryName) === toCategorySlug(targetCategory)) return true;
+  return false;
+}
+
+export function doesProductMatchSubCategory(
+  product: Partial<Product>,
+  targetSubCategory?: string | null,
+  mainCategoryId?: string | null,
+  liveCategories: Category[] = []
+): boolean {
+  if (!targetSubCategory || targetSubCategory === 'all') return true;
+
+  const targetRaw = String(targetSubCategory).trim().toLowerCase();
+  const targetSlug = toCategorySlug(targetSubCategory);
+  if (!targetRaw && !targetSlug) return true;
+
+  const resolved = resolveSubCategoryRecord(targetSubCategory, mainCategoryId, liveCategories);
+
+  const candidateRaws = new Set<string>([targetRaw]);
+  const candidateSlugs = new Set<string>([targetSlug]);
+  if (resolved) {
+    candidateRaws.add(resolved.id.toLowerCase());
+    candidateRaws.add(resolved.name.toLowerCase());
+    if (resolved.nameRw) candidateRaws.add(resolved.nameRw.toLowerCase());
+    candidateSlugs.add(toCategorySlug(resolved.id));
+    candidateSlugs.add(toCategorySlug(resolved.name));
+    candidateSlugs.add(resolved.slug);
+    if (resolved.parentId) {
+      candidateSlugs.add(buildSubCategoryId(resolved.parentId, resolved.name));
+    }
+  } else if (mainCategoryId && mainCategoryId !== 'all') {
+    candidateSlugs.add(buildSubCategoryId(mainCategoryId, targetSubCategory));
+  }
+
+  const productValues = [product.subCategoryId, product.subCategoryName, product.subcategory]
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+
+  if (productValues.length === 0) return false;
+
+  const effectiveSubSlug = resolved?.slug || targetSlug;
+  const effectiveParentSlug = toCategorySlug(resolved?.parentId || mainCategoryId || '');
+
+  for (const val of productValues) {
+    const valLower = val.toLowerCase();
+    const valSlug = toCategorySlug(val);
+
+    if (candidateRaws.has(valLower) || candidateSlugs.has(valSlug)) {
+      return true;
+    }
+
+    // Handle cases where target is "men-s-clothing" and product value is "clothing-men-s-clothing"
+    if (effectiveParentSlug && valSlug === `${effectiveParentSlug}-${effectiveSubSlug}`) {
+      return true;
+    }
+    if (!effectiveParentSlug && valSlug.endsWith(`-${effectiveSubSlug}`)) {
+      return true;
+    }
+    // Handle cases where target is "clothing-men-s-clothing" and product value is "Men's Clothing"
+    if (resolved && effectiveSubSlug && valSlug === effectiveSubSlug) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Intelligent Product Category Auto-Mapper
@@ -857,7 +1162,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'shoes')!;
     return {
       mainCategoryId: 'shoes',
-      subCategoryId: `shoes-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('shoes', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -872,7 +1177,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'hair')!;
     return {
       mainCategoryId: 'hair',
-      subCategoryId: `hair-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('hair', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -892,7 +1197,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'watch-jewelry')!;
     return {
       mainCategoryId: 'watch-jewelry',
-      subCategoryId: `watch-jewelry-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('watch-jewelry', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -908,7 +1213,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'luggage-bags')!;
     return {
       mainCategoryId: 'luggage-bags',
-      subCategoryId: `luggage-bags-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('luggage-bags', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -922,7 +1227,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'phones-tel')!;
     return {
       mainCategoryId: 'phones-tel',
-      subCategoryId: `phones-tel-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('phones-tel', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -936,7 +1241,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'computer-office')!;
     return {
       mainCategoryId: 'computer-office',
-      subCategoryId: `computer-office-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('computer-office', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -951,7 +1256,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'automobile-accessory-tools')!;
     return {
       mainCategoryId: 'automobile-accessory-tools',
-      subCategoryId: `automobile-accessory-tools-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('automobile-accessory-tools', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -965,7 +1270,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'beauty')!;
     return {
       mainCategoryId: 'beauty',
-      subCategoryId: `beauty-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('beauty', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -980,7 +1285,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'kids-toys')!;
     return {
       mainCategoryId: 'kids-toys',
-      subCategoryId: `kids-toys-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('kids-toys', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -993,7 +1298,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'weddings')!;
     return {
       mainCategoryId: 'weddings',
-      subCategoryId: `weddings-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('weddings', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -1009,7 +1314,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'home-appliances')!;
     return {
       mainCategoryId: 'home-appliances',
-      subCategoryId: `home-appliances-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('home-appliances', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -1024,7 +1329,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'clothing')!;
     return {
       mainCategoryId: 'clothing',
-      subCategoryId: `clothing-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('clothing', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -1038,7 +1343,7 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === 'electronics')!;
     return {
       mainCategoryId: 'electronics',
-      subCategoryId: `electronics-${subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId('electronics', subName),
       categoryName: main.name,
       subCategoryName: subName,
       confidence: 'high'
@@ -1051,18 +1356,18 @@ export function mapProductToCategoryHierarchy(product: {
     const main = MAIN_CATEGORY_DEFINITIONS.find(m => m.id === mapped.mainId)!;
     return {
       mainCategoryId: mapped.mainId,
-      subCategoryId: `${mapped.mainId}-${mapped.subName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      subCategoryId: buildSubCategoryId(mapped.mainId, mapped.subName),
       categoryName: main.name,
       subCategoryName: mapped.subName,
       confidence: 'medium'
     };
   }
 
-  // 4. Default fallback: Home & Appliances or Clothing
+  // 4. Default fallback: Clothing
   const defaultMain = MAIN_CATEGORY_DEFINITIONS[0]; // Clothing
   return {
     mainCategoryId: defaultMain.id,
-    subCategoryId: `${defaultMain.id}-women-s-clothing`,
+    subCategoryId: buildSubCategoryId(defaultMain.id, "Women's Clothing"),
     categoryName: defaultMain.name,
     subCategoryName: "Women's Clothing",
     confidence: 'low'

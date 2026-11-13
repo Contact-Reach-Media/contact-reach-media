@@ -4,7 +4,8 @@ import {
   Briefcase, Watch, Baby, Home, HeartHandshake, Crown, Smartphone,
   Tv, Laptop, Wrench, ArrowRight, Grid, Tag
 } from 'lucide-react';
-import { MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
+import { resolveDepartmentDefinitions, MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
+import { Category } from '../types.ts';
 import { Language } from '../translations.ts';
 
 // Dynamic Lucide icon mapper
@@ -34,6 +35,7 @@ interface CategoryMegaMenuProps {
   onClose: () => void;
   selectedCategory?: string;
   productCounts?: Record<string, number>;
+  categories?: Category[];
 }
 
 export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
@@ -41,8 +43,13 @@ export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
   onSelectCategory,
   isOpen,
   onClose,
-  productCounts = {}
+  productCounts = {},
+  categories = []
 }) => {
+  const departments = React.useMemo(
+    () => resolveDepartmentDefinitions(categories, true),
+    [categories]
+  );
   const [activeMainId, setActiveMainId] = useState<string>(MAIN_CATEGORY_DEFINITIONS[0].id);
   const [searchQuery, setSearchQuery] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
@@ -70,7 +77,7 @@ export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
   if (!isOpen) return null;
 
   // Filter categories and subcategories based on search input
-  const filteredCategories = MAIN_CATEGORY_DEFINITIONS.filter(cat => {
+  const filteredCategories = departments.filter(cat => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     if (cat.name.toLowerCase().includes(q) || cat.nameRw.toLowerCase().includes(q)) return true;
@@ -80,7 +87,7 @@ export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
     );
   });
 
-  const activeCategory = MAIN_CATEGORY_DEFINITIONS.find(c => c.id === activeMainId) || MAIN_CATEGORY_DEFINITIONS[0];
+  const activeCategory = departments.find(c => c.id === activeMainId) || departments[0];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-20 px-2 sm:px-4 animate-in fade-in duration-200">
@@ -253,46 +260,52 @@ export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
                 </div>
 
                 {/* Grid of Subcategories & Child Items */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {activeCategory.subcategories.map((sub) => {
-                    const subId = `${activeCategory.id}-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+                {activeCategory.subcategories.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-6 border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                    No subcategories yet in {activeCategory.name}. Click &quot;View All {activeCategory.name}&quot; to browse all products.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {activeCategory.subcategories.map((sub) => {
+                      const subId = sub.id;
 
-                    return (
-                      <div
-                        key={sub.name}
-                        className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs hover:border-orange-300 transition-all group"
-                      >
-                        {/* Subcategory Title Button */}
-                        <button
-                          onClick={() => {
-                            onSelectCategory(activeCategory.id, subId);
-                            onClose();
-                          }}
-                          className="w-full text-left font-black text-xs sm:text-sm text-slate-900 group-hover:text-[#FF6000] flex items-center justify-between pb-2 mb-2 border-b border-slate-100 cursor-pointer"
+                      return (
+                        <div
+                          key={sub.id}
+                          className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs hover:border-orange-300 transition-all group"
                         >
-                          <span className="truncate">{sub.name}</span>
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#FF6000] shrink-0" />
-                        </button>
+                          {/* Subcategory Title Button */}
+                          <button
+                            onClick={() => {
+                              onSelectCategory(activeCategory.id, subId);
+                              onClose();
+                            }}
+                            className="w-full text-left font-black text-xs sm:text-sm text-slate-900 group-hover:text-[#FF6000] flex items-center justify-between pb-2 mb-2 border-b border-slate-100 cursor-pointer"
+                          >
+                            <span className="truncate">{currentLang === 'rw' && sub.nameRw ? sub.nameRw : sub.name}</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#FF6000] shrink-0" />
+                          </button>
 
-                        {/* Child Items / Tags (Level 3) */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {sub.items.map((item) => (
-                            <button
-                              key={item}
-                              onClick={() => {
-                                onSelectCategory(activeCategory.id, subId, item);
-                                onClose();
-                              }}
-                              className="text-[11px] font-medium text-slate-600 hover:text-[#FF6000] hover:bg-orange-50 px-2 py-0.5 rounded-md transition-colors cursor-pointer bg-slate-50 border border-slate-100/80"
-                            >
-                              {item}
-                            </button>
-                          ))}
+                          {/* Child Items / Tags (Level 3) */}
+                          <div className="flex flex-wrap gap-1.5">
+                            {sub.items.map((item) => (
+                              <button
+                                key={item}
+                                onClick={() => {
+                                  onSelectCategory(activeCategory.id, subId, item);
+                                  onClose();
+                                }}
+                                className="text-[11px] font-medium text-slate-600 hover:text-[#FF6000] hover:bg-orange-50 px-2 py-0.5 rounded-md transition-colors cursor-pointer bg-slate-50 border border-slate-100/80"
+                              >
+                                {item}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

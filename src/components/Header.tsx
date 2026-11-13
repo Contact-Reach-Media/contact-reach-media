@@ -6,8 +6,8 @@ import {
 } from 'lucide-react';
 import { Language, translations, SUPPORTED_LANGUAGES, LanguageOption } from '../translations.ts';
 import { CurrencyCode, SUPPORTED_CURRENCIES, CurrencyOption } from '../utils/currency.ts';
-import { Product, CustomerUser } from '../types.ts';
-import { MAIN_CATEGORY_DEFINITIONS } from '../data/categoryStructure.ts';
+import { Product, CustomerUser, Category } from '../types.ts';
+import { MAIN_CATEGORY_DEFINITIONS, resolveDepartmentDefinitions } from '../data/categoryStructure.ts';
 import { SearchableLanguageModal } from './SearchableLanguageModal.tsx';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
@@ -36,6 +36,7 @@ interface HeaderProps {
   onOpenCategoriesMenu?: () => void;
   selectedCategory?: string;
   onSelectCategory?: (mainCatId: string, subCatId?: string, searchTag?: string) => void;
+  categories?: Category[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -62,8 +63,13 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenUploadProduct,
   onOpenCategoriesMenu,
   selectedCategory = 'all',
-  onSelectCategory
+  onSelectCategory,
+  categories = []
 }) => {
+  const departments = React.useMemo(
+    () => resolveDepartmentDefinitions(categories, true),
+    [categories]
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
@@ -832,7 +838,7 @@ export const Header: React.FC<HeaderProps> = ({
               {currentLang === 'en' ? 'All Products' : 'Byose'}
             </button>
 
-            {MAIN_CATEGORY_DEFINITIONS.map((cat) => {
+            {departments.map((cat) => {
               const isSelected = selectedCategory === cat.id;
               return (
                 <button

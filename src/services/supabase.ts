@@ -17,6 +17,7 @@ import type {
   InventoryLog,
   AdminUser
 } from '../types.ts';
+import { toCategorySlug } from '../data/categoryStructure.ts';
 
 // -------------------------------------------------------------
 // SUPABASE PROJECT CONFIGURATION
@@ -465,9 +466,11 @@ export async function getCategoriesFromSupabase(): Promise<Category[]> {
       nameEn: c.name_en || c.name || '',
       nameRw: c.name_rw || c.name_en || c.name || '',
       icon: c.icon || 'Tag',
+      slug: c.slug || toCategorySlug(c.name_en || c.name || c.id),
+      level: c.parent_id ? 2 : 1,
       imageUrl: c.image_url || undefined,
       description: c.description || undefined,
-      parentId: c.parent_id || undefined,
+      parentId: c.parent_id || null,
       sortOrder: c.sort_order || 0,
       isActive: c.is_active !== false,
       subcategories: Array.isArray(c.subcategories) ? c.subcategories : []
