@@ -358,6 +358,61 @@ export async function deleteProductFromSupabase(productId: string): Promise<bool
   }
 }
 
+export async function updateProductStatusInSupabase(
+  productId: string,
+  status: string
+): Promise<{ success: boolean; product?: Product; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', productId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    if (!data) {
+      return { success: false, error: 'Product not found in Supabase database' };
+    }
+    return { success: true, product: mapSupabaseRowToProduct(data) };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Supabase status update failed' };
+  }
+}
+
+export async function bulkUpdateProductStatusInSupabase(
+  productIds: string[],
+  status: string
+): Promise<{ success: boolean; count: number; products?: Product[]; error?: string }> {
+  try {
+    const cleanIds = productIds.map(id => String(id).trim()).filter(Boolean);
+    if (cleanIds.length === 0) {
+      return { success: false, count: 0, error: 'No product IDs provided' };
+    }
+    const { data, error } = await supabase
+      .from('products')
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', cleanIds)
+      .select();
+
+    if (error) {
+      return { success: false, count: 0, error: error.message };
+    }
+    const mapped = Array.isArray(data) ? data.map(mapSupabaseRowToProduct) : [];
+    return { success: true, count: mapped.length || cleanIds.length, products: mapped };
+  } catch (err: any) {
+    return { success: false, count: 0, error: err?.message || 'Supabase bulk status update failed' };
+  }
+}
+
 export async function syncAllProductsToSupabase(products: Product[] = []): Promise<{
   success: boolean;
   syncedCount: number;

@@ -10,6 +10,8 @@ import { initialCategories, initialSettings } from '../data/initialData.ts';
 import {
   getProductsFromSupabase,
   saveProductToSupabase,
+  updateProductStatusInSupabase,
+  bulkUpdateProductStatusInSupabase,
   deleteProductFromSupabase,
   syncAllProductsToSupabase,
   getCategoriesFromSupabase,
@@ -1995,7 +1997,7 @@ export const api = {
     };
   },
 
-  async adminBulkUpdateProductStatus(productIds: string[], status: ProductStatus): Promise<{ success: boolean; count: number; message: string }> {
+  async adminBulkUpdateProductStatus(productIds: string[], status: ProductStatus): Promise<{ success: boolean; count: number; message: string; products?: Product[] }> {
     try {
       const res = await fetch('/api/admin/products/bulk-status', {
         method: 'POST',
@@ -2006,45 +2008,148 @@ export const api = {
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
-      if (parsed.isJson && parsed.json?.error) {
+      if (parsed.isJson && parsed.json?.error && (res.status === 400 || res.status === 401 || res.status === 403)) {
         throw new Error(parsed.json.error);
       }
     } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.message.includes('unreachable') && !err.message.includes('unavailable')) {
         throw err;
       }
     }
 
+    // Direct Supabase fallback when backend endpoint is unreachable
+    const sbResult = await bulkUpdateProductStatusInSupabase(productIds, status);
+    if (!sbResult.success) {
+      throw new Error(sbResult.error || 'Failed to update products status');
+    }
     return {
       success: true,
-      count: productIds.length,
-      message: `Updated ${productIds.length} product(s) to ${status}.`
+      count: sbResult.count,
+      products: sbResult.products,
+      message: `Updated ${sbResult.count} product(s) to ${status}.`
     };
   },
 
   async adminUpdateProductStatus(id: string, status: ProductStatus): Promise<{ success: boolean; message: string; product: Product }> {
-    const res = await fetch(`/api/admin/products/${id}/status`, {
-      method: 'PATCH',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ status })
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json?.product) {
-      throw new Error(parsed.json?.error || 'Failed to update product status');
+    const encodedId = encodeURIComponent(id);
+    const headers = getAuthHeaders();
+    let lastErrorMessage = '';
+
+    // 1. Primary PATCH /status, then POST /status fallback (in case proxy blocks PATCH)
+    for (const method of ['PATCH', 'POST'] as const) {
+      try {
+        const res = await fetch(`/api/admin/products/${encodedId}/status`, {
+          method,
+          headers,
+          body: JSON.stringify({ status })
+        });
+        const parsed = await safeParseResponse<any>(res);
+        if (res.ok && parsed.isJson && parsed.json?.product) {
+          return parsed.json;
+        }
+        // Fail fast on explicit validation or auth errors
+        if (parsed.isJson && parsed.json?.error) {
+          lastErrorMessage = parsed.json.error;
+          if (res.status === 400 || res.status === 401 || res.status === 403) {
+            throw new Error(parsed.json.error);
+          }
+        }
+      } catch (err: any) {
+        if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
+          throw err;
+        }
+      }
     }
-    return parsed.json;
+
+    // 2. Fallback to PUT /api/admin/products/:id with { status }
+    try {
+      const res = await fetch(`/api/admin/products/${encodedId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ status })
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.product?.id)) {
+        const updatedProd = parsed.json?.product || parsed.json;
+        return {
+          success: true,
+          message: `Product "${updatedProd.name}" updated to "${updatedProd.status}"`,
+          product: updatedProd
+        };
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        lastErrorMessage = parsed.json.error;
+        if (res.status === 400 || res.status === 401 || res.status === 403) {
+          throw new Error(parsed.json.error);
+        }
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
+        throw err;
+      }
+    }
+
+    // 3. Direct Supabase fallback for decoupled static hosts or transient backend outages
+    const sbResult = await updateProductStatusInSupabase(id, status);
+    if (sbResult.success && sbResult.product) {
+      return {
+        success: true,
+        message: `Product "${sbResult.product.name}" is now ${status === 'Available' ? 'Published (Available)' : status}`,
+        product: sbResult.product
+      };
+    }
+
+    throw new Error(lastErrorMessage || sbResult.error || 'Failed to update product status');
   },
 
   async adminToggleProductPublish(id: string): Promise<{ success: boolean; message: string; product: Product }> {
-    const res = await fetch(`/api/admin/products/${id}/toggle-publish`, {
-      method: 'PATCH',
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json?.product) {
-      throw new Error(parsed.json?.error || 'Failed to toggle product publish status');
+    const encodedId = encodeURIComponent(id);
+    const headers = getAuthHeaders();
+    let lastErrorMessage = '';
+
+    for (const method of ['PATCH', 'POST'] as const) {
+      try {
+        const res = await fetch(`/api/admin/products/${encodedId}/toggle-publish`, {
+          method,
+          headers
+        });
+        const parsed = await safeParseResponse<any>(res);
+        if (res.ok && parsed.isJson && parsed.json?.product) {
+          return parsed.json;
+        }
+        if (parsed.isJson && parsed.json?.error) {
+          lastErrorMessage = parsed.json.error;
+          if (res.status === 400 || res.status === 401 || res.status === 403) {
+            throw new Error(parsed.json.error);
+          }
+        }
+      } catch (err: any) {
+        if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
+          throw err;
+        }
+      }
     }
-    return parsed.json;
+
+    // Direct Supabase fallback: read current status and toggle Available <-> Hidden
+    try {
+      const sbProducts = await getProductsFromSupabase();
+      const target = sbProducts.find(p => p.id === id);
+      if (target) {
+        const nextStatus: ProductStatus = target.status === 'Available' ? 'Hidden' : 'Available';
+        const sbResult = await updateProductStatusInSupabase(id, nextStatus);
+        if (sbResult.success && sbResult.product) {
+          return {
+            success: true,
+            message: nextStatus === 'Available'
+              ? `Product "${sbResult.product.name}" is now Published to storefront!`
+              : `Product "${sbResult.product.name}" is now Unpublished (hidden from buyers).`,
+            product: sbResult.product
+          };
+        }
+      }
+    } catch {}
+
+    throw new Error(lastErrorMessage || 'Failed to toggle product publish status');
   },
 
   // Categories

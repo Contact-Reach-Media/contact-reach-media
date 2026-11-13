@@ -3,7 +3,8 @@ import {
   Star, ShoppingBag, Truck, RotateCcw, Heart, Plus, Minus,
   MessageCircle, Store, Clock, ChevronRight, CheckCircle2, ChevronLeft,
   Share2, Copy, Check, Sparkles, Info, Package, MapPin, Award,
-  ArrowLeft, Youtube, ExternalLink, ShieldCheck, CheckSquare
+  ArrowLeft, Youtube, ExternalLink, ShieldCheck, CheckSquare,
+  ZoomIn, Maximize
 } from 'lucide-react';
 import { Product, ProductReview, ProductVariation } from '../types.ts';
 import { Language, translations } from '../translations.ts';
@@ -14,6 +15,7 @@ import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/ship
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { FormattedProductDescription } from './FormattedProductDescription.tsx';
+import { ProductImageViewerModal } from './ProductImageViewerModal.tsx';
 
 interface ProductDetailPageProps {
   product: Product | null;
@@ -54,6 +56,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [selectedVariations, setSelectedVariations] = useState<{ [key: string]: string }>({});
   const [copiedLink, setCopiedLink] = useState(false);
   const [addedNotice, setAddedNotice] = useState(false);
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
 
   // Reviews state
   const [reviews, setReviews] = useState<ProductReview[]>([]);
@@ -266,7 +269,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 )}
 
                 {/* Main Image */}
-                <div className="flex-1 relative aspect-square rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 shadow-inner group">
+                <div
+                  onClick={() => setIsImageViewerOpen(true)}
+                  className="flex-1 relative aspect-square rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 shadow-inner group cursor-zoom-in"
+                  title="Click or tap to zoom and inspect in full-screen viewer"
+                >
                   <img
                     src={galleryImages[selectedImageIndex] || getProductImageDueToProduct(product)}
                     alt={product.name}
@@ -278,7 +285,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   />
 
                   {/* Stock Tag */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                  <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
                     {isOutOfStock ? (
                       <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-white text-[11px] font-bold shadow-xs">
                         Direct Supplier Order
@@ -298,7 +305,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   {/* Wishlist Button */}
                   {onToggleWishlist && (
                     <button
-                      onClick={() => onToggleWishlist(product.id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleWishlist(product.id);
+                      }}
                       className={`absolute top-3 right-3 p-2 rounded-full shadow-md transition-transform hover:scale-110 cursor-pointer ${
                         isWishlisted
                           ? 'bg-rose-50 text-rose-600'
@@ -309,6 +320,12 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                       <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-rose-600' : ''}`} />
                     </button>
                   )}
+
+                  {/* Interactive Zoom Prompt Overlay Button */}
+                  <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold backdrop-blur-xs shadow-md border border-slate-700 transition-all group-hover:scale-105 cursor-pointer">
+                    <ZoomIn className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Click to Zoom</span>
+                  </div>
                 </div>
               </div>
 
@@ -796,6 +813,16 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             </div>
           </div>
         )}
+
+        {/* Custom Full-Screen Interactive Product Image Viewer */}
+        <ProductImageViewerModal
+          isOpen={isImageViewerOpen}
+          onClose={() => setIsImageViewerOpen(false)}
+          images={galleryImages}
+          initialIndex={selectedImageIndex}
+          productName={product.name}
+          fallbackImage={getProductImageDueToProduct(product)}
+        />
 
       </div>
     </div>

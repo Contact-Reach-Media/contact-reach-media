@@ -529,7 +529,11 @@ export default function App() {
       const { eventType, new: newRecord, old: oldRecord } = payload;
       if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
         const mapped = mapSupabaseRowToProduct(newRecord);
+        const isPublicVisible = mapped.status !== 'Hidden' && mapped.status !== 'Archived';
         setProducts(prev => {
+          if (!isPublicVisible) {
+            return prev.filter(p => p.id !== mapped.id);
+          }
           const exists = prev.some(p => p.id === mapped.id);
           if (exists) {
             return prev.map(p => p.id === mapped.id ? mapped : p);
@@ -583,13 +587,22 @@ export default function App() {
           // Real-time catalog events
           if (parsed?.type === 'product_created' && parsed.payload?.product) {
             const p: Product = parsed.payload.product;
+            if (p.status !== 'Hidden' && p.status !== 'Archived') {
+              setProducts(prev => {
+                if (prev.some(x => x.id === p.id)) return prev.map(x => x.id === p.id ? p : x);
+                return [p, ...prev];
+              });
+            }
+          } else if (parsed?.type === 'product_updated' && parsed.payload?.product) {
+            const p: Product = parsed.payload.product;
+            const isPublicVisible = p.status !== 'Hidden' && p.status !== 'Archived';
             setProducts(prev => {
+              if (!isPublicVisible) return prev.filter(x => x.id !== p.id);
               if (prev.some(x => x.id === p.id)) return prev.map(x => x.id === p.id ? p : x);
               return [p, ...prev];
             });
-          } else if (parsed?.type === 'product_updated' && parsed.payload?.product) {
-            const p: Product = parsed.payload.product;
-            setProducts(prev => prev.map(x => x.id === p.id ? p : x));
+          } else if (parsed?.type === 'products_bulk_updated' && Array.isArray(parsed.payload?.productIds)) {
+            handleSyncRefresh();
           } else if (parsed?.type === 'product_deleted' && parsed.payload?.productId) {
             const delId = parsed.payload.productId;
             setProducts(prev => prev.filter(x => x.id !== delId));

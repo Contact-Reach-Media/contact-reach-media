@@ -1,11 +1,12 @@
-import React from 'react';
-import { Heart, Star, Camera, Youtube, Truck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Heart, Star, Camera, Youtube, Truck, ZoomIn } from 'lucide-react';
 import { Product } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { ProductImageViewerModal } from './ProductImageViewerModal.tsx';
 
 interface ProductCardProps {
   product: Product;
@@ -51,6 +52,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const originalFormat = hasDiscount ? formatCurrencyPrice(product.price, currentCurrency, exchangeRates) : null;
   const shippingCost = calculateProductShippingUnitCost(product, currentPriceRwf);
   const shippingFormat = formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates);
+
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+
+  const cardImages = React.useMemo(() => {
+    const list = (product.images || []).filter(img => typeof img === 'string' && img.trim().length > 0);
+    const mainImg = product.imageUrl || getProductImageDueToProduct(product);
+    if (list.length > 0) {
+      if (mainImg && !list.includes(mainImg)) return [mainImg, ...list];
+      return list;
+    }
+    return [mainImg];
+  }, [product]);
 
   return (
     <div
@@ -112,6 +125,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           />
         )}
 
+        {/* Quick Zoom Trigger Button on Image Hover */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsViewerOpen(true);
+          }}
+          className="absolute bottom-2 right-2 z-10 w-7 h-7 rounded-full bg-slate-900/80 hover:bg-[#FF6000] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110 cursor-pointer"
+          title="Zoom and inspect product details"
+          aria-label="Inspect image"
+        >
+          <ZoomIn className="w-3.5 h-3.5" />
+        </button>
+
         {(product.status === 'Out of Stock' || product.stock <= 0) && (
           <div className="absolute inset-0 bg-white/85 backdrop-blur-2xs flex flex-col items-center justify-center p-2 text-center z-10">
             <span className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
@@ -120,6 +147,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Full-Screen Image Viewer Modal */}
+      <ProductImageViewerModal
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        images={cardImages}
+        productName={product.name}
+        fallbackImage={getProductImageDueToProduct(product)}
+      />
 
       {/* Product Information - Compact, medium text, clear hierarchy */}
       <div className="p-3 flex flex-col justify-between flex-1">

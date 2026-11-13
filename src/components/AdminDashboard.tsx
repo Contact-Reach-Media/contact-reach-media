@@ -754,6 +754,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editingCostPriceValue, setEditingCostPriceValue] = useState<number | string>('');
   const [editingSellingPriceValue, setEditingSellingPriceValue] = useState<number | string>('');
   const [savingProductCostId, setSavingProductCostId] = useState<string | null>(null);
+  const [updatingStatusProductId, setUpdatingStatusProductId] = useState<string | null>(null);
 
   // Google Drive state
   const [driveStatus, setDriveStatus] = useState<GoogleDriveBackupStatus | null>(null);
@@ -1997,6 +1998,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               const updatedProd: Product = payload.product;
               setProducts(prev => prev.map(p => p.id === updatedProd.id ? updatedProd : p));
               showToast(`📦 Real-time: Product "${updatedProd.name}" updated!`, 'info');
+            } else if (eventType === 'products_bulk_updated' && Array.isArray(payload?.productIds) && payload?.status) {
+              const updatedMap = new Map<string, Product>(
+                Array.isArray(payload.products) ? payload.products.map((p: Product) => [p.id, p]) : []
+              );
+              const idSet = new Set(payload.productIds as string[]);
+              setProducts(prev => prev.map(p => {
+                if (updatedMap.has(p.id)) return updatedMap.get(p.id)!;
+                if (idSet.has(p.id)) return { ...p, status: payload.status };
+                return p;
+              }));
             } else if (eventType === 'product_deleted' && payload?.productId) {
               const delId = payload.productId;
               setProducts(prev => prev.filter(p => p.id !== delId));
@@ -2671,12 +2682,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleBulkChangeStatus = async (status: ProductStatus) => {
     if (selectedProductIds.length === 0) return;
     setBulkUpdatingStatus(true);
+    const idSet = new Set(selectedProductIds);
+    const previousProducts = products;
+    // Optimistically update local product list immediately
+    setProducts(prev => prev.map(p => idSet.has(p.id) ? { ...p, status } : p));
     try {
       const res = await api.adminBulkUpdateProductStatus(selectedProductIds, status);
+      if (Array.isArray(res.products) && res.products.length > 0) {
+        const updatedMap = new Map(res.products.map(p => [p.id, p]));
+        setProducts(prev => prev.map(p => updatedMap.get(p.id) || p));
+      }
       showToast(res.message || `Updated ${selectedProductIds.length} product(s) to "${status}"!`);
-      fetchAllData();
+      fetchAllData(true);
       onRefreshPublicData();
     } catch (err: any) {
+      setProducts(previousProducts);
       showToast(err.message || 'Failed to update products status', 'error');
     } finally {
       setBulkUpdatingStatus(false);
@@ -4269,18 +4289,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                                 <select
                                   value={p.status}
+                                  disabled={updatingStatusProductId === p.id}
                                   onChange={async (e) => {
                                     const newStatus = e.target.value as ProductStatus;
+                                    const previousStatus = p.status;
+                                    setUpdatingStatusProductId(p.id);
+                                    setProducts(prev => prev.map(item => item.id === p.id ? { ...item, status: newStatus } : item));
                                     try {
-                                      await api.adminUpdateProductStatus(p.id, newStatus);
+                                      const res = await api.adminUpdateProductStatus(p.id, newStatus);
+                                      if (res?.product) {
+                                        setProducts(prev => prev.map(item => item.id === p.id ? { ...item, ...res.product } : item));
+                                      }
                                       showToast(`Product "${p.name}" updated to "${newStatus}"!`);
                                       fetchAllData(true);
                                       onRefreshPublicData();
                                     } catch (err: any) {
-                                      showToast(err.message || 'Failed to update status', 'error');
+                                      setProducts(prev => prev.map(item => item.id === p.id ? { ...item, status: previousStatus } : item));
+                                      showToast(err.message || 'Failed to change product status', 'error');
+                                    } finally {
+                                      setUpdatingStatusProductId(null);
                                     }
                                   }}
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold cursor-pointer border transition-colors outline-hidden ${
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold cursor-pointer border transition-colors outline-hidden disabled:opacity-60 ${
                                     p.status === 'Available'
                                       ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
                                       : p.status === 'Out of Stock'
@@ -4292,24 +4322,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <option value="Available">Available (Live)</option>
                                   <option value="Hidden">Hidden (Draft)</option>
                                   <option value="Out of Stock">Out of Stock</option>
+                                  <option value="Archived">Archived</option>
                                 </select>
                               </td>
                               <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                 {/* Quick Publish / Unpublish Toggle */}
                                 <button
                                   type="button"
+                                  disabled={updatingStatusProductId === p.id}
                                   onClick={async () => {
+                                    const previousStatus = p.status;
+                                    const optimisticStatus: ProductStatus = p.status === 'Available' ? 'Hidden' : 'Available';
+                                    setUpdatingStatusProductId(p.id);
+                                    setProducts(prev => prev.map(item => item.id === p.id ? { ...item, status: optimisticStatus } : item));
                                     try {
                                       const res = await api.adminToggleProductPublish(p.id);
+                                      if (res?.product) {
+                                        setProducts(prev => prev.map(item => item.id === p.id ? { ...item, ...res.product } : item));
+                                      }
                                       showToast(res.message);
                                       fetchAllData(true);
                                       onRefreshPublicData();
                                     } catch (err: any) {
+                                      setProducts(prev => prev.map(item => item.id === p.id ? { ...item, status: previousStatus } : item));
                                       showToast(err.message || 'Failed to toggle publish status', 'error');
+                                    } finally {
+                                      setUpdatingStatusProductId(null);
                                     }
                                   }}
                                   title={p.status === 'Available' ? "Unpublish product (hide from buyers)" : "Publish product (show on storefront)"}
-                                  className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                                  className={`p-1.5 rounded-lg cursor-pointer transition-colors disabled:opacity-50 ${
                                     p.status === 'Available'
                                       ? 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
                                       : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
@@ -8531,6 +8573,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     value={prodForm.stock}
                     onChange={(e) => setProdForm({ ...prodForm, stock: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Product Visibility / Status *</label>
+                  <select
+                    value={prodForm.status}
+                    onChange={(e) => setProdForm({ ...prodForm, status: e.target.value as ProductStatus })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-xs bg-white focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="Available">Available (Published Live)</option>
+                    <option value="Hidden">Hidden (Unpublished / Draft)</option>
+                    <option value="Out of Stock">Out of Stock</option>
+                    <option value="Archived">Archived</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Unit Label</label>
+                  <input
+                    type="text"
+                    value={prodForm.unit}
+                    onChange={(e) => setProdForm({ ...prodForm, unit: e.target.value })}
+                    placeholder="e.g. Piece, Pack, Set, Kg"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
               </div>

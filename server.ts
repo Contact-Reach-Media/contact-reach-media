@@ -5463,17 +5463,90 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     res.status(201).json(newProduct);
   });
 
+  async function findOrLoadProduct(rawId: string): Promise<Product | undefined> {
+    const cleanId = decodeURIComponent(String(rawId || '')).trim();
+    if (!cleanId) return undefined;
+
+    let found =
+      db.products.find(p => p.id === cleanId) ||
+      db.products.find(p => p.id.trim() === cleanId) ||
+      db.products.find(p => p.sku && p.sku.trim() === cleanId);
+    if (found) return found;
+
+    try {
+      const { data: sbProd } = await supabase
+        .from('products')
+        .select('*')
+        .or(`id.eq.${cleanId},sku.eq.${cleanId}`)
+        .maybeSingle();
+
+      if (sbProd) {
+        const mapped: Product = {
+          id: String(sbProd.id),
+          name: sbProd.name || 'Product',
+          sku: sbProd.sku || undefined,
+          description: sbProd.description || '',
+          price: Number(sbProd.price) || 0,
+          costPrice: sbProd.cost_price !== null && sbProd.cost_price !== undefined ? Number(sbProd.cost_price) : undefined,
+          costOverriddenByAdmin: Boolean(sbProd.cost_overridden_by_admin),
+          commissionRate: sbProd.commission_rate !== null && sbProd.commission_rate !== undefined ? Number(sbProd.commission_rate) : 10,
+          discountPercent: Number(sbProd.discount_percent) || 0,
+          discountPrice: sbProd.discount_price !== null && sbProd.discount_price !== undefined ? Number(sbProd.discount_price) : undefined,
+          category: normalizeCategoryId(sbProd.category, sbProd.name),
+          subcategory: sbProd.subcategory || undefined,
+          mainCategoryId: sbProd.main_category_id || undefined,
+          subCategoryId: sbProd.sub_category_id || undefined,
+          categoryName: sbProd.category_name || undefined,
+          subCategoryName: sbProd.sub_category_name || undefined,
+          stock: Number(sbProd.stock_quantity ?? sbProd.stock ?? 0),
+          imageUrl: sbProd.image_url || '',
+          images: Array.isArray(sbProd.images) ? sbProd.images : (sbProd.image_url ? [sbProd.image_url] : []),
+          shopName: sbProd.shop_name || 'ContactReach Market',
+          shopId: sbProd.shop_id || undefined,
+          status: (sbProd.status || 'Available') as ProductStatus,
+          rating: Number(sbProd.rating) || 5.0,
+          reviewsCount: Number(sbProd.reviews_count) || 0,
+          createdAt: sbProd.created_at || new Date().toISOString(),
+          updatedAt: sbProd.updated_at || new Date().toISOString()
+        };
+        db.products.unshift(mapped);
+        return mapped;
+      }
+    } catch (err) {
+      console.warn('[Product Lookup] Supabase fallback lookup error:', err);
+    }
+
+    return undefined;
+  }
+
+  function normalizeProductStatus(rawStatus: any): ProductStatus | null {
+    if (typeof rawStatus !== 'string') return null;
+    const s = rawStatus.trim().toLowerCase().replace(/[_-]+/g, ' ');
+    if (s === 'available' || s === 'published' || s === 'live' || s === 'active') return 'Available';
+    if (s === 'out of stock' || s === 'outofstock' || s === 'sold out' || s === 'soldout') return 'Out of Stock';
+    if (s === 'hidden' || s === 'draft' || s === 'unpublished' || s === 'private') return 'Hidden';
+    if (s === 'archived' || s === 'archive') return 'Archived';
+    return null;
+  }
+
   app.put('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
     const admin = (req as any).adminUser;
-    const productIndex = db.products.findIndex(p => p.id === req.params.id);
+    let productIndex = db.products.findIndex(p => p.id === req.params.id);
+    if (productIndex === -1) {
+      const loaded = await findOrLoadProduct(req.params.id);
+      if (loaded) {
+        productIndex = db.products.findIndex(p => p.id === loaded.id);
+      }
+    }
     if (productIndex === -1) return res.status(404).json({ error: 'Product not found' });
 
     const existing = db.products[productIndex];
     const oldStock = existing.stock;
     const newStock = req.body.stock !== undefined ? Math.max(0, parseInt(req.body.stock, 10)) : existing.stock;
 
-    let prodStatus: ProductStatus = req.body.status !== undefined ? req.body.status : existing.status;
-    if (newStock === 0 && prodStatus === 'Available') prodStatus = 'Out of Stock';
+    const requestedStatus = req.body.status !== undefined ? normalizeProductStatus(req.body.status) : null;
+    let prodStatus: ProductStatus = requestedStatus || (req.body.status !== undefined ? req.body.status : existing.status);
+    if (req.body.status === undefined && newStock === 0 && prodStatus === 'Available') prodStatus = 'Out of Stock';
 
     const newPrice = req.body.price !== undefined ? Math.max(0, Number(req.body.price)) : existing.price;
     let finalDiscountPercent: number | undefined = existing.discountPercent;
@@ -5595,50 +5668,56 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
   res.json(updated);
 });
 
-// Single Product Status Update (Available, Out of Stock, Hidden)
-app.patch('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
+// Single Product Status Update (Available, Out of Stock, Hidden, Archived)
+const handleUpdateProductStatus = async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const { status } = req.body;
-  if (!status || !['Available', 'Out of Stock', 'Hidden'].includes(status)) {
-    return res.status(400).json({ error: 'Valid status required: "Available", "Out of Stock", or "Hidden"' });
+  const normalizedStatus = normalizeProductStatus(req.body?.status);
+  if (!normalizedStatus) {
+    return res.status(400).json({ error: 'Valid status required: "Available", "Out of Stock", "Hidden", or "Archived"' });
   }
 
-  const product = db.products.find(p => p.id === req.params.id);
+  const product = await findOrLoadProduct(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
 
   const oldStatus = product.status;
-  product.status = status as ProductStatus;
-  if (!product.history) product.history = [];
+  product.status = normalizedStatus;
+  product.updatedAt = new Date().toISOString();
+  if (!Array.isArray(product.history)) product.history = [];
   product.history.unshift({
-    timestamp: new Date().toISOString(),
-    action: `Status changed to ${status}`,
+    timestamp: product.updatedAt,
+    action: `Status changed to ${normalizedStatus}`,
     user: admin.name
   });
 
-  logAudit(admin, 'PRODUCT_STATUS_CHANGED', `Changed status of "${product.name}" (${product.sku || product.id}) from ${oldStatus} to ${status}`, 'product', product.id);
+  logAudit(admin, 'PRODUCT_STATUS_CHANGED', `Changed status of "${product.name}" (${product.sku || product.id}) from ${oldStatus} to ${normalizedStatus}`, 'product', product.id);
   saveDbToDisk('product_status_changed', { product });
   await saveToFirestoreAsync('products', product.id, product);
-  broadcastDatabaseEvent('product_updated', { product });
+  broadcastDatabaseEvent('product_updated', { product, stats: calculateCurrentStats() });
 
   res.json({
     success: true,
-    message: `Product "${product.name}" is now ${status === 'Available' ? 'Published (Available)' : status}`,
+    message: `Product "${product.name}" is now ${normalizedStatus === 'Available' ? 'Published (Available)' : normalizedStatus}`,
     product
   });
-});
+};
+
+app.patch('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductStatus);
+app.post('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductStatus);
+app.put('/api/admin/products/:id/status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductStatus);
 
 // Instant 1-Click Publish / Unpublish Toggle
-app.patch('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
+const handleToggleProductPublish = async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const product = db.products.find(p => p.id === req.params.id);
+  const product = await findOrLoadProduct(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
 
   const oldStatus = product.status;
   const newStatus: ProductStatus = oldStatus === 'Available' ? 'Hidden' : 'Available';
   product.status = newStatus;
-  if (!product.history) product.history = [];
+  product.updatedAt = new Date().toISOString();
+  if (!Array.isArray(product.history)) product.history = [];
   product.history.unshift({
-    timestamp: new Date().toISOString(),
+    timestamp: product.updatedAt,
     action: newStatus === 'Available' ? 'Published to live storefront' : 'Unpublished (Hidden from storefront)',
     user: admin.name
   });
@@ -5646,14 +5725,18 @@ app.patch('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRol
   logAudit(admin, newStatus === 'Available' ? 'PRODUCT_PUBLISHED' : 'PRODUCT_UNPUBLISHED', `${newStatus === 'Available' ? 'Published' : 'Unpublished'} product "${product.name}" (${product.sku || product.id})`, 'product', product.id);
   saveDbToDisk('product_publish_toggled', { product });
   await saveToFirestoreAsync('products', product.id, product);
-  broadcastDatabaseEvent('product_updated', { product });
+  broadcastDatabaseEvent('product_updated', { product, stats: calculateCurrentStats() });
 
   res.json({
     success: true,
     message: newStatus === 'Available' ? `Product "${product.name}" is now Published to storefront!` : `Product "${product.name}" is now Unpublished (hidden from buyers).`,
     product
   });
-});
+};
+
+app.patch('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleToggleProductPublish);
+app.post('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleToggleProductPublish);
+app.put('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleToggleProductPublish);
 
 // Update or Append Multiple Picture Links on a Product
 app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
@@ -5911,7 +5994,7 @@ app.post('/api/admin/products/bulk-delete', requireAdminAuth, requireRole(PRODUC
 });
 
 // Bulk status update for products
-app.post('/api/admin/products/bulk-status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+app.post('/api/admin/products/bulk-status', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { productIds, status } = req.body;
 
@@ -5919,36 +6002,51 @@ app.post('/api/admin/products/bulk-status', requireAdminAuth, requireRole(PRODUC
     return res.status(400).json({ error: 'Please provide an array of product IDs.' });
   }
 
-  const allowedStatuses = ['Available', 'Out of Stock', 'Hidden', 'Draft'];
-  if (!status || !allowedStatuses.includes(status)) {
-    return res.status(400).json({ error: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` });
+  const normalizedStatus = normalizeProductStatus(status);
+  if (!normalizedStatus) {
+    return res.status(400).json({ error: 'Invalid status. Must be one of: Available, Out of Stock, Hidden, Archived' });
   }
 
-  const idsToUpdate = new Set(productIds.map(id => String(id)));
-  let updatedCount = 0;
+  const idsToUpdate = Array.from(new Set(productIds.map(id => String(id).trim()).filter(Boolean)));
+  const updatedProducts: Product[] = [];
 
-  db.products.forEach(p => {
-    if (idsToUpdate.has(p.id)) {
-      p.status = status;
-      p.updatedAt = new Date().toISOString();
-      updatedCount++;
-      saveToFirestoreAsync('products', p.id, p);
+  for (const pid of idsToUpdate) {
+    const product = await findOrLoadProduct(pid);
+    if (product) {
+      product.status = normalizedStatus;
+      product.updatedAt = new Date().toISOString();
+      if (!Array.isArray(product.history)) product.history = [];
+      product.history.unshift({
+        timestamp: product.updatedAt,
+        action: `Bulk status changed to ${normalizedStatus}`,
+        user: admin.name
+      });
+      updatedProducts.push(product);
     }
-  });
+  }
 
-  saveDbToDisk();
+  await Promise.all(updatedProducts.map(p => saveToFirestoreAsync('products', p.id, p)));
+  saveDbToDisk('products_bulk_status_updated', { productIds: updatedProducts.map(p => p.id), status: normalizedStatus });
   logAudit(
     admin,
     'BULK_PRODUCTS_STATUS_UPDATED',
-    `Updated status to "${status}" for ${updatedCount} product(s)`,
+    `Updated status to "${normalizedStatus}" for ${updatedProducts.length} product(s)`,
     'product',
-    Array.from(idsToUpdate).join(',')
+    updatedProducts.map(p => p.id).join(',')
   );
+
+  broadcastDatabaseEvent('products_bulk_updated', {
+    products: updatedProducts,
+    productIds: updatedProducts.map(p => p.id),
+    status: normalizedStatus,
+    stats: calculateCurrentStats()
+  });
 
   res.json({
     success: true,
-    message: `Successfully updated ${updatedCount} product(s) to ${status}.`,
-    count: updatedCount
+    message: `Successfully updated ${updatedProducts.length} product(s) to ${normalizedStatus}.`,
+    count: updatedProducts.length,
+    products: updatedProducts
   });
 });
 
