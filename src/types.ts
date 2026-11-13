@@ -662,6 +662,32 @@ export interface AdminMessage {
   notificationType?: 'chat' | 'order_update' | 'payment_update' | 'general';
 }
 
+export type AdminNotificationCategory =
+  | 'order'
+  | 'payment'
+  | 'message'
+  | 'problem'
+  | 'supplier'
+  | 'system';
+
+export interface AdminNotification {
+  id: string;
+  category: AdminNotificationCategory;
+  title: string;
+  message: string;
+  senderName?: string;
+  senderPhone?: string;
+  senderEmail?: string;
+  orderNumber?: string;
+  customerId?: string;
+  actionTab?: string;
+  entityId?: string;
+  isRead: boolean;
+  readAt?: string;
+  createdAt: string;
+  metadata?: Record<string, any>;
+}
+
 export interface CustomerConversation {
   customerId: string;
   customerName: string;

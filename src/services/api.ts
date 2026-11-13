@@ -1,6 +1,6 @@
 import {
   Product, Order, PaymentConfirmation, AppSettings, Category, OrderStatus, OrderDeliveryStatus,
-  VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage, CustomerConversation,
+  VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage, AdminNotification, CustomerConversation,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority,
   CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig,
@@ -32,6 +32,9 @@ import {
   getMessagesFromSupabase,
   saveMessageToSupabase,
   deleteMessageFromSupabase,
+  getAdminNotificationsFromSupabase,
+  saveAdminNotificationToSupabase,
+  deleteAdminNotificationFromSupabase,
   getCustomerProblemsFromSupabase,
   saveCustomerProblemToSupabase,
   deleteCustomerProblemFromSupabase,
@@ -1073,12 +1076,15 @@ export const api = {
           message: payload.message,
           orderNumber: payload.orderNumber,
           createdAt: new Date().toISOString(),
-          status: 'unread'
+          status: 'unread',
+          sender: 'customer',
+          senderName: payload.name,
+          isReadByAdmin: false,
+          isReadByCustomer: true,
+          notificationType: 'chat'
         };
-        // Non-blocking fire-and-forget sync to Firestore so message is sent in milliseconds
-        submitMessageToFirestore(newMsg).catch(fsErr => {
-          // persistent local sync
-        });
+        // Non-blocking fire-and-forget sync to Supabase so message is stored in milliseconds
+        submitMessageToFirestore(newMsg).catch(() => {});
         return parsed.json;
       }
       if (parsed.isJson && parsed.json?.error) {
@@ -1100,7 +1106,12 @@ export const api = {
       message: payload.message,
       orderNumber: payload.orderNumber,
       createdAt: new Date().toISOString(),
-      status: 'unread'
+      status: 'unread',
+      sender: 'customer',
+      senderName: payload.name,
+      isReadByAdmin: false,
+      isReadByCustomer: true,
+      notificationType: 'chat'
     };
     try {
       await submitMessageToFirestore(newMsg);
@@ -2541,6 +2552,12 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+
+    try {
+      const sbMsgs = await getMessagesFromSupabase();
+      if (sbMsgs && sbMsgs.length > 0) return sbMsgs;
+    } catch {}
+
     return [];
   },
 
@@ -2594,6 +2611,79 @@ export const api = {
       if (res.ok && parsed.isJson && parsed.json) return parsed.json;
     } catch {}
     return { message: `Deleted ${messageIds.length} messages`, count: messageIds.length };
+  },
+
+  // Admin Persistent Notifications (Stored in Supabase)
+  async adminGetNotifications(): Promise<AdminNotification[]> {
+    try {
+      const res = await fetch('/api/admin/notifications', { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<AdminNotification[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+
+    try {
+      const sbNotifs = await getAdminNotificationsFromSupabase();
+      if (sbNotifs && sbNotifs.length > 0) return sbNotifs;
+    } catch {}
+
+    return [];
+  },
+
+  async adminMarkNotificationRead(id: string): Promise<AdminNotification | null> {
+    try {
+      const res = await fetch(`/api/admin/notifications/${encodeURIComponent(id)}/read`, {
+        method: 'PATCH',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<AdminNotification>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        saveAdminNotificationToSupabase(parsed.json).catch(() => {});
+        return parsed.json;
+      }
+    } catch {}
+    return null;
+  },
+
+  async adminMarkAllNotificationsRead(): Promise<{ success: boolean; updatedCount: number }> {
+    try {
+      const res = await fetch('/api/admin/notifications/mark-all-read', {
+        method: 'PUT',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<{ success: boolean; updatedCount: number }>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { success: false, updatedCount: 0 };
+  },
+
+  async adminDeleteNotification(id: string): Promise<void> {
+    try {
+      await fetch(`/api/admin/notifications/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {}
+    try {
+      await deleteAdminNotificationFromSupabase(id);
+    } catch {}
+  },
+
+  async adminClearReadNotifications(): Promise<{ success: boolean; deletedCount: number }> {
+    try {
+      const res = await fetch('/api/admin/notifications/clear-read', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const parsed = await safeParseResponse<{ success: boolean; deletedCount: number }>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    return { success: false, deletedCount: 0 };
   },
 
   // Problems & Complaints
@@ -4483,6 +4573,8 @@ export const api = {
     const shps = await this.getShops();
     const ords = await this.adminGetOrders();
     const custs = await this.adminGetCustomers().catch(() => []);
+    const msgs = await this.adminGetMessages().catch(() => []);
+    const notifs = await this.adminGetNotifications().catch(() => []);
     const sett = await this.getSettings();
     const res = await syncAllDataToSupabase({
       products: prods,
@@ -4490,6 +4582,8 @@ export const api = {
       shops: shps,
       orders: ords,
       customers: custs,
+      messages: msgs,
+      adminNotifications: notifs,
       settings: sett
     });
     return { success: res.success, message: res.message };

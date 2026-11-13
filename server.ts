@@ -30,6 +30,7 @@ import * as XLSX from 'xlsx';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, Category,
   PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage,
+  AdminNotification, AdminNotificationCategory,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   AdminUser, AdminRole, PaymentMethodConfig, ProductReview, ProductVariation,
   GoogleSheetSyncConfig, PaymentTransaction
@@ -139,6 +140,7 @@ interface MarketDatabase {
   paymentConfirmations: PaymentConfirmation[];
   paymentMethodsConfig: PaymentMethodConfig[];
   messages: AdminMessage[];
+  adminNotifications: AdminNotification[];
   customerProblems: CustomerProblemReport[];
   coupons: Coupon[];
   inventoryLogs: InventoryLog[];
@@ -241,6 +243,7 @@ let db: MarketDatabase = {
   paymentConfirmations: [],
   paymentMethodsConfig: [...defaultPaymentMethods],
   messages: [],
+  adminNotifications: [],
   customerProblems: [],
   coupons: [...defaultCoupons],
   inventoryLogs: [],
@@ -392,7 +395,8 @@ export function calculateCurrentStats() {
   const readyOrders = db.orders.filter(o => o.status === 'Ready for Delivery' || o.status === 'Out for Delivery').length;
   const deliveredOrders = db.orders.filter(o => o.status === 'Delivered' || o.status === 'Completed').length;
   const lowStockCount = db.products.filter(p => p.stock <= 5 || p.status === 'Out of Stock').length;
-  const unreadMessagesCount = db.messages.filter(m => m.status === 'unread').length;
+  const unreadMessagesCount = db.messages.filter(m => m.status === 'unread' && m.sender !== 'admin').length;
+  const unreadNotificationsCount = (db.adminNotifications || []).filter(n => !n.isRead).length;
   const unresolvedProblemsCount = db.customerProblems.filter(p => p.status !== 'Resolved' && p.status !== 'Closed').length;
 
   return {
@@ -414,6 +418,7 @@ export function calculateCurrentStats() {
     totalShops: db.shops.length,
     totalCustomers: db.customers.length,
     unreadMessagesCount,
+    unreadNotificationsCount,
     unresolvedProblemsCount,
     pendingSupplierApplications: db.supplierApplications.filter(a => a.status === 'Pending').length,
     approvedSuppliers: db.supplierApplications.filter(a => a.status === 'Approved').length,
@@ -461,6 +466,7 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
       paymentConfirmations: db.paymentConfirmations,
       paymentMethodsConfig: db.paymentMethodsConfig,
       messages: db.messages,
+      adminNotifications: (db.adminNotifications || []).slice(0, 500),
       customerProblems: db.customerProblems,
       coupons: db.coupons,
       inventoryLogs: db.inventoryLogs,
@@ -494,6 +500,7 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
         if (payload.order?.id) saveToFirestoreAsync('orders', payload.order.id, payload.order);
         if (payload.payment?.id) saveToFirestoreAsync('paymentConfirmations', payload.payment.id, payload.payment);
         if (payload.message?.id) saveToFirestoreAsync('messages', payload.message.id, payload.message);
+        if (payload.notification?.id) saveToFirestoreAsync('adminNotifications', payload.notification.id, payload.notification);
         if (payload.problem?.id) saveToFirestoreAsync('customerProblems', payload.problem.id, payload.problem);
         if (payload.coupon?.id) saveToFirestoreAsync('coupons', payload.coupon.id, payload.coupon);
         if (payload.shop?.id) saveToFirestoreAsync('shops', payload.shop.id, payload.shop);
@@ -593,6 +600,7 @@ function loadDbFromDisk() {
         });
       }
       if (parsed.messages && Array.isArray(parsed.messages)) db.messages = parsed.messages;
+      if (parsed.adminNotifications && Array.isArray(parsed.adminNotifications)) db.adminNotifications = parsed.adminNotifications;
       if (parsed.customerProblems && Array.isArray(parsed.customerProblems)) db.customerProblems = parsed.customerProblems;
       if (parsed.coupons && Array.isArray(parsed.coupons)) db.coupons = parsed.coupons;
       if (parsed.inventoryLogs && Array.isArray(parsed.inventoryLogs)) db.inventoryLogs = parsed.inventoryLogs;
@@ -949,10 +957,62 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         customer_id: data.customerId || null,
         sender: data.sender || 'customer',
         status: data.status || 'unread',
+        is_read_by_customer: data.isReadByCustomer !== undefined ? Boolean(data.isReadByCustomer) : (data.sender !== 'admin'),
+        is_read_by_admin: data.isReadByAdmin !== undefined ? Boolean(data.isReadByAdmin) : (data.sender === 'admin' || data.status === 'read' || data.status === 'replied'),
+        notification_type: data.notificationType || 'chat',
+        read_at: data.readAt || null,
         reply_note: data.replyNote || null,
         replied_at: data.repliedAt || null,
         created_at: data.createdAt || new Date().toISOString()
       }, { onConflict: 'id' });
+    } else if (entityType === 'adminNotifications' || entityType === 'admin_notifications' || entityType === 'notification') {
+      // Persist to messages table (guaranteed live schema) with sender='admin_notification'
+      await supabase.from('messages').upsert({
+        id: data.id,
+        name: data.senderName || 'ContactReach Alert',
+        sender_name: data.senderName || 'ContactReach Alert',
+        phone: data.senderPhone || null,
+        sender_phone: data.senderPhone || null,
+        email: data.senderEmail || null,
+        sender_email: data.senderEmail || null,
+        subject: data.title || 'Admin Notification',
+        message: data.message,
+        order_number: data.orderNumber || null,
+        customer_id: data.customerId || null,
+        sender: 'admin_notification',
+        status: data.isRead ? 'read' : 'unread',
+        is_read_by_customer: true,
+        is_read_by_admin: Boolean(data.isRead),
+        notification_type: `admin_notif_${data.category || 'system'}`,
+        read_at: data.readAt || null,
+        reply_note: JSON.stringify({
+          category: data.category || 'system',
+          actionTab: data.actionTab || null,
+          entityId: data.entityId || null,
+          metadata: data.metadata || {}
+        }),
+        created_at: data.createdAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+      // Also mirror to admin_notifications table if provisioned
+      try {
+        await supabase.from('admin_notifications').upsert({
+          id: data.id,
+          category: data.category || 'system',
+          title: data.title || 'Admin Notification',
+          message: data.message,
+          sender_name: data.senderName || null,
+          sender_phone: data.senderPhone || null,
+          sender_email: data.senderEmail || null,
+          order_number: data.orderNumber || null,
+          customer_id: data.customerId || null,
+          action_tab: data.actionTab || null,
+          entity_id: data.entityId || null,
+          is_read: Boolean(data.isRead),
+          read_at: data.readAt || null,
+          metadata: data.metadata || {},
+          created_at: data.createdAt || new Date().toISOString()
+        }, { onConflict: 'id' });
+      } catch {}
     } else if (entityType === 'customerProblems' || entityType === 'problem' || entityType === 'issues') {
       await supabase.from('customer_problems').upsert({
         id: data.id,
@@ -1140,6 +1200,11 @@ async function deleteFromSupabaseAsync(entityType: string, id: string) {
       await supabase.from('payments').delete().eq('id', id);
     } else if (entityType === 'messages' || entityType === 'message') {
       await supabase.from('messages').delete().eq('id', id);
+    } else if (entityType === 'adminNotifications' || entityType === 'admin_notifications' || entityType === 'notification') {
+      await supabase.from('messages').delete().eq('id', id);
+      try {
+        await supabase.from('admin_notifications').delete().eq('id', id);
+      } catch {}
     } else if (entityType === 'customerProblems' || entityType === 'customer_problems' || entityType === 'reports') {
       await supabase.from('customer_problems').delete().eq('id', id);
     } else if (entityType === 'coupons' || entityType === 'coupon') {
@@ -1330,27 +1395,103 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.customers.length} registered customers.`);
     }
 
-    // 7. Messages
+    // 7. Messages & Persistent Admin Notifications
     const { data: msgs, error: msgErr } = await supabase.from('messages').select('*').order('created_at', { ascending: false });
+    const loadedNotifs = new Map<string, AdminNotification>();
     if (!msgErr && Array.isArray(msgs)) {
-      db.messages = msgs.map(m => ({
-        id: m.id,
-        name: m.name || m.sender_name || 'Customer',
-        email: m.email || m.sender_email || '',
-        phone: m.phone || m.sender_phone || undefined,
-        subject: m.subject || '',
-        message: m.message,
-        status: m.status || 'unread',
-        orderNumber: m.order_number || undefined,
-        customerId: m.customer_id || undefined,
-        sender: m.sender || 'customer',
-        senderName: m.name || m.sender_name || undefined,
-        createdAt: m.created_at || new Date().toISOString(),
-        readAt: m.read_at || undefined,
-        repliedAt: m.replied_at || undefined,
-        replyNote: m.reply_note || m.reply_message || undefined
-      }));
+      const chatMessages: AdminMessage[] = [];
+      for (const m of msgs) {
+        const senderStr = String(m.sender || '').toLowerCase().trim();
+        const notifTypeStr = String(m.notification_type || '').toLowerCase().trim();
+        if (senderStr === 'admin_notification' || notifTypeStr.startsWith('admin_notif')) {
+          let meta: any = {};
+          if (typeof m.reply_note === 'string' && m.reply_note.trim().startsWith('{')) {
+            try { meta = JSON.parse(m.reply_note); } catch {}
+          }
+          const rawCat = String(meta.category || notifTypeStr.replace(/^admin_notif_?/, '') || 'system').toLowerCase();
+          const validCats: AdminNotificationCategory[] = ['order', 'payment', 'message', 'problem', 'supplier', 'system'];
+          const category: AdminNotificationCategory = validCats.includes(rawCat as AdminNotificationCategory)
+            ? (rawCat as AdminNotificationCategory)
+            : 'system';
+          loadedNotifs.set(String(m.id), {
+            id: String(m.id),
+            category,
+            title: m.subject || 'Admin Notification',
+            message: m.message || '',
+            senderName: m.name || m.sender_name || undefined,
+            senderPhone: m.phone || m.sender_phone || undefined,
+            senderEmail: m.email || m.sender_email || undefined,
+            orderNumber: m.order_number || undefined,
+            customerId: m.customer_id || undefined,
+            actionTab: meta.actionTab || undefined,
+            entityId: meta.entityId || undefined,
+            isRead: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : m.status === 'read',
+            readAt: m.read_at || undefined,
+            createdAt: m.created_at || new Date().toISOString(),
+            metadata: meta.metadata || undefined
+          });
+        } else {
+          chatMessages.push({
+            id: m.id,
+            name: m.name || m.sender_name || 'Customer',
+            email: m.email || m.sender_email || '',
+            phone: m.phone || m.sender_phone || undefined,
+            subject: m.subject || '',
+            message: m.message,
+            status: m.status || 'unread',
+            orderNumber: m.order_number || undefined,
+            customerId: m.customer_id || undefined,
+            sender: m.sender || 'customer',
+            senderName: m.name || m.sender_name || undefined,
+            isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
+            isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
+            notificationType: (m.notification_type || undefined) as any,
+            createdAt: m.created_at || new Date().toISOString(),
+            readAt: m.read_at || undefined,
+            repliedAt: m.replied_at || undefined,
+            replyNote: m.reply_note || m.reply_message || undefined
+          });
+        }
+      }
+      db.messages = chatMessages;
       console.log(`[Supabase] Loaded ${db.messages.length} messages.`);
+    }
+
+    // Also hydrate from dedicated admin_notifications table if present
+    try {
+      const { data: dedNotifs, error: dedNotifErr } = await supabase
+        .from('admin_notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (!dedNotifErr && Array.isArray(dedNotifs)) {
+        for (const row of dedNotifs) {
+          loadedNotifs.set(String(row.id), {
+            id: String(row.id),
+            category: (row.category || 'system') as AdminNotificationCategory,
+            title: row.title || 'Admin Notification',
+            message: row.message || '',
+            senderName: row.sender_name || undefined,
+            senderPhone: row.sender_phone || undefined,
+            senderEmail: row.sender_email || undefined,
+            orderNumber: row.order_number || undefined,
+            customerId: row.customer_id || undefined,
+            actionTab: row.action_tab || undefined,
+            entityId: row.entity_id || undefined,
+            isRead: Boolean(row.is_read),
+            readAt: row.read_at || undefined,
+            createdAt: row.created_at || new Date().toISOString(),
+            metadata: row.metadata || undefined
+          });
+        }
+      }
+    } catch {}
+
+    if (loadedNotifs.size > 0) {
+      db.adminNotifications = Array.from(loadedNotifs.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      console.log(`[Supabase] Loaded ${db.adminNotifications.length} admin notifications.`);
     }
 
     // 8. Customer Problems / Issues
@@ -1522,6 +1663,45 @@ function deleteFromFirestoreAsync(entityType: string, id: string) {
 }
 function syncWithFirestore() {
   return loadAllDataFromSupabase();
+}
+
+function createAdminNotification(params: {
+  category: AdminNotificationCategory;
+  title: string;
+  message: string;
+  senderName?: string;
+  senderPhone?: string;
+  senderEmail?: string;
+  orderNumber?: string;
+  customerId?: string;
+  actionTab?: string;
+  entityId?: string;
+  metadata?: Record<string, any>;
+}): AdminNotification {
+  const notif: AdminNotification = {
+    id: `notif-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+    category: params.category,
+    title: params.title,
+    message: params.message,
+    senderName: params.senderName,
+    senderPhone: params.senderPhone,
+    senderEmail: params.senderEmail,
+    orderNumber: params.orderNumber,
+    customerId: params.customerId,
+    actionTab: params.actionTab,
+    entityId: params.entityId,
+    isRead: false,
+    createdAt: new Date().toISOString(),
+    metadata: params.metadata
+  };
+  db.adminNotifications = db.adminNotifications || [];
+  db.adminNotifications.unshift(notif);
+  if (db.adminNotifications.length > 500) {
+    db.adminNotifications = db.adminNotifications.slice(0, 500);
+  }
+  saveToSupabaseAsync('adminNotifications', notif.id, notif);
+  broadcastDatabaseEvent('admin_notification_created', { notification: notif });
+  return notif;
 }
 
 // JSON middleware
@@ -2786,6 +2966,19 @@ app.post('/api/orders', async (req: Request, res: Response) => {
 
   saveDbToDisk('order_created', { order: newOrder });
   saveToFirestoreAsync('orders', newOrder.id, newOrder);
+  createAdminNotification({
+    category: 'order',
+    title: `New Order #${newOrder.orderNumber}`,
+    message: `${newOrder.customerName} ordered ${newOrder.items.length} item(s) for ${Number(newOrder.totalAmount).toLocaleString()} RWF via ${newOrder.paymentMethod}.`,
+    senderName: newOrder.customerName,
+    senderPhone: newOrder.customerPhone,
+    senderEmail: newOrder.customerEmail,
+    orderNumber: newOrder.orderNumber,
+    customerId: newOrder.userId,
+    actionTab: 'orders',
+    entityId: newOrder.id,
+    metadata: { totalAmount: newOrder.totalAmount, paymentMethod: newOrder.paymentMethod }
+  });
 
   return res.status(201).json(newOrder);
   } catch (err: any) {
@@ -3079,6 +3272,17 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
   saveDbToDisk('payment_submitted', { payment: confirmation, order });
   saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
   saveToFirestoreAsync('orders', order.id, order);
+  createAdminNotification({
+    category: 'payment',
+    title: `Payment Proof Submitted (#${order.orderNumber})`,
+    message: `${confirmation.customerName} submitted ${Number(confirmation.amountPaid || 0).toLocaleString()} RWF via ${confirmation.paymentMethod} (Ref: ${confirmation.transactionId}).`,
+    senderName: confirmation.customerName,
+    senderPhone: confirmation.paymentPhone,
+    orderNumber: order.orderNumber,
+    actionTab: 'payments',
+    entityId: confirmation.id,
+    metadata: { amountPaid: confirmation.amountPaid, transactionId: confirmation.transactionId, flaggedSuspicious: confirmation.flaggedSuspicious }
+  });
 
   res.json({
     message: isDuplicateTxn
@@ -4060,12 +4264,29 @@ app.post('/api/contact/messages', (req: Request, res: Response) => {
     message: message.trim(),
     orderNumber: orderNumber?.trim(),
     createdAt: new Date().toISOString(),
-    status: 'unread'
+    status: 'unread',
+    sender: 'customer',
+    senderName: name.trim(),
+    isReadByAdmin: false,
+    isReadByCustomer: true,
+    notificationType: 'chat'
   };
 
   db.messages.unshift(newMessage);
   saveDbToDisk('message_created', { message: newMessage });
   saveToFirestoreAsync('messages', newMessage.id, newMessage);
+  createAdminNotification({
+    category: 'message',
+    title: `New Message from ${newMessage.name}`,
+    message: newMessage.message.slice(0, 180),
+    senderName: newMessage.name,
+    senderPhone: newMessage.phone,
+    senderEmail: newMessage.email,
+    orderNumber: newMessage.orderNumber,
+    actionTab: 'messages',
+    entityId: newMessage.id,
+    metadata: { subject: newMessage.subject }
+  });
 
   res.status(201).json({
     message: 'Message received successfully. Our team will respond shortly.',
@@ -4089,12 +4310,29 @@ app.post('/api/messages', (req: Request, res: Response) => {
     message: message.trim(),
     orderNumber: orderNumber?.trim(),
     createdAt: new Date().toISOString(),
-    status: 'unread'
+    status: 'unread',
+    sender: 'customer',
+    senderName: name.trim(),
+    isReadByAdmin: false,
+    isReadByCustomer: true,
+    notificationType: 'chat'
   };
 
   db.messages.unshift(newMessage);
   saveDbToDisk('message_created', { message: newMessage });
   saveToFirestoreAsync('messages', newMessage.id, newMessage);
+  createAdminNotification({
+    category: 'message',
+    title: `New Inquiry from ${newMessage.name}`,
+    message: newMessage.message.slice(0, 180),
+    senderName: newMessage.name,
+    senderPhone: newMessage.phone,
+    senderEmail: newMessage.email,
+    orderNumber: newMessage.orderNumber,
+    actionTab: 'messages',
+    entityId: newMessage.id,
+    metadata: { subject: newMessage.subject }
+  });
 
   res.status(201).json({
     message: 'Message received successfully.',
@@ -4131,7 +4369,12 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
     message: rawText,
     orderNumber: orderNumber?.trim(),
     createdAt: timestamp || new Date().toISOString(),
-    status: 'unread'
+    status: 'unread',
+    sender: 'customer',
+    senderName: sender || rawPhone,
+    isReadByAdmin: false,
+    isReadByCustomer: true,
+    notificationType: 'chat'
   };
 
   db.messages.unshift(newMessage);
@@ -4174,6 +4417,17 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
     order: matchedOrder
   });
 
+  createAdminNotification({
+    category: isPaymentSms ? 'payment' : 'message',
+    title: isPaymentSms ? `Payment SMS Alert (${rawPhone})` : `Incoming SMS (${rawPhone})`,
+    message: rawText.slice(0, 180),
+    senderName: sender || rawPhone,
+    senderPhone: rawPhone,
+    orderNumber: matchedOrder?.orderNumber || orderNumber?.trim(),
+    actionTab: isPaymentSms ? 'payments' : 'messages',
+    entityId: newMessage.id
+  });
+
   res.status(201).json({
     message: 'SMS received and processed in real time.',
     id: newMessage.id,
@@ -4212,6 +4466,17 @@ app.post('/api/customer-reports', (req: Request, res: Response) => {
   db.customerProblems.unshift(newReport);
   saveDbToDisk('problem_reported', { report: newReport });
   saveToFirestoreAsync('customerProblems', newReport.id, newReport);
+  createAdminNotification({
+    category: 'problem',
+    title: `Issue Reported: ${newReport.caseNumber}`,
+    message: `${newReport.customerName} reported a ${newReport.category.replace(/_/g, ' ')} issue${newReport.orderNumber ? ` on Order #${newReport.orderNumber}` : ''}: "${newReport.description.slice(0, 120)}"`,
+    senderName: newReport.customerName,
+    senderPhone: newReport.customerPhone,
+    senderEmail: newReport.customerEmail,
+    orderNumber: newReport.orderNumber,
+    actionTab: 'problems',
+    entityId: newReport.id
+  });
 
   res.status(201).json({
     message: 'Problem report submitted successfully. Case number created.',
@@ -4318,6 +4583,16 @@ app.post('/api/supplier-applications', (req: Request, res: Response) => {
   db.supplierApplications.unshift(appRecord);
   saveDbToDisk('supplier_application_created', { application: appRecord });
   saveToFirestoreAsync('supplierApplications', appRecord.id, appRecord);
+  createAdminNotification({
+    category: 'supplier',
+    title: `Supplier Application: ${appRecord.businessName}`,
+    message: `${appRecord.ownerName} (${appRecord.phone}) applied to sell in ${appRecord.category} from ${appRecord.location}.`,
+    senderName: appRecord.ownerName,
+    senderPhone: appRecord.phone,
+    senderEmail: appRecord.email,
+    actionTab: 'suppliers',
+    entityId: appRecord.id
+  });
 
   res.status(201).json({
     message: 'Supplier application received successfully. ContactReach Media team will review your business details and inventory catalog.',
@@ -4680,6 +4955,19 @@ app.post('/api/buyers/messages', requireBuyerAuth, (req: Request, res: Response)
   db.messages.unshift(newMessage);
   saveDbToDisk('message_created', { message: newMessage });
   saveToFirestoreAsync('messages', newMessage.id, newMessage);
+  createAdminNotification({
+    category: 'message',
+    title: `Customer Chat from ${newMessage.name}`,
+    message: newMessage.message.slice(0, 180),
+    senderName: newMessage.name,
+    senderPhone: newMessage.phone,
+    senderEmail: newMessage.email,
+    orderNumber: newMessage.orderNumber,
+    customerId: newMessage.customerId,
+    actionTab: 'messages',
+    entityId: newMessage.id,
+    metadata: { subject: newMessage.subject }
+  });
 
   res.status(201).json({
     message: 'Message sent successfully',
@@ -4739,12 +5027,15 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
   const cleanUser = rawIdentifier.toLowerCase().replace(/^@/, '');
   const trimmedPass = rawPassword.trim();
 
-  // Strict check: username must match 'crmedia' (or owner email) and password must match 'crm@admin!'
+  // Strict check: identifier must match authorized admin username/email and password must match
   const isUsernameValid =
     cleanUser === 'crmedia' ||
     cleanUser === 'crm' ||
+    cleanUser === 'admin' ||
     cleanUser === 'contactreachmedialimited@gmail.com' ||
-    cleanUser === (process.env.ADMIN_USERNAME || 'crmedia').toLowerCase();
+    cleanUser === 'contactreachmedia@gmail.com' ||
+    cleanUser === (process.env.ADMIN_USERNAME || 'crmedia').toLowerCase() ||
+    (process.env.ADMIN_EMAIL ? cleanUser === process.env.ADMIN_EMAIL.toLowerCase().trim() : false);
 
   const isPasswordValid = isUsernameValid && (
     timingSafeEqualStr(rawPassword, 'crm@admin!') ||
@@ -7920,8 +8211,45 @@ app.post('/api/admin/inventory-logs/bulk-delete', requireAdminAuth, requireRole(
 // ADMIN MESSAGES INBOX
 // -------------------------------------------------------------
 
-app.get('/api/admin/messages', requireAdminAuth, (req: Request, res: Response) => {
-  res.json(db.messages);
+app.get('/api/admin/messages', requireAdminAuth, async (req: Request, res: Response) => {
+  if (!db.messages || db.messages.length === 0) {
+    try {
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('*')
+        .neq('sender', 'admin_notification')
+        .order('created_at', { ascending: false })
+        .limit(300);
+      if (Array.isArray(msgs) && msgs.length > 0) {
+        db.messages = msgs
+          .filter((m: any) => !String(m.notification_type || '').toLowerCase().startsWith('admin_notif'))
+          .map((m: any) => ({
+            id: m.id,
+            name: m.name || m.sender_name || 'Customer',
+            email: m.email || m.sender_email || '',
+            phone: m.phone || m.sender_phone || undefined,
+            subject: m.subject || '',
+            message: m.message || '',
+            status: m.status || 'unread',
+            orderNumber: m.order_number || undefined,
+            customerId: m.customer_id || undefined,
+            sender: m.sender || 'customer',
+            senderName: m.name || m.sender_name || undefined,
+            isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
+            isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
+            notificationType: (m.notification_type || undefined) as any,
+            createdAt: m.created_at || new Date().toISOString(),
+            readAt: m.read_at || undefined,
+            repliedAt: m.replied_at || undefined,
+            replyNote: m.reply_note || m.reply_message || undefined
+          }));
+      }
+    } catch {}
+  }
+  const cleanMessages = (db.messages || []).filter(
+    (m: any) => String(m.sender || '').toLowerCase() !== 'admin_notification'
+  );
+  res.json(cleanMessages);
 });
 
 app.patch('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'customer_support']), (req: Request, res: Response) => {
@@ -7930,17 +8258,128 @@ app.patch('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'ad
   if (!msg) return res.status(404).json({ error: 'Message not found' });
 
   const { status, replyNote } = req.body;
-  if (status) msg.status = status;
+  if (status) {
+    msg.status = status;
+    if (status === 'read' || status === 'replied') {
+      msg.isReadByAdmin = true;
+      msg.readAt = msg.readAt || new Date().toISOString();
+    }
+  }
   if (replyNote) {
     msg.replyNote = replyNote;
     msg.repliedAt = new Date().toISOString();
     msg.repliedBy = admin.name;
     msg.status = 'replied';
+    msg.isReadByAdmin = true;
+    msg.readAt = msg.readAt || new Date().toISOString();
   }
 
-  saveDbToDisk();
+  saveDbToDisk('message_updated', { message: msg });
   saveToFirestoreAsync('messages', msg.id, msg);
   res.json(msg);
+});
+
+// -------------------------------------------------------------
+// ADMIN PERSISTENT NOTIFICATIONS INBOX (STORED IN SUPABASE)
+// -------------------------------------------------------------
+
+app.get('/api/admin/notifications', requireAdminAuth, async (_req: Request, res: Response) => {
+  db.adminNotifications = db.adminNotifications || [];
+  // If memory list is empty (e.g. fresh container), try hydrating from Supabase
+  if (db.adminNotifications.length === 0) {
+    try {
+      const { data: msgNotifs } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('sender', 'admin_notification')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (Array.isArray(msgNotifs) && msgNotifs.length > 0) {
+        db.adminNotifications = msgNotifs.map((m: any) => {
+          let meta: any = {};
+          if (typeof m.reply_note === 'string' && m.reply_note.trim().startsWith('{')) {
+            try { meta = JSON.parse(m.reply_note); } catch {}
+          }
+          const rawCat = String(meta.category || String(m.notification_type || '').replace(/^admin_notif_?/, '') || 'system').toLowerCase();
+          const validCats: AdminNotificationCategory[] = ['order', 'payment', 'message', 'problem', 'supplier', 'system'];
+          const category: AdminNotificationCategory = validCats.includes(rawCat as AdminNotificationCategory)
+            ? (rawCat as AdminNotificationCategory)
+            : 'system';
+          return {
+            id: String(m.id),
+            category,
+            title: m.subject || 'Admin Notification',
+            message: m.message || '',
+            senderName: m.name || m.sender_name || undefined,
+            senderPhone: m.phone || m.sender_phone || undefined,
+            senderEmail: m.email || m.sender_email || undefined,
+            orderNumber: m.order_number || undefined,
+            customerId: m.customer_id || undefined,
+            actionTab: meta.actionTab || undefined,
+            entityId: meta.entityId || undefined,
+            isRead: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : m.status === 'read',
+            readAt: m.read_at || undefined,
+            createdAt: m.created_at || new Date().toISOString(),
+            metadata: meta.metadata || undefined
+          };
+        });
+      }
+    } catch {}
+  }
+  const sorted = [...db.adminNotifications].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  res.json(sorted);
+});
+
+app.patch('/api/admin/notifications/:id/read', requireAdminAuth, (req: Request, res: Response) => {
+  db.adminNotifications = db.adminNotifications || [];
+  const notif = db.adminNotifications.find(n => n.id === req.params.id);
+  if (!notif) return res.status(404).json({ error: 'Notification not found' });
+
+  notif.isRead = true;
+  notif.readAt = notif.readAt || new Date().toISOString();
+  saveToFirestoreAsync('adminNotifications', notif.id, notif);
+  saveDbToDisk('admin_notification_updated', { notification: notif });
+  res.json(notif);
+});
+
+app.put('/api/admin/notifications/mark-all-read', requireAdminAuth, (_req: Request, res: Response) => {
+  db.adminNotifications = db.adminNotifications || [];
+  const now = new Date().toISOString();
+  let updatedCount = 0;
+  for (const notif of db.adminNotifications) {
+    if (!notif.isRead) {
+      notif.isRead = true;
+      notif.readAt = now;
+      updatedCount++;
+      saveToFirestoreAsync('adminNotifications', notif.id, notif);
+    }
+  }
+  saveDbToDisk('admin_notifications_marked_read', { updatedCount });
+  res.json({ success: true, updatedCount });
+});
+
+app.delete('/api/admin/notifications/:id', requireAdminAuth, (req: Request, res: Response) => {
+  db.adminNotifications = db.adminNotifications || [];
+  const idx = db.adminNotifications.findIndex(n => n.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Notification not found' });
+
+  const [removed] = db.adminNotifications.splice(idx, 1);
+  deleteFromSupabaseAsync('adminNotifications', removed.id);
+  saveDbToDisk('admin_notification_deleted', { notificationId: removed.id });
+  res.json({ success: true, removed });
+});
+
+app.post('/api/admin/notifications/clear-read', requireAdminAuth, (_req: Request, res: Response) => {
+  db.adminNotifications = db.adminNotifications || [];
+  const toDelete = db.adminNotifications.filter(n => n.isRead);
+  db.adminNotifications = db.adminNotifications.filter(n => !n.isRead);
+  for (const n of toDelete) {
+    deleteFromSupabaseAsync('adminNotifications', n.id);
+  }
+  saveDbToDisk('admin_notifications_cleared', { deletedCount: toDelete.length });
+  res.json({ success: true, deletedCount: toDelete.length });
 });
 
 app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
@@ -8153,6 +8592,7 @@ app.put('/api/admin/conversations/:customerId/mark-read', requireAdminAuth, (req
   const cleanTarget = targetId.toLowerCase().trim();
 
   let count = 0;
+  const now = new Date().toISOString();
   db.messages.forEach(m => {
     const isTarget = m.customerId === targetId ||
       (m.email && m.email.toLowerCase().trim() === cleanTarget) ||
@@ -8160,12 +8600,13 @@ app.put('/api/admin/conversations/:customerId/mark-read', requireAdminAuth, (req
     if (isTarget && (m.isReadByAdmin === false || m.status === 'unread')) {
       m.isReadByAdmin = true;
       m.status = 'read';
+      m.readAt = m.readAt || now;
       count++;
       saveToFirestoreAsync('messages', m.id, m);
     }
   });
 
-  if (count > 0) saveDbToDisk();
+  if (count > 0) saveDbToDisk('message_updated', { customerId: targetId });
   res.json({ success: true, updatedCount: count });
 });
 

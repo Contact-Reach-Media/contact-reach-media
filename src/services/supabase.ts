@@ -7,6 +7,8 @@ import type {
   PaymentConfirmation,
   Coupon,
   AdminMessage,
+  AdminNotification,
+  AdminNotificationCategory,
   CustomerProblemReport,
   ProductReview,
   AppSettings,
@@ -962,8 +964,15 @@ export async function syncAllAccountsToSupabase(accounts: any[] = []): Promise<{
 }
 
 // -------------------------------------------------------------
-// 7. CUSTOMER MESSAGES CRUD
+// 7. CUSTOMER MESSAGES & ADMIN NOTIFICATIONS CRUD
 // -------------------------------------------------------------
+export function isAdminNotificationSupabaseRow(m: any): boolean {
+  if (!m) return false;
+  const sender = String(m.sender || '').toLowerCase().trim();
+  const notifType = String(m.notification_type || '').toLowerCase().trim();
+  return sender === 'admin_notification' || notifType.startsWith('admin_notif');
+}
+
 export function mapSupabaseRowToMessage(m: any): AdminMessage {
   return {
     id: String(m.id),
@@ -977,6 +986,9 @@ export function mapSupabaseRowToMessage(m: any): AdminMessage {
     customerId: m.customer_id || undefined,
     sender: m.sender || 'customer',
     senderName: m.name || m.sender_name || undefined,
+    isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
+    isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
+    notificationType: (m.notification_type || undefined) as any,
     createdAt: m.created_at || new Date().toISOString(),
     readAt: m.read_at || undefined,
     repliedAt: m.replied_at || undefined,
@@ -984,19 +996,64 @@ export function mapSupabaseRowToMessage(m: any): AdminMessage {
   };
 }
 
+export function mapSupabaseRowToAdminNotification(row: any): AdminNotification {
+  let parsedMeta: Record<string, any> = {};
+  if (row.metadata && typeof row.metadata === 'object') {
+    parsedMeta = row.metadata;
+  } else if (typeof row.reply_note === 'string' && row.reply_note.trim().startsWith('{')) {
+    try {
+      parsedMeta = JSON.parse(row.reply_note);
+    } catch {}
+  }
+
+  const rawCategory = String(
+    row.category ||
+    parsedMeta.category ||
+    String(row.notification_type || '').replace(/^admin_notif_?/, '') ||
+    'system'
+  ).toLowerCase().trim();
+
+  const validCategories: AdminNotificationCategory[] = ['order', 'payment', 'message', 'problem', 'supplier', 'system'];
+  const category: AdminNotificationCategory = validCategories.includes(rawCategory as AdminNotificationCategory)
+    ? (rawCategory as AdminNotificationCategory)
+    : 'system';
+
+  return {
+    id: String(row.id),
+    category,
+    title: row.title || row.subject || 'Admin Notification',
+    message: row.message || '',
+    senderName: row.sender_name || row.name || undefined,
+    senderPhone: row.sender_phone || row.phone || undefined,
+    senderEmail: row.sender_email || row.email || undefined,
+    orderNumber: row.order_number || undefined,
+    customerId: row.customer_id || undefined,
+    actionTab: row.action_tab || parsedMeta.actionTab || undefined,
+    entityId: row.entity_id || parsedMeta.entityId || undefined,
+    isRead: row.is_read !== undefined
+      ? Boolean(row.is_read)
+      : (row.is_read_by_admin !== undefined ? Boolean(row.is_read_by_admin) : row.status === 'read'),
+    readAt: row.read_at || undefined,
+    createdAt: row.created_at || new Date().toISOString(),
+    metadata: parsedMeta.metadata || (Object.keys(parsedMeta).length > 0 ? parsedMeta : undefined)
+  };
+}
+
 export async function getMessagesFromSupabase(): Promise<AdminMessage[]> {
   try {
     const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: false });
     if (error || !data) return [];
-    return data.map(mapSupabaseRowToMessage);
+    return data
+      .filter((row: any) => !isAdminNotificationSupabaseRow(row))
+      .map(mapSupabaseRowToMessage);
   } catch {
     return [];
   }
 }
 
-export async function saveMessageToSupabase(m: AdminMessage): Promise<void> {
+export async function saveMessageToSupabase(m: AdminMessage): Promise<{ success: boolean; error?: string }> {
   try {
-    await supabase.from('messages').upsert({
+    const { error } = await supabase.from('messages').upsert({
       id: m.id,
       name: m.name || m.senderName || 'Customer',
       sender_name: m.name || m.senderName || 'Customer',
@@ -1010,12 +1067,22 @@ export async function saveMessageToSupabase(m: AdminMessage): Promise<void> {
       customer_id: m.customerId || null,
       sender: m.sender || 'customer',
       status: m.status || 'unread',
+      is_read_by_customer: m.isReadByCustomer !== undefined ? Boolean(m.isReadByCustomer) : (m.sender !== 'admin'),
+      is_read_by_admin: m.isReadByAdmin !== undefined ? Boolean(m.isReadByAdmin) : (m.sender === 'admin' || m.status === 'read' || m.status === 'replied'),
+      notification_type: m.notificationType || 'chat',
+      read_at: m.readAt || null,
       reply_note: m.replyNote || null,
       replied_at: m.repliedAt || null,
       created_at: m.createdAt || new Date().toISOString()
     }, { onConflict: 'id' });
-  } catch (err) {
+    if (error) {
+      console.warn('[Supabase] Save message error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
     console.warn('[Supabase] Save message error:', err);
+    return { success: false, error: err?.message };
   }
 }
 
@@ -1026,6 +1093,123 @@ export async function deleteMessageFromSupabase(messageId: string): Promise<bool
   } catch {
     return false;
   }
+}
+
+export async function getAdminNotificationsFromSupabase(): Promise<AdminNotification[]> {
+  const merged = new Map<string, AdminNotification>();
+
+  try {
+    const { data: dedicatedRows, error: dedErr } = await supabase
+      .from('admin_notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (!dedErr && Array.isArray(dedicatedRows)) {
+      for (const row of dedicatedRows) {
+        const mapped = mapSupabaseRowToAdminNotification(row);
+        merged.set(mapped.id, mapped);
+      }
+    }
+  } catch {}
+
+  try {
+    const { data: msgRows, error: msgErr } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('sender', 'admin_notification')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (!msgErr && Array.isArray(msgRows)) {
+      for (const row of msgRows) {
+        const mapped = mapSupabaseRowToAdminNotification(row);
+        if (!merged.has(mapped.id)) {
+          merged.set(mapped.id, mapped);
+        }
+      }
+    }
+  } catch {}
+
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+export async function saveAdminNotificationToSupabase(n: AdminNotification): Promise<{ success: boolean; error?: string }> {
+  let savedAny = false;
+  let lastError: string | undefined;
+
+  try {
+    const { error: msgErr } = await supabase.from('messages').upsert({
+      id: n.id,
+      name: n.senderName || 'ContactReach Alert',
+      sender_name: n.senderName || 'ContactReach Alert',
+      phone: n.senderPhone || null,
+      sender_phone: n.senderPhone || null,
+      email: n.senderEmail || null,
+      sender_email: n.senderEmail || null,
+      subject: n.title,
+      message: n.message,
+      order_number: n.orderNumber || null,
+      customer_id: n.customerId || null,
+      sender: 'admin_notification',
+      status: n.isRead ? 'read' : 'unread',
+      is_read_by_customer: true,
+      is_read_by_admin: Boolean(n.isRead),
+      notification_type: `admin_notif_${n.category}`,
+      read_at: n.readAt || null,
+      reply_note: JSON.stringify({
+        category: n.category,
+        actionTab: n.actionTab || null,
+        entityId: n.entityId || null,
+        metadata: n.metadata || {}
+      }),
+      created_at: n.createdAt || new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (!msgErr) {
+      savedAny = true;
+    } else {
+      lastError = msgErr.message;
+    }
+  } catch (err: any) {
+    lastError = err?.message;
+  }
+
+  // Also mirror to dedicated admin_notifications table if present in Supabase
+  try {
+    const { error: dedErr } = await supabase.from('admin_notifications').upsert({
+      id: n.id,
+      category: n.category,
+      title: n.title,
+      message: n.message,
+      sender_name: n.senderName || null,
+      sender_phone: n.senderPhone || null,
+      sender_email: n.senderEmail || null,
+      order_number: n.orderNumber || null,
+      customer_id: n.customerId || null,
+      action_tab: n.actionTab || null,
+      entity_id: n.entityId || null,
+      is_read: Boolean(n.isRead),
+      read_at: n.readAt || null,
+      metadata: n.metadata || {},
+      created_at: n.createdAt || new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (!dedErr) savedAny = true;
+  } catch {}
+
+  return { success: savedAny, error: savedAny ? undefined : lastError };
+}
+
+export async function deleteAdminNotificationFromSupabase(notificationId: string): Promise<boolean> {
+  let deleted = false;
+  try {
+    const { error } = await supabase.from('messages').delete().eq('id', notificationId);
+    if (!error) deleted = true;
+  } catch {}
+  try {
+    const { error } = await supabase.from('admin_notifications').delete().eq('id', notificationId);
+    if (!error) deleted = true;
+  } catch {}
+  return deleted;
 }
 
 // -------------------------------------------------------------
@@ -1490,6 +1674,7 @@ export async function syncAllDataToSupabase(db: {
   customers?: CustomerUser[];
   adminUsers?: any[];
   messages?: AdminMessage[];
+  adminNotifications?: AdminNotification[];
   customerProblems?: CustomerProblemReport[];
   coupons?: Coupon[];
   inventoryLogs?: InventoryLog[];
@@ -1510,6 +1695,7 @@ export async function syncAllDataToSupabase(db: {
     payments: 0,
     accounts: 0,
     messages: 0,
+    notifications: 0,
     problems: 0,
     coupons: 0,
     inventoryLogs: 0,
@@ -1542,8 +1728,14 @@ export async function syncAllDataToSupabase(db: {
     }
     if (db.messages?.length) {
       for (const m of db.messages) {
-        await saveMessageToSupabase(m);
-        results.messages++;
+        const res = await saveMessageToSupabase(m);
+        if (res.success) results.messages++;
+      }
+    }
+    if (db.adminNotifications?.length) {
+      for (const n of db.adminNotifications) {
+        const res = await saveAdminNotificationToSupabase(n);
+        if (res.success) results.notifications++;
       }
     }
     if (db.customerProblems?.length) {

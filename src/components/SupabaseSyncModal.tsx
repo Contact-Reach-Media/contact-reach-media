@@ -982,6 +982,28 @@ ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public all notification_logs" ON public.notification_logs;
 CREATE POLICY "Allow public all notification_logs" ON public.notification_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+CREATE TABLE IF NOT EXISTS public.admin_notifications (
+    id TEXT PRIMARY KEY,
+    category TEXT NOT NULL DEFAULT 'system',
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    sender_name TEXT,
+    sender_phone TEXT,
+    sender_email TEXT,
+    order_number TEXT,
+    customer_id TEXT,
+    action_tab TEXT,
+    entity_id TEXT,
+    is_read BOOLEAN DEFAULT false,
+    read_at TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.admin_notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all admin_notifications" ON public.admin_notifications;
+CREATE POLICY "Allow public all admin_notifications" ON public.admin_notifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
 CREATE TABLE IF NOT EXISTS public.reviews (
     id TEXT PRIMARY KEY,
     product_id TEXT NOT NULL,
@@ -1017,7 +1039,7 @@ DO $$
 DECLARE
     tbl text;
     realtime_tables text[] := ARRAY[
-        'products', 'orders', 'payments', 'messages', 'customer_problems',
+        'products', 'orders', 'payments', 'messages', 'admin_notifications', 'customer_problems',
         'categories', 'shops', 'coupons', 'inventory_logs', 'audit_logs',
         'supplier_applications', 'supplier_payouts', 'app_settings'
     ];

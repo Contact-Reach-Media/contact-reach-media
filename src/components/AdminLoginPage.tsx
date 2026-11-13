@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Lock, User, ArrowRight, ShieldCheck, AlertCircle, ArrowLeft,
-  Shield
+  Shield, Eye, EyeOff
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { AdminUser } from '../types.ts';
@@ -17,6 +17,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
 }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(() => Boolean(api.getAdminToken()));
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +71,6 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
         throw new Error('Invalid authentication response.');
       }
     } catch (err: any) {
-      console.error('Admin login error:', err);
       const msg = err?.message || '';
       if (msg.includes('api-key-not-valid') || msg.includes('auth/')) {
         setError('Invalid administrator credentials. Please check your username and password.');
@@ -138,8 +138,9 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
+                  placeholder="Enter username (e.g. crmedia)"
                   required
+                  autoComplete="username"
                   autoCapitalize="none"
                   autoCorrect="off"
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs text-slate-900 outline-none"
@@ -154,14 +155,23 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
               </label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
                   required
-                  className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs text-slate-900 outline-none"
+                  autoComplete="current-password"
+                  className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs text-slate-900 outline-none"
                 />
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2.5 top-2.5 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
