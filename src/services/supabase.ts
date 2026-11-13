@@ -928,7 +928,7 @@ export async function getAccountsFromSupabase(): Promise<any[]> {
   }
 }
 
-export async function saveAccountToSupabase(account: any): Promise<void> {
+export async function saveAccountToSupabase(account: any): Promise<{ success: boolean; error?: string }> {
   try {
     const cleanEmail = account.email && typeof account.email === 'string' && account.email.trim()
       ? account.email.trim().toLowerCase()
@@ -940,13 +940,15 @@ export async function saveAccountToSupabase(account: any): Promise<void> {
       status: account.status || 'Active',
       isRegisteredBuyer: account.isRegisteredBuyer !== false,
       lastLogin: account.lastLogin || undefined,
-      deliveryAddress: account.deliveryAddress || account.defaultAddress || undefined
+      deliveryAddress: account.deliveryAddress || account.defaultAddress || undefined,
+      totalOrders: Number(account.totalOrders) || 0,
+      totalSpent: Number(account.totalSpent) || 0
     };
     if (account.passwordHash) {
       metadataPayload.passwordHash = account.passwordHash;
     }
 
-    const row: Record<string, any> = {
+    const userRow: Record<string, any> = {
       id: accountId,
       full_name: account.name || account.fullName || 'User',
       email: cleanEmail,
@@ -959,16 +961,120 @@ export async function saveAccountToSupabase(account: any): Promise<void> {
       metadata: metadataPayload,
       updated_at: new Date().toISOString()
     };
-    await supabase.from('users').upsert(row, { onConflict: 'id' });
-  } catch (err) {
+    const { error: userErr } = await supabase.from('users').upsert(userRow, { onConflict: 'id' });
+
+    const customerRow: Record<string, any> = {
+      id: accountId,
+      email: cleanEmail,
+      phone: account.phone || null,
+      name: account.name || account.fullName || 'User',
+      role: account.role || 'customer',
+      delivery_address: account.deliveryAddress || account.defaultAddress || null,
+      default_address: account.deliveryAddress || account.defaultAddress || null,
+      city: account.city || 'Kigali',
+      country: account.country || 'Rwanda',
+      total_orders: Number(account.totalOrders) || 0,
+      total_spent: Number(account.totalSpent) || 0,
+      is_active: account.active !== false && account.status !== 'Suspended' && account.status !== 'Inactive',
+      status: account.status || 'Active',
+      is_registered_buyer: account.isRegisteredBuyer !== false,
+      metadata: metadataPayload,
+      updated_at: new Date().toISOString()
+    };
+    const { error: custErr } = await supabase.from('customers').upsert(customerRow, { onConflict: 'id' });
+
+    if (userErr && custErr) {
+      console.warn('[Supabase] Save user error:', userErr.message, custErr.message);
+      return { success: false, error: userErr.message || custErr.message };
+    }
+    return { success: true };
+  } catch (err: any) {
     console.warn('[Supabase] Save user error:', err);
+    return { success: false, error: err?.message || 'Failed to save account to Supabase.' };
+  }
+}
+
+export async function findBuyerByPhoneInSupabase(phoneKey: string): Promise<any | null> {
+  try {
+    const cleanKey = String(phoneKey || '').replace(/\D/g, '');
+    if (cleanKey.length < 7) return null;
+    const norm = (val?: string | null) => {
+      const d = String(val || '').replace(/\D/g, '');
+      if (d.length === 12 && d.startsWith('250')) return d.slice(3);
+      if (d.length === 10 && d.startsWith('07')) return d.slice(1);
+      return d;
+    };
+    const targetKey = norm(cleanKey);
+
+    const [{ data: usersData }, { data: custData }] = await Promise.all([
+      supabase.from('users').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('*').order('created_at', { ascending: false })
+    ]);
+
+    if (Array.isArray(usersData)) {
+      for (const u of usersData) {
+        if (u.role === 'admin' || u.role === 'owner') continue;
+        if (u.phone && norm(u.phone) === targetKey) {
+          const meta = (u.metadata && typeof u.metadata === 'object') ? u.metadata : {};
+          return {
+            id: String(u.id),
+            name: u.full_name || 'Customer',
+            email: u.email || undefined,
+            phone: u.phone || '',
+            deliveryAddress: u.default_address || meta.deliveryAddress || undefined,
+            totalOrders: Number(meta.totalOrders) || 0,
+            totalSpent: Number(meta.totalSpent) || 0,
+            status: (meta.status === 'Suspended' || u.is_active === false) ? 'Suspended' : 'Active',
+            accountType: meta.accountType || 'buyer',
+            authProvider: meta.authProvider || 'phone',
+            passwordHash: meta.passwordHash || u.password_hash || undefined,
+            hasPassword: Boolean(meta.passwordHash || u.password_hash),
+            isRegisteredBuyer: meta.isRegisteredBuyer !== undefined ? Boolean(meta.isRegisteredBuyer) : true,
+            lastLogin: meta.lastLogin || undefined,
+            createdAt: u.created_at || new Date().toISOString()
+          };
+        }
+      }
+    }
+
+    if (Array.isArray(custData)) {
+      for (const c of custData) {
+        if (c.role === 'admin' || c.role === 'owner') continue;
+        if (c.phone && norm(c.phone) === targetKey) {
+          const meta = (c.metadata && typeof c.metadata === 'object') ? c.metadata : {};
+          return {
+            id: String(c.id),
+            name: c.name || 'Customer',
+            email: c.email || undefined,
+            phone: c.phone || '',
+            deliveryAddress: c.delivery_address || c.default_address || undefined,
+            totalOrders: Number(c.total_orders) || 0,
+            totalSpent: Number(c.total_spent) || 0,
+            status: (c.status === 'Suspended' || meta.status === 'Suspended' || c.is_active === false) ? 'Suspended' : 'Active',
+            accountType: meta.accountType || 'buyer',
+            authProvider: meta.authProvider || 'phone',
+            passwordHash: meta.passwordHash || undefined,
+            hasPassword: Boolean(meta.passwordHash),
+            isRegisteredBuyer: c.is_registered_buyer !== undefined ? Boolean(c.is_registered_buyer) : true,
+            lastLogin: meta.lastLogin || undefined,
+            createdAt: c.created_at || new Date().toISOString()
+          };
+        }
+      }
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
 export async function deleteAccountFromSupabase(userId: string): Promise<boolean> {
   try {
-    const { error } = await supabase.from('users').delete().eq('id', userId);
-    return !error;
+    const [{ error: err1 }, { error: err2 }] = await Promise.all([
+      supabase.from('users').delete().eq('id', userId),
+      supabase.from('customers').delete().eq('id', userId)
+    ]);
+    return !err1 || !err2;
   } catch {
     return false;
   }

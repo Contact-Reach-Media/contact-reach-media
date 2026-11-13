@@ -329,7 +329,7 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
                   type="text"
                   value={editAddress}
                   onChange={(e) => setEditAddress(e.target.value)}
-                  placeholder="e.g. Gasabo, Kimironko, Near Market"
+                  placeholder="Enter delivery location or street"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-orange-500"
                 />
               </div>

@@ -62,14 +62,15 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
     const digits = trimmed.replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) {
       return isEn
-        ? 'Please enter a valid phone number (e.g. 0780 022 600).'
-        : 'Nyabuneka shyiramo numero ya telefone yuzuye (urugero: 0780 022 600).';
+        ? 'Please enter a valid phone number.'
+        : 'Nyabuneka shyiramo numero ya telefone yuzuye.';
     }
     return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setSuccessMsg(null);
 
@@ -273,7 +274,7 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                       type="text"
                       required
                       autoComplete="name"
-                      placeholder="e.g. Thierry Maniriho"
+                      placeholder={isEn ? 'Enter your full name' : 'Andika amazina yawe yose'}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-medium"
@@ -294,7 +295,7 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                     inputMode="tel"
                     autoComplete="tel"
                     required
-                    placeholder="e.g. 0780 022 600"
+                    placeholder={isEn ? 'Enter your phone number' : 'Shyiramo numero ya telefone'}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-mono font-semibold"
@@ -479,40 +480,17 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
             />
           </div>
 
-          {/* Floating Sales Metric Card */}
-          <div className="relative z-20 mx-auto w-full max-w-[240px] bg-white text-slate-900 rounded-xl p-3 shadow-xl">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded-md bg-orange-100 text-[#f95700] flex items-center justify-center">
-                  <Calendar className="w-3 h-3" />
-                </div>
-                <span className="text-[11px] font-bold text-slate-500">Sales</span>
-              </div>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200">
-                +2.15%
-              </span>
+          {/* Security Assurance Footer */}
+          <div className="relative z-20 mx-auto w-full max-w-[260px] bg-white/15 backdrop-blur-xs text-white rounded-2xl p-3.5 border border-white/25 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-extrabold">
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span>{isEn ? 'Phone & Password Account' : 'Konti ya Telefoni n\'Ijambobanga'}</span>
             </div>
-
-            <div className="text-base font-black font-mono text-slate-900 mb-1">
-              RWF 145,000
-            </div>
-
-            <div className="flex items-end gap-1 h-7 py-0.5">
-              <div className="w-2 h-3 bg-sky-500 rounded-xs" />
-              <div className="w-2 h-5 bg-sky-500 rounded-xs" />
-              <div className="w-2 h-7 bg-sky-500 rounded-xs" />
-              <div className="w-2 h-4 bg-sky-500 rounded-xs" />
-              <div className="w-2 h-6 bg-sky-500 rounded-xs" />
-              <div className="w-2 h-2 bg-slate-200 rounded-xs" />
-              <div className="w-2 h-3 bg-slate-200 rounded-xs" />
-              <div className="w-2 h-4 bg-slate-200 rounded-xs" />
-              <div className="w-2 h-5 bg-slate-200 rounded-xs" />
-            </div>
-
-            <div className="pt-1 mt-1 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-bold">
-              <span>Set Goals</span>
-              <ChevronRight className="w-3 h-3 text-slate-400" />
-            </div>
+            <p className="text-[11px] text-orange-50 leading-relaxed">
+              {isEn
+                ? 'Your account and order history stay saved securely across all your devices.'
+                : 'Konti yawe na komande zawe bibikwa neza ku bikoresho byawe byose.'}
+            </p>
           </div>
         </div>
       </div>

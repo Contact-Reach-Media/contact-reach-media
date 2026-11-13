@@ -959,7 +959,7 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                       type="text"
                       value={deliveryAddress}
                       onChange={(e) => setDeliveryAddress(e.target.value)}
-                      placeholder="e.g. Kigali, Gasabo, Kimironko Near Gate 2"
+                      placeholder={currentLang === 'en' ? 'Enter delivery location or street' : 'Andika aho utuye cyangwa umuhanda'}
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
                     />
                   </div>

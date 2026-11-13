@@ -2225,6 +2225,12 @@ async function runTests() {
       headers: { Authorization: `Bearer ${newLoginData.token}` }
     });
     assert.strictEqual(otherDeviceMeRes.status, 200, 'Other device session remains valid until it logs out');
+
+    // Clean up temporary test buyer from server & Supabase
+    await fetch(`${BASE_URL}/api/admin/buyers/${regData.user.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
   });
 
   // TEST: Manual Product Upload, Hide, Edit, and Delete with Persistence
@@ -2753,6 +2759,16 @@ async function runTests() {
     const finalInbox = await finalInboxRes.json();
     const deliveryNotice = finalInbox.find((m: any) => m.notificationType === 'order_update' && m.message.includes('Out for Delivery'));
     assert(deliveryNotice, 'Customer must receive real-time order delivery status update in inbox');
+
+    // Clean up temporary test buyers created during test suite
+    for (const cleanupId of [registeredBuyerId, buyerId]) {
+      if (cleanupId) {
+        await fetch(`${BASE_URL}/api/admin/buyers/${cleanupId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${adminToken}` }
+        });
+      }
+    }
   });
 
   console.log('\n====================================================');

@@ -439,6 +439,11 @@ export function broadcastDatabaseEvent(eventType: string = 'database_change', pa
   lastCatalogUpdate = new Date().toISOString();
   if (sseClients.size === 0) return;
   const stats = calculateCurrentStats();
+  let safePayload = payload || null;
+  if (safePayload && typeof safePayload === 'object' && safePayload.customer && 'passwordHash' in safePayload.customer) {
+    const { passwordHash: _omitted, ...safeCustomer } = safePayload.customer;
+    safePayload = { ...safePayload, customer: safeCustomer };
+  }
   const messageData = JSON.stringify({
     type: eventType,
     version: siteVersion,
@@ -446,7 +451,7 @@ export function broadcastDatabaseEvent(eventType: string = 'database_change', pa
     lastCatalogUpdate,
     timestamp: new Date().toISOString(),
     stats,
-    payload: payload || null
+    payload: safePayload
   });
   const sseMessage = `event: db_update\ndata: ${messageData}\n\n`;
 
@@ -1170,58 +1175,7 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         }, { onConflict: 'email' });
       }
     } else if (entityType === 'accounts' || entityType === 'customers' || entityType === 'users') {
-      const accountId = String(data.id || `cust-${Date.now()}`);
-      const cleanEmail = data.email && typeof data.email === 'string' && data.email.trim()
-        ? data.email.trim().toLowerCase()
-        : null;
-      const metaPayload: Record<string, any> = {
-        accountType: data.accountType || 'buyer',
-        authProvider: data.authProvider || 'phone',
-        status: data.status || 'Active',
-        isRegisteredBuyer: data.isRegisteredBuyer !== undefined ? Boolean(data.isRegisteredBuyer) : true,
-        lastLogin: data.lastLogin || undefined,
-        deliveryAddress: data.deliveryAddress || data.defaultAddress || undefined,
-        totalOrders: Number(data.totalOrders) || 0,
-        totalSpent: Number(data.totalSpent) || 0
-      };
-      if (data.passwordHash) {
-        metaPayload.passwordHash = data.passwordHash;
-      }
-
-      const userRow: Record<string, any> = {
-        id: accountId,
-        full_name: data.name || data.fullName || 'Customer',
-        email: cleanEmail,
-        phone: data.phone || null,
-        role: data.role || 'customer',
-        default_address: data.deliveryAddress || data.defaultAddress || null,
-        city: 'Kigali',
-        country: 'Rwanda',
-        is_active: data.active !== false && data.status !== 'Suspended' && data.status !== 'Inactive',
-        metadata: metaPayload,
-        updated_at: new Date().toISOString()
-      };
-      await supabase.from('users').upsert(userRow, { onConflict: 'id' });
-
-      const customerRow: Record<string, any> = {
-        id: accountId,
-        email: cleanEmail,
-        phone: data.phone || null,
-        name: data.name || data.fullName || 'Customer',
-        role: data.role || 'customer',
-        delivery_address: data.deliveryAddress || data.defaultAddress || null,
-        default_address: data.deliveryAddress || data.defaultAddress || null,
-        city: 'Kigali',
-        country: 'Rwanda',
-        total_orders: Number(data.totalOrders) || 0,
-        total_spent: Number(data.totalSpent) || 0,
-        is_active: data.active !== false && data.status !== 'Suspended' && data.status !== 'Inactive',
-        status: data.status || 'Active',
-        is_registered_buyer: data.isRegisteredBuyer !== undefined ? Boolean(data.isRegisteredBuyer) : true,
-        metadata: metaPayload,
-        updated_at: new Date().toISOString()
-      };
-      await supabase.from('customers').upsert(customerRow, { onConflict: 'id' });
+      await saveBuyerAccountToSupabase(data);
     } else if (entityType === 'deletedProducts' || entityType === 'deletedRecordIds') {
       await supabase.from('deleted_tombstones').upsert({
         id: data.id,
@@ -1233,6 +1187,80 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
     }
   } catch (err: any) {
     // Non-blocking background sync
+  }
+}
+
+async function saveBuyerAccountToSupabase(data: any): Promise<{ success: boolean; error?: string }> {
+  try {
+    const accountId = String(data.id || `cust-${Date.now()}`);
+    const existingInMem = db.customers.find(c => c.id === accountId);
+    const effectivePasswordHash = data.passwordHash || existingInMem?.passwordHash;
+    const cleanEmail = data.email && typeof data.email === 'string' && data.email.trim()
+      ? data.email.trim().toLowerCase()
+      : null;
+
+    const metaPayload: Record<string, any> = {
+      accountType: data.accountType || 'buyer',
+      authProvider: data.authProvider || 'phone',
+      status: data.status || 'Active',
+      isRegisteredBuyer: data.isRegisteredBuyer !== undefined ? Boolean(data.isRegisteredBuyer) : true,
+      lastLogin: data.lastLogin || undefined,
+      deliveryAddress: data.deliveryAddress || data.defaultAddress || undefined,
+      totalOrders: Number(data.totalOrders) || 0,
+      totalSpent: Number(data.totalSpent) || 0
+    };
+    if (effectivePasswordHash) {
+      metaPayload.passwordHash = effectivePasswordHash;
+    }
+
+    const userRow: Record<string, any> = {
+      id: accountId,
+      full_name: data.name || data.fullName || 'Customer',
+      email: cleanEmail,
+      phone: data.phone || null,
+      role: data.role || 'customer',
+      default_address: data.deliveryAddress || data.defaultAddress || null,
+      city: 'Kigali',
+      country: 'Rwanda',
+      is_active: data.active !== false && data.status !== 'Suspended' && data.status !== 'Inactive',
+      metadata: metaPayload,
+      updated_at: new Date().toISOString()
+    };
+    const { error: userErr } = await supabase.from('users').upsert(userRow, { onConflict: 'id' });
+    if (userErr) {
+      console.error('[Supabase] Error saving user row:', userErr.message);
+    }
+
+    const customerRow: Record<string, any> = {
+      id: accountId,
+      email: cleanEmail,
+      phone: data.phone || null,
+      name: data.name || data.fullName || 'Customer',
+      role: data.role || 'customer',
+      delivery_address: data.deliveryAddress || data.defaultAddress || null,
+      default_address: data.deliveryAddress || data.defaultAddress || null,
+      city: 'Kigali',
+      country: 'Rwanda',
+      total_orders: Number(data.totalOrders) || 0,
+      total_spent: Number(data.totalSpent) || 0,
+      is_active: data.active !== false && data.status !== 'Suspended' && data.status !== 'Inactive',
+      status: data.status || 'Active',
+      is_registered_buyer: data.isRegisteredBuyer !== undefined ? Boolean(data.isRegisteredBuyer) : true,
+      metadata: metaPayload,
+      updated_at: new Date().toISOString()
+    };
+    const { error: custErr } = await supabase.from('customers').upsert(customerRow, { onConflict: 'id' });
+    if (custErr) {
+      console.error('[Supabase] Error saving customer row:', custErr.message);
+    }
+
+    if (userErr && custErr) {
+      return { success: false, error: userErr.message || custErr.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Supabase] saveBuyerAccountToSupabase exception:', err?.message || err);
+    return { success: false, error: err?.message || 'Failed to save user to Supabase.' };
   }
 }
 
@@ -1262,6 +1290,7 @@ async function deleteFromSupabaseAsync(entityType: string, id: string) {
       await supabase.from('coupons').delete().eq('id', id);
     } else if (entityType === 'users' || entityType === 'customers' || entityType === 'accounts' || entityType === 'buyers') {
       await supabase.from('users').delete().eq('id', id);
+      await supabase.from('customers').delete().eq('id', id);
     } else if (entityType === 'adminUsers' || entityType === 'admin_users' || entityType === 'admins') {
       await supabase.from('admin_users').delete().eq('id', id);
     } else if (entityType === 'supplierApplications' || entityType === 'supplier_applications') {
@@ -4804,7 +4833,7 @@ function validateBuyerPhone(rawPhone: unknown): { valid: boolean; phone?: string
   }
   const digits = trimmed.replace(/\D/g, '');
   if (digits.length < 8 || digits.length > 15) {
-    return { valid: false, error: 'Please enter a valid phone number (e.g. 0780022600).' };
+    return { valid: false, error: 'Please enter a valid phone number.' };
   }
   return {
     valid: true,
@@ -4836,13 +4865,21 @@ function verifyBuyerPassword(password: string, storedHash?: string): boolean {
   try {
     if (!storedHash || typeof storedHash !== 'string') return false;
     const parts = storedHash.split(':');
-    if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
-    const [, salt, expectedHex] = parts;
+    if (parts.length !== 3) return false;
+    const [scheme, salt, expectedHex] = parts;
     if (!salt || !expectedHex) return false;
-    const derivedBuf = crypto.scryptSync(password, salt, 64);
     const expectedBuf = Buffer.from(expectedHex, 'hex');
-    if (derivedBuf.length !== expectedBuf.length) return false;
-    return crypto.timingSafeEqual(derivedBuf, expectedBuf);
+    if (scheme === 'scrypt') {
+      const derivedBuf = crypto.scryptSync(password, salt, 64);
+      if (derivedBuf.length !== expectedBuf.length) return false;
+      return crypto.timingSafeEqual(derivedBuf, expectedBuf);
+    }
+    if (scheme === 'pbkdf2') {
+      const derivedBuf = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      if (derivedBuf.length !== expectedBuf.length) return false;
+      return crypto.timingSafeEqual(derivedBuf, expectedBuf);
+    }
+    return false;
   } catch {
     return false;
   }
@@ -4965,21 +5002,28 @@ function extractBuyerTokenFromReq(req: Request): string | null {
   return null;
 }
 
-function setBuyerSessionCookie(res: Response, token: string, expiresAt: number) {
+function setBuyerSessionCookie(res: Response, token: string, expiresAt: number, req?: Request) {
   try {
     const maxAgeSec = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
+    const isHttps = Boolean(req && (req.secure || req.headers['x-forwarded-proto'] === 'https'));
     res.cookie('crm_buyer_token', token, {
       path: '/',
       maxAge: maxAgeSec * 1000,
-      sameSite: 'lax',
+      sameSite: isHttps ? 'none' : 'lax',
+      secure: isHttps,
       httpOnly: false
     });
   } catch {}
 }
 
-function clearBuyerSessionCookie(res: Response) {
+function clearBuyerSessionCookie(res: Response, req?: Request) {
   try {
-    res.clearCookie('crm_buyer_token', { path: '/' });
+    const isHttps = Boolean(req && (req.secure || req.headers['x-forwarded-proto'] === 'https'));
+    res.clearCookie('crm_buyer_token', {
+      path: '/',
+      sameSite: isHttps ? 'none' : 'lax',
+      secure: isHttps
+    });
   } catch {}
 }
 
@@ -5232,9 +5276,12 @@ app.post('/api/buyers/register', async (req: Request, res: Response) => {
     expiresAt
   });
 
+  const sbSave = await saveBuyerAccountToSupabase(buyer);
+  if (!sbSave.success) {
+    console.warn('[Buyer Register] Supabase sync warning:', sbSave.error);
+  }
   saveDbToDisk('customer_updated', { customer: buyer });
-  await saveToFirestoreAsync('customers', buyer.id, buyer);
-  setBuyerSessionCookie(res, token, expiresAt);
+  setBuyerSessionCookie(res, token, expiresAt, req);
 
   res.status(201).json({
     message: 'Account created and signed in successfully.',
@@ -5287,8 +5334,8 @@ app.post('/api/buyers/login', async (req: Request, res: Response) => {
   });
 
   saveDbToDisk('customer_updated', { customer: buyer });
-  await saveToFirestoreAsync('customers', buyer.id, buyer);
-  setBuyerSessionCookie(res, token, expiresAt);
+  await saveBuyerAccountToSupabase(buyer);
+  setBuyerSessionCookie(res, token, expiresAt, req);
 
   res.json({
     message: 'Welcome back! Signed in successfully.',
@@ -5304,7 +5351,7 @@ app.get('/api/buyers/me', requireBuyerAuth, (req: Request, res: Response) => {
   const expiresAt = (req as any).buyerSessionExpiresAt as number | undefined;
   const token = (req as any).buyerToken as string | undefined;
   if (token && expiresAt) {
-    setBuyerSessionCookie(res, token, expiresAt);
+    setBuyerSessionCookie(res, token, expiresAt, req);
   }
   res.json({
     user: sanitizeBuyer(buyer),

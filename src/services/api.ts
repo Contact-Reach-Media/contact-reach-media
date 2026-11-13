@@ -28,6 +28,7 @@ import {
   deletePaymentFromSupabase,
   getAccountsFromSupabase,
   saveAccountToSupabase,
+  findBuyerByPhoneInSupabase,
   deleteAccountFromSupabase,
   getMessagesFromSupabase,
   saveMessageToSupabase,
@@ -323,16 +324,70 @@ function readBuyerCookie(): string | null {
 function writeBuyerCookie(token: string) {
   try {
     if (typeof document === 'undefined') return;
-    const secureAttr = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${BUYER_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${BUYER_COOKIE_MAX_AGE_SEC}; SameSite=Lax${secureAttr}`;
+    const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+    const attrs = isHttps ? '; SameSite=None; Secure' : '; SameSite=Lax';
+    document.cookie = `${BUYER_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${BUYER_COOKIE_MAX_AGE_SEC}${attrs}`;
   } catch {}
 }
 
 function clearBuyerCookie() {
   try {
     if (typeof document === 'undefined') return;
-    document.cookie = `${BUYER_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+    const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+    const attrs = isHttps ? '; SameSite=None; Secure' : '; SameSite=Lax';
+    document.cookie = `${BUYER_COOKIE_NAME}=; Path=/; Max-Age=0${attrs}`;
   } catch {}
+}
+
+function formatBuyerPhoneForStorage(rawPhone: string): string {
+  const trimmed = String(rawPhone || '').trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 12 && digits.startsWith('250')) return `0${digits.slice(3)}`;
+  if (digits.length === 9 && digits.startsWith('7')) return `0${digits}`;
+  if (digits.length === 10 && digits.startsWith('07')) return digits;
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
+}
+
+async function hashBuyerPasswordClient(password: string): Promise<string> {
+  const saltBytes = new Uint8Array(16);
+  crypto.getRandomValues(saltBytes);
+  const saltHex = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: new TextEncoder().encode(saltHex), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    256
+  );
+  const derivedHex = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `pbkdf2:${saltHex}:${derivedHex}`;
+}
+
+async function verifyBuyerPasswordClient(password: string, storedHash?: string): Promise<boolean> {
+  if (!storedHash || !storedHash.startsWith('pbkdf2:')) return false;
+  const parts = storedHash.split(':');
+  if (parts.length !== 3) return false;
+  const [, saltHex, expectedHex] = parts;
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: new TextEncoder().encode(saltHex), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    256
+  );
+  const derivedHex = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return derivedHex === expectedHex;
 }
 
 function emitBuyerAuthChanged(authenticated: boolean) {
@@ -3359,17 +3414,49 @@ export const api = {
       throw new Error('Password is required.');
     }
 
-    const res = await fetch('/api/buyers/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: rawPhone, password: payload.password })
-    });
-    const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
-    if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
-      setBuyerToken(parsed.json.token, parsed.json.user);
-      return { user: parsed.json.user, token: parsed.json.token };
+    let serverUnreachable = false;
+    try {
+      const res = await fetch('/api/buyers/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: rawPhone, password: payload.password })
+      });
+      const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
+      if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
+        setBuyerToken(parsed.json.token, parsed.json.user);
+        return { user: parsed.json.user, token: parsed.json.token };
+      }
+      if (parsed.isJson) {
+        throw new Error(parsed.json?.error || 'Invalid phone number or password.');
+      }
+      serverUnreachable = true;
+    } catch (err: any) {
+      if (!serverUnreachable && err?.message && !err.message.toLowerCase().includes('fetch')) {
+        throw err;
+      }
+      serverUnreachable = true;
     }
-    throw new Error((parsed.isJson && parsed.json?.error) || 'Invalid phone number or password.');
+
+    if (serverUnreachable) {
+      const existing = await findBuyerByPhoneInSupabase(rawPhone);
+      if (!existing || !existing.passwordHash) {
+        throw new Error('Invalid phone number or password.');
+      }
+      if (existing.status === 'Suspended') {
+        throw new Error('Your account is currently suspended. Please contact customer support.');
+      }
+      const valid = await verifyBuyerPasswordClient(payload.password, existing.passwordHash);
+      if (!valid) {
+        throw new Error('Invalid phone number or password.');
+      }
+      const { passwordHash: _omitted, ...safeUser } = existing;
+      const updatedUser: CustomerUser = { ...safeUser, lastLogin: new Date().toISOString() };
+      await saveAccountToSupabase({ ...existing, lastLogin: updatedUser.lastLogin });
+      const fallbackToken = `crm_sb_buyer_${existing.id}_${Date.now()}`;
+      setBuyerToken(fallbackToken, updatedUser);
+      return { user: updatedUser, token: fallbackToken };
+    }
+    throw new Error('Invalid phone number or password.');
   },
 
   async buyerRegister(payload: {
@@ -3394,27 +3481,94 @@ export const api = {
       throw new Error('Password must be at least 6 characters long.');
     }
 
-    const res = await fetch('/api/buyers/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: payload.name.trim(),
-        phone: rawPhone,
-        password: payload.password,
-        deliveryAddress: payload.deliveryAddress
-      })
-    });
-    const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
-    if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
-      setBuyerToken(parsed.json.token, parsed.json.user);
-      return { user: parsed.json.user, token: parsed.json.token };
+    let serverUnreachable = false;
+    try {
+      const res = await fetch('/api/buyers/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: payload.name.trim(),
+          phone: rawPhone,
+          password: payload.password,
+          deliveryAddress: payload.deliveryAddress
+        })
+      });
+      const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
+      if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
+        setBuyerToken(parsed.json.token, parsed.json.user);
+        return { user: parsed.json.user, token: parsed.json.token };
+      }
+      if (parsed.isJson) {
+        throw new Error(parsed.json?.error || 'Registration failed. Please check your details and try again.');
+      }
+      serverUnreachable = true;
+    } catch (err: any) {
+      if (!serverUnreachable && err?.message && !err.message.toLowerCase().includes('fetch')) {
+        throw err;
+      }
+      serverUnreachable = true;
     }
-    throw new Error((parsed.isJson && parsed.json?.error) || 'Registration failed. Please check your details and try again.');
+
+    // Direct Supabase persistence fallback if static preview / offline proxy does not expose /api/buyers/register
+    if (serverUnreachable) {
+      const existing = await findBuyerByPhoneInSupabase(rawPhone);
+      if (existing && existing.passwordHash) {
+        throw new Error('An account with this phone number already exists. Please sign in using your password.');
+      }
+      if (existing && existing.status === 'Suspended') {
+        throw new Error('This account is currently suspended. Please contact customer support.');
+      }
+      const passwordHash = await hashBuyerPasswordClient(payload.password);
+      const nowIso = new Date().toISOString();
+      const formattedPhone = formatBuyerPhoneForStorage(rawPhone);
+      const buyerRecord: CustomerUser = {
+        id: existing?.id || `cust-p-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+        name: payload.name.trim(),
+        phone: formattedPhone,
+        deliveryAddress: payload.deliveryAddress?.trim() || existing?.deliveryAddress,
+        createdAt: existing?.createdAt || nowIso,
+        totalOrders: existing?.totalOrders || 0,
+        totalSpent: existing?.totalSpent || 0,
+        status: 'Active',
+        accountType: 'buyer',
+        authProvider: 'phone',
+        lastLogin: nowIso,
+        isRegisteredBuyer: true,
+        passwordHash
+      };
+      const saved = await saveAccountToSupabase(buyerRecord);
+      if (!saved.success) {
+        throw new Error(saved.error || 'Could not save user account to Supabase.');
+      }
+      const { passwordHash: _omitted, ...safeUser } = buyerRecord;
+      const fallbackToken = `crm_sb_buyer_${buyerRecord.id}_${Date.now()}`;
+      setBuyerToken(fallbackToken, safeUser);
+      return { user: safeUser, token: fallbackToken };
+    }
+    throw new Error('Registration failed. Please check your details and try again.');
   },
 
   async buyerGetMe(): Promise<CustomerUser | null> {
     const token = getBuyerToken();
     if (!token) return null;
+    if (token.startsWith('crm_sb_buyer_')) {
+      const stored = getStoredBuyerUser();
+      if (stored?.phone) {
+        try {
+          const sbUser = await findBuyerByPhoneInSupabase(stored.phone);
+          if (sbUser) {
+            if (sbUser.status === 'Suspended') {
+              removeBuyerToken();
+              return null;
+            }
+            const { passwordHash: _omitted, ...safeUser } = sbUser;
+            setBuyerToken(token, safeUser);
+            return safeUser;
+          }
+        } catch {}
+      }
+      return stored;
+    }
     try {
       const res = await fetch('/api/buyers/me', { headers: getBuyerAuthHeaders() });
       const parsed = await safeParseResponse<{ user: CustomerUser }>(res);

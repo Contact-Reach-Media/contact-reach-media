@@ -59,8 +59,8 @@ export const SignInPage: React.FC<SignInPageProps> = ({
     const digits = trimmed.replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) {
       return isEn
-        ? 'Please enter a valid phone number (e.g. 0780 022 600).'
-        : 'Nyabuneka shyiramo numero ya telefone yuzuye (urugero: 0780 022 600).';
+        ? 'Please enter a valid phone number.'
+        : 'Nyabuneka shyiramo numero ya telefone yuzuye.';
     }
     return null;
   };
@@ -68,6 +68,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   // Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setSuccessMsg(null);
 
@@ -282,7 +283,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                       type="text"
                       required
                       autoComplete="name"
-                      placeholder="e.g. Thierry Maniriho"
+                      placeholder={isEn ? 'Enter your full name' : 'Andika amazina yawe yose'}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 transition-all font-medium"
@@ -303,7 +304,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                     inputMode="tel"
                     autoComplete="tel"
                     required
-                    placeholder="e.g. 0780 022 600"
+                    placeholder={isEn ? 'Enter your phone number' : 'Shyiramo numero ya telefone'}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 transition-all font-mono font-semibold"
@@ -493,42 +494,17 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             </div>
           </div>
 
-          {/* Floating Glassmorphism Sales Metric Card Matching Image 5 */}
-          <div className="relative z-20 mx-auto w-full max-w-xs bg-white text-slate-900 rounded-2xl p-4 shadow-2xl border border-white/60">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-orange-100 text-[#f95700] flex items-center justify-center">
-                  <Calendar className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-bold text-slate-500">Sales</span>
-              </div>
-              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200">
-                +2.15%
-              </span>
+          {/* Security Assurance Footer */}
+          <div className="relative z-20 mx-auto w-full max-w-xs bg-white/15 backdrop-blur-xs text-white rounded-2xl p-4 border border-white/25 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-extrabold">
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span>{isEn ? 'Phone & Password Account' : 'Konti ya Telefoni n\'Ijambobanga'}</span>
             </div>
-
-            <div className="text-xl font-black font-mono text-slate-900 mb-2">
-              RWF 145,000
-            </div>
-
-            {/* Stylized Bar Chart */}
-            <div className="flex items-end gap-1.5 h-10 py-1">
-              <div className="w-2.5 h-5 bg-sky-500 rounded-sm" />
-              <div className="w-2.5 h-8 bg-sky-500 rounded-sm" />
-              <div className="w-2.5 h-10 bg-sky-500 rounded-sm" />
-              <div className="w-2.5 h-7 bg-sky-500 rounded-sm" />
-              <div className="w-2.5 h-9 bg-sky-500 rounded-sm" />
-              <div className="w-2.5 h-4 bg-slate-200 rounded-sm" />
-              <div className="w-2.5 h-5 bg-slate-200 rounded-sm" />
-              <div className="w-2.5 h-6 bg-slate-200 rounded-sm" />
-              <div className="w-2.5 h-8 bg-slate-200 rounded-sm" />
-              <div className="w-2.5 h-5 bg-slate-200 rounded-sm" />
-            </div>
-
-            <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-bold">
-              <span>Set Goals</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            </div>
+            <p className="text-[11px] text-orange-50 leading-relaxed">
+              {isEn
+                ? 'Your account and order history stay saved securely across all your devices.'
+                : 'Konti yawe na komande zawe bibikwa neza ku bikoresho byawe byose.'}
+            </p>
           </div>
         </div>
       </div>
