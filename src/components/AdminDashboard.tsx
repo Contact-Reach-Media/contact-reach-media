@@ -3236,8 +3236,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleResetBuyerPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetPasswordBuyer) return;
-    if (newTempPassword.length < 5) {
-      showToast('Password must be at least 5 characters long.', 'error');
+    if (newTempPassword.length < 6) {
+      showToast('Password must be at least 6 characters long.', 'error');
       return;
     }
     setResetPasswordLoading(true);
@@ -7327,7 +7327,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div>
                     <h1 className="text-xl font-black text-slate-900 tracking-tight">Customer & Buyer Directory</h1>
                     <p className="text-xs text-slate-500">
-                      Manage registered buyers, 5-digit PIN security accounts, customer phone numbers, and full purchase histories.
+                      Manage registered buyers, phone & password security accounts, customer phone numbers, and full purchase histories.
                     </p>
                   </div>
                   <button
@@ -7355,7 +7355,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">5-Digit PIN Buyers</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Registered Buyers</span>
                       <KeyRound className="w-4 h-4 text-[#FF6000]" />
                     </div>
                     <p className="text-xl font-black text-[#FF6000] mt-1">{registeredBuyers.length}</p>
@@ -7497,7 +7497,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   {isRegistered ? (
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-orange-50 border border-orange-200 text-[#FF6000]">
                                       <KeyRound className="w-3 h-3" />
-                                      <span>5-Digit Password Account</span>
+                                      <span>Phone & Password Account</span>
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
@@ -7583,7 +7583,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                           setPinActionMessage(null);
                                         }}
                                         className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
-                                        title="Reset 5-Digit Password"
+                                        title="Reset Buyer Password"
                                       >
                                         <Lock className="w-3.5 h-3.5" />
                                       </button>
@@ -10521,7 +10521,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {selectedCustomerDetail.customer.isRegisteredBuyer && (
                     <span className="inline-flex items-center gap-1 text-[10px] text-[#FF6000] font-bold bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
                       <KeyRound className="w-3 h-3" />
-                      5-Digit Password Account
+                      Phone & Password Account
                     </span>
                   )}
                 </div>
@@ -10638,7 +10638,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
                   >
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Reset 5-Digit PIN</span>
+                    <span>Reset Password</span>
                   </button>
                 )}
                 <button
@@ -10675,7 +10675,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Admin Reset 5-Digit Password Modal */}
+      {/* Admin Reset Buyer Password Modal */}
       {resetPinCustomer && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative border border-slate-200 space-y-4">
@@ -10691,13 +10691,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <Lock className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-black text-base text-slate-900">Reset 5-Digit Password</h3>
+                <h3 className="font-black text-base text-slate-900">Reset Buyer Password</h3>
                 <p className="text-xs text-slate-500">Buyer: {resetPinCustomer.name} ({resetPinCustomer.phone})</p>
               </div>
             </div>
 
             <p className="text-xs text-slate-600">
-              Set a temporary 5-digit password for this buyer. Provide the credentials to the user securely via WhatsApp or SMS.
+              Set a temporary password (at least 6 characters) for this buyer. Provide the credentials to the user securely via WhatsApp or SMS.
             </p>
 
             {pinActionMessage && (
@@ -10716,21 +10716,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                const cleanPin = tempPin.replace(/\D/g, '').slice(0, 5);
-                if (cleanPin.length !== 5) {
-                  setPinActionMessage({ text: 'Password must be exactly 5 digits (e.g. 12345).', isError: true });
+                const cleanPass = tempPin.trim();
+                if (cleanPass.length < 6 || cleanPass.length > 128) {
+                  setPinActionMessage({ text: 'Password must be between 6 and 128 characters.', isError: true });
                   return;
                 }
                 try {
-                  await api.adminResetBuyerPassword(resetPinCustomer.id, cleanPin);
+                  await api.adminResetBuyerPassword(resetPinCustomer.id, cleanPass);
                   setPinActionMessage({
-                    text: `5-Digit Password successfully updated to "${cleanPin}".`,
+                    text: 'Buyer password has been updated securely.',
                     isError: false
                   });
                   setTimeout(() => {
                     setResetPinCustomer(null);
+                    setTempPin('');
                     showToast('Password updated successfully');
-                  }, 2000);
+                  }, 1500);
                 } catch (err: any) {
                   setPinActionMessage({ text: err.message || 'Failed to reset password', isError: true });
                 }
@@ -10739,21 +10740,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             >
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  New 5-Digit Password / PIN *
+                  New Password *
                 </label>
                 <input
                   type="text"
                   required
-                  maxLength={5}
-                  inputMode="numeric"
-                  pattern="[0-9]{5}"
+                  minLength={6}
+                  maxLength={128}
                   value={tempPin}
-                  onChange={(e) => setTempPin(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                  placeholder="e.g. 12345"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-black text-sm tracking-widest focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                  onChange={(e) => setTempPin(e.target.value)}
+                  placeholder="Min. 6 characters (letters, numbers, or symbols)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
                 />
                 <span className="text-[10px] text-slate-400 mt-1 block">
-                  Must be 5 numeric digits
+                  Minimum 6 characters
                 </span>
               </div>
 
@@ -10769,7 +10769,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   type="submit"
                   className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white text-xs font-bold rounded-xl cursor-pointer"
                 >
-                  Save 5-Digit Password
+                  Save Password
                 </button>
               </div>
             </form>

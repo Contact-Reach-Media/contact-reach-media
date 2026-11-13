@@ -435,57 +435,113 @@ async function runTests() {
     assert(sitemapText.includes(createdProductId), 'Sitemap should include active product URLs');
   });
 
-  // TEST 12: Buyer Exclusive Google Authentication & Rejection of Legacy Password Flows
-  const buyerGoogleEmail = `buyer.shopper.${Date.now()}@gmail.com`;
-  const buyerGoogleUid = `google_uid_${Date.now()}`;
+  // TEST 12: Buyer Phone + Password Authentication & Rejection of Google / Passwordless Flows
+  const buyerPhoneDigits = `078${String(Date.now()).slice(-7)}`;
+  const buyerPhoneIntl = `+250${buyerPhoneDigits.slice(1)}`;
+  const buyerPassword = 'StrongBuyerPass!2026';
   let registeredBuyerId = '';
   let buyerToken = '';
 
-  await test('Buyer signs in exclusively with Google, and legacy password registration is rejected', async () => {
-    // 1. Verify legacy password registration is rejected in favor of Google-only
-    const legacyRegRes = await fetch(`${BASE_URL}/api/buyers/register`, {
+  await test('Buyer registers and signs in with phone number and custom password only (Google & passwordless disabled)', async () => {
+    // 1. Verify Google login for buyers is disabled (403)
+    const googleRes = await fetch(`${BASE_URL}/api/buyers/google-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        phone: '0789123456',
+        email: `blocked.${Date.now()}@gmail.com`,
+        displayName: 'Blocked Google',
+        uid: 'blocked_uid'
+      })
+    });
+    assert.strictEqual(googleRes.status, 403, 'Buyer Google Sign-In must return 403 Forbidden');
+
+    // 2. Verify passwordless phone-login is disabled (403)
+    const passwordlessRes = await fetch(`${BASE_URL}/api/buyers/phone-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: buyerPhoneDigits, name: 'No Password' })
+    });
+    assert.strictEqual(passwordlessRes.status, 403, 'Passwordless phone-login must return 403 Forbidden');
+
+    // 3. Verify short password (< 6 chars) is rejected with 400
+    const weakRegRes = await fetch(`${BASE_URL}/api/buyers/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Gisele Uwase',
+        phone: buyerPhoneDigits,
         password: '12345'
       })
     });
-    assert.strictEqual(legacyRegRes.status, 400, 'Legacy password registration must be rejected');
-    const legacyRegData = await legacyRegRes.json();
-    assert.strictEqual(legacyRegData.useGoogleSignIn, true, 'Response must instruct to use Google Sign-In');
+    assert.strictEqual(weakRegRes.status, 400, 'Password shorter than 6 chars must be rejected');
 
-    // 2. Successful Buyer Google Sign-In
-    const googleLoginRes = await fetch(`${BASE_URL}/api/buyers/google-login`, {
+    // 4. Successful Buyer Registration with Phone & Custom Password
+    const regRes = await fetch(`${BASE_URL}/api/buyers/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: buyerGoogleEmail,
-        displayName: 'Gisele Uwase',
-        uid: buyerGoogleUid,
-        photoURL: 'https://lh3.googleusercontent.com/a/default-user',
-        phoneNumber: '0789123456'
+        name: 'Gisele Uwase',
+        phone: buyerPhoneDigits,
+        password: buyerPassword
       })
     });
-    assert.strictEqual(googleLoginRes.status, 200, 'Buyer Google login should return 200');
-    const loginData = await googleLoginRes.json();
-    assert(loginData.token, 'Session token should be returned');
-    assert.strictEqual(loginData.user.email, buyerGoogleEmail);
-    assert.strictEqual(loginData.user.name, 'Gisele Uwase');
-    assert.strictEqual(loginData.user.authProvider, 'google');
-    registeredBuyerId = loginData.user.id;
-    buyerToken = loginData.token;
+    assert.strictEqual(regRes.status, 201, 'Buyer registration should return 201');
+    const regData = await regRes.json();
+    assert(regData.token, 'Session token should be returned');
+    assert.strictEqual(regData.user.name, 'Gisele Uwase');
+    assert.strictEqual(regData.user.authProvider, 'phone');
+    assert.strictEqual(regData.user.passwordHash, undefined, 'passwordHash must never be returned');
+    registeredBuyerId = regData.user.id;
+    buyerToken = regData.token;
 
-    // 3. Buyer can fetch profile with session token
+    // 5. Duplicate registration on same phone (even formatted with +250) returns 409
+    const dupRes = await fetch(`${BASE_URL}/api/buyers/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Duplicate User',
+        phone: buyerPhoneIntl,
+        password: buyerPassword
+      })
+    });
+    assert.strictEqual(dupRes.status, 409, 'Duplicate phone registration must return 409');
+
+    // 6. Wrong password returns 401
+    const badLoginRes = await fetch(`${BASE_URL}/api/buyers/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: buyerPhoneDigits,
+        password: 'WrongPassword!'
+      })
+    });
+    assert.strictEqual(badLoginRes.status, 401, 'Invalid password must return 401');
+
+    // 7. Cross-device login with normalized +250 format succeeds and issues a valid token
+    const loginRes = await fetch(`${BASE_URL}/api/buyers/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: buyerPhoneIntl,
+        password: buyerPassword
+      })
+    });
+    assert.strictEqual(loginRes.status, 200, 'Phone + password login should return 200');
+    const loginData = await loginRes.json();
+    assert(loginData.token, 'Cross-device session token must be returned');
+    assert.strictEqual(loginData.user.id, registeredBuyerId);
+    assert.strictEqual(loginData.user.passwordHash, undefined, 'passwordHash must never be leaked on login');
+
+    // 8. Buyer can fetch profile with session token
     const meRes = await fetch(`${BASE_URL}/api/buyers/me`, {
       headers: { Authorization: `Bearer ${buyerToken}` }
     });
     assert.strictEqual(meRes.status, 200);
     const meData = await meRes.json();
     assert.strictEqual(meData.user.id, registeredBuyerId);
-    assert.strictEqual(meData.user.email, buyerGoogleEmail);
+    assert.strictEqual(meData.user.passwordHash, undefined);
 
-    // 4. Buyer can update delivery details (address & courier phone)
+    // 9. Buyer can update delivery details (address & courier phone)
     const updateRes = await fetch(`${BASE_URL}/api/buyers/profile`, {
       method: 'PUT',
       headers: {
@@ -494,7 +550,7 @@ async function runTests() {
       },
       body: JSON.stringify({
         deliveryAddress: 'Kigali, Kicukiro, Sonatubes',
-        phone: '0789123456'
+        phone: buyerPhoneDigits
       })
     });
     assert.strictEqual(updateRes.status, 200);
@@ -502,18 +558,19 @@ async function runTests() {
     assert.strictEqual(updatedData.user.deliveryAddress, 'Kigali, Kicukiro, Sonatubes');
   });
 
-  // TEST 13: Admin Can See Google-Authenticated Buyer Information
-  await test('User information can be seen by admin with full Google profile and security status', async () => {
+  // TEST 13: Admin Can See Phone-Authenticated Buyer Information (without passwordHash)
+  await test('User information can be seen by admin with full profile and security status without leaking hash', async () => {
     const adminCustRes = await fetch(`${BASE_URL}/api/admin/customers`, {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
     assert.strictEqual(adminCustRes.status, 200, 'Admin can view all customers');
     const allCustomers = await adminCustRes.json();
-    const createdBuyer = allCustomers.find((c: any) => c.email === buyerGoogleEmail || c.id === registeredBuyerId);
-    assert(createdBuyer, 'Created Google buyer must appear in admin customer directory');
+    const createdBuyer = allCustomers.find((c: any) => c.id === registeredBuyerId || c.phone === buyerPhoneDigits);
+    assert(createdBuyer, 'Created phone buyer must appear in admin customer directory');
     assert.strictEqual(createdBuyer.name, 'Gisele Uwase');
     assert.strictEqual(createdBuyer.isRegisteredBuyer, true, 'Admin can see that user has registered account');
     assert.strictEqual(createdBuyer.deliveryAddress, 'Kigali, Kicukiro, Sonatubes');
+    assert.strictEqual(createdBuyer.passwordHash, undefined, 'Admin list must never expose passwordHash');
 
     // Admin can get detailed customer profile and associated orders
     const detailRes = await fetch(`${BASE_URL}/api/admin/customers/${registeredBuyerId}`, {
@@ -522,7 +579,7 @@ async function runTests() {
     assert.strictEqual(detailRes.status, 200, 'Admin can view individual customer profile');
     const detailData = await detailRes.json();
     assert.strictEqual(detailData.customer.id, registeredBuyerId);
-    assert.strictEqual(detailData.customer.email, buyerGoogleEmail);
+    assert.strictEqual(detailData.customer.passwordHash, undefined, 'Admin customer detail must never expose passwordHash');
     assert(Array.isArray(detailData.orders), 'Orders list should be an array');
   });
 
@@ -2100,21 +2157,74 @@ async function runTests() {
     assert.strictEqual(verifyRes.status, 404, 'Deleted user must return 404');
   });
 
-  // TEST: Buyer Phone Login succeeds and returns token & user
-  await test('Buyer can sign in with phone number (MoMo fallback)', async () => {
-    const phoneRes = await fetch(`${BASE_URL}/api/buyers/phone-login`, {
+  // TEST: Buyer Password Change & Logout Token Revocation
+  await test('Buyer can change password and logout permanently revokes session token', async () => {
+    const secPhone = `072${String(Date.now()).slice(-7)}`;
+    const initialPass = 'InitialPass!99';
+    const updatedPass = 'UpdatedPass!77';
+
+    // 1. Register buyer with phone & custom password
+    const regRes = await fetch(`${BASE_URL}/api/buyers/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        phone: '0780022600',
-        name: 'MoMo Test Buyer'
+        phone: secPhone,
+        name: 'Security Test Buyer',
+        password: initialPass
       })
     });
-    assert.strictEqual(phoneRes.status, 200, 'Phone login should succeed with 200');
-    const phoneData = await phoneRes.json();
-    assert(phoneData.token, 'Token must be issued');
-    assert.strictEqual(phoneData.user.phone, '0780022600');
-    assert.strictEqual(phoneData.user.name, 'MoMo Test Buyer');
+    assert.strictEqual(regRes.status, 201, 'Registration should succeed with 201');
+    const regData = await regRes.json();
+    assert(regData.token, 'Token must be issued');
+    const sessionToken = regData.token;
+
+    // 2. Change password via /api/buyers/password
+    const chgRes = await fetch(`${BASE_URL}/api/buyers/password`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionToken}`
+      },
+      body: JSON.stringify({
+        currentPassword: initialPass,
+        newPassword: updatedPass
+      })
+    });
+    assert.strictEqual(chgRes.status, 200, 'Password change must succeed');
+
+    // 3. Old password must fail, new password must succeed
+    const oldLoginRes = await fetch(`${BASE_URL}/api/buyers/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: secPhone, password: initialPass })
+    });
+    assert.strictEqual(oldLoginRes.status, 401, 'Old password must be rejected after change');
+
+    const newLoginRes = await fetch(`${BASE_URL}/api/buyers/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: secPhone, password: updatedPass })
+    });
+    assert.strictEqual(newLoginRes.status, 200, 'New password must log in');
+    const newLoginData = await newLoginRes.json();
+    assert(newLoginData.token, 'Second device login token must be issued');
+
+    // 4. Logging out revokes sessionToken while newLoginData.token remains active
+    const logoutRes = await fetch(`${BASE_URL}/api/buyers/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    assert.strictEqual(logoutRes.status, 200);
+
+    const revokedMeRes = await fetch(`${BASE_URL}/api/buyers/me`, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    assert.strictEqual(revokedMeRes.status, 401, 'Logged-out token must be rejected with 401');
+
+    const otherDeviceMeRes = await fetch(`${BASE_URL}/api/buyers/me`, {
+      headers: { Authorization: `Bearer ${newLoginData.token}` }
+    });
+    assert.strictEqual(otherDeviceMeRes.status, 200, 'Other device session remains valid until it logs out');
   });
 
   // TEST: Manual Product Upload, Hide, Edit, and Delete with Persistence
@@ -2504,19 +2614,20 @@ async function runTests() {
 
   // TEST 65: Customer Account – Inbox, Real-Time Admin Chat & Order Tracking
   await test('Customer Account: Personal dashboard inbox, real-time admin chat, and order tracking sync', async () => {
-    // 1. Customer signs in
-    const testPhone = '0789998877';
-    const loginRes = await fetch(`${BASE_URL}/api/buyers/phone-login`, {
+    // 1. Customer registers/signs in with phone number and password
+    const testPhone = `0789${String(Date.now()).slice(-6)}`;
+    const testPassword = 'InboxUserPass!2026';
+    const regRes = await fetch(`${BASE_URL}/api/buyers/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         phone: testPhone,
         name: 'Jean Claude (Kigali Shopper)',
-        email: 'jeanclaude.test@gmail.com'
+        password: testPassword
       })
     });
-    assert.strictEqual(loginRes.status, 200, 'Buyer phone login should succeed');
-    const loginData = await loginRes.json();
+    assert.strictEqual(regRes.status, 201, 'Buyer registration should succeed');
+    const loginData = await regRes.json();
     assert(loginData.token, 'Should return buyer session token');
     const buyerToken = loginData.token;
     const buyerId = loginData.user.id;

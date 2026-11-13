@@ -632,12 +632,12 @@ export interface CustomerUser {
   status?: 'Active' | 'Suspended';
   lastLogin?: string;
   accountType?: 'buyer' | 'guest';
-  passwordHash?: string; // Legacy hashed password; never exposed in public client views
+  passwordHash?: string; // Salted scrypt password hash; never exposed in public client views
   isRegisteredBuyer?: boolean;
   hasPassword?: boolean;
   photoURL?: string;
   googleUid?: string;
-  authProvider?: 'google' | 'phone' | 'email';
+  authProvider?: 'phone' | 'email' | 'google';
 }
 
 export interface AdminMessage {

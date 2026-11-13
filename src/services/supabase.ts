@@ -901,20 +901,28 @@ export async function getAccountsFromSupabase(): Promise<any[]> {
   try {
     const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     if (error || !data) return [];
-    return data.map((u: any) => ({
-      id: String(u.id),
-      name: u.full_name || 'Customer',
-      email: u.email,
-      phone: u.phone || undefined,
-      role: u.role || 'customer',
-      deliveryAddress: u.default_address || undefined,
-      city: u.city || 'Kigali',
-      country: u.country || 'Rwanda',
-      status: u.is_active !== false ? 'Active' : 'Inactive',
-      active: u.is_active !== false,
-      isRegisteredBuyer: true,
-      createdAt: u.created_at || new Date().toISOString()
-    }));
+    return data.map((u: any) => {
+      const meta = (u.metadata && typeof u.metadata === 'object') ? u.metadata : {};
+      return {
+        id: String(u.id),
+        name: u.full_name || 'Customer',
+        email: u.email || undefined,
+        phone: u.phone || undefined,
+        role: u.role || 'customer',
+        deliveryAddress: u.default_address || meta.deliveryAddress || undefined,
+        city: u.city || 'Kigali',
+        country: u.country || 'Rwanda',
+        status: meta.status === 'Suspended' ? 'Suspended' : (u.is_active !== false ? 'Active' : 'Suspended'),
+        active: u.is_active !== false,
+        accountType: meta.accountType || 'buyer',
+        authProvider: meta.authProvider || 'phone',
+        passwordHash: meta.passwordHash || u.password_hash || undefined,
+        hasPassword: Boolean(meta.passwordHash || u.password_hash),
+        isRegisteredBuyer: meta.isRegisteredBuyer !== undefined ? Boolean(meta.isRegisteredBuyer) : true,
+        lastLogin: meta.lastLogin || undefined,
+        createdAt: u.created_at || new Date().toISOString()
+      };
+    });
   } catch {
     return [];
   }
@@ -922,21 +930,36 @@ export async function getAccountsFromSupabase(): Promise<any[]> {
 
 export async function saveAccountToSupabase(account: any): Promise<void> {
   try {
+    const cleanEmail = account.email && typeof account.email === 'string' && account.email.trim()
+      ? account.email.trim().toLowerCase()
+      : null;
+    const accountId = String(account.id || `cust-${Date.now()}`);
+    const metadataPayload: Record<string, any> = {
+      accountType: account.accountType || 'buyer',
+      authProvider: account.authProvider || 'phone',
+      status: account.status || 'Active',
+      isRegisteredBuyer: account.isRegisteredBuyer !== false,
+      lastLogin: account.lastLogin || undefined,
+      deliveryAddress: account.deliveryAddress || account.defaultAddress || undefined
+    };
+    if (account.passwordHash) {
+      metadataPayload.passwordHash = account.passwordHash;
+    }
+
     const row: Record<string, any> = {
+      id: accountId,
       full_name: account.name || account.fullName || 'User',
-      email: account.email,
+      email: cleanEmail,
       phone: account.phone || null,
       role: account.role || 'customer',
       default_address: account.deliveryAddress || account.defaultAddress || null,
       city: account.city || 'Kigali',
-      country: 'Rwanda',
-      is_active: account.active !== false && account.status !== 'Inactive',
+      country: account.country || 'Rwanda',
+      is_active: account.active !== false && account.status !== 'Suspended' && account.status !== 'Inactive',
+      metadata: metadataPayload,
       updated_at: new Date().toISOString()
     };
-    if (account.id) {
-      row.id = account.id;
-    }
-    await supabase.from('users').upsert(row, { onConflict: 'email' });
+    await supabase.from('users').upsert(row, { onConflict: 'id' });
   } catch (err) {
     console.warn('[Supabase] Save user error:', err);
   }

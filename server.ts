@@ -486,7 +486,8 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
       deletedRecordIds: db.deletedRecordIds || [],
       adminTokens: Array.from(db.adminTokens.entries()),
       revokedAdminTokens: Array.from(revokedTokens).slice(-500),
-      customerTokens: Array.from(db.customerTokens.entries())
+      customerTokens: Array.from(db.customerTokens.entries()),
+      revokedBuyerTokens: Array.from(revokedBuyerTokens).slice(-500)
     };
     // Atomic disk persistence: write to temp file then rename (compact JSON speeds up write 3-5x)
     const tempFile = path.resolve('data/market_db.tmp.json');
@@ -671,9 +672,19 @@ function loadDbFromDisk() {
         );
         db.adminTokens = new Map(validTokens);
       }
+      if (parsed.revokedBuyerTokens && Array.isArray(parsed.revokedBuyerTokens)) {
+        parsed.revokedBuyerTokens.forEach((rt: any) => {
+          if (typeof rt === 'string' && rt.trim()) revokedBuyerTokens.add(rt.trim());
+        });
+      }
       if (parsed.customerTokens && Array.isArray(parsed.customerTokens)) {
         const now = Date.now();
-        const validTokens = parsed.customerTokens.filter(([token, session]: any) => token && session && session.expiresAt > now);
+        const validTokens = parsed.customerTokens.filter(([token, session]: any) =>
+          token &&
+          !revokedBuyerTokens.has(token) &&
+          session &&
+          session.expiresAt > now
+        );
         db.customerTokens = new Map(validTokens);
       }
       console.log(`Loaded ${db.products.length} products, ${db.orders.length} orders, ${db.shops.length} shops, ${db.adminTokens.size} active admin sessions from storage.`);
@@ -1158,24 +1169,59 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
           updated_at: new Date().toISOString()
         }, { onConflict: 'email' });
       }
-    } else if (entityType === 'accounts' || entityType === 'customers') {
-      if (data.email) {
-        const userRow: Record<string, any> = {
-          full_name: data.name || data.fullName || 'User',
-          email: data.email,
-          phone: data.phone || null,
-          role: data.role || 'customer',
-          default_address: data.deliveryAddress || data.defaultAddress || null,
-          city: 'Kigali',
-          country: 'Rwanda',
-          is_active: data.active !== false && data.status !== 'Inactive',
-          updated_at: new Date().toISOString()
-        };
-        if (data.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)) {
-          userRow.id = data.id;
-        }
-        await supabase.from('users').upsert(userRow, { onConflict: 'email' });
+    } else if (entityType === 'accounts' || entityType === 'customers' || entityType === 'users') {
+      const accountId = String(data.id || `cust-${Date.now()}`);
+      const cleanEmail = data.email && typeof data.email === 'string' && data.email.trim()
+        ? data.email.trim().toLowerCase()
+        : null;
+      const metaPayload: Record<string, any> = {
+        accountType: data.accountType || 'buyer',
+        authProvider: data.authProvider || 'phone',
+        status: data.status || 'Active',
+        isRegisteredBuyer: data.isRegisteredBuyer !== undefined ? Boolean(data.isRegisteredBuyer) : true,
+        lastLogin: data.lastLogin || undefined,
+        deliveryAddress: data.deliveryAddress || data.defaultAddress || undefined,
+        totalOrders: Number(data.totalOrders) || 0,
+        totalSpent: Number(data.totalSpent) || 0
+      };
+      if (data.passwordHash) {
+        metaPayload.passwordHash = data.passwordHash;
       }
+
+      const userRow: Record<string, any> = {
+        id: accountId,
+        full_name: data.name || data.fullName || 'Customer',
+        email: cleanEmail,
+        phone: data.phone || null,
+        role: data.role || 'customer',
+        default_address: data.deliveryAddress || data.defaultAddress || null,
+        city: 'Kigali',
+        country: 'Rwanda',
+        is_active: data.active !== false && data.status !== 'Suspended' && data.status !== 'Inactive',
+        metadata: metaPayload,
+        updated_at: new Date().toISOString()
+      };
+      await supabase.from('users').upsert(userRow, { onConflict: 'id' });
+
+      const customerRow: Record<string, any> = {
+        id: accountId,
+        email: cleanEmail,
+        phone: data.phone || null,
+        name: data.name || data.fullName || 'Customer',
+        role: data.role || 'customer',
+        delivery_address: data.deliveryAddress || data.defaultAddress || null,
+        default_address: data.deliveryAddress || data.defaultAddress || null,
+        city: 'Kigali',
+        country: 'Rwanda',
+        total_orders: Number(data.totalOrders) || 0,
+        total_spent: Number(data.totalSpent) || 0,
+        is_active: data.active !== false && data.status !== 'Suspended' && data.status !== 'Inactive',
+        status: data.status || 'Active',
+        is_registered_buyer: data.isRegisteredBuyer !== undefined ? Boolean(data.isRegisteredBuyer) : true,
+        metadata: metaPayload,
+        updated_at: new Date().toISOString()
+      };
+      await supabase.from('customers').upsert(customerRow, { onConflict: 'id' });
     } else if (entityType === 'deletedProducts' || entityType === 'deletedRecordIds') {
       await supabase.from('deleted_tombstones').upsert({
         id: data.id,
@@ -1384,21 +1430,59 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.paymentConfirmations.length} payments.`);
     }
 
-    // 6. Users / Customers
-    const { data: usrs, error: usrErr } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    // 6. Users / Customers (merge both Supabase `users` and `customers` preserving metadata.passwordHash)
+    const [{ data: usrs, error: usrErr }, { data: custRows, error: custErr }] = await Promise.all([
+      supabase.from('users').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('*').order('created_at', { ascending: false })
+    ]);
+    const customerMap = new Map<string, CustomerUser>();
     if (!usrErr && Array.isArray(usrs)) {
-      db.customers = usrs.filter(u => u.role !== 'admin' && u.role !== 'owner').map(u => ({
-        id: String(u.id),
-        name: u.full_name || 'Customer',
-        email: u.email,
-        phone: u.phone || undefined,
-        role: 'customer',
-        deliveryAddress: u.default_address || undefined,
-        totalOrders: 0,
-        totalSpent: 0,
-        isRegisteredBuyer: true,
-        createdAt: u.created_at || new Date().toISOString()
-      }));
+      for (const u of usrs) {
+        if (u.role === 'admin' || u.role === 'owner') continue;
+        const meta = (u.metadata && typeof u.metadata === 'object') ? u.metadata : {};
+        customerMap.set(String(u.id), {
+          id: String(u.id),
+          name: u.full_name || 'Customer',
+          email: u.email || undefined,
+          phone: u.phone || '',
+          deliveryAddress: u.default_address || meta.deliveryAddress || undefined,
+          totalOrders: Number(meta.totalOrders) || 0,
+          totalSpent: Number(meta.totalSpent) || 0,
+          status: meta.status === 'Suspended' ? 'Suspended' : (u.is_active === false ? 'Suspended' : 'Active'),
+          accountType: meta.accountType || 'buyer',
+          authProvider: meta.authProvider || 'phone',
+          passwordHash: meta.passwordHash || u.password_hash || undefined,
+          isRegisteredBuyer: meta.isRegisteredBuyer !== undefined ? Boolean(meta.isRegisteredBuyer) : true,
+          lastLogin: meta.lastLogin || undefined,
+          createdAt: u.created_at || new Date().toISOString()
+        });
+      }
+    }
+    if (!custErr && Array.isArray(custRows)) {
+      for (const c of custRows) {
+        if (c.role === 'admin' || c.role === 'owner') continue;
+        const meta = (c.metadata && typeof c.metadata === 'object') ? c.metadata : {};
+        const existing = customerMap.get(String(c.id));
+        customerMap.set(String(c.id), {
+          id: String(c.id),
+          name: c.name || existing?.name || 'Customer',
+          email: c.email || existing?.email || undefined,
+          phone: c.phone || existing?.phone || '',
+          deliveryAddress: c.delivery_address || c.default_address || existing?.deliveryAddress || undefined,
+          totalOrders: Number(c.total_orders) || existing?.totalOrders || 0,
+          totalSpent: Number(c.total_spent) || existing?.totalSpent || 0,
+          status: (c.status === 'Suspended' || meta.status === 'Suspended' || c.is_active === false) ? 'Suspended' : 'Active',
+          accountType: meta.accountType || existing?.accountType || 'buyer',
+          authProvider: meta.authProvider || existing?.authProvider || 'phone',
+          passwordHash: meta.passwordHash || existing?.passwordHash || undefined,
+          isRegisteredBuyer: c.is_registered_buyer !== undefined ? Boolean(c.is_registered_buyer) : (existing?.isRegisteredBuyer ?? true),
+          lastLogin: meta.lastLogin || existing?.lastLogin || undefined,
+          createdAt: c.created_at || existing?.createdAt || new Date().toISOString()
+        });
+      }
+    }
+    if (customerMap.size > 0) {
+      db.customers = Array.from(customerMap.values());
       console.log(`[Supabase] Loaded ${db.customers.length} registered customers.`);
     }
 
@@ -1742,8 +1826,11 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 
 // Set of explicitly revoked or logged-out tokens & JTIs to guarantee instant permanent revocation
 const revokedTokens = new Set<string>();
+const revokedBuyerTokens = new Set<string>();
 const ADMIN_SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180-day persistent device session
 const ADMIN_SESSION_SLIDING_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
+const BUYER_SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180-day persistent buyer device session
+const BUYER_SESSION_SLIDING_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
 
 function getAdminTokenSecret(): string {
   if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 16) {
@@ -2864,23 +2951,18 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
   });
 
-    // Link to registered buyer account if token or phone/email match
+    // Link to registered buyer account if token or phone match
     let buyerUserId: string | undefined = (req.body as any).userId;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const bToken = authHeader.split(' ')[1];
-      const session = db.customerTokens.get(bToken);
-      if (session && session.expiresAt > Date.now()) {
-        const loggedInBuyer = db.customers.find(c => c.id === session.customerId);
-        if (loggedInBuyer) {
-          buyerUserId = loggedInBuyer.id;
-        }
+    const bToken = extractBuyerTokenFromReq(req);
+    if (bToken) {
+      const resolvedBuyer = await resolveBuyerSession(bToken);
+      if (resolvedBuyer?.buyer) {
+        buyerUserId = resolvedBuyer.buyer.id;
       }
     }
     if (!buyerUserId) {
-      const cleanPhone = customerPhone.replace(/\D/g, '');
       const existingCustomer = db.customers.find(c =>
-        (cleanPhone.length >= 7 && c.phone && c.phone.replace(/\D/g, '') === cleanPhone) ||
+        (c.phone && phonesMatch(c.phone, customerPhone)) ||
         (customerEmail && c.email && c.email.toLowerCase().trim() === customerEmail.toLowerCase().trim())
       );
       if (existingCustomer) buyerUserId = existingCustomer.id;
@@ -4674,219 +4756,560 @@ ${urls.map(u => `  <url>
 });
 
 // -------------------------------------------------------------
-// BUYER ACCOUNTS & AUTHENTICATION (GOOGLE SIGN-IN ONLY)
+// BUYER ACCOUNTS & AUTHENTICATION (PHONE NUMBER + PASSWORD ONLY)
 // -------------------------------------------------------------
+
+function normalizePhoneKey(rawPhone: string): string {
+  const digits = String(rawPhone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 12 && digits.startsWith('250')) {
+    return `0${digits.slice(3)}`;
+  }
+  if (digits.length === 9 && digits.startsWith('7')) {
+    return `0${digits}`;
+  }
+  return digits;
+}
+
+function formatStoredPhone(rawPhone: string): string {
+  const trimmed = String(rawPhone || '').trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 12 && digits.startsWith('250')) {
+    return `0${digits.slice(3)}`;
+  }
+  if (digits.length === 9 && digits.startsWith('7')) {
+    return `0${digits}`;
+  }
+  if (digits.length === 10 && digits.startsWith('07')) {
+    return digits;
+  }
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
+}
+
+function phonesMatch(a?: string | null, b?: string | null): boolean {
+  const keyA = normalizePhoneKey(a || '');
+  const keyB = normalizePhoneKey(b || '');
+  if (keyA.length < 7 || keyB.length < 7) return false;
+  return keyA === keyB;
+}
+
+function validateBuyerPhone(rawPhone: unknown): { valid: boolean; phone?: string; key?: string; error?: string } {
+  if (typeof rawPhone !== 'string' || !rawPhone.trim()) {
+    return { valid: false, error: 'Phone number is required.' };
+  }
+  const trimmed = rawPhone.trim();
+  if (trimmed.includes('@')) {
+    return { valid: false, error: 'Please sign in or register using your phone number (email login is disabled).' };
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 15) {
+    return { valid: false, error: 'Please enter a valid phone number (e.g. 0780022600).' };
+  }
+  return {
+    valid: true,
+    phone: formatStoredPhone(trimmed),
+    key: normalizePhoneKey(trimmed)
+  };
+}
+
+function validateBuyerPassword(password: unknown): { valid: boolean; error?: string } {
+  if (typeof password !== 'string' || password.length === 0 || /^\s+$/.test(password)) {
+    return { valid: false, error: 'Password is required.' };
+  }
+  if (password.length < 6) {
+    return { valid: false, error: 'Password must be at least 6 characters long.' };
+  }
+  if (password.length > 128) {
+    return { valid: false, error: 'Password must not exceed 128 characters.' };
+  }
+  return { valid: true };
+}
+
+function hashBuyerPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt:${salt}:${derived}`;
+}
+
+function verifyBuyerPassword(password: string, storedHash?: string): boolean {
+  try {
+    if (!storedHash || typeof storedHash !== 'string') return false;
+    const parts = storedHash.split(':');
+    if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+    const [, salt, expectedHex] = parts;
+    if (!salt || !expectedHex) return false;
+    const derivedBuf = crypto.scryptSync(password, salt, 64);
+    const expectedBuf = Buffer.from(expectedHex, 'hex');
+    if (derivedBuf.length !== expectedBuf.length) return false;
+    return crypto.timingSafeEqual(derivedBuf, expectedBuf);
+  } catch {
+    return false;
+  }
+}
+
+function getBuyerTokenSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 16) {
+    return process.env.SESSION_SECRET.trim();
+  }
+  if (process.env.BUYER_SESSION_SECRET && process.env.BUYER_SESSION_SECRET.trim().length >= 16) {
+    return process.env.BUYER_SESSION_SECRET.trim();
+  }
+  return crypto
+    .createHash('sha256')
+    .update(`${process.env.ADMIN_PASSWORD || ADMIN_PASSWORD}:crm_buyer_session_hmac_v2`)
+    .digest('hex');
+}
+
+function createSignedBuyerToken(buyer: CustomerUser, ttlMs: number = BUYER_SESSION_TTL_MS): { token: string; expiresAt: number } {
+  const now = Date.now();
+  const expiresAt = now + ttlMs;
+  const payload = {
+    sub: buyer.id,
+    phoneKey: normalizePhoneKey(buyer.phone || ''),
+    jti: crypto.randomBytes(16).toString('hex'),
+    iat: now,
+    exp: expiresAt
+  };
+  const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const sigB64 = crypto
+    .createHmac('sha256', getBuyerTokenSecret())
+    .update(payloadB64)
+    .digest('base64url');
+  return {
+    token: `crm_buyer_${payloadB64}.${sigB64}`,
+    expiresAt
+  };
+}
+
+function verifySignedBuyerTokenRaw(token: string): { jti?: string; sub?: string; phoneKey?: string; exp?: number } | null {
+  try {
+    if (!token || !token.startsWith('crm_buyer_')) return null;
+    const raw = token.slice('crm_buyer_'.length);
+    const dotIdx = raw.indexOf('.');
+    if (dotIdx <= 0) return null;
+    return JSON.parse(Buffer.from(raw.slice(0, dotIdx), 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function verifySignedBuyerToken(token: string): { sub: string; phoneKey?: string; jti: string; iat: number; exp: number } | null {
+  try {
+    if (!token || typeof token !== 'string' || !token.startsWith('crm_buyer_')) return null;
+    if (revokedBuyerTokens.has(token)) return null;
+    const raw = token.slice('crm_buyer_'.length);
+    const dotIdx = raw.indexOf('.');
+    if (dotIdx <= 0) return null;
+    const payloadB64 = raw.slice(0, dotIdx);
+    const sigB64 = raw.slice(dotIdx + 1);
+    if (!payloadB64 || !sigB64) return null;
+
+    const expectedSig = crypto
+      .createHmac('sha256', getBuyerTokenSecret())
+      .update(payloadB64)
+      .digest('base64url');
+
+    const sigBuf = Buffer.from(sigB64);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      return null;
+    }
+
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (!payload || typeof payload !== 'object' || !payload.sub) return null;
+    if (!payload.exp || Number(payload.exp) <= Date.now()) return null;
+    if (payload.jti && revokedBuyerTokens.has(`jti:${payload.jti}`)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function revokeBuyerToken(token: string) {
+  if (!token) return;
+  db.customerTokens.delete(token);
+  revokedBuyerTokens.add(token);
+  const parsed = verifySignedBuyerTokenRaw(token);
+  if (parsed?.jti) {
+    revokedBuyerTokens.add(`jti:${parsed.jti}`);
+  }
+}
+
+function revokeAllTokensForBuyer(buyerId: string) {
+  for (const [tok, session] of db.customerTokens.entries()) {
+    if (session.customerId === buyerId) {
+      revokeBuyerToken(tok);
+    }
+  }
+}
+
+function extractBuyerTokenFromReq(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const bearer = authHeader.split(' ')[1]?.trim();
+    if (bearer) return bearer;
+  }
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader && typeof cookieHeader === 'string') {
+    const parts = cookieHeader.split(';');
+    for (const part of parts) {
+      const idx = part.indexOf('=');
+      if (idx === -1) continue;
+      if (part.slice(0, idx).trim() === 'crm_buyer_token') {
+        const val = decodeURIComponent(part.slice(idx + 1).trim());
+        if (val) return val;
+      }
+    }
+  }
+  return null;
+}
+
+function setBuyerSessionCookie(res: Response, token: string, expiresAt: number) {
+  try {
+    const maxAgeSec = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
+    res.cookie('crm_buyer_token', token, {
+      path: '/',
+      maxAge: maxAgeSec * 1000,
+      sameSite: 'lax',
+      httpOnly: false
+    });
+  } catch {}
+}
+
+function clearBuyerSessionCookie(res: Response) {
+  try {
+    res.clearCookie('crm_buyer_token', { path: '/' });
+  } catch {}
+}
+
+async function syncBuyerFromSupabaseIfNeeded(opts: { id?: string; phoneKey?: string }): Promise<CustomerUser | null> {
+  try {
+    const { data: usersData } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (Array.isArray(usersData)) {
+      for (const u of usersData) {
+        if (u.role === 'admin' || u.role === 'owner') continue;
+        const meta = (u.metadata && typeof u.metadata === 'object') ? u.metadata : {};
+        const matchesId = opts.id && String(u.id) === opts.id;
+        const matchesPhone = opts.phoneKey && u.phone && normalizePhoneKey(u.phone) === opts.phoneKey;
+        if (matchesId || matchesPhone) {
+          const hydrated: CustomerUser = {
+            id: String(u.id),
+            name: u.full_name || 'Customer',
+            email: u.email || undefined,
+            phone: u.phone || '',
+            deliveryAddress: u.default_address || meta.deliveryAddress || undefined,
+            totalOrders: Number(meta.totalOrders) || 0,
+            totalSpent: Number(meta.totalSpent) || 0,
+            status: (meta.status === 'Suspended' || u.is_active === false) ? 'Suspended' : 'Active',
+            accountType: meta.accountType || 'buyer',
+            authProvider: meta.authProvider || 'phone',
+            passwordHash: meta.passwordHash || u.password_hash || undefined,
+            isRegisteredBuyer: meta.isRegisteredBuyer !== undefined ? Boolean(meta.isRegisteredBuyer) : true,
+            lastLogin: meta.lastLogin || undefined,
+            createdAt: u.created_at || new Date().toISOString()
+          };
+          const existingIdx = db.customers.findIndex(c => c.id === hydrated.id);
+          if (existingIdx >= 0) {
+            db.customers[existingIdx] = { ...db.customers[existingIdx], ...hydrated };
+            return db.customers[existingIdx];
+          } else {
+            db.customers.unshift(hydrated);
+            return hydrated;
+          }
+        }
+      }
+    }
+
+    const { data: custData } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (Array.isArray(custData)) {
+      for (const c of custData) {
+        if (c.role === 'admin' || c.role === 'owner') continue;
+        const meta = (c.metadata && typeof c.metadata === 'object') ? c.metadata : {};
+        const matchesId = opts.id && String(c.id) === opts.id;
+        const matchesPhone = opts.phoneKey && c.phone && normalizePhoneKey(c.phone) === opts.phoneKey;
+        if (matchesId || matchesPhone) {
+          const hydrated: CustomerUser = {
+            id: String(c.id),
+            name: c.name || 'Customer',
+            email: c.email || undefined,
+            phone: c.phone || '',
+            deliveryAddress: c.delivery_address || c.default_address || undefined,
+            totalOrders: Number(c.total_orders) || 0,
+            totalSpent: Number(c.total_spent) || 0,
+            status: (c.status === 'Suspended' || meta.status === 'Suspended' || c.is_active === false) ? 'Suspended' : 'Active',
+            accountType: meta.accountType || 'buyer',
+            authProvider: meta.authProvider || 'phone',
+            passwordHash: meta.passwordHash || undefined,
+            isRegisteredBuyer: c.is_registered_buyer !== undefined ? Boolean(c.is_registered_buyer) : true,
+            lastLogin: meta.lastLogin || undefined,
+            createdAt: c.created_at || new Date().toISOString()
+          };
+          const existingIdx = db.customers.findIndex(cust => cust.id === hydrated.id);
+          if (existingIdx >= 0) {
+            db.customers[existingIdx] = { ...db.customers[existingIdx], ...hydrated };
+            return db.customers[existingIdx];
+          } else {
+            db.customers.unshift(hydrated);
+            return hydrated;
+          }
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function resolveBuyerSession(token: string): Promise<{ buyer: CustomerUser; expiresAt: number; statusError?: number; errorMsg?: string } | null> {
+  if (!token || revokedBuyerTokens.has(token)) return null;
+
+  let session = db.customerTokens.get(token);
+  let signedPayload: ReturnType<typeof verifySignedBuyerToken> = null;
+
+  if (!session) {
+    signedPayload = verifySignedBuyerToken(token);
+    if (!signedPayload) return null;
+    session = {
+      customerId: signedPayload.sub,
+      expiresAt: signedPayload.exp
+    };
+    db.customerTokens.set(token, session);
+  } else {
+    const rawParsed = verifySignedBuyerTokenRaw(token);
+    if (rawParsed?.jti && revokedBuyerTokens.has(`jti:${rawParsed.jti}`)) {
+      revokeBuyerToken(token);
+      return null;
+    }
+    if (Date.now() > session.expiresAt) {
+      db.customerTokens.delete(token);
+      return null;
+    }
+  }
+
+  let buyer = db.customers.find(c => c.id === session!.customerId);
+  if (!buyer) {
+    const phoneKey = signedPayload?.phoneKey || verifySignedBuyerTokenRaw(token)?.phoneKey;
+    const synced = await syncBuyerFromSupabaseIfNeeded({ id: session.customerId, phoneKey });
+    if (synced) buyer = synced;
+  }
+
+  if (!buyer) {
+    return null;
+  }
+  if (buyer.status === 'Suspended') {
+    return { buyer, expiresAt: session.expiresAt, statusError: 403, errorMsg: 'This account has been suspended. Please contact customer support.' };
+  }
+
+  // Sliding session renewal so active buyers stay signed in across devices & restarts until explicit logout
+  if (session.expiresAt - Date.now() < BUYER_SESSION_SLIDING_THRESHOLD_MS) {
+    session.expiresAt = Date.now() + BUYER_SESSION_TTL_MS;
+    saveDbToDisk();
+  }
+
+  return { buyer, expiresAt: session.expiresAt };
+}
 
 function sanitizeBuyer(c: CustomerUser): Omit<CustomerUser, 'passwordHash'> {
   const { passwordHash, ...safe } = c;
-  return safe;
+  return {
+    ...safe,
+    hasPassword: Boolean(passwordHash)
+  };
 }
 
-function requireBuyerAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Please sign in with your Google account.' });
+async function requireBuyerAuth(req: Request, res: Response, next: NextFunction) {
+  const token = extractBuyerTokenFromReq(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Please sign in with your phone number and password.' });
   }
-  const token = authHeader.split(' ')[1];
-  const session = db.customerTokens.get(token);
-  if (!session || Date.now() > session.expiresAt) {
-    if (session) db.customerTokens.delete(token);
-    return res.status(401).json({ error: 'Session expired. Please sign in with Google again.' });
+  const resolved = await resolveBuyerSession(token);
+  if (!resolved) {
+    return res.status(401).json({ error: 'Session expired. Please sign in with your phone number and password.' });
   }
-  const buyer = db.customers.find(c => c.id === session.customerId);
-  if (!buyer) {
-    return res.status(404).json({ error: 'Buyer account not found.' });
+  if (resolved.statusError === 403) {
+    return res.status(403).json({ error: resolved.errorMsg || 'This account has been suspended.' });
   }
-  if (buyer.status === 'Suspended') {
-    return res.status(403).json({ error: 'This account has been suspended. Please contact customer support.' });
-  }
-  (req as any).buyerUser = buyer;
+  (req as any).buyerUser = resolved.buyer;
+  (req as any).buyerSessionExpiresAt = resolved.expiresAt;
+  (req as any).buyerToken = token;
   next();
 }
 
-// 1. Exclusive Buyer Google Sign-In Endpoint
-app.post('/api/buyers/google-login', async (req: Request, res: Response) => {
-  const { email, displayName, uid, photoURL, phoneNumber, idToken } = req.body;
-  if (!email && !uid && !idToken) {
-    return res.status(400).json({ error: 'Google account details (email, UID, or ID token) are required.' });
-  }
-
-  let normalizedEmail = (email || '').trim().toLowerCase();
-  let verifiedUid = uid;
-  let verifiedName = displayName;
-  let verifiedPhoto = photoURL;
-
-  // Cryptographic Google ID Token Verification (Direct Google OAuth)
-  if (idToken && typeof idToken === 'string') {
-    try {
-      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
-      if (verifyRes.ok) {
-        const gUser = await verifyRes.json();
-        if (gUser.email) normalizedEmail = gUser.email.toLowerCase().trim();
-        if (gUser.sub) verifiedUid = gUser.sub;
-        if (gUser.name) verifiedName = gUser.name;
-        if (gUser.picture) verifiedPhoto = gUser.picture;
-      }
-    } catch (tokenErr) {
-      console.warn('[Buyer Auth] Google ID token verification lookup notice:', tokenErr);
-    }
-  }
-
-  // Match buyer by email, googleUid, or id
-  let buyer = db.customers.find(c =>
-    (normalizedEmail && c.email && c.email.toLowerCase() === normalizedEmail) ||
-    (verifiedUid && c.googleUid && c.googleUid === verifiedUid) ||
-    (verifiedUid && c.id === `cust-g-${verifiedUid}`)
-  );
-
-  const buyerName = verifiedName?.trim() || (normalizedEmail ? normalizedEmail.split('@')[0] : 'Valued Buyer');
-
-  if (buyer) {
-    if (buyer.status === 'Suspended') {
-      return res.status(403).json({ error: 'Your account is currently suspended. Please contact customer support.' });
-    }
-    buyer.lastLogin = new Date().toISOString();
-    buyer.accountType = 'buyer';
-    buyer.authProvider = 'google';
-    buyer.isRegisteredBuyer = true;
-    if (displayName && (!buyer.name || buyer.name.startsWith('Buyer ('))) {
-      buyer.name = displayName.trim();
-    }
-    if (normalizedEmail && !buyer.email) {
-      buyer.email = normalizedEmail;
-    }
-    if (photoURL) {
-      buyer.photoURL = photoURL;
-    }
-    if (uid) {
-      buyer.googleUid = uid;
-    }
-    if (phoneNumber && !buyer.phone) {
-      buyer.phone = phoneNumber.trim();
-    }
-  } else {
-    buyer = {
-      id: `cust-g-${uid || Date.now()}`,
-      name: buyerName,
-      phone: phoneNumber?.trim() || '',
-      email: normalizedEmail || undefined,
-      deliveryAddress: undefined,
-      createdAt: new Date().toISOString(),
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'Active',
-      accountType: 'buyer',
-      lastLogin: new Date().toISOString(),
-      photoURL: photoURL || undefined,
-      googleUid: uid,
-      authProvider: 'google',
-      isRegisteredBuyer: true
-    };
-    db.customers.push(buyer);
-  }
-
-  const token = `buyer_g_${crypto.randomBytes(24).toString('hex')}`;
-  db.customerTokens.set(token, {
-    customerId: buyer.id,
-    expiresAt: Date.now() + 30 * 24 * 3600 * 1000 // 30 days
-  });
-
-  saveDbToDisk();
-  saveToFirestoreAsync('customers', buyer.id, sanitizeBuyer(buyer));
-
-  res.json({
-    message: 'Welcome! Signed in with Google successfully.',
-    token,
-    user: sanitizeBuyer(buyer)
+// Disabled Legacy Endpoints: Google Sign-In & Passwordless Phone Login
+app.post('/api/buyers/google-login', (_req: Request, res: Response) => {
+  return res.status(403).json({
+    error: 'Sign in with Google is disabled for buyer accounts. Please register or sign in with your phone number and password.'
   });
 });
 
-// 1b. Buyer Phone Number / Mobile Money Sign-In Endpoint
-app.post('/api/buyers/phone-login', async (req: Request, res: Response) => {
-  const { phone, name, email } = req.body;
-  if (!phone || typeof phone !== 'string' || !phone.trim()) {
-    return res.status(400).json({ error: 'Phone number is required for buyer login.' });
+app.post('/api/buyers/phone-login', (_req: Request, res: Response) => {
+  return res.status(403).json({
+    error: 'Passwordless phone sign-in is disabled. Please sign in with your phone number and password.'
+  });
+});
+
+// 1. Register New Buyer Account (Phone Number + Custom Password)
+app.post('/api/buyers/register', async (req: Request, res: Response) => {
+  const { name, phone, identifier, emailOrPhone, password, deliveryAddress } = req.body;
+  const rawPhoneInput = phone || identifier || emailOrPhone;
+  const phoneCheck = validateBuyerPhone(rawPhoneInput);
+  if (!phoneCheck.valid || !phoneCheck.phone || !phoneCheck.key) {
+    return res.status(400).json({ error: phoneCheck.error || 'Valid phone number is required.' });
   }
 
-  const cleanPhone = phone.trim().replace(/\s+/g, '');
-  const cleanEmail = email && typeof email === 'string' ? email.trim().toLowerCase() : undefined;
-  const buyerName = name && typeof name === 'string' && name.trim() ? name.trim() : `Buyer (${cleanPhone.slice(-4)})`;
+  const passwordCheck = validateBuyerPassword(password);
+  if (!passwordCheck.valid) {
+    return res.status(400).json({ error: passwordCheck.error || 'Valid password is required.' });
+  }
 
-  // Find existing buyer by phone or email
-  const existingBuyer = db.customers.find(c =>
-    (c.phone && c.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '')) ||
-    (cleanEmail && c.email && c.email.toLowerCase() === cleanEmail)
-  );
+  const cleanName = typeof name === 'string' ? name.trim() : '';
+  if (cleanName.length < 2) {
+    return res.status(400).json({ error: 'Please enter your full name (at least 2 characters).' });
+  }
+
+  // Check memory and Supabase for an existing account with this phone number
+  let existingBuyer = db.customers.find(c => phonesMatch(c.phone, phoneCheck.phone));
+  if (!existingBuyer) {
+    const remoteBuyer = await syncBuyerFromSupabaseIfNeeded({ phoneKey: phoneCheck.key });
+    if (remoteBuyer) existingBuyer = remoteBuyer;
+  }
+
+  if (existingBuyer && existingBuyer.passwordHash) {
+    return res.status(409).json({
+      error: 'An account with this phone number already exists. Please sign in using your password.'
+    });
+  }
+
+  const passwordHash = hashBuyerPassword(password);
+  const nowIso = new Date().toISOString();
 
   let buyer: CustomerUser;
   if (existingBuyer) {
     if (existingBuyer.status === 'Suspended') {
-      return res.status(403).json({ error: 'Your account is currently suspended. Please contact customer support.' });
+      return res.status(403).json({ error: 'This account is currently suspended. Please contact customer support.' });
     }
-    existingBuyer.lastLogin = new Date().toISOString();
+    // Upgrade historical guest order profile into a full password-protected buyer account
+    existingBuyer.name = cleanName;
+    existingBuyer.phone = phoneCheck.phone;
+    existingBuyer.passwordHash = passwordHash;
     existingBuyer.accountType = 'buyer';
+    existingBuyer.authProvider = 'phone';
     existingBuyer.isRegisteredBuyer = true;
-    if (name && (!existingBuyer.name || existingBuyer.name.startsWith('Buyer ('))) {
-      existingBuyer.name = name.trim();
-    }
-    if (cleanEmail && !existingBuyer.email) {
-      existingBuyer.email = cleanEmail;
+    existingBuyer.lastLogin = nowIso;
+    if (typeof deliveryAddress === 'string' && deliveryAddress.trim()) {
+      existingBuyer.deliveryAddress = deliveryAddress.trim();
     }
     buyer = existingBuyer;
   } else {
     buyer = {
-      id: `cust-p-${Date.now()}`,
-      name: buyerName,
-      phone: cleanPhone,
-      email: cleanEmail,
-      deliveryAddress: undefined,
-      createdAt: new Date().toISOString(),
+      id: `cust-p-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+      name: cleanName,
+      phone: phoneCheck.phone,
+      deliveryAddress: typeof deliveryAddress === 'string' && deliveryAddress.trim() ? deliveryAddress.trim() : undefined,
+      createdAt: nowIso,
       totalOrders: 0,
       totalSpent: 0,
       status: 'Active',
       accountType: 'buyer',
-      lastLogin: new Date().toISOString(),
+      lastLogin: nowIso,
       authProvider: 'phone',
+      passwordHash,
       isRegisteredBuyer: true
     };
-    db.customers.push(buyer);
+    db.customers.unshift(buyer);
   }
 
-  const token = `buyer_p_${crypto.randomBytes(24).toString('hex')}`;
+  const { token, expiresAt } = createSignedBuyerToken(buyer, BUYER_SESSION_TTL_MS);
   db.customerTokens.set(token, {
     customerId: buyer.id,
-    expiresAt: Date.now() + 30 * 24 * 3600 * 1000 // 30 days
+    expiresAt
   });
 
-  saveDbToDisk();
-  saveToFirestoreAsync('customers', buyer.id, sanitizeBuyer(buyer));
+  saveDbToDisk('customer_updated', { customer: buyer });
+  await saveToFirestoreAsync('customers', buyer.id, buyer);
+  setBuyerSessionCookie(res, token, expiresAt);
 
-  res.json({
-    message: 'Welcome! Signed in successfully.',
+  res.status(201).json({
+    message: 'Account created and signed in successfully.',
     token,
+    expiresAt,
     user: sanitizeBuyer(buyer)
   });
 });
 
-// Legacy password endpoints disabled in favor of Google and MoMo phone authentication
-app.post('/api/buyers/register', (req: Request, res: Response) => {
-  return res.status(400).json({
-    error: 'ContactReach Market now uses Google and Phone Sign-In for all buyer accounts. Please sign in with Google or Phone.',
-    useGoogleSignIn: true
+// 1b. Sign In Existing Buyer Account (Phone Number + Password)
+app.post('/api/buyers/login', async (req: Request, res: Response) => {
+  const { phone, identifier, emailOrPhone, password } = req.body;
+  const rawPhoneInput = phone || identifier || emailOrPhone;
+  const phoneCheck = validateBuyerPhone(rawPhoneInput);
+  if (!phoneCheck.valid || !phoneCheck.phone || !phoneCheck.key) {
+    return res.status(400).json({ error: phoneCheck.error || 'Valid phone number is required.' });
+  }
+
+  if (typeof password !== 'string' || !password.length) {
+    return res.status(400).json({ error: 'Password is required.' });
+  }
+
+  let buyer = db.customers.find(c => phonesMatch(c.phone, phoneCheck.phone));
+  if (!buyer || !buyer.passwordHash) {
+    const remoteBuyer = await syncBuyerFromSupabaseIfNeeded({ phoneKey: phoneCheck.key });
+    if (remoteBuyer) buyer = remoteBuyer;
+  }
+
+  if (!buyer || !buyer.passwordHash) {
+    return res.status(401).json({ error: 'Invalid phone number or password.' });
+  }
+
+  if (buyer.status === 'Suspended') {
+    return res.status(403).json({ error: 'Your account is currently suspended. Please contact customer support.' });
+  }
+
+  if (!verifyBuyerPassword(password, buyer.passwordHash)) {
+    return res.status(401).json({ error: 'Invalid phone number or password.' });
+  }
+
+  buyer.lastLogin = new Date().toISOString();
+  buyer.accountType = 'buyer';
+  buyer.authProvider = 'phone';
+  buyer.isRegisteredBuyer = true;
+
+  const { token, expiresAt } = createSignedBuyerToken(buyer, BUYER_SESSION_TTL_MS);
+  db.customerTokens.set(token, {
+    customerId: buyer.id,
+    expiresAt
+  });
+
+  saveDbToDisk('customer_updated', { customer: buyer });
+  await saveToFirestoreAsync('customers', buyer.id, buyer);
+  setBuyerSessionCookie(res, token, expiresAt);
+
+  res.json({
+    message: 'Welcome back! Signed in successfully.',
+    token,
+    expiresAt,
+    user: sanitizeBuyer(buyer)
   });
 });
 
-app.post('/api/buyers/login', (req: Request, res: Response) => {
-  return res.status(400).json({
-    error: 'ContactReach Market now uses Google and Phone Sign-In for all buyer accounts. Please sign in with Google or Phone.',
-    useGoogleSignIn: true
-  });
-});
-
-// 2. Current Buyer Profile
+// 2. Current Buyer Profile (Sliding Persistent Session)
 app.get('/api/buyers/me', requireBuyerAuth, (req: Request, res: Response) => {
   const buyer = (req as any).buyerUser as CustomerUser;
-  res.json({ user: sanitizeBuyer(buyer) });
+  const expiresAt = (req as any).buyerSessionExpiresAt as number | undefined;
+  const token = (req as any).buyerToken as string | undefined;
+  if (token && expiresAt) {
+    setBuyerSessionCookie(res, token, expiresAt);
+  }
+  res.json({
+    user: sanitizeBuyer(buyer),
+    sessionExpiresAt: expiresAt
+  });
 });
 
 // 3. Update Buyer Profile (Name, Phone, Delivery Address)
@@ -4894,21 +5317,31 @@ app.put('/api/buyers/profile', requireBuyerAuth, (req: Request, res: Response) =
   const buyer = (req as any).buyerUser as CustomerUser;
   const { name, email, phone, deliveryAddress } = req.body;
 
-  if (name && typeof name === 'string' && name.trim()) {
+  if (name && typeof name === 'string' && name.trim().length >= 2) {
     buyer.name = name.trim();
   }
   if (email !== undefined && typeof email === 'string') {
-    buyer.email = email.trim();
+    buyer.email = email.trim() || undefined;
   }
-  if (phone !== undefined && typeof phone === 'string') {
-    buyer.phone = phone.trim();
+  if (phone !== undefined && typeof phone === 'string' && phone.trim()) {
+    const phoneCheck = validateBuyerPhone(phone);
+    if (!phoneCheck.valid || !phoneCheck.phone) {
+      return res.status(400).json({ error: phoneCheck.error || 'Invalid phone number.' });
+    }
+    const conflict = db.customers.find(c =>
+      c.id !== buyer.id && Boolean(c.passwordHash) && phonesMatch(c.phone, phoneCheck.phone)
+    );
+    if (conflict) {
+      return res.status(409).json({ error: 'This phone number is already used by another registered account.' });
+    }
+    buyer.phone = phoneCheck.phone;
   }
   if (deliveryAddress !== undefined) {
     buyer.deliveryAddress = typeof deliveryAddress === 'string' ? deliveryAddress.trim() : undefined;
   }
 
-  saveDbToDisk();
-  saveToFirestoreAsync('customers', buyer.id, sanitizeBuyer(buyer));
+  saveDbToDisk('customer_updated', { customer: buyer });
+  saveToFirestoreAsync('customers', buyer.id, buyer);
 
   res.json({
     message: 'Profile updated successfully',
@@ -4916,15 +5349,37 @@ app.put('/api/buyers/profile', requireBuyerAuth, (req: Request, res: Response) =
   });
 });
 
+// 3b. Change Buyer Password
+app.put('/api/buyers/password', requireBuyerAuth, (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  const { currentPassword, newPassword } = req.body;
+
+  if (buyer.passwordHash && !verifyBuyerPassword(String(currentPassword || ''), buyer.passwordHash)) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+  const passCheck = validateBuyerPassword(newPassword);
+  if (!passCheck.valid) {
+    return res.status(400).json({ error: passCheck.error || 'Invalid new password.' });
+  }
+
+  buyer.passwordHash = hashBuyerPassword(newPassword);
+  saveDbToDisk('customer_updated', { customer: buyer });
+  saveToFirestoreAsync('customers', buyer.id, buyer);
+
+  res.json({
+    message: 'Password updated successfully.',
+    user: sanitizeBuyer(buyer)
+  });
+});
+
 // 5. Buyer Order History & Real-Time Tracking
 app.get('/api/buyers/orders', requireBuyerAuth, (req: Request, res: Response) => {
   const buyer = (req as any).buyerUser as CustomerUser;
-  const cleanPhone = buyer.phone ? buyer.phone.replace(/\D/g, '') : '';
   const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
 
   const buyerOrders = db.orders.filter(o =>
     (o.userId && o.userId === buyer.id) ||
-    (cleanPhone.length >= 7 && o.customerPhone && o.customerPhone.replace(/\D/g, '') === cleanPhone) ||
+    (buyer.phone && o.customerPhone && phonesMatch(o.customerPhone, buyer.phone)) ||
     (cleanEmail && o.customerEmail && o.customerEmail.toLowerCase().trim() === cleanEmail)
   );
 
@@ -4936,12 +5391,12 @@ app.get('/api/buyers/orders', requireBuyerAuth, (req: Request, res: Response) =>
 // 5b. Buyer Inbox & Live Chat Messages (Real-Time Bidirectional Messages)
 app.get('/api/buyers/messages', requireBuyerAuth, (req: Request, res: Response) => {
   const buyer = (req as any).buyerUser as CustomerUser;
-  const cleanPhone = buyer.phone ? buyer.phone.replace(/\D/g, '') : '';
+  const cleanPhone = normalizePhoneKey(buyer.phone || '');
   const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
 
   const buyerMessages = db.messages.filter(m =>
-    (m.customerId && (m.customerId === buyer.id || m.customerId === `cust-${cleanPhone}` || (buyer.googleUid && m.customerId === `cust-g-${buyer.googleUid}`))) ||
-    (cleanPhone.length >= 7 && m.phone && m.phone.replace(/\D/g, '') === cleanPhone) ||
+    (m.customerId && (m.customerId === buyer.id || (cleanPhone && m.customerId === `cust-${cleanPhone}`))) ||
+    (buyer.phone && m.phone && phonesMatch(m.phone, buyer.phone)) ||
     (cleanEmail && m.email && m.email.toLowerCase().trim() === cleanEmail)
   );
 
@@ -5003,13 +5458,13 @@ app.post('/api/buyers/messages', requireBuyerAuth, (req: Request, res: Response)
 // 5d. Buyer Mark Inbox Messages As Read
 app.put('/api/buyers/messages/mark-read', requireBuyerAuth, (req: Request, res: Response) => {
   const buyer = (req as any).buyerUser as CustomerUser;
-  const cleanPhone = buyer.phone ? buyer.phone.replace(/\D/g, '') : '';
+  const cleanPhone = normalizePhoneKey(buyer.phone || '');
   const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
 
   let updatedCount = 0;
   db.messages.forEach(m => {
-    const isTarget = (m.customerId && (m.customerId === buyer.id || m.customerId === `cust-${cleanPhone}`)) ||
-      (cleanPhone.length >= 7 && m.phone && m.phone.replace(/\D/g, '') === cleanPhone) ||
+    const isTarget = (m.customerId && (m.customerId === buyer.id || (cleanPhone && m.customerId === `cust-${cleanPhone}`))) ||
+      (buyer.phone && m.phone && phonesMatch(m.phone, buyer.phone)) ||
       (cleanEmail && m.email && m.email.toLowerCase().trim() === cleanEmail);
 
     if (isTarget && m.isReadByCustomer === false) {
@@ -5026,13 +5481,14 @@ app.put('/api/buyers/messages/mark-read', requireBuyerAuth, (req: Request, res: 
   res.json({ success: true, updatedCount });
 });
 
-// 6. Buyer Logout
+// 6. Buyer Logout (Explicit Permanent Token Revocation)
 app.post('/api/buyers/logout', (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-    db.customerTokens.delete(token);
+  const token = extractBuyerTokenFromReq(req);
+  if (token) {
+    revokeBuyerToken(token);
+    saveDbToDisk();
   }
+  clearBuyerSessionCookie(res);
   res.json({ message: 'Signed out successfully' });
 });
 
@@ -9032,15 +9488,39 @@ app.put('/api/admin/buyers/:id/status', requireAdminAuth, requireRole(['owner', 
   }
 
   customer.status = status;
+  if (status === 'Suspended') {
+    revokeAllTokensForBuyer(customer.id);
+  }
   logAudit(admin, 'BUYER_STATUS_CHANGED', `Changed status of buyer "${customer.name}" (${customer.phone}) to ${status}`, 'buyer', customer.id);
   saveDbToDisk();
-  saveToFirestoreAsync('customers', customer.id, sanitizeBuyer(customer));
+  saveToFirestoreAsync('customers', customer.id, customer);
 
   res.json({ message: `Buyer account status updated to ${status}`, customer: sanitizeBuyer(customer) });
 });
 
 app.put('/api/admin/buyers/:id/reset-password', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
-  return res.json({ message: 'Buyer accounts now sign in exclusively via Google Authentication. Password management is handled securely by Google.' });
+  const admin = (req as any).adminUser;
+  const customer = db.customers.find(c => c.id === req.params.id);
+  if (!customer) return res.status(404).json({ error: 'Buyer record not found' });
+
+  const { temporaryPassword } = req.body;
+  const passCheck = validateBuyerPassword(temporaryPassword);
+  if (!passCheck.valid) {
+    return res.status(400).json({ error: passCheck.error || 'Temporary password must be at least 6 characters.' });
+  }
+
+  customer.passwordHash = hashBuyerPassword(temporaryPassword);
+  customer.accountType = 'buyer';
+  customer.authProvider = 'phone';
+  customer.isRegisteredBuyer = true;
+  logAudit(admin, 'BUYER_PASSWORD_RESET', `Reset password for buyer "${customer.name}" (${customer.phone || customer.id})`, 'buyer', customer.id);
+  saveDbToDisk();
+  saveToFirestoreAsync('customers', customer.id, customer);
+
+  res.json({
+    message: 'Buyer password updated successfully.',
+    customer: sanitizeBuyer(customer)
+  });
 });
 
 // Edit Buyer / User Details
@@ -9052,14 +9532,16 @@ app.put('/api/admin/buyers/:id', requireAdminAuth, requireRole(['owner', 'admini
   const { name, email, phone, deliveryAddress, status } = req.body;
   if (name && typeof name === 'string') customer.name = name.trim();
   if (email !== undefined) customer.email = typeof email === 'string' ? email.trim() : undefined;
-  if (phone !== undefined) customer.phone = String(phone).trim();
+  if (phone !== undefined) customer.phone = formatStoredPhone(String(phone)) || String(phone).trim();
   if (deliveryAddress !== undefined) customer.deliveryAddress = typeof deliveryAddress === 'string' ? deliveryAddress.trim() : undefined;
-  if (status === 'Active' || status === 'Suspended') customer.status = status;
+  if (status === 'Active' || status === 'Suspended') {
+    customer.status = status;
+    if (status === 'Suspended') revokeAllTokensForBuyer(customer.id);
+  }
 
   logAudit(admin, 'BUYER_UPDATED', `Updated details for buyer "${customer.name}" (${customer.id})`, 'buyer', customer.id);
   saveDbToDisk();
-  saveToFirestoreAsync('customers', customer.id, sanitizeBuyer(customer));
-  saveToFirestoreAsync('users', customer.id, sanitizeBuyer(customer));
+  saveToFirestoreAsync('customers', customer.id, customer);
 
   res.json({ message: 'Buyer profile updated successfully', customer: sanitizeBuyer(customer) });
 });
@@ -9072,12 +9554,8 @@ app.delete('/api/admin/buyers/:id', requireAdminAuth, requireRole(['owner', 'adm
 
   const removed = db.customers.splice(idx, 1)[0];
 
-  // Invalidate any active session tokens for this buyer
-  for (const [token, session] of db.customerTokens.entries()) {
-    if (session.customerId === removed.id) {
-      db.customerTokens.delete(token);
-    }
-  }
+  // Invalidate any active session tokens for this buyer across all devices
+  revokeAllTokensForBuyer(removed.id);
 
   logAudit(admin, 'BUYER_DELETED', `Deleted customer/buyer account "${removed.name}" (${removed.phone || removed.email || removed.id})`, 'buyer', removed.id);
   saveDbToDisk();

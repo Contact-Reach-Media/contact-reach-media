@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  X, Mail, Lock, Eye, EyeOff, CheckCircle2,
-  AlertCircle, Calendar, ChevronRight, ShoppingBag, ArrowLeft
+  X, Phone, Lock, Eye, EyeOff, CheckCircle2,
+  AlertCircle, Calendar, ChevronRight, ShoppingBag, User, ShieldCheck, MessageCircle
 } from 'lucide-react';
 import { api } from '../services/api.ts';
-import { loginWithGoogle } from '../services/googleDrive.ts';
 import { CustomerUser } from '../types.ts';
 import { Language } from '../translations.ts';
 
@@ -23,51 +22,50 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
   currentLang,
   onOpenVendorApplication
 }) => {
+  const isEn = currentLang === 'en';
   const [mode, setMode] = useState<'signin' | 'register' | 'forgot'>('signin');
-  const [identifier, setIdentifier] = useState('');
+  const [phone, setPhone] = useState(() => {
+    try {
+      return localStorage.getItem('crm_remember_buyer') || '';
+    } catch {
+      return '';
+    }
+  });
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setError(null);
+      setSuccessMsg(null);
+    }
+  }, [isOpen, mode]);
+
   if (!isOpen) return null;
 
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const fbUser = await loginWithGoogle();
-      if (!fbUser.email) {
-        throw new Error('Konti yawe ya Google ntiyatanze imeli. Nyabuneka wemerere imeli kugira ngo winjire.');
-      }
-
-      const idToken = await fbUser.getIdToken();
-      const res = await api.buyerGoogleLogin({
-        email: fbUser.email,
-        displayName: fbUser.displayName,
-        uid: fbUser.uid,
-        photoURL: fbUser.photoURL,
-        phoneNumber: fbUser.phoneNumber,
-        idToken
-      });
-
-      onSuccess(res.user);
-      onClose();
-    } catch (err: any) {
-      console.error('Google Sign-In Error:', err);
-      if (err.code === 'auth/popup-closed-by-user' || err.message?.includes('closed-by-user')) {
-        setError('Idirishya ryo kwinjira ryafunzwe. Kanda kuri buto yo hejuru wongere ugerageze.');
-      } else if (err.code === 'auth/popup-blocked') {
-        setError('Urubuga rwazitiye idirishya rya Google. Nyabuneka hemerera popup kuri uru rubuga.');
-      } else {
-        setError(err.message || 'Kwinjira na Google ntibikunze. Ongera ugerageze.');
-      }
-    } finally {
-      setLoading(false);
+  const validatePhoneInput = (raw: string): string | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return isEn ? 'Please enter your phone number.' : 'Nyabuneka shyiramo numero ya telefone.';
     }
+    if (trimmed.includes('@')) {
+      return isEn
+        ? 'Email sign-in is disabled. Please enter your phone number.'
+        : 'Kwinjira na imeyili ntibyemewe. Nyabuneka shyiramo numero ya telefone.';
+    }
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 15) {
+      return isEn
+        ? 'Please enter a valid phone number (e.g. 0780 022 600).'
+        : 'Nyabuneka shyiramo numero ya telefone yuzuye (urugero: 0780 022 600).';
+    }
+    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,53 +73,75 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
     setError(null);
     setSuccessMsg(null);
 
-    if (!identifier.trim()) {
-      setError('Nyabuneka shyiramo imeyili cyangwa numero ya telefone.');
+    const phoneErr = validatePhoneInput(phone);
+    if (phoneErr) {
+      setError(phoneErr);
       return;
     }
 
-    if (mode !== 'forgot' && !password.trim()) {
-      setError('Nyabuneka shyiramo ijambo ry\'ibanga.');
+    if (mode === 'forgot') {
+      setSuccessMsg(
+        isEn
+          ? `To reset the password for ${phone.trim()}, please contact ContactReach Support via WhatsApp (+250 780 022 600).`
+          : `Kugira ngo usubiremo ijambo ry'ibanga kuri ${phone.trim()}, vugana n'ubuyobozi kuri WhatsApp (+250 780 022 600).`
+      );
       return;
+    }
+
+    if (!password) {
+      setError(isEn ? 'Please enter your password.' : 'Nyabuneka shyiramo ijambo ry\'ibanga.');
+      return;
+    }
+
+    if (mode === 'register') {
+      if (name.trim().length < 2) {
+        setError(isEn ? 'Please enter your full name (at least 2 characters).' : 'Nyabuneka shyiramo amazina yawe yose.');
+        return;
+      }
+      if (password.length < 6) {
+        setError(
+          isEn
+            ? 'Your password must be at least 6 characters long.'
+            : 'Ijambo ry\'ibanga rigomba kugira nibura inyuguti cyangwa imibare 6.'
+        );
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError(isEn ? 'Passwords do not match.' : 'Amagambo y\'ibanga ntabwo ahura.');
+        return;
+      }
     }
 
     setLoading(true);
-
     try {
       if (mode === 'signin') {
         const res = await api.buyerLogin({
-          emailOrPhone: identifier.trim(),
-          password: password.trim()
+          phone: phone.trim(),
+          password
         });
-        if (rememberMe) {
-          localStorage.setItem('crm_remember_buyer', identifier.trim());
-        }
+        try {
+          if (rememberMe) {
+            localStorage.setItem('crm_remember_buyer', phone.trim());
+          } else {
+            localStorage.removeItem('crm_remember_buyer');
+          }
+        } catch {}
         onSuccess(res.user);
         onClose();
-      } else if (mode === 'register') {
-        if (!name.trim()) {
-          setError('Nyabuneka shyiramo amazina yawe.');
-          setLoading(false);
-          return;
-        }
-        const isEmail = identifier.includes('@');
+      } else {
         const res = await api.buyerRegister({
           name: name.trim(),
-          email: isEmail ? identifier.trim() : `${identifier.trim().replace(/\D/g, '')}@contactreachmarket.com`,
-          phone: !isEmail ? identifier.trim() : undefined,
-          password: password.trim()
+          phone: phone.trim(),
+          password
         });
+        try {
+          localStorage.setItem('crm_remember_buyer', phone.trim());
+        } catch {}
         onSuccess(res.user);
         onClose();
-      } else if (mode === 'forgot') {
-        setSuccessMsg(`Ubutumwa bwo gusubiramo ijambo ry'ibanga bwoherejwe kuri ${identifier.trim()}.`);
       }
     } catch (err: any) {
-      if (mode === 'signin' && err.message?.includes('Invalid')) {
-        setError('Imeyili cyangwa ijambo ry\'ibanga ntirihuye. Niba uri mushya kanda kuri "Iyandikishe".');
-      } else {
-        setError(err.message || 'Habaye ikosa. Ongera ugerageze.');
-      }
+      setError(err.message || (isEn ? 'Authentication failed. Please try again.' : 'Habaye ikosa. Ongera ugerageze.'));
     } finally {
       setLoading(false);
     }
@@ -139,7 +159,7 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {/* LEFT FORM COLUMN (Matching Image 5) */}
+        {/* LEFT FORM COLUMN */}
         <div className="p-7 sm:p-10 flex flex-col justify-between">
           <div className="space-y-5">
             {/* Logo */}
@@ -163,42 +183,54 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
             {/* Heading */}
             <div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-                {mode === 'signin' && 'Welcome Back !'}
-                {mode === 'register' && 'Fungura Konti Nshya !'}
-                {mode === 'forgot' && 'Subiramo Ijambo ry\'ibanga'}
+                {mode === 'signin' && (isEn ? 'Buyer Sign In' : 'Injira muri Konti !')}
+                {mode === 'register' && (isEn ? 'Create Buyer Account' : 'Fungura Konti Nshya !')}
+                {mode === 'forgot' && (isEn ? 'Password Assistance' : 'Subiramo Ijambo ry\'ibanga')}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                {mode === 'signin' && 'Injira kugira ngo ukomeze guhaha no gukurikirana ibicuruzwa.'}
-                {mode === 'register' && 'Iyandikishe uhite ubona ibicuruzwa bihendutse biva muri Alibaba.'}
-                {mode === 'forgot' && 'Andika imeyili cyangwa nimero ya telefone yawe.'}
+                {mode === 'signin' && (
+                  isEn
+                    ? 'Sign in with your phone number and password to shop, track orders, and chat across devices.'
+                    : 'Injira ukoresheje numero ya telefone n\'ijambo ry\'ibanga ukomeze guhaha.'
+                )}
+                {mode === 'register' && (
+                  isEn
+                    ? 'Register with your phone number and choose a password to save your orders & profile across devices.'
+                    : 'Iyandikishe na numero ya telefone uhitemo ijambo ry\'ibanga ryawe.'
+                )}
+                {mode === 'forgot' && (
+                  isEn
+                    ? 'Enter your registered phone number to request password reset support.'
+                    : 'Andika nimero ya telefone wakoresheje wiyandikisha.'
+                )}
               </p>
             </div>
 
-            {/* Google Sign In Button */}
+            {/* Mode Switch Pills */}
             {mode !== 'forgot' && (
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={loading}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 shadow-2xs flex items-center justify-center gap-2.5 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <span>Injira na Google</span>
-              </button>
-            )}
-
-            {/* Divider "OR" */}
-            {mode !== 'forgot' && (
-              <div className="relative flex items-center justify-center my-3">
-                <div className="border-t border-slate-200 w-full" />
-                <span className="bg-white px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest absolute">
-                  OR
-                </span>
+              <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold gap-1">
+                <button
+                  type="button"
+                  onClick={() => setMode('signin')}
+                  className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
+                    mode === 'signin'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {isEn ? 'Sign In' : 'Injira'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('register')}
+                  className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
+                    mode === 'register'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {isEn ? 'Create Account' : 'Iyandikishe'}
+                </button>
               </div>
             )}
 
@@ -211,9 +243,20 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
             )}
 
             {successMsg && (
-              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
-                <span className="font-medium">{successMsg}</span>
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs space-y-2">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                  <span className="font-medium">{successMsg}</span>
+                </div>
+                <a
+                  href={`https://wa.me/250780022600?text=${encodeURIComponent(`Hello ContactReach Market Support, please help reset the buyer password for phone number: ${phone.trim()}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Message Support on WhatsApp' : 'Vugana na Support kuri WhatsApp'}</span>
+                </a>
               </div>
             )}
 
@@ -222,33 +265,39 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
               {mode === 'register' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Amazina yawe yose
+                    {isEn ? 'Full Name *' : 'Amazina yawe yose *'}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Thierry Maniriho"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-medium"
-                  />
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      required
+                      autoComplete="name"
+                      placeholder="e.g. Thierry Maniriho"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-medium"
+                    />
+                  </div>
                 </div>
               )}
 
-              {/* Field 1: Email or Phone */}
+              {/* Field 1: Phone Number ONLY */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Imeyili cyangwa numero ya telefone
+                  {isEn ? 'Phone Number *' : 'Numero ya telefone *'}
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     required
-                    placeholder="Email or phone number"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-medium"
+                    placeholder="e.g. 0780 022 600"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-mono font-semibold"
                   />
                 </div>
               </div>
@@ -257,14 +306,18 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
               {mode !== 'forgot' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Ijambo ry'ibanga
+                    {mode === 'register'
+                      ? (isEn ? 'Choose a Password (min. 6 characters) *' : 'Hitamo ijambo ry\'ibanga (nibura 6) *')
+                      : (isEn ? 'Password *' : 'Ijambo ry\'ibanga *')}
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
-                      placeholder="Enter your password"
+                      minLength={mode === 'register' ? 6 : 1}
+                      autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                      placeholder={mode === 'register' ? (isEn ? 'Create a strong password' : 'Andika ijambo ry\'ibanga rishya') : (isEn ? 'Enter your password' : 'Andika ijambo ry\'ibanga')}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-medium"
@@ -273,9 +326,39 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
+                  </div>
+                  {mode === 'register' && password.length > 0 && (
+                    <p className={`text-[10px] mt-1 font-semibold ${password.length >= 6 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {password.length >= 6
+                        ? (isEn ? '✓ Password length looks good' : '✓ Ijambo ry\'ibanga rihagije')
+                        : (isEn ? `Need ${6 - password.length} more character(s)` : `Ongeraho inyuguti ${6 - password.length}`)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Confirm Password in Register Mode */}
+              {mode === 'register' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isEn ? 'Confirm Password *' : 'Emeza ijambo ry\'ibanga *'}
+                  </label>
+                  <div className="relative">
+                    <ShieldCheck className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                      placeholder={isEn ? 'Re-enter your password' : 'Subiramo ijambo ry\'ibanga'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#f95700] focus:ring-2 focus:ring-orange-100 font-medium"
+                    />
                   </div>
                 </div>
               )}
@@ -290,19 +373,19 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="w-3.5 h-3.5 rounded text-[#f95700] focus:ring-[#f95700] border-slate-300 cursor-pointer"
                     />
-                    <span>Remember me</span>
+                    <span>{isEn ? 'Keep me signed in' : 'Komeza mbe ndi muri konti'}</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => setMode('forgot')}
                     className="text-[#f95700] hover:text-orange-700 font-bold transition-colors cursor-pointer text-[11px]"
                   >
-                    Wibagiwe ijambo ry'ibanga?
+                    {isEn ? 'Forgot password?' : 'Wibagiwe ijambo ry\'ibanga?'}
                   </button>
                 </div>
               )}
 
-              {/* Orange Button: "Injira" */}
+              {/* Primary Button */}
               <button
                 type="submit"
                 disabled={loading}
@@ -312,16 +395,16 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <span>
-                    {mode === 'signin' && 'Injira'}
-                    {mode === 'register' && 'Iyandikishe'}
-                    {mode === 'forgot' && 'Ohereza Ubutumwa'}
+                    {mode === 'signin' && (isEn ? 'Sign In' : 'Injira')}
+                    {mode === 'register' && (isEn ? 'Create Account' : 'Iyandikishe')}
+                    {mode === 'forgot' && (isEn ? 'Request Support' : 'Saba Ubufasha')}
                   </span>
                 )}
               </button>
             </form>
           </div>
 
-          {/* Bottom Links Matching Image 5 */}
+          {/* Bottom Links */}
           <div className="pt-4 mt-4 border-t border-slate-100 space-y-1.5 text-center text-xs">
             {mode === 'signin' ? (
               <p className="text-slate-600 text-[11px]">
@@ -330,18 +413,18 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                   onClick={() => setMode('register')}
                   className="text-[#f95700] hover:text-orange-700 font-bold underline cursor-pointer"
                 >
-                  Nta Konti Ufite? Iyandikishe.
+                  {isEn ? 'New to ContactReach? Create an account.' : 'Nta Konti Ufite? Iyandikishe.'}
                 </button>
               </p>
             ) : (
               <p className="text-slate-600 text-[11px]">
-                Ufite konti isanzwe?{' '}
+                {isEn ? 'Already have an account?' : 'Ufite konti isanzwe?'}{' '}
                 <button
                   type="button"
                   onClick={() => setMode('signin')}
                   className="text-[#f95700] hover:text-orange-700 font-bold underline cursor-pointer"
                 >
-                  Injira hano
+                  {isEn ? 'Sign in here' : 'Injira hano'}
                 </button>
               </p>
             )}

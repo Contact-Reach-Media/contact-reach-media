@@ -267,8 +267,11 @@ export default function App() {
   const [autoOpenAddProduct, setAutoOpenAddProduct] = useState(initialRoute.view === 'admin-upload');
   const [pendingAdminAction, setPendingAdminAction] = useState<string | null>(initialRoute.view === 'admin-upload' ? 'upload-product' : null);
 
-  // Buyer Account & Authentication
-  const [buyerUser, setBuyerUser] = useState<CustomerUser | null>(null);
+  // Buyer Account & Authentication (hydrated synchronously so session persists across refreshes/restarts)
+  const [buyerUser, setBuyerUser] = useState<CustomerUser | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return api.getBuyerToken() ? api.getStoredBuyerUser() : null;
+  });
 
   // Modal Dialog States
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -519,8 +522,12 @@ export default function App() {
 
       // Check for logged-in buyer user
       try {
-        const currentBuyer = await api.buyerGetMe();
-        if (currentBuyer) setBuyerUser(currentBuyer);
+        if (!api.getBuyerToken()) {
+          setBuyerUser(null);
+        } else {
+          const currentBuyer = await api.buyerGetMe();
+          setBuyerUser(currentBuyer);
+        }
       } catch {}
 
       // Reconcile and clamp existing cart items against fresh inventory
@@ -618,6 +625,75 @@ export default function App() {
       window.removeEventListener('online', handleFocusOrOnline);
       window.removeEventListener('storage', handleStorageSync);
       window.removeEventListener('crm_admin_auth_changed', handleAuthChanged);
+    };
+  }, []);
+
+  // Persistent Buyer Session Verification & Cross-Tab Sync
+  useEffect(() => {
+    let isCheckingBuyer = false;
+    const verifyBuyerSession = async () => {
+      if (isCheckingBuyer) return;
+      const token = api.getBuyerToken();
+      if (!token) {
+        setBuyerUser(null);
+        return;
+      }
+      isCheckingBuyer = true;
+      try {
+        const currentBuyer = await api.buyerGetMe();
+        setBuyerUser(currentBuyer);
+      } catch {} finally {
+        isCheckingBuyer = false;
+      }
+    };
+
+    const handleBuyerVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        verifyBuyerSession();
+      }
+    };
+
+    const handleBuyerStorageSync = (e: StorageEvent) => {
+      if (
+        e.key === 'crm_buyer_token' ||
+        e.key === 'crm_buyer_session_active' ||
+        e.key === 'crm_buyer_user' ||
+        e.key === null
+      ) {
+        const token = api.getBuyerToken();
+        if (!token) {
+          setBuyerUser(null);
+        } else {
+          const stored = api.getStoredBuyerUser();
+          if (stored) setBuyerUser(stored);
+          verifyBuyerSession();
+        }
+      }
+    };
+
+    const handleBuyerAuthChanged = (e: any) => {
+      const authenticated = Boolean(e?.detail?.authenticated && api.getBuyerToken());
+      if (!authenticated) {
+        setBuyerUser(null);
+      } else {
+        setBuyerUser(e?.detail?.user || api.getStoredBuyerUser());
+      }
+    };
+
+    const buyerHeartbeat = setInterval(verifyBuyerSession, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', handleBuyerVisibility);
+    window.addEventListener('focus', verifyBuyerSession);
+    window.addEventListener('online', verifyBuyerSession);
+    window.addEventListener('storage', handleBuyerStorageSync);
+    window.addEventListener('crm_buyer_auth_changed', handleBuyerAuthChanged);
+
+    return () => {
+      clearInterval(buyerHeartbeat);
+      document.removeEventListener('visibilitychange', handleBuyerVisibility);
+      window.removeEventListener('focus', verifyBuyerSession);
+      window.removeEventListener('online', verifyBuyerSession);
+      window.removeEventListener('storage', handleBuyerStorageSync);
+      window.removeEventListener('crm_buyer_auth_changed', handleBuyerAuthChanged);
     };
   }, []);
 
@@ -2019,7 +2095,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 10. Buyer Authentication Modal (Google Sign In Only) */}
+      {/* 10. Buyer Authentication Modal (Phone Number & Password) */}
       <BuyerAuthModal
         isOpen={isBuyerAuthOpen}
         onClose={() => setIsBuyerAuthOpen(false)}

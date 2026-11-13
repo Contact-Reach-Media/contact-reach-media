@@ -295,23 +295,95 @@ export function removeAdminToken() {
   emitAdminAuthChanged(false);
 }
 
-// Buyer Authentication Storage
+// Buyer Persistent Authentication Storage (localStorage + persistent same-site cookie)
 const BUYER_TOKEN_KEY = 'crm_buyer_token';
 const BUYER_USER_KEY = 'crm_buyer_user';
+const BUYER_SESSION_FLAG_KEY = 'crm_buyer_session_active';
+const BUYER_COOKIE_NAME = 'crm_buyer_token';
+const BUYER_COOKIE_MAX_AGE_SEC = 180 * 24 * 60 * 60; // 180 days persistent session
+
+function readBuyerCookie(): string | null {
+  try {
+    if (typeof document === 'undefined' || !document.cookie) return null;
+    const parts = document.cookie.split(';');
+    for (const part of parts) {
+      const idx = part.indexOf('=');
+      if (idx === -1) continue;
+      if (part.slice(0, idx).trim() === BUYER_COOKIE_NAME) {
+        const val = decodeURIComponent(part.slice(idx + 1).trim());
+        return val && val.trim() ? val.trim() : null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeBuyerCookie(token: string) {
+  try {
+    if (typeof document === 'undefined') return;
+    const secureAttr = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${BUYER_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${BUYER_COOKIE_MAX_AGE_SEC}; SameSite=Lax${secureAttr}`;
+  } catch {}
+}
+
+function clearBuyerCookie() {
+  try {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${BUYER_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+  } catch {}
+}
+
+function emitBuyerAuthChanged(authenticated: boolean) {
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('crm_buyer_auth_changed', { detail: { authenticated } }));
+    }
+  } catch {}
+}
 
 export function getBuyerToken(): string | null {
-  return localStorage.getItem(BUYER_TOKEN_KEY);
+  try {
+    const token = localStorage.getItem(BUYER_TOKEN_KEY);
+    if (token && typeof token === 'string' && token.trim()) {
+      return token.trim();
+    }
+    const cookieToken = readBuyerCookie();
+    if (cookieToken) {
+      try {
+        localStorage.setItem(BUYER_TOKEN_KEY, cookieToken);
+        localStorage.setItem(BUYER_SESSION_FLAG_KEY, 'true');
+      } catch {}
+      return cookieToken;
+    }
+    return null;
+  } catch {
+    return readBuyerCookie();
+  }
 }
 
 export function setBuyerToken(token: string, user?: CustomerUser) {
-  localStorage.setItem(BUYER_TOKEN_KEY, token);
-  if (user) {
-    localStorage.setItem(BUYER_USER_KEY, JSON.stringify(user));
-  }
+  try {
+    const cleanToken = typeof token === 'string' ? token.trim() : '';
+    if (!cleanToken) {
+      removeBuyerToken();
+      return;
+    }
+    localStorage.setItem(BUYER_TOKEN_KEY, cleanToken);
+    localStorage.setItem(BUYER_SESSION_FLAG_KEY, 'true');
+    writeBuyerCookie(cleanToken);
+    if (user) {
+      localStorage.setItem(BUYER_USER_KEY, JSON.stringify(user));
+    }
+    emitBuyerAuthChanged(true);
+  } catch {}
 }
 
 export function getStoredBuyerUser(): CustomerUser | null {
   try {
+    const token = getBuyerToken();
+    if (!token) return null;
     const raw = localStorage.getItem(BUYER_USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
@@ -320,8 +392,13 @@ export function getStoredBuyerUser(): CustomerUser | null {
 }
 
 export function removeBuyerToken() {
-  localStorage.removeItem(BUYER_TOKEN_KEY);
-  localStorage.removeItem(BUYER_USER_KEY);
+  try {
+    localStorage.removeItem(BUYER_TOKEN_KEY);
+    localStorage.removeItem(BUYER_USER_KEY);
+    localStorage.removeItem(BUYER_SESSION_FLAG_KEY);
+  } catch {}
+  clearBuyerCookie();
+  emitBuyerAuthChanged(false);
 }
 
 // Permanent Deletion Tombstone Storage Key
@@ -491,11 +568,15 @@ const fallbackAdminUsers: AdminUser[] = [
 ];
 
 export const api = {
-  // Admin & Token Helpers
+  // Admin & Buyer Token Helpers
   getAdminToken,
   setAdminToken,
   getStoredAdminUser,
   removeAdminToken,
+  getBuyerToken,
+  setBuyerToken,
+  getStoredBuyerUser,
+  removeBuyerToken,
   getLocallyDeletedProductIds,
   markProductDeletedLocally,
 
@@ -3260,232 +3341,123 @@ export const api = {
     return { message: `Deleted ${payoutIds.length} supplier payouts`, count: payoutIds.length };
   },
 
-  // Exclusive Buyer Google Authentication & Profile
-  async buyerGoogleLogin(googleUser: {
-    email: string;
-    displayName?: string | null;
-    uid: string;
-    photoURL?: string | null;
-    phoneNumber?: string | null;
-    idToken?: string;
-  }): Promise<{ user: CustomerUser; token: string }> {
-    const cleanEmail = (googleUser.email || '').trim().toLowerCase();
-
-    // 1. Attempt API server authentication
-    try {
-      const res = await fetch('/api/buyers/google-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          displayName: googleUser.displayName,
-          uid: googleUser.uid,
-          photoURL: googleUser.photoURL,
-          phoneNumber: googleUser.phoneNumber,
-          idToken: googleUser.idToken
-        })
-      });
-      const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
-      if (res.ok && parsed.isJson && parsed.json && !parsed.json.error) {
-        setBuyerToken(parsed.json.token, parsed.json.user);
-        return parsed.json;
-      }
-      if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('Service temporarily') && !fetchErr.message.includes('HTML') && !fetchErr.message.includes('fetch')) {
-        throw fetchErr;
-      }
-    }
-
-    // 2. Client-side / Decoupled Fallback Persistence
-    const buyerUser: CustomerUser = {
-      id: `cust-g-${googleUser.uid}`,
-      name: googleUser.displayName || (cleanEmail ? cleanEmail.split('@')[0] : 'Valued Buyer'),
-      phone: googleUser.phoneNumber || '',
-      email: cleanEmail,
-      createdAt: new Date().toISOString(),
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'Active',
-      accountType: 'buyer',
-      isRegisteredBuyer: true,
-      lastLogin: new Date().toISOString(),
-      photoURL: googleUser.photoURL || undefined,
-      googleUid: googleUser.uid,
-      authProvider: 'google'
-    };
-
-    const fallbackToken = `buyer_g_local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    setBuyerToken(fallbackToken, buyerUser);
-
-    try {
-      await saveCustomerToFirestore(buyerUser);
-    } catch {}
-
-    return { user: buyerUser, token: fallbackToken };
-  },
-
+  // Buyer Phone Number & Password Authentication
   async buyerLogin(payload: {
+    phone?: string;
     identifier?: string;
     emailOrPhone?: string;
-    email?: string;
-    phone?: string;
-    password?: string;
+    password: string;
   }): Promise<{ user: CustomerUser; token: string }> {
-    const rawId = (payload.identifier || payload.emailOrPhone || payload.email || payload.phone || '').trim();
-    try {
-      const res = await fetch('/api/buyers/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: rawId, password: payload.password })
-      });
-      const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
-      if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
-        setBuyerToken(parsed.json.token, parsed.json.user);
-        return { user: parsed.json.user, token: parsed.json.token };
-      }
-      if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('Service temporarily')) {
-        throw err;
-      }
+    const rawPhone = (payload.phone || payload.identifier || payload.emailOrPhone || '').trim();
+    if (!rawPhone) {
+      throw new Error('Phone number is required.');
+    }
+    if (rawPhone.includes('@')) {
+      throw new Error('Please sign in using your phone number (email login is disabled).');
+    }
+    if (!payload.password) {
+      throw new Error('Password is required.');
     }
 
-    // Client-side fallback persistence
-    const isEmail = rawId.includes('@');
-    const fallbackUser: CustomerUser = {
-      id: `cust-loc-${Date.now()}`,
-      name: isEmail ? rawId.split('@')[0] : `Customer (${rawId.slice(-4) || 'Buyer'})`,
-      email: isEmail ? rawId : undefined,
-      phone: !isEmail ? rawId : '',
-      createdAt: new Date().toISOString(),
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'Active',
-      accountType: 'buyer',
-      isRegisteredBuyer: true,
-      lastLogin: new Date().toISOString()
-    };
-    const token = `buyer_loc_${Date.now()}`;
-    setBuyerToken(token, fallbackUser);
-    try {
-      await saveCustomerToFirestore(fallbackUser);
-    } catch {}
-    return { user: fallbackUser, token };
+    const res = await fetch('/api/buyers/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: rawPhone, password: payload.password })
+    });
+    const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
+    if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
+      setBuyerToken(parsed.json.token, parsed.json.user);
+      return { user: parsed.json.user, token: parsed.json.token };
+    }
+    throw new Error((parsed.isJson && parsed.json?.error) || 'Invalid phone number or password.');
   },
 
   async buyerRegister(payload: {
     name: string;
+    phone?: string;
     identifier?: string;
     emailOrPhone?: string;
-    email?: string;
-    phone?: string;
-    password?: string;
+    password: string;
+    deliveryAddress?: string;
   }): Promise<{ user: CustomerUser; token: string }> {
-    const rawId = (payload.identifier || payload.emailOrPhone || payload.email || payload.phone || '').trim();
-    try {
-      const res = await fetch('/api/buyers/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: payload.name, identifier: rawId, password: payload.password })
-      });
-      const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
-      if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
-        setBuyerToken(parsed.json.token, parsed.json.user);
-        return { user: parsed.json.user, token: parsed.json.token };
-      }
-      if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('Service temporarily')) {
-        throw err;
-      }
+    const rawPhone = (payload.phone || payload.identifier || payload.emailOrPhone || '').trim();
+    if (!payload.name || payload.name.trim().length < 2) {
+      throw new Error('Please enter your full name.');
+    }
+    if (!rawPhone) {
+      throw new Error('Phone number is required.');
+    }
+    if (rawPhone.includes('@')) {
+      throw new Error('Please register using your phone number (email accounts are disabled).');
+    }
+    if (!payload.password || payload.password.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
     }
 
-    const isEmail = rawId.includes('@');
-    const fallbackUser: CustomerUser = {
-      id: `cust-loc-${Date.now()}`,
-      name: payload.name.trim() || (isEmail ? rawId.split('@')[0] : 'Umuguzi wa ContactReach Market'),
-      email: isEmail ? rawId : undefined,
-      phone: !isEmail ? rawId : '',
-      createdAt: new Date().toISOString(),
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'Active',
-      accountType: 'buyer',
-      isRegisteredBuyer: true,
-      lastLogin: new Date().toISOString()
-    };
-    const token = `buyer_loc_${Date.now()}`;
-    setBuyerToken(token, fallbackUser);
-    try {
-      await saveCustomerToFirestore(fallbackUser);
-    } catch {}
-    return { user: fallbackUser, token };
+    const res = await fetch('/api/buyers/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: payload.name.trim(),
+        phone: rawPhone,
+        password: payload.password,
+        deliveryAddress: payload.deliveryAddress
+      })
+    });
+    const parsed = await safeParseResponse<{ user: CustomerUser; token: string; error?: string }>(res);
+    if (res.ok && parsed.isJson && parsed.json?.user && parsed.json?.token) {
+      setBuyerToken(parsed.json.token, parsed.json.user);
+      return { user: parsed.json.user, token: parsed.json.token };
+    }
+    throw new Error((parsed.isJson && parsed.json?.error) || 'Registration failed. Please check your details and try again.');
   },
 
   async buyerGetMe(): Promise<CustomerUser | null> {
+    const token = getBuyerToken();
+    if (!token) return null;
     try {
       const res = await fetch('/api/buyers/me', { headers: getBuyerAuthHeaders() });
       const parsed = await safeParseResponse<{ user: CustomerUser }>(res);
       if (res.ok && parsed.isJson && parsed.json?.user) {
-        setBuyerToken(getBuyerToken() || '', parsed.json.user);
+        setBuyerToken(token, parsed.json.user);
         return parsed.json.user;
       }
+      if (res.status === 401 || res.status === 403 || res.status === 404) {
+        removeBuyerToken();
+        return null;
+      }
     } catch {}
+    // Keep persistent device session during transient offline/network interruptions
     return getStoredBuyerUser();
   },
 
-  async buyerUpdateProfile(data: { name?: string; email?: string; phone?: string; deliveryAddress?: string }): Promise<CustomerUser> {
-    try {
-      const res = await fetch('/api/buyers/profile', {
-        method: 'PUT',
-        headers: getBuyerAuthHeaders(),
-        body: JSON.stringify(data)
-      });
-      const parsed = await safeParseResponse<{ user: CustomerUser; error?: string }>(res);
-      if (res.ok && parsed.isJson && parsed.json?.user) {
-        setBuyerToken(getBuyerToken() || '', parsed.json.user);
-        return parsed.json.user;
-      }
-      if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('Service temporarily') && !fetchErr.message.includes('HTML') && !fetchErr.message.includes('fetch')) {
-        throw fetchErr;
-      }
+  async buyerChangePassword(payload: { currentPassword: string; newPassword: string }): Promise<{ message: string; user: CustomerUser }> {
+    const res = await fetch('/api/buyers/password', {
+      method: 'PUT',
+      headers: getBuyerAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<{ message: string; user: CustomerUser; error?: string }>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json?.user) {
+      throw new Error((parsed.isJson && parsed.json?.error) || 'Failed to update password');
     }
+    const token = getBuyerToken();
+    if (token) setBuyerToken(token, parsed.json.user);
+    return parsed.json;
+  },
 
-    const current = getStoredBuyerUser() || {
-      id: `cust-${Date.now()}`,
-      name: data.name || 'Buyer',
-      phone: data.phone || '',
-      createdAt: new Date().toISOString(),
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'Active',
-      accountType: 'buyer' as const
-    };
-    const updated: CustomerUser = {
-      ...current,
-      name: data.name?.trim() || current.name,
-      email: data.email?.trim() || current.email,
-      phone: data.phone?.trim() || current.phone,
-      deliveryAddress: data.deliveryAddress?.trim() || current.deliveryAddress
-    };
-
-    try {
-      await saveCustomerToFirestore(updated);
-    } catch {}
-
-    setBuyerToken(getBuyerToken() || '', updated);
-    return updated;
+  async buyerUpdateProfile(data: { name?: string; email?: string; phone?: string; deliveryAddress?: string }): Promise<CustomerUser> {
+    const res = await fetch('/api/buyers/profile', {
+      method: 'PUT',
+      headers: getBuyerAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    const parsed = await safeParseResponse<{ user: CustomerUser; error?: string }>(res);
+    if (res.ok && parsed.isJson && parsed.json?.user) {
+      setBuyerToken(getBuyerToken() || '', parsed.json.user);
+      return parsed.json.user;
+    }
+    throw new Error((parsed.isJson && parsed.json?.error) || 'Failed to update buyer profile');
   },
 
   async buyerGetOrders(): Promise<Order[]> {
@@ -3589,9 +3561,6 @@ export const api = {
   async buyerLogout(): Promise<void> {
     try {
       await fetch('/api/buyers/logout', { method: 'POST', headers: getBuyerAuthHeaders() });
-    } catch {}
-    try {
-      await logoutUser();
     } catch {}
     removeBuyerToken();
   },

@@ -3,7 +3,7 @@ import {
   X, User, Phone, MapPin, Mail, Calendar, ShoppingBag,
   LogOut, ShieldCheck, CheckCircle2, ChevronRight, AlertCircle, Edit3,
   MessageSquare, Send, Bell, Clock, Truck, Package, Copy, ExternalLink,
-  RefreshCw, Check, ArrowRight, Info
+  RefreshCw, Check, ArrowRight, Info, Lock, KeyRound, Eye, EyeOff
 } from 'lucide-react';
 import { CustomerUser, Order, AdminMessage } from '../types.ts';
 import { api } from '../services/api.ts';
@@ -62,6 +62,16 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Password change state
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showPasswordFields, setShowPasswordFields] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState<string | null>(null);
+  const [passwordErrorMsg, setPasswordErrorMsg] = useState<string | null>(null);
 
   // Calculate unread count for customer
   const unreadMessagesCount = messages.filter(
@@ -199,6 +209,40 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
       setErrorMsg(err.message || 'Failed to update delivery details');
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordErrorMsg(null);
+    setPasswordSuccessMsg(null);
+
+    if (!currentPassword) {
+      setPasswordErrorMsg(currentLang === 'en' ? 'Please enter your current password.' : 'Andika ijambobanga ukoresha ubu.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordErrorMsg(currentLang === 'en' ? 'New password must be at least 6 characters.' : 'Ijambobanga rishya rigomba kugira nibura inyuguti 6.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordErrorMsg(currentLang === 'en' ? 'New passwords do not match.' : 'Amajambobanga mashya ntabwo ahura.');
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      await api.buyerChangePassword({ currentPassword, newPassword });
+      setPasswordSuccessMsg(currentLang === 'en' ? 'Password updated successfully!' : 'Ijambobanga ryahinduwe neza!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setIsChangingPassword(false);
+      setTimeout(() => setPasswordSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setPasswordErrorMsg(err.message || (currentLang === 'en' ? 'Failed to update password.' : 'Guhindura ijambobanga byanze.'));
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -961,27 +1005,144 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
               )}
             </div>
 
-            {/* Google Authentication Info Box */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <div>
-                  <p className="font-bold text-slate-800 text-xs">
-                    {currentLang === 'en' ? 'Google Account Connected' : 'Konti ya Google Ihujwe'}
-                  </p>
-                  <p className="text-[10px] text-slate-400">
-                    {user.email || 'Verified Single Sign-On'}
-                  </p>
+            {/* Phone & Password Account Security Box */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#FF6000] flex items-center justify-center shrink-0">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-xs">
+                      {currentLang === 'en' ? 'Phone & Password Security' : 'Umutekano wa Telefoni n\'Ijambobanga'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      {user.phone || (currentLang === 'en' ? 'Phone verified account' : 'Konti ikoresha telefoni')}
+                    </p>
+                  </div>
                 </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700 shrink-0">
+                  {currentLang === 'en' ? 'Persistent Session' : 'Konti Ihoraho'}
+                </span>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-700">
-                Active
-              </span>
+
+              {passwordSuccessMsg && (
+                <p className="text-emerald-600 font-bold text-[11px] flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>{passwordSuccessMsg}</span>
+                </p>
+              )}
+
+              {!isChangingPassword ? (
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70">
+                  <span className="text-[11px] text-slate-500">
+                    {currentLang === 'en'
+                      ? 'Signed in across sessions until you manually log out.'
+                      : 'Uguma winjiye muri konti yawe kugeza usohotse.'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsChangingPassword(true);
+                      setPasswordErrorMsg(null);
+                      setPasswordSuccessMsg(null);
+                    }}
+                    className="text-[#FF6000] hover:underline font-bold text-[11px] flex items-center gap-1 cursor-pointer shrink-0 ml-2"
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span>{currentLang === 'en' ? 'Change Password' : 'Hindura Ijambobanga'}</span>
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleChangePassword} className="space-y-2.5 pt-2 border-t border-slate-200/70">
+                  {passwordErrorMsg && (
+                    <div className="p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{passwordErrorMsg}</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      {currentLang === 'en' ? 'Current Password' : 'Ijambobanga ry\'ubu'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPasswordFields ? 'text' : 'password'}
+                        required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder={currentLang === 'en' ? 'Enter current password' : 'Andika ijambobanga ry\'ubu'}
+                        className="w-full px-3 py-2 pr-9 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswordFields(v => !v)}
+                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        aria-label={showPasswordFields ? 'Hide password' : 'Show password'}
+                      >
+                        {showPasswordFields ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        {currentLang === 'en' ? 'New Password (min. 6)' : 'Ijambobanga Rishya'}
+                      </label>
+                      <input
+                        type={showPasswordFields ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder={currentLang === 'en' ? 'At least 6 characters' : 'Inyuguti 6+'}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        {currentLang === 'en' ? 'Confirm New Password' : 'Emeza Ijambobanga'}
+                      </label>
+                      <input
+                        type={showPasswordFields ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        placeholder={currentLang === 'en' ? 'Re-enter new password' : 'Subiramo ijambobanga'}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:ring-2 focus:ring-[#FF6000] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsChangingPassword(false);
+                        setPasswordErrorMsg(null);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmNewPassword('');
+                      }}
+                      className="px-3.5 py-1.5 border border-slate-300 rounded-xl text-slate-600 font-bold hover:bg-slate-100 cursor-pointer"
+                    >
+                      {currentLang === 'en' ? 'Cancel' : 'Reka'}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingPassword}
+                      className="px-4 py-1.5 bg-[#FF6000] text-white rounded-xl font-bold hover:bg-orange-600 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingPassword
+                        ? (currentLang === 'en' ? 'Updating...' : 'Biri gukorwa...')
+                        : (currentLang === 'en' ? 'Update Password' : 'Bika Ijambobanga')}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}
