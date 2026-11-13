@@ -3,7 +3,11 @@ import { Heart, Star, Camera, Youtube, Truck, ZoomIn } from 'lucide-react';
 import { Product } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
+import {
+  calculateProductShippingUnitCost,
+  getEffectiveDiscountPercent,
+  getEffectiveUnitPrice
+} from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { ProductImageViewerModal } from './ProductImageViewerModal.tsx';
@@ -35,23 +39,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const translated = useProductTranslation(product, currentLang);
   const displayName = translated.name || product.name;
 
-  const hasDiscount = Boolean(
-    (product.discountPercent !== undefined && product.discountPercent > 0) ||
-    (product.discountPrice !== undefined && product.discountPrice < product.price)
-  );
-
-  const discountPercent = product.discountPercent || (hasDiscount && product.price > 0 && product.discountPrice
-    ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
-    : 0);
-
-  const currentPriceRwf = (product.discountPrice !== undefined && product.discountPrice < product.price)
-    ? product.discountPrice
-    : (discountPercent > 0 ? Math.round(product.price * (1 - discountPercent / 100)) : product.price);
+  const discountPercent = getEffectiveDiscountPercent(product);
+  const currentPriceRwf = getEffectiveUnitPrice(product, 1);
+  const hasDiscount = discountPercent > 0 && currentPriceRwf < product.price;
 
   const priceFormat = formatCurrencyPrice(currentPriceRwf, currentCurrency, exchangeRates, { showBaseSecondary: true });
   const originalFormat = hasDiscount ? formatCurrencyPrice(product.price, currentCurrency, exchangeRates) : null;
-  const shippingCost = calculateProductShippingUnitCost(product, currentPriceRwf);
+  const shippingCost = calculateProductShippingUnitCost(product);
+  const totalWithShippingRwf = currentPriceRwf + shippingCost;
   const shippingFormat = formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates);
+  const totalFormat = formatCurrencyPrice(totalWithShippingRwf, currentCurrency, exchangeRates);
 
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
@@ -187,10 +184,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {displayName}
           </h3>
 
-          {/* Delivery Note */}
-          <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500">
-            <Truck className="w-3 h-3 text-slate-400 shrink-0" />
-            <span>+{shippingFormat.primary} delivery</span>
+          {/* Shipping + Total Price Incl. Shipping */}
+          <div className="mt-1.5 space-y-0.5 text-[11px]">
+            <div className="flex items-center gap-1 text-slate-500">
+              <Truck className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>+{shippingFormat.primary} shipping</span>
+            </div>
+            <div className="text-slate-800 font-bold font-mono tabular-nums">
+              Total: {totalFormat.primary}
+            </div>
           </div>
         </div>
 

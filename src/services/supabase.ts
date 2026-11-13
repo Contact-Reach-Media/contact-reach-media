@@ -255,7 +255,7 @@ export function mapSupabaseRowToProduct(row: any): Product {
     isBestSeller: Boolean(row.is_best_seller),
     brand: row.brand || undefined,
     unit: row.unit || 'Piece',
-    shippingCost: Number(row.shipping_cost) || 0,
+    shippingCost: (row.shipping_cost !== null && row.shipping_cost !== undefined && Number(row.shipping_cost) > 0) ? Number(row.shipping_cost) : undefined,
     specifications: row.specifications || undefined,
     storage: row.storage || undefined,
     packagingInfo: row.packaging_info || undefined,
@@ -323,7 +323,7 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
       is_best_seller: Boolean(p.isBestSeller),
       brand: p.brand || null,
       unit: p.unit || 'Piece',
-      shipping_cost: Math.max(0, Number(p.shippingCost) || 0),
+      shipping_cost: p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0 ? Math.max(0, Number(p.shippingCost)) : null,
       specifications: p.specifications || null,
       storage: p.storage || null,
       packaging_info: p.packagingInfo || null,
@@ -440,6 +440,7 @@ export async function syncAllProductsToSupabase(products: Product[] = []): Promi
       description: p.description || '',
       price: Math.max(0, Number(p.price) || 0),
       cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
+      shipping_cost: p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0 ? Math.max(0, Number(p.shippingCost)) : null,
       category: p.category,
       stock: Math.max(0, Number(p.stock ?? 0)),
       image_url: p.imageUrl || '',
@@ -1394,9 +1395,11 @@ export async function getMessagesFromSupabase(): Promise<AdminMessage[]> {
 
 export async function saveMessageToSupabase(m: AdminMessage): Promise<{ success: boolean; error?: string }> {
   try {
+    const rawConvId = typeof m.conversationId === 'string' ? m.conversationId.trim() : '';
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawConvId);
     const { error } = await supabase.from('messages').upsert({
       id: m.id,
-      conversation_id: m.conversationId || m.customerId || null,
+      conversation_id: isUuid ? rawConvId : null,
       name: m.name || m.senderName || 'Customer',
       sender_name: m.name || m.senderName || 'Customer',
       phone: m.phone || null,
@@ -1406,7 +1409,7 @@ export async function saveMessageToSupabase(m: AdminMessage): Promise<{ success:
       subject: m.subject || null,
       message: m.message,
       order_number: m.orderNumber || null,
-      customer_id: m.customerId || null,
+      customer_id: m.customerId || (!isUuid && rawConvId ? rawConvId : null),
       sender: m.sender || 'customer',
       status: m.status || 'unread',
       is_read_by_customer: m.isReadByCustomer !== undefined ? Boolean(m.isReadByCustomer) : (m.sender !== 'admin'),
@@ -1603,7 +1606,7 @@ export async function saveCustomerProblemToSupabase(p: CustomerProblemReport): P
     const { error } = await supabase.from('customer_problems').upsert({
       id: p.id,
       case_number: p.caseNumber || null,
-      order_number: p.orderNumber || null,
+      order_number: p.orderNumber || p.caseNumber || 'General Inquiry',
       customer_name: p.customerName,
       customer_phone: p.customerPhone,
       customer_email: p.customerEmail || null,

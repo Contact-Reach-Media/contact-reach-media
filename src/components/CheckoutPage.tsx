@@ -7,7 +7,7 @@ import { CartItem, Order, PaymentMethod, AppSettings, CustomerUser } from '../ty
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { calculateCartBreakdown } from '../utils/shippingCalculator.ts';
+import { calculateCartBreakdown, getEffectiveUnitPrice } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface CheckoutPageProps {
@@ -143,7 +143,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           productId: item.product.id,
           productName: item.product.name,
           name: item.product.name,
-          price: (item.product.discountPrice && item.product.discountPrice > 0 ? item.product.discountPrice : item.product.price) || 0,
+          price: getEffectiveUnitPrice(item.product, item.quantity),
           quantity: item.quantity,
           imageUrl: item.product.imageUrl || '/logo.png',
           variation: item.variation || item.selectedVariation
@@ -345,14 +345,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                       <optgroup label="Kigali Delivery">
                         {settings.kigaliAreas?.map(a => (
                           <option key={a.id} value={a.id}>
-                            {a.name} ({a.fee === 0 ? 'FREE' : `${a.fee.toLocaleString()} FRW`})
+                            {a.name} ({cartBreakdown.isFreeDelivery || a.fee === 0 ? 'FREE' : `${a.fee.toLocaleString()} FRW`})
                           </option>
                         ))}
                       </optgroup>
                       <optgroup label="Other Options">
                         <option value="pickup">Store Pickup (Fair View Plaza, Kigali - FREE)</option>
-                        <option value="outside">Outside Kigali (Upcountry - 3,500 FRW)</option>
-                        <option value="international">International Delivery (5,000 FRW)</option>
+                        <option value="outside">Outside Kigali (Upcountry - {(settings.deliveryFeeUpcountry ?? 3500).toLocaleString()} FRW)</option>
+                        <option value="international">International Delivery ({((settings as any)?.deliveryFeeInternational ?? 5000).toLocaleString()} FRW)</option>
                       </optgroup>
                     </select>
                   </div>
@@ -546,27 +546,32 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
 
                 {/* Items Mini List */}
                 <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1 divide-y divide-slate-100">
-                  {cart.map(item => {
-                    const resolvedImg = getProductImageDueToProduct(item.product);
-                    const itemUnitPrice = item.product.discountPrice || item.product.price;
+                  {cartBreakdown.items.map(bItem => {
+                    const resolvedImg = getProductImageDueToProduct(bItem.product);
                     return (
-                      <div key={item.product.id} className="pt-2 first:pt-0 flex items-center gap-2.5 text-xs">
+                      <div key={bItem.product.id} className="pt-2 first:pt-0 flex items-center gap-2.5 text-xs">
                         <img
                           src={resolvedImg && resolvedImg.trim() ? resolvedImg : '/logo.png'}
-                          alt={item.product.name}
+                          alt={bItem.product.name}
                           className="w-10 h-10 rounded-lg object-cover bg-white border border-slate-200 shrink-0"
                           referrerPolicy="no-referrer"
                           onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-slate-800 truncate">{item.product.name}</p>
-                          <p className="text-[10px] text-slate-400">
-                            Qty: {item.quantity} &times; {itemUnitPrice.toLocaleString()} FRW
+                          <p className="font-bold text-slate-800 truncate">{bItem.product.name}</p>
+                          <p className="text-[10px] text-slate-500 font-mono">
+                            {bItem.quantity} &times; {bItem.unitPrice.toLocaleString()} FRW
+                            <span className="text-orange-700 font-semibold"> (+{bItem.itemShippingCost.toLocaleString()} ship)</span>
                           </p>
                         </div>
-                        <span className="font-mono font-bold text-slate-900">
-                          {(itemUnitPrice * item.quantity).toLocaleString()} FRW
-                        </span>
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-bold text-slate-900 block">
+                            {bItem.itemTotalWithShipping.toLocaleString()} FRW
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono block">
+                            Incl. ship
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
@@ -575,23 +580,31 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                 {/* Pricing Breakdown */}
                 <div className="space-y-2 text-xs text-slate-600 pt-3 border-t border-slate-100">
                   <div className="flex justify-between items-center">
-                    <span>Subtotal:</span>
+                    <span>1. Product Price (Subtotal):</span>
                     <span className="font-mono font-bold text-slate-900">
                       {subtotal.toLocaleString()} FRW
                     </span>
                   </div>
 
-                  {shippingCost > 0 && (
-                    <div className="flex justify-between items-center text-amber-700">
-                      <span>Supplier Shipping:</span>
-                      <span className="font-mono font-bold">
-                        +{shippingCost.toLocaleString()} FRW
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex justify-between items-center text-orange-700">
+                    <span className="flex items-center gap-1">
+                      <span>2. Shipping Cost:</span>
+                      <span className="text-[9px] bg-orange-100 px-1 rounded font-bold font-mono">1,500 + 10%</span>
+                    </span>
+                    <span className="font-mono font-bold">
+                      +{shippingCost.toLocaleString()} FRW
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1.5 border-t border-slate-100">
+                    <span className="font-semibold text-slate-700">Product + Shipping Subtotal:</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {cartBreakdown.subtotalWithShipping.toLocaleString()} FRW
+                    </span>
+                  </div>
 
                   <div className="flex justify-between items-center">
-                    <span>Delivery:</span>
+                    <span>3. Delivery Fee:</span>
                     <span className="font-mono font-bold text-slate-900">
                       {deliveryFee === 0 ? (
                         <span className="text-emerald-600 font-bold">FREE</span>

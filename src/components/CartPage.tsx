@@ -3,7 +3,7 @@ import {
   ShoppingBag, Trash2, Plus, Minus, ArrowRight, ArrowLeft,
   Truck, ShieldCheck, CheckCircle2, ChevronRight, Package
 } from 'lucide-react';
-import { CartItem, Product } from '../types.ts';
+import { AppSettings, CartItem, Product } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { calculateCartBreakdown } from '../utils/shippingCalculator.ts';
@@ -11,6 +11,7 @@ import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface CartPageProps {
   cart: CartItem[];
+  settings?: AppSettings;
   onUpdateQuantity: (productId: string, delta: number) => void;
   onRemoveItem: (productId: string) => void;
   onNavigate: (view: string, params?: any) => void;
@@ -22,6 +23,7 @@ interface CartPageProps {
 
 export const CartPage: React.FC<CartPageProps> = ({
   cart,
+  settings,
   onUpdateQuantity,
   onRemoveItem,
   onNavigate,
@@ -31,14 +33,15 @@ export const CartPage: React.FC<CartPageProps> = ({
   exchangeRates
 }) => {
   const t = translations[currentLang] || translations.en;
-  const breakdown = calculateCartBreakdown(cart);
+  const breakdown = calculateCartBreakdown(cart, { settings });
 
   const subtotalFormatted = formatCurrencyPrice(breakdown.subtotal, currentCurrency, exchangeRates, { showBaseSecondary: true });
-  const estimatedDelivery = breakdown.subtotal >= 50000 ? 0 : 1500;
-  const estimatedTotal = breakdown.subtotal + breakdown.shippingCost + estimatedDelivery;
+  const subtotalWithShippingFormatted = formatCurrencyPrice(breakdown.subtotalWithShipping, currentCurrency, exchangeRates);
+  const estimatedDelivery = breakdown.deliveryFee;
+  const estimatedTotal = breakdown.grandTotal;
   const totalFormatted = formatCurrencyPrice(estimatedTotal, currentCurrency, exchangeRates, { showBaseSecondary: true });
 
-  const freeDeliveryThreshold = 50000;
+  const freeDeliveryThreshold = settings?.freeDeliveryThreshold ?? 50000;
   const progressToFreeDelivery = Math.min(100, Math.round((breakdown.subtotal / freeDeliveryThreshold) * 100));
   const remainingForFreeDelivery = Math.max(0, freeDeliveryThreshold - breakdown.subtotal);
 
@@ -139,27 +142,27 @@ export const CartPage: React.FC<CartPageProps> = ({
 
               {/* Items Table/Cards */}
               <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden divide-y divide-slate-100">
-                {cart.map(item => {
-                  const resolvedImg = getProductImageDueToProduct(item.product);
-                  const itemUnitPrice = item.product.discountPrice || item.product.price;
-                  const itemTotal = itemUnitPrice * item.quantity;
-                  const itemTotalFormatted = formatCurrencyPrice(itemTotal, currentCurrency, exchangeRates);
+                {breakdown.items.map((bItem) => {
+                  const item = cart.find(c => c.product.id === bItem.product.id);
+                  const resolvedImg = getProductImageDueToProduct(bItem.product);
+                  const itemUnitPrice = bItem.unitPrice;
+                  const itemTotalWithShippingFormatted = formatCurrencyPrice(bItem.itemTotalWithShipping, currentCurrency, exchangeRates);
 
                   return (
                     <div
-                      key={item.product.id}
+                      key={bItem.product.id}
                       className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors"
                     >
                       {/* Product Image & Info */}
                       <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
                         <img
                           src={resolvedImg}
-                          alt={item.product.name}
+                          alt={bItem.product.name}
                           className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover bg-white border border-slate-200 shrink-0 shadow-2xs cursor-pointer"
                           referrerPolicy="no-referrer"
                           onClick={() => {
-                            onSelectProduct(item.product);
-                            onNavigate('product', { productId: item.product.id });
+                            onSelectProduct(bItem.product);
+                            onNavigate('product', { productId: bItem.product.id });
                           }}
                         />
 
@@ -167,28 +170,33 @@ export const CartPage: React.FC<CartPageProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              onSelectProduct(item.product);
-                              onNavigate('product', { productId: item.product.id });
+                              onSelectProduct(bItem.product);
+                              onNavigate('product', { productId: bItem.product.id });
                             }}
                             className="font-bold text-xs sm:text-sm text-slate-900 hover:text-orange-600 text-left line-clamp-2 transition-colors cursor-pointer"
                           >
-                            {item.product.name}
+                            {bItem.product.name}
                           </button>
 
                           <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">
-                            <span className="capitalize">{item.product.category}</span>
-                            {item.product.shopName && (
-                              <span>&bull; {item.product.shopName}</span>
+                            <span className="capitalize">{bItem.product.category}</span>
+                            {bItem.product.shopName && (
+                              <span>&bull; {bItem.product.shopName}</span>
                             )}
-                            {item.variation && Object.entries(item.variation).map(([k, v]) => (
+                            {item?.variation && Object.entries(item.variation).map(([k, v]) => (
                               <span key={k} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">
                                 {k}: {v}
                               </span>
                             ))}
                           </div>
 
-                          <div className="text-xs font-mono font-bold text-slate-700">
-                            {formatCurrencyPrice(itemUnitPrice, currentCurrency, exchangeRates).primary} each
+                          <div className="flex items-center gap-2 flex-wrap text-xs font-mono">
+                            <span className="font-bold text-slate-700">
+                              {formatCurrencyPrice(itemUnitPrice, currentCurrency, exchangeRates).primary} each
+                            </span>
+                            <span className="text-[11px] text-orange-700 font-semibold bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">
+                              +{formatCurrencyPrice(bItem.itemShippingCost, currentCurrency, exchangeRates).primary} shipping
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -199,19 +207,19 @@ export const CartPage: React.FC<CartPageProps> = ({
                         <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1 shadow-2xs">
                           <button
                             type="button"
-                            onClick={() => onUpdateQuantity(item.product.id, -1)}
+                            onClick={() => onUpdateQuantity(bItem.product.id, -1)}
                             className="p-1.5 rounded-lg hover:bg-white text-slate-600 cursor-pointer transition-colors"
                             title="Decrease quantity"
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
                           <span className="w-8 text-center font-mono font-bold text-xs text-slate-900">
-                            {item.quantity}
+                            {bItem.quantity}
                           </span>
                           <button
                             type="button"
-                            onClick={() => onUpdateQuantity(item.product.id, 1)}
-                            disabled={item.quantity >= (item.product.stock || 50)}
+                            onClick={() => onUpdateQuantity(bItem.product.id, 1)}
+                            disabled={!bItem.isOutOfStock && bItem.quantity >= (bItem.product.stock || 50)}
                             className="p-1.5 rounded-lg hover:bg-white text-slate-600 disabled:opacity-30 cursor-pointer transition-colors"
                             title="Increase quantity"
                           >
@@ -219,22 +227,20 @@ export const CartPage: React.FC<CartPageProps> = ({
                           </button>
                         </div>
 
-                        {/* Total Price */}
-                        <div className="text-right min-w-[90px]">
+                        {/* Total Price (Product + Shipping) */}
+                        <div className="text-right min-w-[100px]">
                           <span className="font-mono font-black text-sm text-slate-900 block">
-                            {itemTotalFormatted.primary}
+                            {itemTotalWithShippingFormatted.primary}
                           </span>
-                          {itemTotalFormatted.secondary && (
-                            <span className="font-mono text-[10px] text-slate-400 block">
-                              {itemTotalFormatted.secondary}
-                            </span>
-                          )}
+                          <span className="font-mono text-[10px] text-slate-400 block">
+                            Incl. shipping
+                          </span>
                         </div>
 
                         {/* Remove Button */}
                         <button
                           type="button"
-                          onClick={() => onRemoveItem(item.product.id)}
+                          onClick={() => onRemoveItem(bItem.product.id)}
                           className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                           title="Remove item from basket"
                         >
@@ -264,21 +270,29 @@ export const CartPage: React.FC<CartPageProps> = ({
 
                 <div className="space-y-2.5 text-xs text-slate-600">
                   <div className="flex justify-between items-center">
-                    <span>Subtotal:</span>
+                    <span>1. Product Price (Subtotal):</span>
                     <span className="font-mono font-bold text-slate-900">{subtotalFormatted.primary}</span>
                   </div>
 
-                  {breakdown.shippingCost > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span>Supplier Cargo Handling:</span>
-                      <span className="font-mono font-bold text-amber-700">
-                        +{formatCurrencyPrice(breakdown.shippingCost, currentCurrency, exchangeRates).primary}
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1">
+                      <span>2. Shipping Cost:</span>
+                      <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.2 rounded font-bold font-mono">
+                        1,500 + 10%
                       </span>
-                    </div>
-                  )}
+                    </span>
+                    <span className="font-mono font-bold text-orange-700">
+                      +{formatCurrencyPrice(breakdown.shippingCost, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1.5 border-t border-slate-100">
+                    <span className="font-semibold text-slate-700">Product + Shipping:</span>
+                    <span className="font-mono font-bold text-slate-900">{subtotalWithShippingFormatted.primary}</span>
+                  </div>
 
                   <div className="flex justify-between items-center">
-                    <span>Estimated Delivery (Kigali):</span>
+                    <span>3. Estimated Delivery (Kigali):</span>
                     <span className="font-mono font-bold text-slate-900">
                       {estimatedDelivery === 0 ? (
                         <span className="text-emerald-600 font-black">FREE</span>

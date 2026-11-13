@@ -953,6 +953,70 @@ function isProductTombstoned(identifiers: { id?: string; sku?: string; alibabaPr
 
 loadDbFromDisk();
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function toNullableUuid(val: any): string | null {
+  const s = typeof val === 'string' ? val.trim() : '';
+  return UUID_REGEX.test(s) ? s : null;
+}
+
+function isTransientNetworkError(errOrMsg: any): boolean {
+  const msg = typeof errOrMsg === 'string' ? errOrMsg : (errOrMsg?.message || String(errOrMsg || ''));
+  return /fetch failed|econnreset|etimedout|enotfound|eai_again|socket|network/i.test(msg);
+}
+
+async function runSupabaseWithRetry<T = any>(
+  op: () => PromiseLike<{ data?: T; error?: any }>,
+  maxRetries = 2
+): Promise<{ data?: T; error?: any }> {
+  let lastResult: { data?: T; error?: any } = { error: null };
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await op();
+      lastResult = res || { error: null };
+      if (!lastResult.error || !isTransientNetworkError(lastResult.error)) {
+        return lastResult;
+      }
+    } catch (err: any) {
+      lastResult = { error: err };
+      if (!isTransientNetworkError(err)) {
+        return lastResult;
+      }
+    }
+    if (attempt < maxRetries) {
+      await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+    }
+  }
+  return lastResult;
+}
+
+function buildSupabaseMessageRow(data: any): Record<string, any> {
+  return {
+    id: String(data.id),
+    conversation_id: toNullableUuid(data.conversationId),
+    name: data.name || data.senderName || 'Customer',
+    sender_name: data.name || data.senderName || 'Customer',
+    phone: data.phone || null,
+    sender_phone: data.phone || null,
+    email: data.email || null,
+    sender_email: data.email || null,
+    subject: data.subject || null,
+    message: data.message ?? '',
+    order_number: data.orderNumber || null,
+    customer_id: data.customerId || (!toNullableUuid(data.conversationId) && data.conversationId ? String(data.conversationId) : null),
+    sender: data.sender || 'customer',
+    status: data.status || 'unread',
+    is_read_by_customer: data.isReadByCustomer !== undefined ? Boolean(data.isReadByCustomer) : (data.sender !== 'admin'),
+    is_read_by_admin: data.isReadByAdmin !== undefined ? Boolean(data.isReadByAdmin) : (data.sender === 'admin' || data.status === 'read' || data.status === 'replied'),
+    notification_type: data.notificationType || 'chat',
+    read_at: data.readAt || null,
+    reply_note: data.replyNote || null,
+    reply_message: data.replyNote || null,
+    replied_at: data.repliedAt || null,
+    created_at: data.createdAt || new Date().toISOString()
+  };
+}
+
 // -------------------------------------------------------------
 // SUPABASE REAL-TIME PERSISTENCE WRITER
 // -------------------------------------------------------------
@@ -1032,13 +1096,15 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
 
       let existingOrder: { id: string; order_number: string } | null = null;
       if (queryParts.length > 0) {
-        const { data: matched } = await supabase
-          .from('orders')
-          .select('id, order_number')
-          .or(queryParts.join(','))
-          .limit(1)
-          .maybeSingle();
-        if (matched) existingOrder = matched;
+        const { data: matched } = await runSupabaseWithRetry(() =>
+          supabase
+            .from('orders')
+            .select('id, order_number')
+            .or(queryParts.join(','))
+            .limit(1)
+            .maybeSingle()
+        );
+        if (matched) existingOrder = matched as { id: string; order_number: string };
       }
 
       if (existingOrder) {
@@ -1046,24 +1112,30 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         if (existingOrder.order_number) {
           orderRow.order_number = existingOrder.order_number;
         }
-        const { error: ordErr } = await supabase
-          .from('orders')
-          .update(orderRow)
-          .eq('id', existingOrder.id);
+        const { error: ordErr } = await runSupabaseWithRetry(() =>
+          supabase
+            .from('orders')
+            .update(orderRow)
+            .eq('id', existingOrder!.id)
+        );
         if (ordErr) {
           console.error('[Supabase Order Sync] Error:', ordErr.message);
         } else {
           console.log(`[Supabase] Live synchronized order #${orderRow.order_number} to Supabase.`);
         }
       } else {
-        const { error: ordErr } = await supabase.from('orders').insert(orderRow);
+        const { error: ordErr } = await runSupabaseWithRetry(() =>
+          supabase.from('orders').insert(orderRow)
+        );
         if (ordErr) {
           if (ordErr.code === '23505' && queryParts.length > 0) {
             // Concurrency fallback: update matching row
-            const { error: fbErr } = await supabase
-              .from('orders')
-              .update(orderRow)
-              .or(queryParts.join(','));
+            const { error: fbErr } = await runSupabaseWithRetry(() =>
+              supabase
+                .from('orders')
+                .update(orderRow)
+                .or(queryParts.join(','))
+            );
             if (fbErr) {
               console.error('[Supabase Order Sync] Error:', fbErr.message);
             } else {
@@ -1113,7 +1185,7 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         is_best_seller: Boolean(data.isBestSeller),
         brand: data.brand || null,
         unit: data.unit || 'Piece',
-        shipping_cost: Math.max(0, Number(data.shippingCost) || 0),
+        shipping_cost: (data.shippingCost !== undefined && data.shippingCost !== null && Number(data.shippingCost) > 0) ? Math.max(0, Number(data.shippingCost)) : null,
         specifications: data.specifications || null,
         storage: data.storage || null,
         packaging_info: data.packagingInfo || null,
@@ -1205,7 +1277,9 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         submitted_at: data.submittedAt || new Date().toISOString(),
         created_at: data.submittedAt || data.createdAt || new Date().toISOString()
       };
-      const { error: payErr } = await supabase.from('payments').upsert(payRow, { onConflict: 'id' });
+      const { error: payErr } = await runSupabaseWithRetry(() =>
+        supabase.from('payments').upsert(payRow, { onConflict: 'id' })
+      );
       if (payErr) {
         console.error('[Supabase Payment Sync] Error:', payErr.message);
       }
@@ -1236,128 +1310,119 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         created_at: data.createdAt || new Date().toISOString(),
         updated_at: data.updatedAt || new Date().toISOString()
       };
-      const { error: txnErr } = await supabase.from('payment_transactions').upsert(txnRow, { onConflict: 'id' });
+      const { error: txnErr } = await runSupabaseWithRetry(() =>
+        supabase.from('payment_transactions').upsert(txnRow, { onConflict: 'id' })
+      );
       if (txnErr) {
         console.error('[Supabase PaymentTransaction Sync] Error:', txnErr.message);
       }
     } else if (entityType === 'smsNotifications' || entityType === 'sms_notifications') {
-      const { error: smsErr } = await supabase.from('sms_notifications').upsert({
-        id: String(data.id),
-        direction: data.direction || 'incoming',
-        sender_phone: data.senderPhone || '',
-        sender_name: data.senderName || null,
-        recipient_phone: data.recipientPhone || null,
-        provider: data.provider || 'MTN Mobile Money',
-        message: data.message || '',
-        parsed_transaction_id: data.parsedTransactionId || null,
-        parsed_amount: data.parsedAmount !== undefined ? Math.round(Number(data.parsedAmount)) : null,
-        order_number: data.orderNumber || null,
-        payment_id: data.paymentId || null,
-        status: data.status || 'received',
-        metadata: data.metadata || {},
-        created_at: data.createdAt || new Date().toISOString()
-      }, { onConflict: 'id' });
+      const { error: smsErr } = await runSupabaseWithRetry(() =>
+        supabase.from('sms_notifications').upsert({
+          id: String(data.id),
+          direction: data.direction || 'incoming',
+          sender_phone: data.senderPhone || '',
+          sender_name: data.senderName || null,
+          recipient_phone: data.recipientPhone || null,
+          provider: data.provider || 'MTN Mobile Money',
+          message: data.message || '',
+          parsed_transaction_id: data.parsedTransactionId || null,
+          parsed_amount: data.parsedAmount !== undefined ? Math.round(Number(data.parsedAmount)) : null,
+          order_number: data.orderNumber || null,
+          payment_id: data.paymentId || null,
+          status: data.status || 'received',
+          metadata: data.metadata || {},
+          created_at: data.createdAt || new Date().toISOString()
+        }, { onConflict: 'id' })
+      );
       if (smsErr && !String(smsErr.message || '').includes('Could not find the table')) {
         console.warn('[Supabase SMS Sync] Notice:', smsErr.message);
       }
     } else if (entityType === 'messages' || entityType === 'message' || entityType === 'customer_messages') {
-      const { error: msgErr } = await supabase.from('messages').upsert({
-        id: data.id,
-        conversation_id: data.conversationId || data.customerId || null,
-        name: data.name || data.senderName || 'Customer',
-        sender_name: data.name || data.senderName || 'Customer',
-        phone: data.phone || null,
-        sender_phone: data.phone || null,
-        email: data.email || null,
-        sender_email: data.email || null,
-        subject: data.subject || null,
-        message: data.message,
-        order_number: data.orderNumber || null,
-        customer_id: data.customerId || null,
-        sender: data.sender || 'customer',
-        status: data.status || 'unread',
-        is_read_by_customer: data.isReadByCustomer !== undefined ? Boolean(data.isReadByCustomer) : (data.sender !== 'admin'),
-        is_read_by_admin: data.isReadByAdmin !== undefined ? Boolean(data.isReadByAdmin) : (data.sender === 'admin' || data.status === 'read' || data.status === 'replied'),
-        notification_type: data.notificationType || 'chat',
-        read_at: data.readAt || null,
-        reply_note: data.replyNote || null,
-        reply_message: data.replyNote || null,
-        replied_at: data.repliedAt || null,
-        created_at: data.createdAt || new Date().toISOString()
-      }, { onConflict: 'id' });
+      const msgRow = buildSupabaseMessageRow(data);
+      const { error: msgErr } = await runSupabaseWithRetry(() =>
+        supabase.from('messages').upsert(msgRow, { onConflict: 'id' })
+      );
       if (msgErr) {
         console.error('[Supabase Message Sync] Error:', msgErr.message);
       }
     } else if (entityType === 'adminNotifications' || entityType === 'admin_notifications' || entityType === 'notification') {
       // Persist to messages table (guaranteed live schema) with sender='admin_notification'
-      await supabase.from('messages').upsert({
-        id: data.id,
-        name: data.senderName || 'ContactReach Alert',
-        sender_name: data.senderName || 'ContactReach Alert',
-        phone: data.senderPhone || null,
-        sender_phone: data.senderPhone || null,
-        email: data.senderEmail || null,
-        sender_email: data.senderEmail || null,
-        subject: data.title || 'Admin Notification',
-        message: data.message,
-        order_number: data.orderNumber || null,
-        customer_id: data.customerId || null,
-        sender: 'admin_notification',
-        status: data.isRead ? 'read' : 'unread',
-        is_read_by_customer: true,
-        is_read_by_admin: Boolean(data.isRead),
-        notification_type: `admin_notif_${data.category || 'system'}`,
-        read_at: data.readAt || null,
-        reply_note: JSON.stringify({
-          category: data.category || 'system',
-          actionTab: data.actionTab || null,
-          entityId: data.entityId || null,
-          metadata: data.metadata || {}
-        }),
-        created_at: data.createdAt || new Date().toISOString()
-      }, { onConflict: 'id' });
-      // Also mirror to admin_notifications table if provisioned
-      try {
-        await supabase.from('admin_notifications').upsert({
+      await runSupabaseWithRetry(() =>
+        supabase.from('messages').upsert({
           id: data.id,
-          category: data.category || 'system',
-          title: data.title || 'Admin Notification',
-          message: data.message,
-          sender_name: data.senderName || null,
+          conversation_id: null,
+          name: data.senderName || 'ContactReach Alert',
+          sender_name: data.senderName || 'ContactReach Alert',
+          phone: data.senderPhone || null,
           sender_phone: data.senderPhone || null,
+          email: data.senderEmail || null,
           sender_email: data.senderEmail || null,
+          subject: data.title || 'Admin Notification',
+          message: data.message,
           order_number: data.orderNumber || null,
           customer_id: data.customerId || null,
-          action_tab: data.actionTab || null,
-          entity_id: data.entityId || null,
-          is_read: Boolean(data.isRead),
+          sender: 'admin_notification',
+          status: data.isRead ? 'read' : 'unread',
+          is_read_by_customer: true,
+          is_read_by_admin: Boolean(data.isRead),
+          notification_type: `admin_notif_${data.category || 'system'}`,
           read_at: data.readAt || null,
-          metadata: data.metadata || {},
+          reply_note: JSON.stringify({
+            category: data.category || 'system',
+            actionTab: data.actionTab || null,
+            entityId: data.entityId || null,
+            metadata: data.metadata || {}
+          }),
           created_at: data.createdAt || new Date().toISOString()
-        }, { onConflict: 'id' });
+        }, { onConflict: 'id' })
+      );
+      // Also mirror to admin_notifications table if provisioned
+      try {
+        await runSupabaseWithRetry(() =>
+          supabase.from('admin_notifications').upsert({
+            id: data.id,
+            category: data.category || 'system',
+            title: data.title || 'Admin Notification',
+            message: data.message,
+            sender_name: data.senderName || null,
+            sender_phone: data.senderPhone || null,
+            sender_email: data.senderEmail || null,
+            order_number: data.orderNumber || null,
+            customer_id: data.customerId || null,
+            action_tab: data.actionTab || null,
+            entity_id: data.entityId || null,
+            is_read: Boolean(data.isRead),
+            read_at: data.readAt || null,
+            metadata: data.metadata || {},
+            created_at: data.createdAt || new Date().toISOString()
+          }, { onConflict: 'id' })
+        );
       } catch {}
     } else if (entityType === 'customerProblems' || entityType === 'problem' || entityType === 'issues') {
       const notesArr = Array.isArray(data.privateNotes) ? data.privateNotes : [];
-      const { error: probErr } = await supabase.from('customer_problems').upsert({
-        id: data.id,
-        case_number: data.caseNumber || null,
-        order_number: data.orderNumber || null,
-        customer_name: data.customerName,
-        customer_phone: data.customerPhone,
-        customer_email: data.customerEmail || null,
-        category: data.category || 'delivery_delay',
-        issue_type: data.issueType || data.category || null,
-        description: data.description,
-        priority: data.priority || 'medium',
-        status: data.status || 'New',
-        assigned_to: data.assignedTo || null,
-        private_notes: notesArr,
-        admin_notes: data.adminNotes || (notesArr.length > 0 ? JSON.stringify(notesArr) : null),
-        resolution: data.resolution || null,
-        resolved_at: data.resolvedAt || null,
-        updated_at: data.updatedAt || new Date().toISOString(),
-        created_at: data.createdAt || new Date().toISOString()
-      }, { onConflict: 'id' });
+      const { error: probErr } = await runSupabaseWithRetry(() =>
+        supabase.from('customer_problems').upsert({
+          id: data.id,
+          case_number: data.caseNumber || null,
+          order_number: data.orderNumber || data.caseNumber || 'General Inquiry',
+          customer_name: data.customerName,
+          customer_phone: data.customerPhone,
+          customer_email: data.customerEmail || null,
+          category: data.category || 'delivery_delay',
+          issue_type: data.issueType || data.category || null,
+          description: data.description,
+          priority: data.priority || 'medium',
+          status: data.status || 'New',
+          assigned_to: data.assignedTo || null,
+          private_notes: notesArr,
+          admin_notes: data.adminNotes || (notesArr.length > 0 ? JSON.stringify(notesArr) : null),
+          resolution: data.resolution || null,
+          resolved_at: data.resolvedAt || null,
+          updated_at: data.updatedAt || new Date().toISOString(),
+          created_at: data.createdAt || new Date().toISOString()
+        }, { onConflict: 'id' })
+      );
       if (probErr) {
         console.error('[Supabase Problem Report Sync] Error:', probErr.message);
       }
@@ -1645,6 +1710,7 @@ export async function loadAllDataFromSupabase() {
         description: p.description || '',
         price: Number(p.price) || 0,
         costPrice: p.cost_price !== null ? Number(p.cost_price) : undefined,
+        shippingCost: (p.shipping_cost !== null && p.shipping_cost !== undefined && Number(p.shipping_cost) > 0) ? Number(p.shipping_cost) : undefined,
         costOverriddenByAdmin: Boolean(p.cost_overridden_by_admin),
         commissionRate: p.commission_rate !== null ? Number(p.commission_rate) : 10,
         discountPercent: Number(p.discount_percent) || 0,
@@ -1712,11 +1778,29 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.shops.length} registered shops.`);
     }
 
-    // 4. Orders with items (non-destructive merge + backfill missing local orders into Supabase)
-    const { data: ords, error: ordErr } = await supabase
-      .from('orders')
-      .select('*, order_items(*)')
-      .order('created_at', { ascending: false });
+    // 4. Orders with items (non-destructive merge + throttled backfill of missing local orders)
+    const pendingBackfills: {
+      orders: Order[];
+      payments: PaymentConfirmation[];
+      txns: PaymentTransaction[];
+      messages: AdminMessage[];
+      problems: CustomerProblemReport[];
+    } = { orders: [], payments: [], txns: [], messages: [], problems: [] };
+
+    const [{ data: ords, error: ordErr }, { data: ordItemRows }] = await Promise.all([
+      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('order_items').select('*')
+    ]);
+
+    const orderItemsByOrderId = new Map<string, any[]>();
+    if (Array.isArray(ordItemRows)) {
+      for (const it of ordItemRows) {
+        const oid = String(it.order_id || '');
+        if (!oid) continue;
+        if (!orderItemsByOrderId.has(oid)) orderItemsByOrderId.set(oid, []);
+        orderItemsByOrderId.get(oid)!.push(it);
+      }
+    }
 
     if (!ordErr && Array.isArray(ords)) {
       const orderMap = new Map<string, Order>();
@@ -1726,6 +1810,7 @@ export async function loadAllDataFromSupabase() {
       const remoteOrderIds = new Set<string>();
       for (const o of ords) {
         remoteOrderIds.add(String(o.id));
+        const linkedItems = orderItemsByOrderId.get(String(o.id));
         const mappedOrd: Order = {
           id: String(o.id),
           orderNumber: o.order_number,
@@ -1753,7 +1838,7 @@ export async function loadAllDataFromSupabase() {
           trackingNumber: o.tracking_number || undefined,
           trackingToken: o.tracking_token || undefined,
           paymentConfirmation: o.payment_confirmation || undefined,
-          items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
+          items: Array.isArray(linkedItems) && linkedItems.length > 0 ? linkedItems.map((it: any) => ({
             productId: it.product_id ? String(it.product_id) : '',
             productName: it.product_name,
             price: Number(it.unit_price) || 0,
@@ -1769,11 +1854,7 @@ export async function loadAllDataFromSupabase() {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       console.log(`[Supabase] Loaded ${ords.length} orders from Supabase (merged total: ${db.orders.length}).`);
-      // Backfill local orders missing in Supabase asynchronously without blocking startup
-      const missingLocalOrders = db.orders.filter(o => !remoteOrderIds.has(String(o.id))).slice(0, 50);
-      if (missingLocalOrders.length > 0) {
-        Promise.allSettled(missingLocalOrders.map(o => saveToSupabaseAsync('orders', o.id, o))).catch(() => {});
-      }
+      pendingBackfills.orders = db.orders.filter(o => !remoteOrderIds.has(String(o.id))).slice(0, 20);
     }
 
     // 5. Payments & Payment Transactions (non-destructive merge + backfill missing records to Supabase)
@@ -1818,10 +1899,7 @@ export async function loadAllDataFromSupabase() {
         (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
       );
       console.log(`[Supabase] Loaded ${pays.length} payments (merged total: ${db.paymentConfirmations.length}).`);
-      const missingLocalPays = db.paymentConfirmations.filter(p => !remotePayIds.has(String(p.id)));
-      if (missingLocalPays.length > 0) {
-        Promise.allSettled(missingLocalPays.map(p => saveToSupabaseAsync('paymentConfirmations', p.id, p))).catch(() => {});
-      }
+      pendingBackfills.payments = db.paymentConfirmations.filter(p => !remotePayIds.has(String(p.id)));
     }
 
     if (!txnErr && Array.isArray(txns)) {
@@ -1862,10 +1940,7 @@ export async function loadAllDataFromSupabase() {
       db.paymentTransactions = Array.from(txnMap.values()).sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
-      const missingLocalTxns = db.paymentTransactions.filter(t => !remoteTxnIds.has(String(t.id))).slice(0, 50);
-      if (missingLocalTxns.length > 0) {
-        Promise.allSettled(missingLocalTxns.map(t => saveToSupabaseAsync('paymentTransactions', t.id, t))).catch(() => {});
-      }
+      pendingBackfills.txns = db.paymentTransactions.filter(t => !remoteTxnIds.has(String(t.id))).slice(0, 50);
     }
 
     // 5b. SMS Notifications (Incoming & Outgoing Mobile Money SMS logs)
@@ -2034,10 +2109,7 @@ export async function loadAllDataFromSupabase() {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       console.log(`[Supabase] Loaded ${db.messages.length} messages.`);
-      const missingLocalMsgs = db.messages.filter(m => !remoteMsgIds.has(String(m.id))).slice(0, 50);
-      if (missingLocalMsgs.length > 0) {
-        Promise.allSettled(missingLocalMsgs.map(m => saveToSupabaseAsync('messages', m.id, m))).catch(() => {});
-      }
+      pendingBackfills.messages = db.messages.filter(m => !remoteMsgIds.has(String(m.id))).slice(0, 100);
     }
 
     // Also hydrate from dedicated admin_notifications table if present
@@ -2117,10 +2189,7 @@ export async function loadAllDataFromSupabase() {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       console.log(`[Supabase] Loaded ${db.customerProblems.length} customer problem reports.`);
-      const missingLocalProbs = db.customerProblems.filter(p => !remoteProbIds.has(String(p.id)));
-      if (missingLocalProbs.length > 0) {
-        Promise.allSettled(missingLocalProbs.map(p => saveToSupabaseAsync('customerProblems', p.id, p))).catch(() => {});
-      }
+      pendingBackfills.problems = db.customerProblems.filter(p => !remoteProbIds.has(String(p.id)));
     }
 
     // 9. Coupons
@@ -2299,6 +2368,50 @@ export async function loadAllDataFromSupabase() {
       const hasOwner = authorizedAdmins.some(u => u.email === 'contactreachmedialimited@gmail.com');
       db.adminUsers = hasOwner ? authorizedAdmins : [...defaultAdminUsers, ...authorizedAdmins];
       console.log(`[Supabase] Verified ${db.adminUsers.length} authorized admin account(s).`);
+    }
+
+    // Sequentially backfill missing local records in small batches after startup hydration completes
+    // to avoid bursting simultaneous sockets on Node's HTTP pool (prevents TypeError: fetch failed).
+    const hasBackfill =
+      pendingBackfills.messages.length > 0 ||
+      pendingBackfills.problems.length > 0 ||
+      pendingBackfills.payments.length > 0 ||
+      pendingBackfills.txns.length > 0 ||
+      pendingBackfills.orders.length > 0;
+
+    if (hasBackfill) {
+      void (async () => {
+        try {
+          // 1. Batch upsert missing messages (chunks of 15)
+          for (let i = 0; i < pendingBackfills.messages.length; i += 15) {
+            const chunk = pendingBackfills.messages.slice(i, i + 15).map(buildSupabaseMessageRow);
+            const { error: batchErr } = await runSupabaseWithRetry(() =>
+              supabase.from('messages').upsert(chunk, { onConflict: 'id' })
+            );
+            if (batchErr) {
+              console.warn('[Supabase Message Batch Backfill] Notice:', batchErr.message);
+            }
+          }
+          // 2. Backfill customer problems sequentially
+          for (const prob of pendingBackfills.problems) {
+            await saveToSupabaseAsync('customerProblems', prob.id, prob);
+          }
+          // 3. Backfill payment confirmations & transactions sequentially
+          for (const pay of pendingBackfills.payments) {
+            await saveToSupabaseAsync('paymentConfirmations', pay.id, pay);
+          }
+          for (const txn of pendingBackfills.txns) {
+            await saveToSupabaseAsync('paymentTransactions', txn.id, txn);
+          }
+          // 4. Backfill missing orders with max concurrency 2
+          for (let i = 0; i < pendingBackfills.orders.length; i += 2) {
+            const slice = pendingBackfills.orders.slice(i, i + 2);
+            await Promise.allSettled(slice.map(o => saveToSupabaseAsync('orders', o.id, o)));
+          }
+        } catch (bkErr: any) {
+          console.warn('[Supabase Backfill] Notice:', bkErr?.message || bkErr);
+        }
+      })();
     }
   } catch (err: any) {
     console.warn('[Supabase] Hydration notice:', err?.message || err);
@@ -3399,6 +3512,8 @@ app.post('/api/orders', async (req: Request, res: Response) => {
               sku: sbProd.sku || undefined,
               description: sbProd.description || '',
               price: Number(sbProd.price) || 0,
+              costPrice: sbProd.cost_price !== null && sbProd.cost_price !== undefined ? Number(sbProd.cost_price) : undefined,
+              shippingCost: (sbProd.shipping_cost !== null && sbProd.shipping_cost !== undefined && Number(sbProd.shipping_cost) > 0) ? Number(sbProd.shipping_cost) : undefined,
               discountPercent: Number(sbProd.discount_percent) || 0,
               discountPrice: sbProd.discount_price !== null ? Number(sbProd.discount_price) : undefined,
               category: sbProd.category || 'clothing',
@@ -3452,13 +3567,27 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       // Mark as out of stock for supplier fulfillment if stock <= 0, without blocking order completion
       const isOutOfStock = product.status === 'Out of Stock' || product.stock <= 0;
 
-    // Shipping Cost strictly calculated: if explicit shippingCost > 0 use it; if out-of-stock supplier delivery apply 1500 + 10% base cost; else 0 for in-stock local items
+    // Canonical Effective Unit Price (matching frontend getEffectiveUnitPrice)
+    const rawProdPrice = Math.max(0, Number(product.price) || 0);
+    let baseUnitPrice = rawProdPrice;
+    if (typeof product.discountPrice === 'number' && product.discountPrice > 0 && product.discountPrice < rawProdPrice) {
+      baseUnitPrice = Math.round(product.discountPrice);
+    } else if (typeof product.discountPercent === 'number' && product.discountPercent > 0 && product.discountPercent < 100) {
+      baseUnitPrice = Math.max(0, Math.round(rawProdPrice * (1 - product.discountPercent / 100)));
+    } else {
+      baseUnitPrice = Math.round(rawProdPrice);
+    }
+    const unitPrice = qty >= 10 ? Math.round(baseUnitPrice * 0.96) : baseUnitPrice;
+    calculatedSubtotal += unitPrice * qty;
+
+    // Canonical Shipping Cost strictly calculated for every listed product:
+    // Use custom shippingCost (> 0) if set by Admin; otherwise 1500 + (cost of product * 10) / 100
     const baseProductCost = (typeof product.costPrice === 'number' && product.costPrice > 0)
       ? product.costPrice
-      : (product.discountPrice && product.discountPrice > 0 ? product.discountPrice : (product.price || 0));
-    const unitShipping = (typeof product.shippingCost === 'number' && product.shippingCost > 0)
-      ? product.shippingCost
-      : (isOutOfStock ? (1500 + Math.round((baseProductCost * 10) / 100)) : 0);
+      : baseUnitPrice;
+    const unitShipping = (typeof product.shippingCost === 'number' && !isNaN(product.shippingCost) && product.shippingCost > 0)
+      ? Math.round(product.shippingCost)
+      : (1500 + Math.round((baseProductCost * 10) / 100));
     const itemShippingCost = unitShipping * qty;
     calculatedShippingCost += itemShippingCost;
 
@@ -3466,9 +3595,6 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     if (product.receiverName) primaryReceiverName = product.receiverName;
     if (product.receiverPhone) primaryReceiverPhone = product.receiverPhone;
     if (product.merchantCode) primaryMerchantCode = product.merchantCode;
-
-    const unitPrice = product.discountPrice && product.discountPrice > 0 ? product.discountPrice : product.price;
-    calculatedSubtotal += unitPrice * qty;
 
     const verifiedImg = resolveProductImageDueToProduct({ productName: product.name, productId: product.id, imageUrl: product.imageUrl }, db.products);
     verifiedItems.push({
@@ -7585,6 +7711,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
           description: sbProd.description || '',
           price: Number(sbProd.price) || 0,
           costPrice: sbProd.cost_price !== null && sbProd.cost_price !== undefined ? Number(sbProd.cost_price) : undefined,
+          shippingCost: (sbProd.shipping_cost !== null && sbProd.shipping_cost !== undefined && Number(sbProd.shipping_cost) > 0) ? Number(sbProd.shipping_cost) : undefined,
           costOverriddenByAdmin: Boolean(sbProd.cost_overridden_by_admin),
           commissionRate: sbProd.commission_rate !== null && sbProd.commission_rate !== undefined ? Number(sbProd.commission_rate) : 10,
           discountPercent: Number(sbProd.discount_percent) || 0,
@@ -7916,11 +8043,7 @@ app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_
     product.discountPercent = product.price > 0 ? Math.round(((product.price - product.discountPrice) / product.price) * 100) : undefined;
   }
 
-  // Recalculate profit margin in RWF and shipping cost: 1500 + (cost of product * 10) / 100 if shippingCost not custom
-  if (product.shippingCost === undefined) {
-    const effCost = (product.costPrice !== undefined && product.costPrice > 0) ? product.costPrice : (product.price || 0);
-    product.shippingCost = 1500 + Math.round((effCost * 10) / 100);
-  }
+  // Keep shippingCost undefined when auto-calculated so future cost/price updates recompute dynamically
   if (product.costPrice !== undefined) {
     const currentSellingPrice = product.discountPrice || product.price;
     product.profitMargin = currentSellingPrice - product.costPrice;

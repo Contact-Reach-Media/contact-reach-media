@@ -12,7 +12,7 @@ import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
-import { calculateCartBreakdown, isProductOutOfStock, calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
+import { calculateCartBreakdown, getEffectiveUnitPrice } from '../utils/shippingCalculator.ts';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -164,9 +164,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   }, [buyerUser]);
 
-  if (!isOpen) return null;
-
-  // Automated Total Payment Formula: Product Price + Delivery Fee + Shipping Cost (if out of stock)
+  // Automated Total Payment Formula: Product Price + Shipping Cost + Delivery Fee - Discount
   const cartBreakdown = useMemo(() => {
     return calculateCartBreakdown(cart, {
       selectedLocationId,
@@ -174,6 +172,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       appliedDiscount
     });
   }, [cart, selectedLocationId, settings, appliedDiscount]);
+
+  if (!isOpen) return null;
 
   const subtotal = cartBreakdown.subtotal;
   const isOutsideKigali = selectedLocationId === 'outside';
@@ -213,16 +213,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           isError: false
         });
       } else {
+        setAppliedDiscount(0);
         setDiscountMsg({ text: res.message || 'Invalid promo code', isError: true });
       }
     } catch (err: any) {
-      if (['WELCOME10', 'CRM2026', 'MOMO', 'DISCOUNT10'].includes(discountCode.trim().toUpperCase())) {
-        const disc = Math.min(10000, Math.round(subtotal * 0.1));
-        setAppliedDiscount(disc);
-        setDiscountMsg({ text: `Promo applied: 10% OFF (-${disc.toLocaleString()} FRW)!`, isError: false });
-      } else {
-        setDiscountMsg({ text: err.message || 'Invalid coupon code.', isError: true });
-      }
+      setAppliedDiscount(0);
+      setDiscountMsg({ text: err.message || 'Invalid or inactive coupon code.', isError: true });
     }
   };
 
@@ -282,7 +278,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           productId: item.product.id,
           productName: item.product.name,
           name: item.product.name,
-          price: (item.product.discountPrice && item.product.discountPrice > 0 ? item.product.discountPrice : item.product.price) || 0,
+          price: getEffectiveUnitPrice(item.product, item.quantity),
           quantity: item.quantity,
           imageUrl: item.product.imageUrl || '/logo.png',
           variation: item.variation || item.selectedVariation
@@ -610,30 +606,29 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </span>
                 </div>
 
-                {/* Items List with image thumbnail, name, qty, price */}
-                <div className="max-h-40 overflow-y-auto divide-y divide-slate-100 pr-1 space-y-2">
-                  {cart.map(item => {
-                    const outOfStock = isProductOutOfStock(item.product);
+                {/* Items List with image thumbnail, name, qty, unit price, shipping & item total */}
+                <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 pr-1 space-y-2">
+                  {cartBreakdown.items.map(bItem => {
                     return (
-                      <div key={item.product.id} className="pt-2 first:pt-0 flex items-center justify-between gap-3 text-xs">
+                      <div key={bItem.product.id} className="pt-2 first:pt-0 flex items-center justify-between gap-3 text-xs">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
-                            src={item.product.imageUrl && item.product.imageUrl.trim() ? item.product.imageUrl : '/logo.png'}
-                            alt={item.product.name}
+                            src={bItem.product.imageUrl && bItem.product.imageUrl.trim() ? bItem.product.imageUrl : '/logo.png'}
+                            alt={bItem.product.name}
                             className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
                             onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                           />
                           <div className="truncate">
-                            <p className="font-bold text-slate-900 truncate">{item.product.name}</p>
+                            <p className="font-bold text-slate-900 truncate">{bItem.product.name}</p>
                             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               <span className="text-[11px] text-slate-500 font-mono">
-                                {item.quantity} × {formatCurrencyPrice(item.product.price, currentCurrency, exchangeRates).primary}
+                                {bItem.quantity} &times; {formatCurrencyPrice(bItem.unitPrice, currentCurrency, exchangeRates).primary}
                               </span>
                               <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-800 bg-orange-50 border border-orange-200 px-1.5 py-0.2 rounded">
                                 <Truck className="w-2.5 h-2.5 text-[#FF5500] shrink-0" />
-                                <span>+{formatCurrencyPrice(calculateProductShippingUnitCost(item.product), currentCurrency, exchangeRates).primary} ship</span>
+                                <span>+{formatCurrencyPrice(bItem.itemShippingCost, currentCurrency, exchangeRates).primary} ship</span>
                               </span>
-                              {outOfStock ? (
+                              {bItem.isOutOfStock ? (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                   ⚡ Out of Stock (Supplier)
                                 </span>
@@ -645,15 +640,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </div>
                           </div>
                         </div>
-                        <span className="font-mono font-bold text-slate-900 shrink-0">
-                          {formatCurrencyPrice(item.product.price * item.quantity, currentCurrency, exchangeRates).primary}
-                        </span>
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-bold text-slate-900 block">
+                            {formatCurrencyPrice(bItem.itemTotalWithShipping, currentCurrency, exchangeRates).primary}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono block">
+                            Incl. ship
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Subtotal, Delivery Fee & Supplier Shipping Cost Breakdown */}
+                {/* Subtotal, Shipping Cost & Delivery Fee Breakdown */}
                 <div className="pt-2 border-t border-slate-200 text-xs space-y-2 font-medium text-slate-600">
                   {/* Row 1: Product Price (Subtotal) */}
                   <div className="flex justify-between items-center">
@@ -663,10 +663,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Row 2: Delivery Fee */}
+                  {/* Row 2: Shipping Cost: 1500 + 10% of product cost */}
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Truck className="w-3.5 h-3.5 text-[#FF5500]" />
+                      <span>2. Shipping Cost:</span>
+                      <span className="text-[10px] bg-orange-100 text-[#FF5500] px-1.5 py-0.2 rounded font-bold font-mono">
+                        1,500 + 10%
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-900">
+                      +{formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+
+                  {/* Combined Product + Shipping Subtotal */}
+                  <div className="flex justify-between items-center pt-1.5 border-t border-slate-200/70">
+                    <span className="text-slate-800 font-semibold">Product + Shipping Subtotal:</span>
+                    <span className="font-mono text-slate-900 font-bold">
+                      {formatCurrencyPrice(cartBreakdown.subtotalWithShipping, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+
+                  {/* Row 3: Delivery Fee */}
                   <div className="flex justify-between items-center">
                     <span className="flex items-center gap-1 text-slate-700">
-                      <span>2. Local Delivery Fee:</span>
+                      <span>3. Local Delivery Fee:</span>
                       {qualifiesForFreeDelivery && (
                         <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold uppercase">
                           Free
@@ -675,20 +697,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </span>
                     <span className="font-mono text-slate-900">
                       {deliveryFee === 0 ? '0 RWF (Free)' : formatCurrencyPrice(deliveryFee, currentCurrency, exchangeRates).primary}
-                    </span>
-                  </div>
-
-                  {/* Row 3: Shipping Cost: 1500 + 10% of product cost */}
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1.5 text-slate-700">
-                      <Truck className="w-3.5 h-3.5 text-[#FF5500]" />
-                      <span>3. Shipping Cost:</span>
-                      <span className="text-[10px] bg-orange-100 text-[#FF5500] px-1.5 py-0.2 rounded font-bold font-mono">
-                        1,500 + 10%
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold text-slate-900">
-                      +{formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates).primary}
                     </span>
                   </div>
 
@@ -702,7 +710,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   {/* Formula banner */}
                   <div className="p-2 rounded-xl bg-orange-50/80 border border-orange-200/70 text-[11px] text-orange-950 flex items-center justify-between">
                     <span className="font-semibold text-[10px] text-orange-900">
-                      Total = Product Price + Delivery Fee + Shipping Cost
+                      Total = Product Price + Shipping Cost + Delivery Fee
                     </span>
                     <span className="text-[10px] font-bold text-[#FF5500]">
                       Standard 1,500 + 10% shipping
@@ -792,7 +800,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   >
                     <div className="font-bold text-xs truncate">International</div>
                     <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
-                      5,000 RWF (Global)
+                      {((settings as any)?.deliveryFeeInternational ?? 5000).toLocaleString()} RWF (Global)
                     </div>
                   </button>
                   <button

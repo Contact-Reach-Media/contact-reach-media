@@ -10,7 +10,12 @@ import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
+import {
+  isProductOutOfStock,
+  getProductSelectionBreakdown,
+  getEffectiveDiscountPercent,
+  getEffectiveUnitPrice
+} from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { FormattedProductDescription } from './FormattedProductDescription.tsx';
@@ -127,33 +132,26 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [galleryImages.length, isLightboxOpen, onClose, product]);
 
-  if (!product) return null;
+  // Automatic Formula: Product Price + Shipping Cost + Delivery Fee
+  const costBreakdown = useMemo(() => {
+    if (!product) return null;
+    return getProductSelectionBreakdown(product, quantity, 1500);
+  }, [product, quantity]);
+
+  if (!product || !costBreakdown) return null;
 
   const t = translations[currentLang] || translations.en;
-  const hasDiscount = Boolean(
-    (product.discountPercent !== undefined && product.discountPercent > 0) ||
-    (product.discountPrice !== undefined && product.discountPrice < product.price)
-  );
-  const discountPercent = product.discountPercent || (hasDiscount && product.price > 0 && product.discountPrice
-    ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
-    : 7);
-
-  const unitPrice = (product.discountPrice !== undefined && product.discountPrice < product.price)
-    ? product.discountPrice
-    : (discountPercent > 0 ? Math.round(product.price * (1 - discountPercent / 100)) : product.price);
+  const discountPercent = getEffectiveDiscountPercent(product);
+  const unitPrice = getEffectiveUnitPrice(product, 1);
+  const hasDiscount = discountPercent > 0 && unitPrice < product.price;
 
   // Bulk Tier Pricing (Matching Image 1 & 2)
   const wholesaleTier1 = unitPrice; // 1-9 pcs
-  const wholesaleTier2 = Math.round(unitPrice * 0.96); // >=10 pcs (4% wholesale bulk discount)
+  const wholesaleTier2 = getEffectiveUnitPrice(product, 10); // >=10 pcs (4% wholesale bulk discount)
 
-  const activeUnitPrice = quantity >= 10 ? wholesaleTier2 : wholesaleTier1;
-  const totalPrice = activeUnitPrice * quantity;
-  const isOutOfStock = isProductOutOfStock(product);
-
-  // Automatic Formula: Product Price + Delivery Fee + Shipping Cost (if out of stock)
-  const costBreakdown = useMemo(() => {
-    return getProductSelectionBreakdown(product, quantity, 1500);
-  }, [product, quantity]);
+  const activeUnitPrice = costBreakdown.unitPrice;
+  const totalPrice = costBreakdown.productPriceTotal;
+  const isOutOfStock = costBreakdown.isOutOfStock;
 
   // Store's Hot Items (Matching Image 4)
   const storeHotItems = allProducts
@@ -553,8 +551,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-slate-500 flex items-center gap-1 pt-1 border-t border-slate-200/60">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Selling Price formula strictly calculated: (Product Cost + Kigali Freight) &times; 1.10</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>
+                    Standard Shipping (+{formatCurrencyPrice(costBreakdown.unitShippingCost, currentCurrency, exchangeRates).primary}/unit) automatically added &bull; Total/unit:{' '}
+                    <strong className="text-slate-800 font-mono">
+                      {formatCurrencyPrice(activeUnitPrice + costBreakdown.unitShippingCost, currentCurrency, exchangeRates).primary}
+                    </strong>
+                  </span>
                 </p>
               </div>
 
@@ -671,10 +674,32 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Line 2: Delivery Fee */}
+                  {/* Line 2: Shipping Cost: 1500 + 10% of product cost */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600 flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-[#f95700]" />
+                      <span>2. Shipping Cost:</span>
+                      <span className="text-[10px] bg-orange-100 text-[#ea4e00] px-1.5 py-0.5 rounded font-bold font-mono">
+                        1,500 + 10%
+                      </span>
+                    </span>
+                    <span className="font-mono font-bold text-[#f95700]">
+                      +{formatCurrencyPrice(costBreakdown.totalShippingCost, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+
+                  {/* Product + Shipping Subtotal */}
+                  <div className="flex justify-between items-center pt-1.5 border-t border-orange-200/60">
+                    <span className="font-semibold text-slate-800">Product + Shipping Subtotal:</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {formatCurrencyPrice(costBreakdown.subtotalWithShipping, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+
+                  {/* Line 3: Delivery Fee */}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600 flex items-center gap-1">
-                      <span>2. Local Kigali Delivery:</span>
+                      <span>3. Local Kigali Delivery:</span>
                       {costBreakdown.deliveryFee === 0 && (
                         <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded font-bold uppercase">
                           Free
@@ -682,21 +707,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                       )}
                     </span>
                     <span className="font-mono font-bold text-slate-900">
-                      {costBreakdown.deliveryFee === 0 ? '0 RWF (Free)' : `${costBreakdown.deliveryFee.toLocaleString()} RWF`}
-                    </span>
-                  </div>
-
-                  {/* Line 3: Shipping Cost: 1500 + 10% of product cost */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-600 flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-[#f95700]" />
-                      <span>3. Shipping Cost:</span>
-                      <span className="text-[10px] bg-orange-100 text-[#ea4e00] px-1.5 py-0.5 rounded font-bold font-mono">
-                        1,500 + 10%
-                      </span>
-                    </span>
-                    <span className="font-mono font-bold text-[#f95700]">
-                      +{costBreakdown.totalShippingCost.toLocaleString()} RWF
+                      {costBreakdown.deliveryFee === 0
+                        ? '0 RWF (Free)'
+                        : formatCurrencyPrice(costBreakdown.deliveryFee, currentCurrency, exchangeRates).primary}
                     </span>
                   </div>
 
@@ -712,7 +725,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     <div>
                       <span className="text-xs font-black uppercase text-slate-900 block">Total Payment to Pay:</span>
                       <span className="text-[10px] text-slate-500 font-normal">
-                        Product Price + Delivery + Shipping Cost
+                        Product Price + Shipping Cost + Delivery
                       </span>
                     </div>
                     <div className="text-right">
@@ -734,7 +747,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 <div className="flex items-center justify-between text-emerald-900 font-bold">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    Alibaba & ContactReach Market Order Protection
+                    ContactReach Market Order Protection
                   </span>
                   <span className="text-[10px] text-emerald-700 font-mono">100% Guaranteed</span>
                 </div>

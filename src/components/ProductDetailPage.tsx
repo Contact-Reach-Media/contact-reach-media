@@ -6,12 +6,16 @@ import {
   ArrowLeft, Youtube, ExternalLink, ShieldCheck, CheckSquare,
   ZoomIn, Maximize
 } from 'lucide-react';
-import { Product, ProductReview, ProductVariation } from '../types.ts';
+import { AppSettings, Product, ProductReview, ProductVariation } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { getYouTubeEmbedUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { isProductOutOfStock, getProductSelectionBreakdown } from '../utils/shippingCalculator.ts';
+import {
+  isProductOutOfStock,
+  getProductSelectionBreakdown,
+  getEffectiveDiscountPercent
+} from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { FormattedProductDescription } from './FormattedProductDescription.tsx';
@@ -20,6 +24,7 @@ import { ProductImageViewerModal } from './ProductImageViewerModal.tsx';
 interface ProductDetailPageProps {
   product: Product | null;
   allProducts: Product[];
+  settings?: AppSettings;
   onAddToCart: (product: Product, quantity: number, variation?: { [key: string]: string }) => void;
   onBuyNow: (product: Product, quantity: number, variation?: { [key: string]: string }) => void;
   onSelectProduct: (product: Product) => void;
@@ -34,6 +39,7 @@ interface ProductDetailPageProps {
 export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   product,
   allProducts,
+  settings,
   onAddToCart,
   onBuyNow,
   onSelectProduct,
@@ -126,20 +132,16 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     );
   }
 
-  const selectionBreakdown = getProductSelectionBreakdown(product, quantity);
-  const isOutOfStock = isProductOutOfStock(product);
+  const selectionBreakdown = getProductSelectionBreakdown(product, quantity, 1500, settings);
+  const isOutOfStock = selectionBreakdown.isOutOfStock;
   const maxAvailable = isOutOfStock ? 50 : Math.max(1, product.stock);
 
   const priceFormatted = formatCurrencyPrice(selectionBreakdown.unitPrice, currentCurrency, exchangeRates, { showBaseSecondary: true });
-  const originalFormatted = product.discountPrice && product.discountPrice < product.price
+  const rawDiscountPct = getEffectiveDiscountPercent(product);
+  const discountPercent = rawDiscountPct > 0 ? rawDiscountPct : null;
+  const originalFormatted = discountPercent && selectionBreakdown.unitPrice < product.price
     ? formatCurrencyPrice(product.price, currentCurrency, exchangeRates)
     : null;
-
-  const discountPercent = product.discountPercent && product.discountPercent > 0
-    ? product.discountPercent
-    : (product.discountPrice && product.discountPrice < product.price
-      ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
-      : null);
 
   const handleCopyLink = () => {
     if (typeof window === 'undefined') return;
@@ -390,34 +392,62 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 </div>
               </div>
 
-              {/* Price Block */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/80 to-amber-50/50 border border-orange-200/80">
-                <div className="flex items-baseline gap-3 flex-wrap">
-                  <span className="text-2xl sm:text-3xl font-black text-orange-600 font-mono tracking-tight">
-                    {priceFormatted.primary}
-                  </span>
-                  {originalFormatted && (
-                    <span className="text-sm sm:text-base text-slate-400 line-through font-mono">
-                      {originalFormatted.primary}
+              {/* Price & Automatic Shipping Breakdown Block */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/80 to-amber-50/50 border border-orange-200/80 space-y-3">
+                <div>
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <span className="text-2xl sm:text-3xl font-black text-orange-600 font-mono tracking-tight">
+                      {priceFormatted.primary}
                     </span>
-                  )}
-                  {discountPercent && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-800">
-                      Save {discountPercent}%
-                    </span>
+                    {originalFormatted && (
+                      <span className="text-sm sm:text-base text-slate-400 line-through font-mono">
+                        {originalFormatted.primary}
+                      </span>
+                    )}
+                    {discountPercent && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-800">
+                        Save {discountPercent}%
+                      </span>
+                    )}
+                  </div>
+                  {priceFormatted.secondary && (
+                    <p className="text-xs text-slate-500 font-mono mt-1">
+                      {priceFormatted.secondary}
+                    </p>
                   )}
                 </div>
-                {priceFormatted.secondary && (
-                  <p className="text-xs text-slate-500 font-mono mt-1">
-                    {priceFormatted.secondary}
-                  </p>
-                )}
-                {selectionBreakdown.estimatedShippingCost > 0 && (
-                  <p className="text-xs text-amber-800 mt-2 font-medium flex items-center gap-1">
-                    <Truck className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                    <span>Includes {selectionBreakdown.estimatedShippingCost.toLocaleString()} FRW international supplier handling</span>
-                  </p>
-                )}
+
+                <div className="pt-2.5 border-t border-orange-200/70 space-y-1.5 text-xs text-slate-700">
+                  <div className="flex justify-between items-center">
+                    <span>Product Price ({quantity} {quantity > 1 ? 'units' : 'unit'}):</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {formatCurrencyPrice(selectionBreakdown.productPriceTotal, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                      <span>Shipping Fee (1,500 + 10%):</span>
+                    </span>
+                    <span className="font-mono font-bold text-orange-700">
+                      +{formatCurrencyPrice(selectionBreakdown.totalShippingCost, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Estimated Delivery (Kigali):</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {selectionBreakdown.deliveryFee === 0
+                        ? '0 RWF (Free)'
+                        : formatCurrencyPrice(selectionBreakdown.deliveryFee, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+                  <div className="pt-1.5 border-t border-orange-200/70 flex justify-between items-baseline font-black text-slate-900">
+                    <span>Total Price (Incl. Shipping &amp; Delivery):</span>
+                    <span className="text-base font-mono text-orange-600">
+                      {formatCurrencyPrice(selectionBreakdown.grandTotal, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Variations (if any) */}

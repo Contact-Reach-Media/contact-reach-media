@@ -1352,6 +1352,7 @@ export default function App() {
       ) : activeView === 'cart' ? (
         <CartPage
           cart={cart}
+          settings={settings}
           onUpdateQuantity={handleUpdateCartQuantity}
           onRemoveItem={handleRemoveFromCart}
           onNavigate={handleNavigate}
@@ -2010,6 +2011,7 @@ export default function App() {
             }
           }}
           cart={cart}
+          settings={settings}
           onUpdateQuantity={handleUpdateCartQuantity}
           onRemoveItem={handleRemoveFromCart}
           onProceedToCheckout={() => {
