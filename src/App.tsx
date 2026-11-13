@@ -359,12 +359,22 @@ export default function App() {
     else if (view === 'account') {
       targetPath = '/account';
     }
-    else if (view === 'admin-login') targetPath = '/admin/login';
+    else if (view === 'admin-login') {
+      const token = api.getAdminToken();
+      const stored = api.getStoredAdminUser();
+      const isAuth = (isAdminLoggedIn || Boolean(token)) && (!stored || (isAuthorizedAdminUser(stored) && stored.active !== false));
+      if (isAuth && token) {
+        resolvedView = 'admin';
+        targetPath = '/admin';
+      } else {
+        targetPath = '/admin/login';
+      }
+    }
     else if (view === 'admin') {
       const token = api.getAdminToken();
       const stored = api.getStoredAdminUser();
       const isAuth = (isAdminLoggedIn || Boolean(token)) && (!stored || (isAuthorizedAdminUser(stored) && stored.active !== false));
-      if (!isAuth && !token) {
+      if (!isAuth || !token) {
         resolvedView = 'admin-login';
         targetPath = '/admin/login';
       } else {
@@ -480,11 +490,19 @@ export default function App() {
       setSettings(fetchedSettings);
       setShops(fetchedShops);
       const hasToken = Boolean(api.getAdminToken());
-      const effectiveAuth = isAuth || (hasToken && Boolean(api.getStoredAdminUser()));
+      const effectiveAuth = isAuth && hasToken;
       setIsAdminLoggedIn(effectiveAuth);
 
-      if (initialRoute.view === 'admin' && !effectiveAuth && !hasToken) {
+      if (initialRoute.view === 'admin' && !effectiveAuth) {
         setActiveView('admin-login');
+        if (typeof window !== 'undefined') {
+          window.history.replaceState({ view: 'admin-login' }, '', '/admin/login');
+        }
+      } else if (initialRoute.view === 'admin-login' && effectiveAuth) {
+        setActiveView('admin');
+        if (typeof window !== 'undefined') {
+          window.history.replaceState({ view: 'admin' }, '', '/admin');
+        }
       }
 
       if (initialRoute.productId) {
@@ -520,6 +538,80 @@ export default function App() {
 
   useEffect(() => {
     refreshAllData();
+  }, []);
+
+  // Automatic Admin Session Verification & Cross-Tab Sync
+  useEffect(() => {
+    let isChecking = false;
+    const verifyAdminSession = async () => {
+      if (isChecking) return;
+      const token = api.getAdminToken();
+      if (!token) {
+        setIsAdminLoggedIn(false);
+        return;
+      }
+      isChecking = true;
+      try {
+        const valid = await api.adminCheckAuth();
+        setIsAdminLoggedIn(valid);
+        if (!valid && window.location.pathname.toLowerCase().startsWith('/admin') && !window.location.pathname.toLowerCase().includes('/login')) {
+          setActiveView('admin-login');
+          window.history.replaceState({ view: 'admin-login' }, '', '/admin/login');
+        }
+      } catch {} finally {
+        isChecking = false;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        verifyAdminSession();
+      }
+    };
+
+    const handleFocusOrOnline = () => {
+      verifyAdminSession();
+    };
+
+    const handleStorageSync = (e: StorageEvent) => {
+      if (e.key === 'crm_admin_token' || e.key === 'crm_admin_session_active' || e.key === null) {
+        const token = api.getAdminToken();
+        if (!token) {
+          setIsAdminLoggedIn(false);
+          if (window.location.pathname.toLowerCase().startsWith('/admin') && !window.location.pathname.toLowerCase().includes('/login')) {
+            setActiveView('admin-login');
+            window.history.replaceState({ view: 'admin-login' }, '', '/admin/login');
+          }
+        } else {
+          verifyAdminSession();
+        }
+      }
+    };
+
+    const handleAuthChanged = (e: any) => {
+      const authenticated = Boolean(e?.detail?.authenticated && api.getAdminToken());
+      setIsAdminLoggedIn(authenticated);
+      if (!authenticated && window.location.pathname.toLowerCase().startsWith('/admin') && !window.location.pathname.toLowerCase().includes('/login')) {
+        setActiveView('admin-login');
+        window.history.replaceState({ view: 'admin-login' }, '', '/admin/login');
+      }
+    };
+
+    const sessionHeartbeat = setInterval(verifyAdminSession, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleFocusOrOnline);
+    window.addEventListener('online', handleFocusOrOnline);
+    window.addEventListener('storage', handleStorageSync);
+    window.addEventListener('crm_admin_auth_changed', handleAuthChanged);
+
+    return () => {
+      clearInterval(sessionHeartbeat);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleFocusOrOnline);
+      window.removeEventListener('online', handleFocusOrOnline);
+      window.removeEventListener('storage', handleStorageSync);
+      window.removeEventListener('crm_admin_auth_changed', handleAuthChanged);
+    };
   }, []);
 
   // Live real-time catalog synchronization across all devices & sessions

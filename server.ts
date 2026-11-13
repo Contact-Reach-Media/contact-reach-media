@@ -474,6 +474,7 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
       settings: db.settings,
       deletedRecordIds: db.deletedRecordIds || [],
       adminTokens: Array.from(db.adminTokens.entries()),
+      revokedAdminTokens: Array.from(revokedTokens).slice(-500),
       customerTokens: Array.from(db.customerTokens.entries())
     };
     // Atomic disk persistence: write to temp file then rename (compact JSON speeds up write 3-5x)
@@ -640,11 +641,17 @@ function loadDbFromDisk() {
         };
       }
       if (parsed.deletedRecordIds && Array.isArray(parsed.deletedRecordIds)) db.deletedRecordIds = parsed.deletedRecordIds;
+      if (parsed.revokedAdminTokens && Array.isArray(parsed.revokedAdminTokens)) {
+        parsed.revokedAdminTokens.forEach((rt: any) => {
+          if (typeof rt === 'string' && rt.trim()) revokedTokens.add(rt.trim());
+        });
+      }
       if (parsed.adminTokens && Array.isArray(parsed.adminTokens)) {
         const now = Date.now();
-        // Purge and automatically revoke any tokens for non-authorized email addresses
+        // Purge and automatically revoke any tokens for non-authorized email addresses or revoked tokens
         const validTokens = parsed.adminTokens.filter(([token, session]: any) =>
           token &&
+          !revokedTokens.has(token) &&
           session &&
           session.expiresAt > now &&
           String(session.user?.email || '').toLowerCase().trim() === 'contactreachmedialimited@gmail.com'
@@ -1546,50 +1553,148 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   }
 }
 
-// Set of explicitly revoked or logged-out tokens to guarantee instant revocation
+// Set of explicitly revoked or logged-out tokens & JTIs to guarantee instant permanent revocation
 const revokedTokens = new Set<string>();
+const ADMIN_SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180-day persistent device session
+const ADMIN_SESSION_SLIDING_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Middleware to authenticate admin token - strictly enforces that only verified administrator sessions can access
-function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized. Admin credentials required.' });
+function getAdminTokenSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 16) {
+    return process.env.SESSION_SECRET.trim();
   }
-  const token = authHeader.split(' ')[1];
-  if (revokedTokens.has(token)) {
-    return res.status(403).json({ error: 'Administrator account has been deactivated or session was revoked. Access denied.' });
+  if (process.env.ADMIN_SESSION_SECRET && process.env.ADMIN_SESSION_SECRET.trim().length >= 16) {
+    return process.env.ADMIN_SESSION_SECRET.trim();
   }
+  return crypto
+    .createHash('sha256')
+    .update(`${process.env.ADMIN_PASSWORD || ADMIN_PASSWORD}:${AUTHORIZED_ADMIN_EMAIL}:crm_admin_session_hmac_v2`)
+    .digest('hex');
+}
+
+function createSignedAdminToken(admin: AdminUser, ttlMs: number = ADMIN_SESSION_TTL_MS): { token: string; expiresAt: number } {
+  const now = Date.now();
+  const expiresAt = now + ttlMs;
+  const payload = {
+    sub: admin.id,
+    username: admin.username || ADMIN_USERNAME,
+    email: admin.email,
+    role: admin.role,
+    jti: crypto.randomBytes(16).toString('hex'),
+    iat: now,
+    exp: expiresAt
+  };
+  const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const sigB64 = crypto
+    .createHmac('sha256', getAdminTokenSecret())
+    .update(payloadB64)
+    .digest('base64url');
+  return {
+    token: `crm_admin_${payloadB64}.${sigB64}`,
+    expiresAt
+  };
+}
+
+function verifySignedAdminToken(token: string): {
+  sub: string;
+  username: string;
+  email: string;
+  role: AdminRole;
+  jti: string;
+  iat: number;
+  exp: number;
+} | null {
+  try {
+    if (!token || typeof token !== 'string' || !token.startsWith('crm_admin_')) return null;
+    if (revokedTokens.has(token)) return null;
+    const raw = token.slice('crm_admin_'.length);
+    const dotIdx = raw.indexOf('.');
+    if (dotIdx <= 0) return null;
+    const payloadB64 = raw.slice(0, dotIdx);
+    const sigB64 = raw.slice(dotIdx + 1);
+    if (!payloadB64 || !sigB64) return null;
+
+    const expectedSig = crypto
+      .createHmac('sha256', getAdminTokenSecret())
+      .update(payloadB64)
+      .digest('base64url');
+
+    const sigBuf = Buffer.from(sigB64);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      return null;
+    }
+
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (!payload || typeof payload !== 'object') return null;
+    if (!payload.exp || Number(payload.exp) <= Date.now()) return null;
+    if (payload.jti && revokedTokens.has(`jti:${payload.jti}`)) return null;
+    if (String(payload.email || '').toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) return null;
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function revokeAdminToken(token: string) {
+  if (!token) return;
+  db.adminTokens.delete(token);
+  revokedTokens.add(token);
+  const parsed = verifySignedAdminTokenRaw(token);
+  if (parsed?.jti) {
+    revokedTokens.add(`jti:${parsed.jti}`);
+  }
+}
+
+function verifySignedAdminTokenRaw(token: string): { jti?: string } | null {
+  try {
+    if (!token.startsWith('crm_admin_')) return null;
+    const raw = token.slice('crm_admin_'.length);
+    const dotIdx = raw.indexOf('.');
+    if (dotIdx <= 0) return null;
+    return JSON.parse(Buffer.from(raw.slice(0, dotIdx), 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function resolveAdminSession(token: string): { user: AdminUser; expiresAt: number } | null {
+  if (!token || revokedTokens.has(token)) return null;
 
   let session = db.adminTokens.get(token);
 
-  // Fallback: recognized admin session mapped to authorized admin
-  if (!session && token && !revokedTokens.has(token)) {
-    const isRecognizedToken =
-      token.startsWith('crm_admin_') ||
-      token.startsWith('fb_client_token_') ||
-      token === 'crm_admin_test_session';
-
-    if (isRecognizedToken) {
-      const fallbackOwner =
-        db.adminUsers.find(u => (u.username === ADMIN_USERNAME || u.role === 'owner') && u.active) ||
+  // If server restarted/rotated without local session cache, verify cryptographic HMAC token signature
+  if (!session) {
+    const signedPayload = verifySignedAdminToken(token);
+    if (signedPayload) {
+      const liveOwner =
+        db.adminUsers.find(u => u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) ||
         defaultAdminUsers[0];
-
-      if (fallbackOwner && fallbackOwner.active !== false) {
+      if (liveOwner && liveOwner.active !== false) {
         session = {
-          user: fallbackOwner,
-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+          user: { ...liveOwner },
+          expiresAt: signedPayload.exp
         };
         db.adminTokens.set(token, session);
         saveDbToDisk();
       }
     }
+  } else {
+    const rawParsed = verifySignedAdminTokenRaw(token);
+    if (rawParsed?.jti && revokedTokens.has(`jti:${rawParsed.jti}`)) {
+      db.adminTokens.delete(token);
+      revokedTokens.add(token);
+      return null;
+    }
   }
 
-  if (!session) {
-    return res.status(403).json({ error: 'Invalid or expired session token. Please sign in again.' });
+  if (!session) return null;
+  if (Date.now() > session.expiresAt) {
+    db.adminTokens.delete(token);
+    saveDbToDisk();
+    return null;
   }
 
-  // STRICT SECURITY RESTRICTION: Valid administrator session check
   const sessionUser = session.user;
   const isAuthorized = sessionUser && (
     sessionUser.username?.toLowerCase() === ADMIN_USERNAME.toLowerCase() ||
@@ -1597,46 +1702,54 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
     String(sessionUser.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL
   );
   if (!isAuthorized) {
-    db.adminTokens.delete(token);
-    revokedTokens.add(token);
+    revokeAdminToken(token);
     saveDbToDisk();
-    return res.status(403).json({
-      error: 'Access denied: Unauthorized administrator session. Access revoked.'
-    });
+    return null;
   }
 
-  if (Date.now() > session.expiresAt) {
-    db.adminTokens.delete(token);
-    saveDbToDisk();
-    return res.status(403).json({ error: 'Session has expired. Please sign in again.' });
-  }
-
-  // Sliding session renewal: if within 7 days of expiration, extend by 30 days
-  if (session.expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000) {
-    session.expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-    saveDbToDisk();
-  }
-
-  // Ensure live account is not deactivated
   const liveAdmin = db.adminUsers.find(u => u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL);
   if (liveAdmin) {
     if (!liveAdmin.active) {
-      db.adminTokens.delete(token);
-      revokedTokens.add(token);
+      revokeAdminToken(token);
       saveDbToDisk();
-      return res.status(403).json({ error: 'Administrator account has been deactivated. Access revoked.' });
+      return null;
     }
     session.user.role = liveAdmin.role;
     session.user.name = liveAdmin.name;
     session.user.active = liveAdmin.active;
   } else if (session.user && session.user.active === false) {
-    db.adminTokens.delete(token);
-    revokedTokens.add(token);
+    revokeAdminToken(token);
     saveDbToDisk();
-    return res.status(403).json({ error: 'Administrator account has been deactivated. Access revoked.' });
+    return null;
+  }
+
+  // Sliding session renewal: automatically extend active sessions on the device
+  if (session.expiresAt - Date.now() < ADMIN_SESSION_SLIDING_THRESHOLD_MS) {
+    session.expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
+    saveDbToDisk();
+  }
+
+  return session;
+}
+
+// Middleware to authenticate admin token - strictly enforces verified administrator sessions only
+function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized. Admin credentials required.' });
+  }
+  const token = authHeader.split(' ')[1]?.trim();
+  if (!token || revokedTokens.has(token)) {
+    return res.status(403).json({ error: 'Administrator account has been deactivated or session was revoked. Access denied.' });
+  }
+
+  const session = resolveAdminSession(token);
+  if (!session) {
+    return res.status(403).json({ error: 'Invalid or expired session token. Please sign in again.' });
   }
 
   (req as any).adminUser = session.user;
+  (req as any).adminSessionExpiresAt = session.expiresAt;
   next();
 }
 
@@ -2330,9 +2443,9 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       const authHeader = req.headers.authorization;
       let isAdmin = false;
       if (authHeader && authHeader.startsWith('Bearer ')) {
-        const bearer = authHeader.split(' ')[1];
-        const session = db.adminTokens.get(bearer);
-        if (session && session.expiresAt > Date.now()) {
+        const bearer = authHeader.split(' ')[1]?.trim();
+        const session = bearer ? resolveAdminSession(bearer) : null;
+        if (session) {
           isAdmin = true;
         }
       }
@@ -3877,9 +3990,9 @@ app.get('/api/payments/status/:orderNumber', (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   let isAdmin = false;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const bearer = authHeader.split(' ')[1];
-    const session = db.adminTokens.get(bearer);
-    if (session && session.expiresAt > Date.now()) {
+    const bearer = authHeader.split(' ')[1]?.trim();
+    const session = bearer ? resolveAdminSession(bearer) : null;
+    if (session) {
       isAdmin = true;
     }
   }
@@ -4676,16 +4789,15 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     lastLogin: new Date().toISOString()
   };
 
-  // Generate 32-byte session token
-  const token = 'crm_admin_' + crypto.randomBytes(24).toString('hex');
+  // Generate cryptographically signed persistent device session token (180-day sliding session)
+  const { token, expiresAt } = createSignedAdminToken(authorizedAdmin);
 
   // Ensure ONLY this owner is registered in db.adminUsers
   db.adminUsers = [authorizedAdmin];
 
-  // 30-day persistent session
   db.adminTokens.set(token, {
     user: authorizedAdmin,
-    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+    expiresAt
   });
   saveDbToDisk();
 
@@ -4702,6 +4814,7 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
   return res.json({
     token,
     admin: authorizedAdmin,
+    expiresAt,
     redirectTo: '/admin'
   });
 });
@@ -4721,20 +4834,21 @@ app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
   if (!user) {
     const token = req.headers.authorization?.split(' ')[1];
     if (token) {
-      db.adminTokens.delete(token);
-      revokedTokens.add(token);
+      revokeAdminToken(token);
       saveDbToDisk();
     }
     return res.status(403).json({ error: 'Access denied: Unauthorized administrator session.' });
   }
-  res.json(user);
+  res.json({
+    ...user,
+    sessionExpiresAt: (req as any).adminSessionExpiresAt
+  });
 });
 
 app.post('/api/auth/logout', requireAdminAuth, (req: Request, res: Response) => {
-  const token = req.headers.authorization?.split(' ')[1];
+  const token = req.headers.authorization?.split(' ')[1]?.trim();
   if (token) {
-    db.adminTokens.delete(token);
-    revokedTokens.add(token);
+    revokeAdminToken(token);
     saveDbToDisk();
   }
   res.json({ message: 'Logged out successfully.' });
@@ -4908,65 +5022,17 @@ app.get('/api/admin/stats', requireAdminAuth, (req: Request, res: Response) => {
 
 // Real-Time Database EventStream Listener (SSE) for Instant Multi-Device Order Sync
 app.get('/api/admin/realtime', (req: Request, res: Response) => {
-  const token = (req.query.token as string) || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : '');
-  let isValidAdmin = false;
+  const token = String(
+    (req.query.token as string) ||
+      (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : '') ||
+      ''
+  ).trim();
 
-  if (token && !revokedTokens.has(token)) {
-    const session = db.adminTokens.get(token);
-    if (session && session.expiresAt > Date.now()) {
-      const u = session.user;
-      if (
-        u &&
-        (u.username === ADMIN_USERNAME ||
-          u.role === 'owner' ||
-          String(u.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) &&
-        u.active !== false
-      ) {
-        isValidAdmin = true;
-      } else {
-        db.adminTokens.delete(token);
-        revokedTokens.add(token);
-        saveDbToDisk();
-      }
-    } else if (
-      token.startsWith('crm_admin_') ||
-      token.startsWith('adm_') ||
-      token.startsWith('admin_') ||
-      token.startsWith('fb_client_token_') ||
-      token === 'crm_admin_test_session' ||
-      token.length > 5
-    ) {
-      const fallbackOwner =
-        db.adminUsers.find(
-          u =>
-            (u.username === ADMIN_USERNAME ||
-              u.role === 'owner' ||
-              u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) &&
-            u.active
-        ) || defaultAdminUsers[0];
-      if (fallbackOwner) {
-        isValidAdmin = true;
-        db.adminTokens.set(token, {
-          user: fallbackOwner,
-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
-        });
-        saveDbToDisk();
-      }
-    }
-  } else {
-    // If token is omitted, authenticate as authorized system owner so real-time push is always active
-    const fallbackOwner =
-      db.adminUsers.find(
-        u =>
-          (u.username === ADMIN_USERNAME ||
-            u.role === 'owner' ||
-            u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) &&
-          u.active
-      ) || defaultAdminUsers[0];
-    if (fallbackOwner) {
-      isValidAdmin = true;
-    }
+  const session = token ? resolveAdminSession(token) : null;
+  if (!session) {
+    return res.status(401).json({ error: 'Unauthorized. Valid administrator session required for live stream.' });
   }
+  const isValidAdmin = true;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');

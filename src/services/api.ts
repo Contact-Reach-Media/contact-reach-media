@@ -154,24 +154,86 @@ export function isAuthorizedAdminUser(user: any): boolean {
   );
 }
 
-export function getAdminToken(): string | null {
+const ADMIN_COOKIE_NAME = 'crm_admin_token';
+const ADMIN_COOKIE_MAX_AGE_SEC = 180 * 24 * 60 * 60; // 180 days persistent device session
+
+function readAdminCookie(): string | null {
   try {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token || typeof token !== 'string' || !token.trim()) return null;
-    return token.trim();
+    if (typeof document === 'undefined' || !document.cookie) return null;
+    const parts = document.cookie.split(';');
+    for (const part of parts) {
+      const idx = part.indexOf('=');
+      if (idx === -1) continue;
+      const key = part.slice(0, idx).trim();
+      if (key === ADMIN_COOKIE_NAME) {
+        const val = decodeURIComponent(part.slice(idx + 1).trim());
+        return val && val.trim() ? val.trim() : null;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
+function writeAdminCookie(token: string) {
+  try {
+    if (typeof document === 'undefined') return;
+    const secureAttr = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${ADMIN_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${ADMIN_COOKIE_MAX_AGE_SEC}; SameSite=Lax${secureAttr}`;
+  } catch {}
+}
+
+function clearAdminCookie() {
+  try {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${ADMIN_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+  } catch {}
+}
+
+function emitAdminAuthChanged(authenticated: boolean) {
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('crm_admin_auth_changed', { detail: { authenticated } }));
+    }
+  } catch {}
+}
+
+export function getAdminToken(): string | null {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token && typeof token === 'string' && token.trim()) {
+      return token.trim();
+    }
+    // Recover from persistent same-site cookie if localStorage was evicted
+    const cookieToken = readAdminCookie();
+    if (cookieToken) {
+      try {
+        localStorage.setItem(TOKEN_KEY, cookieToken);
+        localStorage.setItem(SESSION_FLAG_KEY, 'true');
+      } catch {}
+      return cookieToken;
+    }
+    return null;
+  } catch {
+    return readAdminCookie();
+  }
+}
+
 export function setAdminToken(token: string, user?: any) {
   try {
+    const cleanToken = typeof token === 'string' ? token.trim() : '';
+    if (!cleanToken) {
+      removeAdminToken();
+      throw new Error('Invalid authentication token.');
+    }
     if (user && !isAuthorizedAdminUser(user)) {
       removeAdminToken();
       throw new Error('Access denied: Unauthorized administrator account.');
     }
-    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_KEY, cleanToken);
     localStorage.setItem(SESSION_FLAG_KEY, 'true');
+    writeAdminCookie(cleanToken);
     const userToSave = (user && isAuthorizedAdminUser(user)) ? user : {
       id: 'adm-owner-crmedia',
       name: 'Administrator',
@@ -183,13 +245,16 @@ export function setAdminToken(token: string, user?: any) {
       lastLogin: new Date().toISOString()
     };
     localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(userToSave));
+    emitAdminAuthChanged(true);
   } catch (err: any) {
-    if (err.message?.includes('Access denied')) throw err;
+    if (err.message?.includes('Access denied') || err.message?.includes('Invalid authentication')) throw err;
   }
 }
 
 export function getStoredAdminUser(): AdminUser | null {
   try {
+    const token = getAdminToken();
+    if (!token) return null;
     const raw = localStorage.getItem(ADMIN_USER_KEY);
     if (raw) {
       const user = JSON.parse(raw);
@@ -197,25 +262,21 @@ export function getStoredAdminUser(): AdminUser | null {
         return user;
       }
     }
-    // If a valid admin session token exists in localStorage, maintain session with default admin profile
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (token && token.trim()) {
-      const fallbackUser: AdminUser = {
-        id: 'adm-owner-crmedia',
-        name: 'Administrator',
-        username: AUTHORIZED_ADMIN_USERNAME,
-        email: AUTHORIZED_ADMIN_EMAIL,
-        role: 'owner',
-        active: true,
-        phone: '0780022600',
-        lastLogin: new Date().toISOString()
-      };
-      try {
-        localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(fallbackUser));
-      } catch {}
-      return fallbackUser;
-    }
-    return null;
+    // Maintain user profile when a verified token is present in localStorage/cookie
+    const fallbackUser: AdminUser = {
+      id: 'adm-owner-crmedia',
+      name: 'Administrator',
+      username: AUTHORIZED_ADMIN_USERNAME,
+      email: AUTHORIZED_ADMIN_EMAIL,
+      role: 'owner',
+      active: true,
+      phone: '0780022600',
+      lastLogin: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(fallbackUser));
+    } catch {}
+    return fallbackUser;
   } catch {
     return null;
   }
@@ -227,6 +288,8 @@ export function removeAdminToken() {
     localStorage.removeItem(ADMIN_USER_KEY);
     localStorage.removeItem(SESSION_FLAG_KEY);
   } catch {}
+  clearAdminCookie();
+  emitAdminAuthChanged(false);
 }
 
 // Buyer Authentication Storage
@@ -352,21 +415,10 @@ function getBuyerAuthHeaders() {
 }
 
 function getAuthHeaders() {
-  let token = getAdminToken();
-  if (!token) {
-    token = `crm_admin_token_${Date.now()}`;
-    const defaultOwner = getStoredAdminUser() || {
-      id: 'adm-owner-ruth',
-      name: 'Ruth (System Owner)',
-      email: 'contactreachmedialimited@gmail.com',
-      role: 'owner',
-      active: true
-    };
-    setAdminToken(token, defaultOwner);
-  }
+  const token = getAdminToken();
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -495,12 +547,18 @@ export const api = {
   // Admin Manual Refresh of Live Exchange Rates
   async refreshExchangeRates(): Promise<{ success: boolean; rates?: Record<string, number>; source?: string; updatedAt?: string; message?: string }> {
     try {
-      const res = await fetch('/api/admin/exchange-rates/refresh', { method: 'POST' });
+      const res = await fetch('/api/admin/exchange-rates/refresh', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
-      return { success: false, message: 'Failed to refresh rates' };
+      if (res.status === 401 || res.status === 403) {
+        removeAdminToken();
+      }
+      return { success: false, message: parsed.json?.error || 'Failed to refresh rates' };
     } catch (err: any) {
       return { success: false, message: err?.message || 'Network error refreshing rates' };
     }
@@ -1204,6 +1262,7 @@ export const api = {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({
           username: cleanIdentifier,
           email: cleanIdentifier,
@@ -1212,7 +1271,7 @@ export const api = {
       });
       const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
 
-      if (res.ok && parsed.isJson && parsed.json?.token) {
+      if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
         setAdminToken(parsed.json.token, parsed.json.admin);
         return { token: parsed.json.token, admin: parsed.json.admin };
       }
@@ -1220,35 +1279,15 @@ export const api = {
       if (parsed.isJson && parsed.json?.error) {
         throw new Error(parsed.json.error);
       }
+
+      throw new Error('Invalid administrator credentials. Please check your username and password.');
     } catch (err: any) {
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
-        throw err;
+      const msg = String(err?.message || '');
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError') {
+        throw new Error('Unable to reach authentication server. Please check your internet connection and try again.');
       }
+      throw err;
     }
-
-    // Client-side fallback if server is unreachable
-    const isUserMatch =
-      cleanIdentifier.toLowerCase().replace(/^@/, '') === 'crmedia' ||
-      cleanIdentifier.toLowerCase() === 'contactreachmedialimited@gmail.com';
-    const isPassMatch = cleanPass === 'crm@admin!' || rawPass === 'crm@admin!';
-
-    if (isUserMatch && isPassMatch) {
-      const fallbackAdmin: AdminUser = {
-        id: 'adm-owner-crmedia',
-        name: 'Administrator',
-        username: 'crmedia',
-        email: 'contactreachmedialimited@gmail.com',
-        role: 'owner',
-        active: true,
-        phone: '0780022600',
-        lastLogin: new Date().toISOString()
-      };
-      const fallbackToken = 'crm_admin_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-      setAdminToken(fallbackToken, fallbackAdmin);
-      return { token: fallbackToken, admin: fallbackAdmin };
-    }
-
-    throw new Error('Invalid administrator credentials. Please check your username and password.');
   },
 
   async adminGoogleLogin(_user: any): Promise<{ token: string; admin: any }> {
@@ -1271,7 +1310,8 @@ export const api = {
 
     try {
       const res = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.username || parsed.json?.email)) {
@@ -1280,7 +1320,7 @@ export const api = {
           removeAdminToken();
           return false;
         }
-        // Refresh stored admin user profile
+        // Refresh stored admin user profile & persistent backup cookie
         setAdminToken(token, parsed.json);
         return true;
       }
@@ -3797,27 +3837,9 @@ export const api = {
         return parsed.json;
       }
 
-      // If token expired or lost, refresh session and retry once
       if (res.status === 401 || res.status === 403) {
-        const freshToken = `crm_admin_token_${Date.now()}`;
-        const owner = getStoredAdminUser() || {
-          id: 'adm-owner-ruth',
-          name: 'Ruth (System Owner)',
-          email: 'contactreachmedialimited@gmail.com',
-          role: 'owner',
-          active: true
-        };
-        setAdminToken(freshToken, owner);
-
-        const retryRes = await fetch('/api/admin/cjdropshipping/sync-now', {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ category, autoPublish })
-        });
-        const retryParsed = await safeParseResponse<any>(retryRes);
-        if (retryRes.ok && retryParsed.isJson && retryParsed.json) {
-          return retryParsed.json;
-        }
+        removeAdminToken();
+        throw new Error(parsed.json?.error || 'Administrator session expired. Please sign in again.');
       }
 
       if (parsed.isJson && parsed.json?.error) {
@@ -4235,22 +4257,11 @@ export const api = {
     config: GoogleSheetSyncConfig;
     totalProducts: number;
   }> {
-    let res = await fetch('/api/admin/google-sheet', {
+    const res = await fetch('/api/admin/google-sheet', {
       headers: getAuthHeaders()
     });
     if (res.status === 401 || res.status === 403) {
-      const freshToken = `crm_admin_token_${Date.now()}`;
-      const owner = getStoredAdminUser() || {
-        id: 'adm-owner-ruth',
-        name: 'Ruth (System Owner)',
-        email: 'contactreachmedialimited@gmail.com',
-        role: 'owner',
-        active: true
-      };
-      setAdminToken(freshToken, owner);
-      res = await fetch('/api/admin/google-sheet', {
-        headers: getAuthHeaders()
-      });
+      removeAdminToken();
     }
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson) {
@@ -4264,26 +4275,13 @@ export const api = {
     config: GoogleSheetSyncConfig;
     message: string;
   }> {
-    let res = await fetch('/api/admin/google-sheet', {
+    const res = await fetch('/api/admin/google-sheet', {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(config)
     });
     if (res.status === 401 || res.status === 403) {
-      const freshToken = `crm_admin_token_${Date.now()}`;
-      const owner = getStoredAdminUser() || {
-        id: 'adm-owner-ruth',
-        name: 'Ruth (System Owner)',
-        email: 'contactreachmedialimited@gmail.com',
-        role: 'owner',
-        active: true
-      };
-      setAdminToken(freshToken, owner);
-      res = await fetch('/api/admin/google-sheet', {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(config)
-      });
+      removeAdminToken();
     }
     const parsed = await safeParseResponse<any>(res);
     if (!res.ok || !parsed.isJson) {
@@ -4314,23 +4312,14 @@ export const api = {
       });
     };
 
-    let res = await doFetch(accessToken);
+    const res = await doFetch(accessToken);
 
-    // If admin token expired or unauthorized, renew admin session and retry
     if (res.status === 401 || res.status === 403) {
-      const freshToken = `crm_admin_token_${Date.now()}`;
-      const owner = getStoredAdminUser() || {
-        id: 'adm-owner-ruth',
-        name: 'Ruth (System Owner)',
-        email: 'contactreachmedialimited@gmail.com',
-        role: 'owner',
-        active: true
-      };
-      setAdminToken(freshToken, owner);
-      res = await doFetch(accessToken);
+      removeAdminToken();
+      throw new Error('Administrator session expired. Please sign in again.');
     }
 
-    let parsed = await safeParseResponse<any>(res);
+    const parsed = await safeParseResponse<any>(res);
 
     // If request failed and an accessToken was passed (which may have expired), fallback to public link access
     if ((!res.ok || !parsed.isJson) && accessToken) {

@@ -18,19 +18,38 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(() => Boolean(api.getAdminToken()));
   const [error, setError] = useState<string | null>(null);
 
-  // If already logged in, automatically resolve to dashboard
+  // If already logged in on this device, automatically verify and enter dashboard
   useEffect(() => {
+    let active = true;
     const token = api.getAdminToken();
     const user = api.getStoredAdminUser();
-    if (token && user && user.active !== false) {
-      api.adminCheckAuth().then((isValid) => {
-        if (isValid) {
-          onLoginSuccess(user, token);
-        }
-      }).catch(() => {});
+    if (!token) {
+      setCheckingSession(false);
+      return;
     }
+
+    setCheckingSession(true);
+    api.adminCheckAuth()
+      .then((isValid) => {
+        if (!active) return;
+        const verifiedToken = api.getAdminToken();
+        const verifiedUser = api.getStoredAdminUser() || user;
+        if (isValid && verifiedToken && verifiedUser && verifiedUser.active !== false) {
+          onLoginSuccess(verifiedUser, verifiedToken);
+        } else {
+          setCheckingSession(false);
+        }
+      })
+      .catch(() => {
+        if (active) setCheckingSession(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [onLoginSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,10 +107,19 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
               Admin Portal
             </h1>
             <p className="text-xs text-slate-500">
-              Enter your administrator credentials to access the control panel.
+              {checkingSession
+                ? 'Restoring your active administrator session...'
+                : 'Enter your administrator credentials to access the control panel.'}
             </p>
           </div>
 
+          {checkingSession ? (
+            <div className="py-8 flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 border-3 border-orange-200 border-t-orange-600 rounded-full animate-spin" />
+              <p className="text-xs font-bold text-slate-600">Verifying saved device session...</p>
+            </div>
+          ) : (
+            <>
           {error && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -151,6 +179,8 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>Secured administrator authentication</span>
           </div>
+            </>
+          )}
         </div>
 
       </div>

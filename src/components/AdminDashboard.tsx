@@ -1856,7 +1856,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
 
       try {
-        const token = api.getAdminToken() || 'crm_admin_test_session';
+        const token = api.getAdminToken();
+        if (!token) {
+          setIsRealtimeConnected(false);
+          onLogout();
+          return;
+        }
         const sseUrl = reconnectAttempts > 0 && reconnectAttempts % 2 === 1
           ? '/api/database/stream'
           : `/api/admin/realtime?token=${encodeURIComponent(token)}`;
@@ -2034,11 +2039,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             try { eventSource.close(); } catch {}
             eventSource = null;
           }
-          // Exponential backoff auto-reconnect (1.5s, 3s, 6s, max 8s)
-          const delay = Math.min(1500 * Math.pow(1.5, reconnectAttempts), 8000);
-          reconnectAttempts++;
-          if (reconnectTimeout) clearTimeout(reconnectTimeout);
-          reconnectTimeout = setTimeout(connectSSE, delay);
+          // Verify whether SSE disconnect was due to revoked/expired token vs transient network drop
+          api.adminCheckAuth().then((isValid) => {
+            if (!isSubscribed) return;
+            if (!isValid) {
+              onLogout();
+              return;
+            }
+            const delay = Math.min(1500 * Math.pow(1.5, reconnectAttempts), 8000);
+            reconnectAttempts++;
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            reconnectTimeout = setTimeout(connectSSE, delay);
+          }).catch(() => {
+            if (!isSubscribed) return;
+            const delay = Math.min(1500 * Math.pow(1.5, reconnectAttempts), 8000);
+            reconnectAttempts++;
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            reconnectTimeout = setTimeout(connectSSE, delay);
+          });
         };
       } catch (err) {
         setIsRealtimeConnected(false);
