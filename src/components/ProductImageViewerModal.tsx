@@ -37,7 +37,11 @@ export const ProductImageViewerModal: React.FC<ProductImageViewerModalProps> = (
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  const validImages = images && images.length > 0 ? images : [fallbackImage];
+  const safeFallback = (fallbackImage && fallbackImage.trim()) || '/logo.png';
+  const filteredImages = Array.isArray(images)
+    ? images.filter(img => typeof img === 'string' && img.trim().length > 0)
+    : [];
+  const validImages = filteredImages.length > 0 ? filteredImages : [safeFallback];
 
   // Sync index when initialIndex changes or modal opens
   useEffect(() => {
@@ -238,7 +242,7 @@ export const ProductImageViewerModal: React.FC<ProductImageViewerModalProps> = (
 
   if (!isOpen) return null;
 
-  const currentImage = validImages[currentIndex] || fallbackImage;
+  const currentImage = (validImages[currentIndex] && validImages[currentIndex].trim()) || safeFallback;
 
   return (
     <div
@@ -439,12 +443,12 @@ export const ProductImageViewerModal: React.FC<ProductImageViewerModalProps> = (
               }`}
             >
               <img
-                src={img}
+                src={img && img.trim() ? img : safeFallback}
                 alt={`Thumbnail ${idx + 1}`}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = fallbackImage;
+                  (e.target as HTMLImageElement).src = safeFallback;
                 }}
               />
             </button>

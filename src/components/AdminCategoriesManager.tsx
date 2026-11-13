@@ -774,9 +774,12 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
                           <div className="flex items-center gap-2.5 max-w-xs">
                             <div className="w-9 h-9 rounded-lg overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
                               <img
-                                src={product.imageUrl}
+                                src={product.imageUrl?.trim() ? product.imageUrl : '/logo.png'}
                                 alt={product.name}
                                 className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/logo.png';
+                                }}
                               />
                             </div>
                             <div className="min-w-0">

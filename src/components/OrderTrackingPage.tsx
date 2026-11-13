@@ -7,6 +7,7 @@ import {
 import { Order, OrderStatus } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
@@ -81,27 +82,60 @@ export const OrderTrackingPage: React.FC<OrderTrackingPageProps> = ({
     handleTrackQuery(searchQuery, phoneQuery);
   };
 
-  // Real-Time Auto-Synchronization: Live poll order status every 5 seconds
+  // Scoped Real-Time Synchronization via SSE + Supabase Realtime (no polling)
   useEffect(() => {
-    if (!trackedOrder) return;
+    if (!trackedOrder?.orderNumber) return;
+    const orderNum = trackedOrder.orderNumber;
+    const phoneParam = (trackedOrder.customerPhone || phoneQuery || '').trim();
+    const qPhone = phoneParam ? `&phone=${encodeURIComponent(phoneParam)}` : '';
 
-    const interval = setInterval(async () => {
-      try {
-        const latest = await api.trackOrder(trackedOrder.orderNumber, trackedOrder.customerPhone || phoneQuery);
-        if (latest) {
-          if (latest.status !== trackedOrder.status || latest.paymentStatus !== trackedOrder.paymentStatus || latest.deliveryStatus !== trackedOrder.deliveryStatus) {
-            setTrackedOrder(latest);
-            setLiveStatusNotice(`⚡ Order status updated live: "${latest.deliveryStatus || latest.status}" (${latest.paymentStatus})`);
-            setTimeout(() => setLiveStatusNotice(null), 6000);
-          } else {
-            setTrackedOrder(latest);
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/realtime/track?orderNumber=${encodeURIComponent(orderNum)}${qPhone}`);
+      es.onmessage = async (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type !== 'db_update') return;
+          const latest = await api.trackOrder(orderNum, phoneParam || undefined);
+          if (latest) {
+            setTrackedOrder(prev => {
+              if (prev && (latest.status !== prev.status || latest.paymentStatus !== prev.paymentStatus || latest.deliveryStatus !== prev.deliveryStatus)) {
+                setLiveStatusNotice(`⚡ Order status updated live: "${latest.deliveryStatus || latest.status}" (${latest.paymentStatus})`);
+                setTimeout(() => setLiveStatusNotice(null), 6000);
+              }
+              return latest;
+            });
           }
-        }
-      } catch {}
-    }, 5000);
+        } catch {}
+      };
+    } catch {}
 
-    return () => clearInterval(interval);
-  }, [trackedOrder?.orderNumber, trackedOrder?.status, trackedOrder?.paymentStatus, trackedOrder?.deliveryStatus, phoneQuery]);
+    const unsubOrders = subscribeToSupabaseTable('orders', async (payload) => {
+      const row = payload.new as any;
+      if (row && (row.order_number === orderNum || row.id === trackedOrder.id)) {
+        try {
+          const latest = await api.trackOrder(orderNum, phoneParam || undefined);
+          if (latest) setTrackedOrder(latest);
+        } catch {}
+      }
+    });
+
+    const unsubPayments = subscribeToSupabaseTable('payments', async (payload) => {
+      const row = payload.new as any;
+      if (row && row.order_number === orderNum) {
+        try {
+          const latest = await api.trackOrder(orderNum, phoneParam || undefined);
+          if (latest) setTrackedOrder(latest);
+        } catch {}
+      }
+    });
+
+    return () => {
+      if (es) es.close();
+      unsubOrders();
+      unsubPayments();
+    };
+  }, [trackedOrder?.orderNumber, trackedOrder?.id, phoneQuery]);
 
   const currentStepIdx = trackedOrder
     ? ORDER_STEPS.indexOf(
@@ -263,10 +297,11 @@ export const OrderTrackingPage: React.FC<OrderTrackingPageProps> = ({
                   {primaryItem ? (
                     <div className="flex items-center gap-2.5 mt-1">
                       <img
-                        src={primaryItemImg}
+                        src={primaryItemImg && primaryItemImg.trim() ? primaryItemImg : '/logo.png'}
                         alt={primaryItem.productName}
                         className="w-10 h-10 rounded-xl object-cover bg-white border border-slate-200 shrink-0"
                         referrerPolicy="no-referrer"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                       />
                       <div className="min-w-0">
                         <span className="font-bold text-slate-900 truncate block text-xs" title={primaryItem.productName}>
@@ -511,10 +546,11 @@ export const OrderTrackingPage: React.FC<OrderTrackingPageProps> = ({
                     <div key={idx} className="pt-2.5 first:pt-0 flex items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-3">
                         <img
-                          src={resolvedImg}
+                          src={resolvedImg && resolvedImg.trim() ? resolvedImg : '/logo.png'}
                           alt={it.productName}
                           className="w-12 h-12 rounded-xl object-cover bg-white border border-slate-200 shrink-0"
                           referrerPolicy="no-referrer"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                         />
                         <div>
                           <p className="font-bold text-slate-900">{it.productName}</p>

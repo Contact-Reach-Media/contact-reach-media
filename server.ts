@@ -39,7 +39,7 @@ import {
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   AdminUser, AdminRole, AdminInvitation, AdminInvitationStatus,
   PaymentMethodConfig, ProductReview, ProductVariation,
-  GoogleSheetSyncConfig, PaymentTransaction
+  GoogleSheetSyncConfig, PaymentTransaction, SmsNotification
 } from './src/types.ts';
 
 // Universal category normalizer mapping arbitrary labels, subcategories & legacy IDs to the 13 canonical categories
@@ -173,6 +173,7 @@ interface MarketDatabase {
   supplierApplications: SupplierApplication[];
   supplierPayouts: SupplierPayoutRecord[];
   paymentTransactions?: PaymentTransaction[];
+  smsNotifications?: SmsNotification[];
   settings: AppSettings;
   deletedRecordIds: string[];
   adminTokens: Map<string, { user: AdminUser; expiresAt: number }>;
@@ -278,6 +279,7 @@ let db: MarketDatabase = {
   supplierApplications: [],
   supplierPayouts: [],
   paymentTransactions: [],
+  smsNotifications: [],
   settings: {
     ...initialSettings,
     email: 'contactreachmedialimited@gmail.com',
@@ -381,9 +383,49 @@ function resolveProductImageDueToProduct(
 }
 
 // -------------------------------------------------------------
-// REAL-TIME DATABASE SYNCHRONIZATION & SSE BROADCASTER
+// REAL-TIME DATABASE SYNCHRONIZATION & SCOPED SSE BROADCASTER
 // -------------------------------------------------------------
-const sseClients = new Set<Response>();
+interface BuyerSseMeta {
+  customerId: string;
+  phoneKey: string;
+  email: string;
+}
+
+interface TrackingSseMeta {
+  orderNumber?: string;
+  trackingToken?: string;
+  phoneKey?: string;
+  caseNumber?: string;
+  messageId?: string;
+}
+
+const adminSseClients = new Set<Response>();
+const publicSseClients = new Set<Response>();
+const buyerSseClients = new Map<Response, BuyerSseMeta>();
+const trackingSseClients = new Map<Response, TrackingSseMeta>();
+
+const PUBLIC_SSE_EVENT_PREFIXES = [
+  'product_',
+  'category_',
+  'shop_',
+  'settings_',
+  'site_version_',
+  'review_',
+  'catalog_',
+  'database_change'
+];
+
+function ssePhonesMatch(a?: string | null, b?: string | null): boolean {
+  const clean = (v?: string | null) => {
+    const d = String(v || '').replace(/\D/g, '');
+    if (d.length === 12 && d.startsWith('250')) return `0${d.slice(3)}`;
+    if (d.length === 9 && d.startsWith('7')) return `0${d}`;
+    return d;
+  };
+  const ka = clean(a);
+  const kb = clean(b);
+  return ka.length >= 7 && kb.length >= 7 && ka === kb;
+}
 
 // Global Site Versioning and Live Catalog Tracking
 export let siteVersion = '2.5.0';
@@ -459,14 +501,23 @@ export function calculateCurrentStats() {
 
 export function broadcastDatabaseEvent(eventType: string = 'database_change', payload?: any) {
   lastCatalogUpdate = new Date().toISOString();
-  if (sseClients.size === 0) return;
+  if (
+    adminSseClients.size === 0 &&
+    publicSseClients.size === 0 &&
+    buyerSseClients.size === 0 &&
+    trackingSseClients.size === 0
+  ) {
+    return;
+  }
+
   const stats = calculateCurrentStats();
   let safePayload = payload || null;
   if (safePayload && typeof safePayload === 'object' && safePayload.customer && 'passwordHash' in safePayload.customer) {
     const { passwordHash: _omitted, ...safeCustomer } = safePayload.customer;
     safePayload = { ...safePayload, customer: safeCustomer };
   }
-  const messageData = JSON.stringify({
+
+  const adminMessage = `event: db_update\ndata: ${JSON.stringify({
     type: eventType,
     version: siteVersion,
     buildTime: siteBuildTime,
@@ -474,14 +525,154 @@ export function broadcastDatabaseEvent(eventType: string = 'database_change', pa
     timestamp: new Date().toISOString(),
     stats,
     payload: safePayload
-  });
-  const sseMessage = `event: db_update\ndata: ${messageData}\n\n`;
+  })}\n\n`;
 
-  for (const client of sseClients) {
+  for (const client of adminSseClients) {
     try {
-      client.write(sseMessage);
+      client.write(adminMessage);
     } catch {
-      sseClients.delete(client);
+      adminSseClients.delete(client);
+    }
+  }
+
+  const isPublicCatalogEvent = PUBLIC_SSE_EVENT_PREFIXES.some(prefix => eventType.startsWith(prefix));
+  if (isPublicCatalogEvent && publicSseClients.size > 0) {
+    const publicSafePayload =
+      safePayload && typeof safePayload === 'object'
+        ? {
+            version: safePayload.version,
+            buildTime: safePayload.buildTime,
+            message: safePayload.message,
+            product: safePayload.product,
+            category: safePayload.category,
+            shop: safePayload.shop,
+            review: safePayload.review,
+            settings: safePayload.settings
+          }
+        : null;
+    const publicMsg = `event: db_update\ndata: ${JSON.stringify({
+      type: eventType,
+      version: siteVersion,
+      buildTime: siteBuildTime,
+      lastCatalogUpdate,
+      timestamp: new Date().toISOString(),
+      payload: publicSafePayload
+    })}\n\n`;
+    for (const client of publicSseClients) {
+      try {
+        client.write(publicMsg);
+      } catch {
+        publicSseClients.delete(client);
+      }
+    }
+  }
+
+  // Targeted delivery to connected buyer sessions
+  if (buyerSseClients.size > 0 && safePayload && typeof safePayload === 'object') {
+    const pOrder = safePayload.order;
+    const pPayment = safePayload.payment;
+    const pTxn = safePayload.transaction;
+    const pMsg = safePayload.message;
+    const pReport = safePayload.report || safePayload.problem;
+    const pCust = safePayload.customer;
+    const targetCustomerId =
+      safePayload.customerId ||
+      pOrder?.userId ||
+      pMsg?.customerId ||
+      pCust?.id ||
+      '';
+    const targetPhones = [
+      pOrder?.customerPhone,
+      pPayment?.paymentPhone,
+      pTxn?.customerPhone,
+      pMsg?.phone,
+      pReport?.customerPhone,
+      pCust?.phone
+    ].filter(Boolean);
+    const targetEmails = [
+      pOrder?.customerEmail,
+      pTxn?.customerEmail,
+      pMsg?.email,
+      pReport?.customerEmail,
+      pCust?.email
+    ]
+      .filter(Boolean)
+      .map((e: string) => e.toLowerCase().trim());
+
+    for (const [client, meta] of buyerSseClients.entries()) {
+      const idMatches = Boolean(targetCustomerId && (targetCustomerId === meta.customerId || (meta.phoneKey && targetCustomerId === `cust-${meta.phoneKey}`)));
+      const phoneMatches = meta.phoneKey ? targetPhones.some(ph => ssePhonesMatch(ph, meta.phoneKey)) : false;
+      const emailMatches = meta.email ? targetEmails.includes(meta.email) : false;
+
+      if (isPublicCatalogEvent || idMatches || phoneMatches || emailMatches) {
+        const scopedMsg = `event: db_update\ndata: ${JSON.stringify({
+          type: eventType,
+          version: siteVersion,
+          buildTime: siteBuildTime,
+          lastCatalogUpdate,
+          timestamp: new Date().toISOString(),
+          payload: safePayload
+        })}\n\n`;
+        try {
+          client.write(scopedMsg);
+        } catch {
+          buyerSseClients.delete(client);
+        }
+      }
+    }
+  }
+
+  // Targeted delivery to scoped live tracking listeners (Order Tracking, Case Tracking, Contact Message Tracking)
+  if (trackingSseClients.size > 0 && safePayload && typeof safePayload === 'object') {
+    const pOrder = safePayload.order;
+    const pPayment = safePayload.payment;
+    const pTxn = safePayload.transaction;
+    const pMsg = safePayload.message;
+    const pReport = safePayload.report || safePayload.problem;
+
+    const payloadOrderNum = String(pOrder?.orderNumber || pPayment?.orderNumber || pTxn?.orderNumber || '').toUpperCase().trim();
+    const payloadCaseNum = String(pReport?.caseNumber || '').toUpperCase().trim();
+    const payloadMsgId = String(pMsg?.id || '').trim();
+
+    for (const [client, meta] of trackingSseClients.entries()) {
+      const orderHit = Boolean(meta.orderNumber && payloadOrderNum && meta.orderNumber === payloadOrderNum);
+      const caseHit = Boolean(meta.caseNumber && payloadCaseNum && meta.caseNumber === payloadCaseNum);
+      const msgHit = Boolean(meta.messageId && payloadMsgId && meta.messageId === payloadMsgId);
+
+      if (orderHit || caseHit || msgHit) {
+        const sanitizedReport = pReport
+          ? {
+              id: pReport.id,
+              caseNumber: pReport.caseNumber,
+              customerName: pReport.customerName,
+              orderNumber: pReport.orderNumber,
+              category: pReport.category,
+              status: pReport.status,
+              priority: pReport.priority,
+              assignedTo: pReport.assignedTo,
+              resolution: pReport.resolution,
+              resolvedAt: pReport.resolvedAt,
+              createdAt: pReport.createdAt,
+              updatedAt: pReport.updatedAt
+            }
+          : undefined;
+        const trackMsg = `event: db_update\ndata: ${JSON.stringify({
+          type: eventType,
+          timestamp: new Date().toISOString(),
+          payload: {
+            order: orderHit ? pOrder : undefined,
+            payment: orderHit ? pPayment : undefined,
+            transaction: orderHit ? pTxn : undefined,
+            message: msgHit ? pMsg : undefined,
+            report: caseHit ? sanitizedReport : undefined
+          }
+        })}\n\n`;
+        try {
+          client.write(trackMsg);
+        } catch {
+          trackingSseClients.delete(client);
+        }
+      }
     }
   }
 }
@@ -511,6 +702,7 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
       supplierApplications: db.supplierApplications,
       supplierPayouts: db.supplierPayouts,
       paymentTransactions: db.paymentTransactions || [],
+      smsNotifications: db.smsNotifications || [],
       settings: db.settings,
       deletedRecordIds: db.deletedRecordIds || [],
       adminTokens: Array.from(db.adminTokens.entries()),
@@ -523,10 +715,10 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
     fs.writeFileSync(tempFile, JSON.stringify(dataToSave), 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
 
-    // Instant real-time push to all connected administrator clients
+    // Instant real-time push to connected authorized clients
     broadcastDatabaseEvent(eventType, payload);
 
-    // Asynchronously synchronize changed entity to Cloud Firestore for permanent persistence
+    // Asynchronously synchronize changed entity to Supabase PostgreSQL
     try {
       if (eventType === 'settings_updated') {
         saveToFirestoreAsync('settings', 'global', db.settings);
@@ -534,9 +726,12 @@ function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
         if (payload.product?.id) saveToFirestoreAsync('products', payload.product.id, payload.product);
         if (payload.order?.id) saveToFirestoreAsync('orders', payload.order.id, payload.order);
         if (payload.payment?.id) saveToFirestoreAsync('paymentConfirmations', payload.payment.id, payload.payment);
+        if (payload.transaction?.id) saveToFirestoreAsync('paymentTransactions', payload.transaction.id, payload.transaction);
+        if (payload.smsNotification?.id) saveToFirestoreAsync('smsNotifications', payload.smsNotification.id, payload.smsNotification);
         if (payload.message?.id) saveToFirestoreAsync('messages', payload.message.id, payload.message);
         if (payload.notification?.id) saveToFirestoreAsync('adminNotifications', payload.notification.id, payload.notification);
         if (payload.problem?.id) saveToFirestoreAsync('customerProblems', payload.problem.id, payload.problem);
+        if (payload.report?.id) saveToFirestoreAsync('customerProblems', payload.report.id, payload.report);
         if (payload.coupon?.id) saveToFirestoreAsync('coupons', payload.coupon.id, payload.coupon);
         if (payload.shop?.id) saveToFirestoreAsync('shops', payload.shop.id, payload.shop);
         if (payload.application?.id) saveToFirestoreAsync('supplierApplications', payload.application.id, payload.application);
@@ -668,6 +863,7 @@ function loadDbFromDisk() {
       if (parsed.supplierApplications && Array.isArray(parsed.supplierApplications)) db.supplierApplications = parsed.supplierApplications;
       if (parsed.supplierPayouts && Array.isArray(parsed.supplierPayouts)) db.supplierPayouts = parsed.supplierPayouts;
       if (parsed.paymentTransactions && Array.isArray(parsed.paymentTransactions)) db.paymentTransactions = parsed.paymentTransactions;
+      if (parsed.smsNotifications && Array.isArray(parsed.smsNotifications)) db.smsNotifications = parsed.smsNotifications;
       if (parsed.settings) {
         db.settings = {
           ...initialSettings,
@@ -980,32 +1176,94 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
       }, { onConflict: 'id' });
     } else if (entityType === 'paymentConfirmations' || entityType === 'payments' || entityType === 'payment') {
       const payRow: Record<string, any> = {
-        order_number: data.orderNumber,
+        id: String(data.id || `conf-${Date.now()}`),
+        order_id: data.orderId || null,
+        order_number: data.orderNumber || null,
         payment_method: data.paymentMethod || 'MTN Mobile Money',
-        amount: data.amount || data.amountPaid || 0,
-        amount_paid: data.amountPaid || data.amount || 0,
+        amount: Math.round(Number(data.amount ?? data.amountPaid) || 0),
+        amount_paid: Math.round(Number(data.amountPaid ?? data.amount) || 0),
         transaction_id: data.transactionId || null,
         sender_phone: data.senderPhone || data.paymentPhone || null,
         payment_phone: data.paymentPhone || data.senderPhone || null,
         sender_name: data.senderName || data.customerName || null,
         customer_name: data.customerName || 'Customer',
         customer_phone: data.customerPhone || data.paymentPhone || '0780000000',
-        proof_image_url: data.screenshotUrl || data.paymentProofUrl || null,
+        payment_proof_url: data.screenshotUrl || data.paymentProofUrl || null,
         screenshot_url: data.screenshotUrl || data.paymentProofUrl || null,
+        confirmation_message: data.confirmationMessage || null,
         verification_status: data.verificationStatus || 'Pending Verification',
         verified_by: data.verifiedBy || null,
         verified_at: data.verifiedAt || null,
         notes: data.notes || data.adminNotes || null,
         admin_notes: data.adminNotes || data.notes || null,
-        submitted_at: data.submittedAt || new Date().toISOString()
+        flagged_suspicious: Boolean(data.flaggedSuspicious),
+        is_duplicate_txn: Boolean(data.isDuplicateTxn),
+        suspicious_reason: data.suspiciousReason || null,
+        verified_directly: Boolean(data.verifiedDirectly),
+        customer_notified: Boolean(data.customerNotified),
+        notification_message: data.notificationMessage || null,
+        submitted_at: data.submittedAt || new Date().toISOString(),
+        created_at: data.submittedAt || data.createdAt || new Date().toISOString()
       };
-      if (data.id) {
-        payRow.id = data.id;
+      const { error: payErr } = await supabase.from('payments').upsert(payRow, { onConflict: 'id' });
+      if (payErr) {
+        console.error('[Supabase Payment Sync] Error:', payErr.message);
       }
-      await supabase.from('payments').upsert(payRow);
+    } else if (entityType === 'paymentTransactions' || entityType === 'payment_transactions' || entityType === 'transaction') {
+      const txnRow: Record<string, any> = {
+        id: String(data.id),
+        order_id: data.orderId || null,
+        order_number: data.orderNumber || null,
+        idempotency_key: data.idempotencyKey || null,
+        payment_method: data.paymentMethod || 'MTN Mobile Money',
+        provider: data.provider || 'MTN Mobile Money',
+        amount: Math.round(Number(data.amount) || 0),
+        currency: data.currency || 'RWF',
+        customer_phone: data.customerPhone || null,
+        customer_email: data.customerEmail || null,
+        checkout_url: data.checkoutUrl || null,
+        status: data.status || 'Pending',
+        metadata: {
+          ...(data.metadata || {}),
+          providerTransactionId: data.providerTransactionId || data.metadata?.providerTransactionId || undefined,
+          financialTransactionId: data.financialTransactionId || data.metadata?.financialTransactionId || undefined,
+          failureReason: data.failureReason || undefined,
+          verifiedDirectly: data.verifiedDirectly,
+          verifiedAt: data.verifiedAt || undefined,
+          telecomStatus: data.telecomStatus || undefined,
+          signatureVerified: data.signatureVerified
+        },
+        created_at: data.createdAt || new Date().toISOString(),
+        updated_at: data.updatedAt || new Date().toISOString()
+      };
+      const { error: txnErr } = await supabase.from('payment_transactions').upsert(txnRow, { onConflict: 'id' });
+      if (txnErr) {
+        console.error('[Supabase PaymentTransaction Sync] Error:', txnErr.message);
+      }
+    } else if (entityType === 'smsNotifications' || entityType === 'sms_notifications') {
+      const { error: smsErr } = await supabase.from('sms_notifications').upsert({
+        id: String(data.id),
+        direction: data.direction || 'incoming',
+        sender_phone: data.senderPhone || '',
+        sender_name: data.senderName || null,
+        recipient_phone: data.recipientPhone || null,
+        provider: data.provider || 'MTN Mobile Money',
+        message: data.message || '',
+        parsed_transaction_id: data.parsedTransactionId || null,
+        parsed_amount: data.parsedAmount !== undefined ? Math.round(Number(data.parsedAmount)) : null,
+        order_number: data.orderNumber || null,
+        payment_id: data.paymentId || null,
+        status: data.status || 'received',
+        metadata: data.metadata || {},
+        created_at: data.createdAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+      if (smsErr && !String(smsErr.message || '').includes('Could not find the table')) {
+        console.warn('[Supabase SMS Sync] Notice:', smsErr.message);
+      }
     } else if (entityType === 'messages' || entityType === 'message' || entityType === 'customer_messages') {
-      await supabase.from('messages').upsert({
+      const { error: msgErr } = await supabase.from('messages').upsert({
         id: data.id,
+        conversation_id: data.conversationId || data.customerId || null,
         name: data.name || data.senderName || 'Customer',
         sender_name: data.name || data.senderName || 'Customer',
         phone: data.phone || null,
@@ -1023,9 +1281,13 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         notification_type: data.notificationType || 'chat',
         read_at: data.readAt || null,
         reply_note: data.replyNote || null,
+        reply_message: data.replyNote || null,
         replied_at: data.repliedAt || null,
         created_at: data.createdAt || new Date().toISOString()
       }, { onConflict: 'id' });
+      if (msgErr) {
+        console.error('[Supabase Message Sync] Error:', msgErr.message);
+      }
     } else if (entityType === 'adminNotifications' || entityType === 'admin_notifications' || entityType === 'notification') {
       // Persist to messages table (guaranteed live schema) with sender='admin_notification'
       await supabase.from('messages').upsert({
@@ -1075,25 +1337,30 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         }, { onConflict: 'id' });
       } catch {}
     } else if (entityType === 'customerProblems' || entityType === 'problem' || entityType === 'issues') {
-      await supabase.from('customer_problems').upsert({
+      const notesArr = Array.isArray(data.privateNotes) ? data.privateNotes : [];
+      const { error: probErr } = await supabase.from('customer_problems').upsert({
         id: data.id,
         case_number: data.caseNumber || null,
-        order_number: data.orderNumber,
+        order_number: data.orderNumber || null,
         customer_name: data.customerName,
         customer_phone: data.customerPhone,
         customer_email: data.customerEmail || null,
         category: data.category || 'delivery_delay',
-        issue_type: data.issueType || null,
+        issue_type: data.issueType || data.category || null,
         description: data.description,
         priority: data.priority || 'medium',
         status: data.status || 'New',
         assigned_to: data.assignedTo || null,
-        admin_notes: data.adminNotes || null,
+        private_notes: notesArr,
+        admin_notes: data.adminNotes || (notesArr.length > 0 ? JSON.stringify(notesArr) : null),
         resolution: data.resolution || null,
         resolved_at: data.resolvedAt || null,
-        updated_at: new Date().toISOString(),
+        updated_at: data.updatedAt || new Date().toISOString(),
         created_at: data.createdAt || new Date().toISOString()
       }, { onConflict: 'id' });
+      if (probErr) {
+        console.error('[Supabase Problem Report Sync] Error:', probErr.message);
+      }
     } else if (entityType === 'coupons' || entityType === 'coupon' || entityType === 'promo_codes') {
       await supabase.from('coupons').upsert({
         id: data.id,
@@ -1445,71 +1712,197 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.shops.length} registered shops.`);
     }
 
-    // 4. Orders with items
+    // 4. Orders with items (non-destructive merge + backfill missing local orders into Supabase)
     const { data: ords, error: ordErr } = await supabase
       .from('orders')
       .select('*, order_items(*)')
       .order('created_at', { ascending: false });
 
     if (!ordErr && Array.isArray(ords)) {
-      db.orders = ords.map(o => ({
-        id: String(o.id),
-        orderNumber: o.order_number,
-        customerName: o.customer_name,
-        customerPhone: o.customer_phone,
-        customerEmail: o.customer_email || undefined,
-        deliveryLocation: o.delivery_district || o.delivery_city || 'Kigali',
-        deliveryAddress: o.delivery_address,
-        deliveryNotes: o.delivery_notes || undefined,
-        subtotal: Number(o.subtotal) || 0,
-        deliveryFee: Number(o.delivery_fee) || 0,
-        discountAmount: Number(o.discount_amount) || 0,
-        totalAmount: Number(o.total_amount) || 0,
-        paymentMethod: o.payment_method || 'MTN Mobile Money',
-        paymentStatus: o.payment_status || 'Pending Payment',
-        receiverName: 'Ruth',
-        receiverDetails: '0780022600',
-        stockDeducted: Boolean(o.stock_deducted),
-        statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
-        status: o.status || o.order_status || 'New',
-        deliveryStatus: o.delivery_status || 'Pending',
-        trackingNumber: o.tracking_number || undefined,
-        trackingToken: o.tracking_token || undefined,
-        items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
-          productId: it.product_id ? String(it.product_id) : undefined,
-          name: it.product_name,
-          productName: it.product_name,
-          price: Number(it.unit_price) || 0,
-          quantity: Number(it.quantity) || 1
-        })) : (Array.isArray(o.items) ? o.items : []),
-        createdAt: o.created_at || new Date().toISOString(),
-        updatedAt: o.updated_at || undefined
-      }));
-      console.log(`[Supabase] Loaded ${db.orders.length} orders.`);
+      const orderMap = new Map<string, Order>();
+      for (const localOrd of db.orders) {
+        orderMap.set(String(localOrd.id), localOrd);
+      }
+      const remoteOrderIds = new Set<string>();
+      for (const o of ords) {
+        remoteOrderIds.add(String(o.id));
+        const mappedOrd: Order = {
+          id: String(o.id),
+          orderNumber: o.order_number,
+          userId: o.user_id || undefined,
+          customerName: o.customer_name,
+          customerPhone: o.customer_phone,
+          customerEmail: o.customer_email || undefined,
+          deliveryType: (o.delivery_type as any) || 'delivery',
+          deliveryLocation: o.delivery_location || o.delivery_district || o.delivery_city || 'Kigali',
+          deliveryAddress: o.delivery_address || 'Kigali, Rwanda',
+          deliveryNotes: o.delivery_notes || undefined,
+          subtotal: Number(o.subtotal) || 0,
+          deliveryFee: Number(o.delivery_fee) || 0,
+          shippingCost: Number(o.shipping_cost) || 0,
+          discountAmount: Number(o.discount_amount) || 0,
+          totalAmount: Number(o.total_amount) || 0,
+          paymentMethod: o.payment_method || 'MTN Mobile Money',
+          paymentStatus: o.payment_status || 'Pending Payment',
+          receiverName: o.receiver_name || 'Ruth',
+          receiverDetails: o.receiver_details || '0780022600',
+          stockDeducted: Boolean(o.stock_deducted),
+          statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
+          status: o.status || o.order_status || 'New',
+          deliveryStatus: o.delivery_status || 'Pending',
+          trackingNumber: o.tracking_number || undefined,
+          trackingToken: o.tracking_token || undefined,
+          paymentConfirmation: o.payment_confirmation || undefined,
+          items: Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
+            productId: it.product_id ? String(it.product_id) : '',
+            productName: it.product_name,
+            price: Number(it.unit_price) || 0,
+            quantity: Number(it.quantity) || 1,
+            imageUrl: resolveProductImageDueToProduct({ productName: it.product_name, productId: it.product_id }, db.products)
+          })) : (Array.isArray(o.items) ? o.items : []),
+          createdAt: o.created_at || new Date().toISOString(),
+          updatedAt: o.updated_at || undefined
+        };
+        orderMap.set(mappedOrd.id, mappedOrd);
+      }
+      db.orders = Array.from(orderMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      console.log(`[Supabase] Loaded ${ords.length} orders from Supabase (merged total: ${db.orders.length}).`);
+      // Backfill local orders missing in Supabase asynchronously without blocking startup
+      const missingLocalOrders = db.orders.filter(o => !remoteOrderIds.has(String(o.id))).slice(0, 50);
+      if (missingLocalOrders.length > 0) {
+        Promise.allSettled(missingLocalOrders.map(o => saveToSupabaseAsync('orders', o.id, o))).catch(() => {});
+      }
     }
 
-    // 5. Payments
-    const { data: pays, error: payErr } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
+    // 5. Payments & Payment Transactions (non-destructive merge + backfill missing records to Supabase)
+    const [{ data: pays, error: payErr }, { data: txns, error: txnErr }] = await Promise.all([
+      supabase.from('payments').select('*').order('created_at', { ascending: false }),
+      supabase.from('payment_transactions').select('*').order('created_at', { ascending: false })
+    ]);
+
     if (!payErr && Array.isArray(pays)) {
-      db.paymentConfirmations = pays.map(p => ({
-        id: p.id,
-        orderId: p.order_id || '',
-        orderNumber: p.order_number || '',
-        customerName: p.customer_name || 'Customer',
-        paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
-        amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
-        paymentMethod: p.payment_method || 'MTN Mobile Money',
-        transactionId: p.transaction_id || '',
-        screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
-        confirmationMessage: p.confirmation_message || undefined,
-        verificationStatus: p.verification_status || 'Pending Verification',
-        verifiedAt: p.verified_at || undefined,
-        verifiedBy: p.verified_by || undefined,
-        adminNotes: p.admin_notes || p.notes || undefined,
-        submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
-      }));
-      console.log(`[Supabase] Loaded ${db.paymentConfirmations.length} payments.`);
+      const payMap = new Map<string, PaymentConfirmation>();
+      for (const localPay of db.paymentConfirmations) {
+        payMap.set(String(localPay.id), localPay);
+      }
+      const remotePayIds = new Set<string>();
+      for (const p of pays) {
+        remotePayIds.add(String(p.id));
+        payMap.set(String(p.id), {
+          id: p.id,
+          orderId: p.order_id || '',
+          orderNumber: p.order_number || '',
+          customerName: p.customer_name || p.sender_name || 'Customer',
+          paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
+          amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
+          paymentMethod: p.payment_method || 'MTN Mobile Money',
+          transactionId: p.transaction_id || '',
+          screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
+          confirmationMessage: p.confirmation_message || undefined,
+          verificationStatus: p.verification_status || 'Pending Verification',
+          verifiedAt: p.verified_at || undefined,
+          verifiedBy: p.verified_by || undefined,
+          adminNotes: p.admin_notes || p.notes || undefined,
+          flaggedSuspicious: Boolean(p.flagged_suspicious),
+          isDuplicateTxn: Boolean(p.is_duplicate_txn),
+          suspiciousReason: p.suspicious_reason || undefined,
+          verifiedDirectly: Boolean(p.verified_directly),
+          customerNotified: Boolean(p.customer_notified),
+          notificationMessage: p.notification_message || undefined,
+          submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
+        });
+      }
+      db.paymentConfirmations = Array.from(payMap.values()).sort(
+        (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+      );
+      console.log(`[Supabase] Loaded ${pays.length} payments (merged total: ${db.paymentConfirmations.length}).`);
+      const missingLocalPays = db.paymentConfirmations.filter(p => !remotePayIds.has(String(p.id)));
+      if (missingLocalPays.length > 0) {
+        Promise.allSettled(missingLocalPays.map(p => saveToSupabaseAsync('paymentConfirmations', p.id, p))).catch(() => {});
+      }
     }
+
+    if (!txnErr && Array.isArray(txns)) {
+      db.paymentTransactions = db.paymentTransactions || [];
+      const txnMap = new Map<string, PaymentTransaction>();
+      for (const localTxn of db.paymentTransactions) {
+        txnMap.set(String(localTxn.id), localTxn);
+      }
+      const remoteTxnIds = new Set<string>();
+      for (const t of txns) {
+        remoteTxnIds.add(String(t.id));
+        const meta = (t.metadata && typeof t.metadata === 'object') ? t.metadata : {};
+        txnMap.set(String(t.id), {
+          id: String(t.id),
+          orderId: t.order_id || '',
+          orderNumber: t.order_number || '',
+          customerPhone: t.customer_phone || '',
+          customerEmail: t.customer_email || undefined,
+          amount: Number(t.amount) || 0,
+          currency: t.currency || 'RWF',
+          paymentMethod: t.payment_method || 'MTN Mobile Money',
+          provider: t.provider || 'MTN Mobile Money',
+          status: t.status || 'Pending',
+          providerTransactionId: meta.providerTransactionId || undefined,
+          financialTransactionId: meta.financialTransactionId || undefined,
+          idempotencyKey: t.idempotency_key || undefined,
+          checkoutUrl: t.checkout_url || undefined,
+          failureReason: meta.failureReason || undefined,
+          verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
+          verifiedAt: meta.verifiedAt || undefined,
+          telecomStatus: meta.telecomStatus || undefined,
+          signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
+          metadata: meta,
+          createdAt: t.created_at || new Date().toISOString(),
+          updatedAt: t.updated_at || t.created_at || new Date().toISOString()
+        });
+      }
+      db.paymentTransactions = Array.from(txnMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const missingLocalTxns = db.paymentTransactions.filter(t => !remoteTxnIds.has(String(t.id))).slice(0, 50);
+      if (missingLocalTxns.length > 0) {
+        Promise.allSettled(missingLocalTxns.map(t => saveToSupabaseAsync('paymentTransactions', t.id, t))).catch(() => {});
+      }
+    }
+
+    // 5b. SMS Notifications (Incoming & Outgoing Mobile Money SMS logs)
+    try {
+      const { data: smsRows, error: smsLoadErr } = await supabase
+        .from('sms_notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(300);
+      if (!smsLoadErr && Array.isArray(smsRows)) {
+        const smsMap = new Map<string, SmsNotification>(
+          (db.smsNotifications || []).map(s => [String(s.id), s])
+        );
+        for (const s of smsRows) {
+          smsMap.set(String(s.id), {
+            id: String(s.id),
+            direction: (s.direction || 'incoming') as 'incoming' | 'outgoing',
+            senderPhone: s.sender_phone || '',
+            senderName: s.sender_name || undefined,
+            recipientPhone: s.recipient_phone || undefined,
+            provider: s.provider || 'MTN Mobile Money',
+            message: s.message || '',
+            parsedTransactionId: s.parsed_transaction_id || undefined,
+            parsedAmount: s.parsed_amount !== null && s.parsed_amount !== undefined ? Number(s.parsed_amount) : undefined,
+            orderNumber: s.order_number || undefined,
+            paymentId: s.payment_id || undefined,
+            status: (s.status || 'received') as any,
+            createdAt: s.created_at || new Date().toISOString(),
+            metadata: s.metadata || undefined
+          });
+        }
+        db.smsNotifications = Array.from(smsMap.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        console.log(`[Supabase] Loaded ${db.smsNotifications.length} SMS notifications.`);
+      }
+    } catch {}
 
     // 6. Users / Customers (merge both Supabase `users` and `customers` preserving metadata.passwordHash)
     const [{ data: usrs, error: usrErr }, { data: custRows, error: custErr }] = await Promise.all([
@@ -1517,6 +1910,9 @@ export async function loadAllDataFromSupabase() {
       supabase.from('customers').select('*').order('created_at', { ascending: false })
     ]);
     const customerMap = new Map<string, CustomerUser>();
+    for (const localCust of db.customers) {
+      customerMap.set(String(localCust.id), localCust);
+    }
     if (!usrErr && Array.isArray(usrs)) {
       for (const u of usrs) {
         if (u.role === 'admin' || u.role === 'owner') continue;
@@ -1567,12 +1963,20 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.customers.length} registered customers.`);
     }
 
-    // 7. Messages & Persistent Admin Notifications
+    // 7. Messages & Persistent Admin Notifications (merge with local)
     const { data: msgs, error: msgErr } = await supabase.from('messages').select('*').order('created_at', { ascending: false });
     const loadedNotifs = new Map<string, AdminNotification>();
+    for (const ln of db.adminNotifications || []) {
+      loadedNotifs.set(String(ln.id), ln);
+    }
     if (!msgErr && Array.isArray(msgs)) {
-      const chatMessages: AdminMessage[] = [];
+      const msgMap = new Map<string, AdminMessage>();
+      for (const lm of db.messages || []) {
+        msgMap.set(String(lm.id), lm);
+      }
+      const remoteMsgIds = new Set<string>();
       for (const m of msgs) {
+        remoteMsgIds.add(String(m.id));
         const senderStr = String(m.sender || '').toLowerCase().trim();
         const notifTypeStr = String(m.notification_type || '').toLowerCase().trim();
         if (senderStr === 'admin_notification' || notifTypeStr.startsWith('admin_notif')) {
@@ -1603,8 +2007,9 @@ export async function loadAllDataFromSupabase() {
             metadata: meta.metadata || undefined
           });
         } else {
-          chatMessages.push({
+          msgMap.set(String(m.id), {
             id: m.id,
+            conversationId: m.conversation_id || m.customer_id || undefined,
             name: m.name || m.sender_name || 'Customer',
             email: m.email || m.sender_email || '',
             phone: m.phone || m.sender_phone || undefined,
@@ -1625,8 +2030,14 @@ export async function loadAllDataFromSupabase() {
           });
         }
       }
-      db.messages = chatMessages;
+      db.messages = Array.from(msgMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
       console.log(`[Supabase] Loaded ${db.messages.length} messages.`);
+      const missingLocalMsgs = db.messages.filter(m => !remoteMsgIds.has(String(m.id))).slice(0, 50);
+      if (missingLocalMsgs.length > 0) {
+        Promise.allSettled(missingLocalMsgs.map(m => saveToSupabaseAsync('messages', m.id, m))).catch(() => {});
+      }
     }
 
     // Also hydrate from dedicated admin_notifications table if present
@@ -1666,28 +2077,50 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.adminNotifications.length} admin notifications.`);
     }
 
-    // 8. Customer Problems / Issues
+    // 8. Customer Problems / Issues (merge with local & deserialize privateNotes)
     const { data: probs, error: probErr } = await supabase.from('customer_problems').select('*').order('created_at', { ascending: false });
     if (!probErr && Array.isArray(probs)) {
-      db.customerProblems = probs.map(p => ({
-        id: p.id,
-        caseNumber: p.case_number || undefined,
-        orderNumber: p.order_number,
-        customerName: p.customer_name,
-        customerPhone: p.customer_phone,
-        customerEmail: p.customer_email || undefined,
-        category: p.category || 'delivery_delay',
-        issueType: p.issue_type || undefined,
-        description: p.description,
-        priority: p.priority || 'medium',
-        status: p.status || 'New',
-        assignedTo: p.assigned_to || undefined,
-        adminNotes: p.admin_notes || undefined,
-        resolution: p.resolution || undefined,
-        resolvedAt: p.resolved_at || undefined,
-        createdAt: p.created_at || new Date().toISOString()
-      }));
+      const probMap = new Map<string, CustomerProblemReport>();
+      for (const lp of db.customerProblems || []) {
+        probMap.set(String(lp.id), lp);
+      }
+      const remoteProbIds = new Set<string>();
+      for (const p of probs) {
+        remoteProbIds.add(String(p.id));
+        let parsedNotes = Array.isArray(p.private_notes) ? p.private_notes : undefined;
+        if (!parsedNotes && typeof p.private_notes === 'string' && p.private_notes.trim().startsWith('[')) {
+          try { parsedNotes = JSON.parse(p.private_notes); } catch {}
+        }
+        if (!parsedNotes && typeof p.admin_notes === 'string' && p.admin_notes.trim().startsWith('[')) {
+          try { parsedNotes = JSON.parse(p.admin_notes); } catch {}
+        }
+        probMap.set(String(p.id), {
+          id: p.id,
+          caseNumber: p.case_number || '',
+          orderNumber: p.order_number || undefined,
+          customerName: p.customer_name,
+          customerPhone: p.customer_phone,
+          customerEmail: p.customer_email || undefined,
+          category: (p.category || 'delivery_delay') as any,
+          description: p.description,
+          priority: (p.priority || 'medium') as any,
+          status: (p.status || 'New') as any,
+          assignedTo: p.assigned_to || undefined,
+          privateNotes: parsedNotes,
+          resolution: p.resolution || undefined,
+          resolvedAt: p.resolved_at || undefined,
+          createdAt: p.created_at || new Date().toISOString(),
+          updatedAt: p.updated_at || undefined
+        });
+      }
+      db.customerProblems = Array.from(probMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
       console.log(`[Supabase] Loaded ${db.customerProblems.length} customer problem reports.`);
+      const missingLocalProbs = db.customerProblems.filter(p => !remoteProbIds.has(String(p.id)));
+      if (missingLocalProbs.length > 0) {
+        Promise.allSettled(missingLocalProbs.map(p => saveToSupabaseAsync('customerProblems', p.id, p))).catch(() => {});
+      }
     }
 
     // 9. Coupons
@@ -2884,22 +3317,32 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       couponCode
     } = req.body;
 
+    // Resolve optional Admin session and Buyer session first
+    const authHeader = req.headers.authorization;
+    let isAdmin = false;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const bearer = authHeader.split(' ')[1]?.trim();
+      const session = bearer ? resolveAdminSession(bearer) : null;
+      if (session) {
+        isAdmin = true;
+      }
+    }
+
     // Block public checkout if Maintenance Mode is active (except for authenticated admins)
-    if (db.settings.isMaintenanceMode) {
-      const authHeader = req.headers.authorization;
-      let isAdmin = false;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const bearer = authHeader.split(' ')[1]?.trim();
-        const session = bearer ? resolveAdminSession(bearer) : null;
-        if (session) {
-          isAdmin = true;
-        }
-      }
-      if (!isAdmin) {
-        return res.status(503).json({
-          error: db.settings.maintenanceMessage || 'ContactReach Market is currently in scheduled maintenance. New orders are temporarily paused. We will be back online shortly!'
-        });
-      }
+    if (db.settings.isMaintenanceMode && !isAdmin) {
+      return res.status(503).json({
+        error: db.settings.maintenanceMessage || 'ContactReach Market is currently in scheduled maintenance. New orders are temporarily paused. We will be back online shortly!'
+      });
+    }
+
+    // Mandatory Buyer Account Gate: Buyers must create an account or sign in before placing an order
+    const buyerTokenFromReq = extractBuyerTokenFromReq(req);
+    const resolvedBuyerSession = buyerTokenFromReq ? await resolveBuyerSession(buyerTokenFromReq) : null;
+    if (!resolvedBuyerSession?.buyer && !isAdmin) {
+      return res.status(401).json({
+        error: 'Please create an account or sign in before buying any product.',
+        requiresAuth: true
+      });
     }
 
     if (!customerName || !customerPhone || !items || !Array.isArray(items) || items.length === 0) {
@@ -3105,15 +3548,8 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     return prod?.source === 'cjdropshipping' || Boolean(prod?.cjProductId) || prod?.sku?.startsWith('CJ-');
   });
 
-    // Link to registered buyer account if token or phone match
-    let buyerUserId: string | undefined = (req.body as any).userId;
-    const bToken = extractBuyerTokenFromReq(req);
-    if (bToken) {
-      const resolvedBuyer = await resolveBuyerSession(bToken);
-      if (resolvedBuyer?.buyer) {
-        buyerUserId = resolvedBuyer.buyer.id;
-      }
-    }
+    // Link to authenticated buyer account
+    let buyerUserId: string | undefined = resolvedBuyerSession?.buyer?.id || (req.body as any).userId;
     if (!buyerUserId) {
       const existingCustomer = db.customers.find(c =>
         (c.phone && phonesMatch(c.phone, customerPhone)) ||
@@ -3207,6 +3643,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     // Automatically push an order tracking notification to the customer's personal Inbox
     const orderWelcomeMsg: AdminMessage = {
       id: `msg-ord-${newOrder.id}`,
+      conversationId: newOrder.userId || customer.id,
       customerId: newOrder.userId || customer.id,
       name: customerName.trim(),
       email: customerEmail?.trim() || `${customerPhone.replace(/\D/g, '')}@contactreach.rw`,
@@ -3225,8 +3662,9 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     db.messages.unshift(orderWelcomeMsg);
     saveToFirestoreAsync('messages', orderWelcomeMsg.id, orderWelcomeMsg);
 
-  saveDbToDisk('order_created', { order: newOrder });
+  saveDbToDisk('order_created', { order: newOrder, customer });
   saveToFirestoreAsync('orders', newOrder.id, newOrder);
+  saveToFirestoreAsync('customers', customer.id, customer);
   createAdminNotification({
     category: 'order',
     title: `New Order #${newOrder.orderNumber}`,
@@ -3818,9 +4256,10 @@ export function applyVerifiedPaymentSuccess(
     note: `Payment verified directly via ${verificationSource}. Provider Ref: ${finalRef}. Amount: ${order.totalAmount.toLocaleString()} RWF.`
   });
 
-  saveDbToDisk('order_status_updated', { order });
+  saveDbToDisk('payment_verified', { order, payment: conf, transaction: txn });
   saveToFirestoreAsync('orders', order.id, order);
   if (conf) saveToFirestoreAsync('paymentConfirmations', conf.id, conf);
+  if (txn) saveToFirestoreAsync('paymentTransactions', txn.id, txn);
 
   return {
     success: true,
@@ -4013,8 +4452,9 @@ app.post('/api/payments/initiate', async (req: Request, res: Response) => {
     note: `Payment push prompt dispatched to ${cleanPhone} via ${provider} (${dispatchMode}). Ref: ${providerRef}, amount: ${order.totalAmount.toLocaleString()} RWF.`
   });
 
-  saveDbToDisk();
+  saveDbToDisk('payment_initiated', { transaction, order });
   saveToFirestoreAsync('orders', order.id, order);
+  saveToFirestoreAsync('paymentTransactions', transaction.id, transaction);
 
   res.status(201).json({
     success: true,
@@ -4179,8 +4619,9 @@ app.post('/api/payments/verify/:orderNumber', async (req: Request, res: Response
       txn.updatedAt = new Date().toISOString();
     }
     order.paymentStatus = 'Failed';
-    saveDbToDisk('order_status_updated', { order });
+    saveDbToDisk('order_status_updated', { order, transaction: txn });
     saveToFirestoreAsync('orders', order.id, order);
+    if (txn) saveToFirestoreAsync('paymentTransactions', txn.id, txn);
 
     return res.status(400).json({
       success: false,
@@ -4246,9 +4687,13 @@ app.post('/api/payments/webhook/mtn', async (req: Request, res: Response) => {
     applyVerifiedPaymentSuccess(order, txn, financialTransactionId || refId, 'MTN MoMo Webhook');
     return res.status(200).json({ success: true, orderNumber: order.orderNumber, paymentStatus: 'Paid' });
   } else if (status === 'FAILED') {
-    if (txn) txn.status = 'Failed';
+    if (txn) {
+      txn.status = 'Failed';
+      txn.updatedAt = new Date().toISOString();
+      saveToFirestoreAsync('paymentTransactions', txn.id, txn);
+    }
     order.paymentStatus = 'Failed';
-    saveDbToDisk('order_status_updated', { order });
+    saveDbToDisk('order_status_updated', { order, transaction: txn });
     saveToFirestoreAsync('orders', order.id, order);
     return res.status(200).json({ success: true, orderNumber: order.orderNumber, paymentStatus: 'Failed' });
   }
@@ -4295,9 +4740,13 @@ app.post('/api/payments/webhook/airtel', async (req: Request, res: Response) => 
     applyVerifiedPaymentSuccess(order, txn, airtelId, 'Airtel Money Rwanda Webhook');
     return res.status(200).json({ success: true, orderNumber: order.orderNumber, paymentStatus: 'Paid' });
   } else if (status === 'FAILED') {
-    if (txn) txn.status = 'Failed';
+    if (txn) {
+      txn.status = 'Failed';
+      txn.updatedAt = new Date().toISOString();
+      saveToFirestoreAsync('paymentTransactions', txn.id, txn);
+    }
     order.paymentStatus = 'Failed';
-    saveDbToDisk('order_status_updated', { order });
+    saveDbToDisk('order_status_updated', { order, transaction: txn });
     saveToFirestoreAsync('orders', order.id, order);
     return res.status(200).json({ success: true, orderNumber: order.orderNumber, paymentStatus: 'Failed' });
   }
@@ -4429,8 +4878,9 @@ app.post('/api/payments/webhook', async (req: Request, res: Response) => {
       console.warn(`[Payment Webhook] Unhandled event: ${event}`);
   }
 
-  saveDbToDisk('order_status_updated', { order });
+  saveDbToDisk('order_status_updated', { order, transaction: txn });
   saveToFirestoreAsync('orders', order.id, order);
+  if (txn) saveToFirestoreAsync('paymentTransactions', txn.id, txn);
 
   res.status(200).json({
     success: true,
@@ -4510,14 +4960,24 @@ app.get('/api/admin/persistence/status', requireAdminAuth, (req: Request, res: R
 // PUBLIC API: MESSAGES & CONTACT FORM
 // -------------------------------------------------------------
 
-app.post('/api/contact/messages', (req: Request, res: Response) => {
+app.post('/api/contact/messages', async (req: Request, res: Response) => {
   const { name, email, phone, subject, message, orderNumber } = req.body;
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'Name, email, and message are required.' });
   }
 
+  const buyerToken = extractBuyerTokenFromReq(req);
+  const buyerSession = buyerToken ? await resolveBuyerSession(buyerToken) : null;
+  const matchedCustomer = buyerSession?.buyer || db.customers.find(c =>
+    (phone && c.phone && phonesMatch(c.phone, phone)) ||
+    (email && c.email && c.email.toLowerCase().trim() === email.toLowerCase().trim())
+  );
+  const resolvedCustomerId = matchedCustomer?.id || (phone ? `cust-${normalizePhoneKey(phone)}` : undefined);
+
   const newMessage: AdminMessage = {
     id: `msg-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    conversationId: resolvedCustomerId,
+    customerId: resolvedCustomerId,
     name: name.trim(),
     email: email.trim(),
     phone: phone?.trim(),
@@ -4530,7 +4990,7 @@ app.post('/api/contact/messages', (req: Request, res: Response) => {
     senderName: name.trim(),
     isReadByAdmin: false,
     isReadByCustomer: true,
-    notificationType: 'chat'
+    notificationType: 'contact_message'
   };
 
   db.messages.unshift(newMessage);
@@ -4544,6 +5004,7 @@ app.post('/api/contact/messages', (req: Request, res: Response) => {
     senderPhone: newMessage.phone,
     senderEmail: newMessage.email,
     orderNumber: newMessage.orderNumber,
+    customerId: newMessage.customerId,
     actionTab: 'messages',
     entityId: newMessage.id,
     metadata: { subject: newMessage.subject }
@@ -4551,19 +5012,79 @@ app.post('/api/contact/messages', (req: Request, res: Response) => {
 
   res.status(201).json({
     message: 'Message received successfully. Our team will respond shortly.',
-    id: newMessage.id
+    id: newMessage.id,
+    data: newMessage
+  });
+});
+
+// Track a submitted Contact Us message & receive admin reply live
+app.get('/api/contact/messages/:id', async (req: Request, res: Response) => {
+  const targetId = String(req.params.id || '').trim();
+  if (!targetId) return res.status(400).json({ error: 'Message ID is required.' });
+
+  let msg = db.messages.find(m => m.id === targetId);
+  if (!msg) {
+    try {
+      const { data: sbMsg } = await supabase.from('messages').select('*').eq('id', targetId).maybeSingle();
+      if (sbMsg) {
+        msg = {
+          id: String(sbMsg.id),
+          conversationId: sbMsg.conversation_id || sbMsg.customer_id || undefined,
+          customerId: sbMsg.customer_id || undefined,
+          name: sbMsg.name || sbMsg.sender_name || 'Customer',
+          email: sbMsg.email || sbMsg.sender_email || '',
+          phone: sbMsg.phone || sbMsg.sender_phone || undefined,
+          subject: sbMsg.subject || 'General Inquiry',
+          message: sbMsg.message || '',
+          orderNumber: sbMsg.order_number || undefined,
+          status: sbMsg.status || 'unread',
+          sender: sbMsg.sender || 'customer',
+          createdAt: sbMsg.created_at || new Date().toISOString(),
+          readAt: sbMsg.read_at || undefined,
+          repliedAt: sbMsg.replied_at || undefined,
+          replyNote: sbMsg.reply_note || sbMsg.reply_message || undefined
+        };
+      }
+    } catch {}
+  }
+
+  if (!msg) {
+    return res.status(404).json({ error: 'Message not found.' });
+  }
+
+  res.json({
+    id: msg.id,
+    name: msg.name,
+    subject: msg.subject,
+    message: msg.message,
+    orderNumber: msg.orderNumber,
+    status: msg.status,
+    replyNote: msg.replyNote,
+    repliedAt: msg.repliedAt,
+    repliedBy: msg.repliedBy,
+    createdAt: msg.createdAt
   });
 });
 
 // Alias for direct messages endpoint
-app.post('/api/messages', (req: Request, res: Response) => {
+app.post('/api/messages', async (req: Request, res: Response) => {
   const { name, email, phone, subject, message, orderNumber } = req.body;
   if (!name || (!email && !phone) || !message) {
     return res.status(400).json({ error: 'Name, email or phone, and message are required.' });
   }
 
+  const buyerToken = extractBuyerTokenFromReq(req);
+  const buyerSession = buyerToken ? await resolveBuyerSession(buyerToken) : null;
+  const matchedCustomer = buyerSession?.buyer || db.customers.find(c =>
+    (phone && c.phone && phonesMatch(c.phone, phone)) ||
+    (email && c.email && c.email.toLowerCase().trim() === email.toLowerCase().trim())
+  );
+  const resolvedCustomerId = matchedCustomer?.id || (phone ? `cust-${normalizePhoneKey(phone)}` : undefined);
+
   const newMessage: AdminMessage = {
     id: `msg-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    conversationId: resolvedCustomerId,
+    customerId: resolvedCustomerId,
     name: name.trim(),
     email: (email || `${(phone || 'customer').replace(/\D/g, '')}@contactreach.rw`).trim(),
     phone: phone?.trim(),
@@ -4576,7 +5097,7 @@ app.post('/api/messages', (req: Request, res: Response) => {
     senderName: name.trim(),
     isReadByAdmin: false,
     isReadByCustomer: true,
-    notificationType: 'chat'
+    notificationType: 'contact_message'
   };
 
   db.messages.unshift(newMessage);
@@ -4590,6 +5111,7 @@ app.post('/api/messages', (req: Request, res: Response) => {
     senderPhone: newMessage.phone,
     senderEmail: newMessage.email,
     orderNumber: newMessage.orderNumber,
+    customerId: newMessage.customerId,
     actionTab: 'messages',
     entityId: newMessage.id,
     metadata: { subject: newMessage.subject }
@@ -4604,7 +5126,7 @@ app.post('/api/messages', (req: Request, res: Response) => {
 
 // Real-Time Incoming SMS Gateway / Forwarder / Webhook
 app.post('/api/sms/incoming', (req: Request, res: Response) => {
-  const { from, phone, text, message, sender, timestamp, orderNumber } = req.body;
+  const { from, phone, text, message, sender, timestamp, orderNumber, provider } = req.body;
   const rawText = (text || message || '').trim();
   const rawPhone = (phone || from || sender || '').trim();
 
@@ -4619,29 +5141,9 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
 
   const parsedTxnId = txnMatch ? txnMatch[1].replace(/[^a-zA-Z0-9]/g, '') : `SMS-${Date.now().toString().slice(-6)}`;
   const parsedAmount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : undefined;
+  const detectedProvider = provider || (rawText.toLowerCase().includes('airtel') ? 'Airtel Money' : 'MTN Mobile Money');
 
-  // Create message record in db.messages
-  const newMessage: AdminMessage = {
-    id: `msg-sms-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
-    name: sender || `SMS Customer (${rawPhone})`,
-    email: `${rawPhone.replace(/\D/g, '') || 'sms'}@sms.contactreach.rw`,
-    phone: rawPhone,
-    subject: isPaymentSms ? `Payment SMS Alert (${rawPhone})` : `Incoming SMS (${rawPhone})`,
-    message: rawText,
-    orderNumber: orderNumber?.trim(),
-    createdAt: timestamp || new Date().toISOString(),
-    status: 'unread',
-    sender: 'customer',
-    senderName: sender || rawPhone,
-    isReadByAdmin: false,
-    isReadByCustomer: true,
-    notificationType: 'chat'
-  };
-
-  db.messages.unshift(newMessage);
-  saveToFirestoreAsync('messages', newMessage.id, newMessage);
-
-  // If matched to an order or contains payment info, also link payment confirmation
+  // If matched to an order or contains payment info, link order & payment confirmation
   let matchedOrder: Order | undefined;
   if (orderNumber) {
     matchedOrder = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase());
@@ -4649,6 +5151,30 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
     const cleanPhone = rawPhone.replace(/\D/g, '');
     matchedOrder = db.orders.find(o => o.customerPhone.replace(/\D/g, '').endsWith(cleanPhone) || cleanPhone.endsWith(o.customerPhone.replace(/\D/g, '')));
   }
+
+  // Create message record in db.messages
+  const newMessage: AdminMessage = {
+    id: `msg-sms-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    conversationId: matchedOrder?.userId || (rawPhone ? `cust-${normalizePhoneKey(rawPhone)}` : undefined),
+    customerId: matchedOrder?.userId || (rawPhone ? `cust-${normalizePhoneKey(rawPhone)}` : undefined),
+    name: sender || `SMS Customer (${rawPhone})`,
+    email: `${rawPhone.replace(/\D/g, '') || 'sms'}@sms.contactreach.rw`,
+    phone: rawPhone,
+    subject: isPaymentSms ? `Payment SMS Alert (${rawPhone})` : `Incoming SMS (${rawPhone})`,
+    message: rawText,
+    orderNumber: matchedOrder?.orderNumber || orderNumber?.trim(),
+    createdAt: timestamp || new Date().toISOString(),
+    status: 'unread',
+    sender: 'customer',
+    senderName: sender || rawPhone,
+    isReadByAdmin: false,
+    isReadByCustomer: true,
+    notificationType: 'sms_notification',
+    metadata: { parsedTxnId, parsedAmount, provider: detectedProvider, isPaymentSms }
+  };
+
+  db.messages.unshift(newMessage);
+  saveToFirestoreAsync('messages', newMessage.id, newMessage);
 
   let confirmation: PaymentConfirmation | undefined;
   if (matchedOrder && isPaymentSms) {
@@ -4658,7 +5184,7 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
       orderNumber: matchedOrder.orderNumber,
       customerName: matchedOrder.customerName,
       paymentPhone: rawPhone,
-      paymentMethod: rawText.toLowerCase().includes('airtel') ? 'Airtel Money' : 'MTN Mobile Money',
+      paymentMethod: detectedProvider === 'Airtel Money' ? 'Airtel Money' : 'MTN Mobile Money',
       amountPaid: parsedAmount || matchedOrder.totalAmount,
       transactionId: parsedTxnId,
       confirmationMessage: rawText,
@@ -4672,8 +5198,28 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
     saveToFirestoreAsync('orders', matchedOrder.id, matchedOrder);
   }
 
+  const smsNotif: SmsNotification = {
+    id: `sms-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    direction: 'incoming',
+    senderPhone: rawPhone,
+    senderName: sender || matchedOrder?.customerName || undefined,
+    provider: detectedProvider,
+    message: rawText,
+    parsedTransactionId: parsedTxnId,
+    parsedAmount,
+    orderNumber: matchedOrder?.orderNumber || orderNumber?.trim(),
+    paymentId: confirmation?.id,
+    status: confirmation ? 'matched_payment' : 'received',
+    createdAt: timestamp || new Date().toISOString(),
+    metadata: { isPaymentSms, messageId: newMessage.id }
+  };
+  db.smsNotifications = db.smsNotifications || [];
+  db.smsNotifications.unshift(smsNotif);
+  saveToFirestoreAsync('smsNotifications', smsNotif.id, smsNotif);
+
   saveDbToDisk('sms_received', {
     message: newMessage,
+    smsNotification: smsNotif,
     payment: confirmation,
     order: matchedOrder
   });
@@ -4686,12 +5232,14 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
     senderPhone: rawPhone,
     orderNumber: matchedOrder?.orderNumber || orderNumber?.trim(),
     actionTab: isPaymentSms ? 'payments' : 'messages',
-    entityId: newMessage.id
+    entityId: smsNotif.id
   });
 
   res.status(201).json({
     message: 'SMS received and processed in real time.',
     id: newMessage.id,
+    smsId: smsNotif.id,
+    smsNotification: smsNotif,
     orderMatched: matchedOrder ? matchedOrder.orderNumber : null
   });
 });
@@ -4746,19 +5294,52 @@ app.post('/api/customer-reports', (req: Request, res: Response) => {
   });
 });
 
-app.get('/api/customer-reports/:caseNumber', (req: Request, res: Response) => {
+app.get('/api/customer-reports/:caseNumber', async (req: Request, res: Response) => {
   const caseNumber = req.params.caseNumber.trim().toUpperCase();
-  const report = db.customerProblems.find(r => r.caseNumber.toUpperCase() === caseNumber);
+  let report = db.customerProblems.find(r => r.caseNumber.toUpperCase() === caseNumber);
+  if (!report) {
+    try {
+      const { data: sbProb } = await supabase
+        .from('customer_problems')
+        .select('*')
+        .ilike('case_number', caseNumber)
+        .maybeSingle();
+      if (sbProb) {
+        report = {
+          id: String(sbProb.id),
+          caseNumber: sbProb.case_number || caseNumber,
+          orderNumber: sbProb.order_number || undefined,
+          customerName: sbProb.customer_name || 'Customer',
+          customerPhone: sbProb.customer_phone || '',
+          customerEmail: sbProb.customer_email || undefined,
+          category: (sbProb.category || 'other') as any,
+          description: sbProb.description || '',
+          priority: (sbProb.priority || 'medium') as any,
+          status: (sbProb.status || 'New') as any,
+          assignedTo: sbProb.assigned_to || undefined,
+          resolution: sbProb.resolution || undefined,
+          resolvedAt: sbProb.resolved_at || undefined,
+          createdAt: sbProb.created_at || new Date().toISOString(),
+          updatedAt: sbProb.updated_at || undefined
+        };
+      }
+    } catch {}
+  }
   if (!report) {
     return res.status(404).json({ error: `Case #${caseNumber} not found.` });
   }
   // Return sanitized customer-facing view
   res.json({
+    id: report.id,
     caseNumber: report.caseNumber,
+    orderNumber: report.orderNumber,
     customerName: report.customerName,
     category: report.category,
+    priority: report.priority,
     status: report.status,
+    assignedTo: report.assignedTo,
     createdAt: report.createdAt,
+    updatedAt: report.updatedAt,
     resolution: report.resolution,
     resolvedAt: report.resolvedAt
   });
@@ -5561,15 +6142,55 @@ app.get('/api/buyers/orders', requireBuyerAuth, (req: Request, res: Response) =>
 });
 
 // 5b. Buyer Inbox & Live Chat Messages (Real-Time Bidirectional Messages)
-app.get('/api/buyers/messages', requireBuyerAuth, (req: Request, res: Response) => {
+app.get('/api/buyers/messages', requireBuyerAuth, async (req: Request, res: Response) => {
   const buyer = (req as any).buyerUser as CustomerUser;
   const cleanPhone = normalizePhoneKey(buyer.phone || '');
   const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
 
+  try {
+    const { data: sbMsgs } = await supabase
+      .from('messages')
+      .select('*')
+      .neq('sender', 'admin_notification')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (Array.isArray(sbMsgs) && sbMsgs.length > 0) {
+      const msgMap = new Map<string, AdminMessage>(db.messages.map(m => [String(m.id), m]));
+      for (const m of sbMsgs) {
+        if (!msgMap.has(String(m.id))) {
+          msgMap.set(String(m.id), {
+            id: String(m.id),
+            conversationId: m.conversation_id || m.customer_id || undefined,
+            customerId: m.customer_id || undefined,
+            name: m.name || m.sender_name || 'Customer',
+            email: m.email || m.sender_email || '',
+            phone: m.phone || m.sender_phone || undefined,
+            subject: m.subject || '',
+            message: m.message || '',
+            orderNumber: m.order_number || undefined,
+            status: m.status || 'unread',
+            sender: m.sender || 'customer',
+            senderName: m.name || m.sender_name || undefined,
+            isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
+            isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
+            notificationType: (m.notification_type || undefined) as any,
+            createdAt: m.created_at || new Date().toISOString(),
+            readAt: m.read_at || undefined,
+            repliedAt: m.replied_at || undefined,
+            replyNote: m.reply_note || m.reply_message || undefined
+          });
+        }
+      }
+      db.messages = Array.from(msgMap.values());
+    }
+  } catch {}
+
   const buyerMessages = db.messages.filter(m =>
-    (m.customerId && (m.customerId === buyer.id || (cleanPhone && m.customerId === `cust-${cleanPhone}`))) ||
-    (buyer.phone && m.phone && phonesMatch(m.phone, buyer.phone)) ||
-    (cleanEmail && m.email && m.email.toLowerCase().trim() === cleanEmail)
+    String(m.sender || '').toLowerCase() !== 'admin_notification' && (
+      (m.customerId && (m.customerId === buyer.id || (cleanPhone && m.customerId === `cust-${cleanPhone}`))) ||
+      (buyer.phone && m.phone && phonesMatch(m.phone, buyer.phone)) ||
+      (cleanEmail && m.email && m.email.toLowerCase().trim() === cleanEmail)
+    )
   );
 
   // Return sorted chronologically (oldest to newest for chat view)
@@ -5588,6 +6209,7 @@ app.post('/api/buyers/messages', requireBuyerAuth, (req: Request, res: Response)
 
   const newMessage: AdminMessage = {
     id: `msg-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    conversationId: buyer.id,
     customerId: buyer.id,
     name: buyer.name,
     email: buyer.email || `${(buyer.phone || 'customer').replace(/\D/g, '')}@contactreach.rw`,
@@ -5651,6 +6273,119 @@ app.put('/api/buyers/messages/mark-read', requireBuyerAuth, (req: Request, res: 
   }
 
   res.json({ success: true, updatedCount });
+});
+
+// 5e. Buyer Problem Reports / Complaints
+app.get('/api/buyers/reports', requireBuyerAuth, async (req: Request, res: Response) => {
+  const buyer = (req as any).buyerUser as CustomerUser;
+  const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
+
+  try {
+    const { data: sbProbs } = await supabase
+      .from('customer_problems')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (Array.isArray(sbProbs) && sbProbs.length > 0) {
+      const probMap = new Map<string, CustomerProblemReport>(db.customerProblems.map(p => [String(p.id), p]));
+      for (const p of sbProbs) {
+        probMap.set(String(p.id), {
+          id: String(p.id),
+          caseNumber: p.case_number || '',
+          orderNumber: p.order_number || undefined,
+          customerName: p.customer_name || 'Customer',
+          customerPhone: p.customer_phone || '',
+          customerEmail: p.customer_email || undefined,
+          category: (p.category || 'other') as any,
+          description: p.description || '',
+          priority: (p.priority || 'medium') as any,
+          status: (p.status || 'New') as any,
+          assignedTo: p.assigned_to || undefined,
+          resolution: p.resolution || undefined,
+          resolvedAt: p.resolved_at || undefined,
+          createdAt: p.created_at || new Date().toISOString(),
+          updatedAt: p.updated_at || undefined
+        });
+      }
+      db.customerProblems = Array.from(probMap.values());
+    }
+  } catch {}
+
+  const buyerReports = db.customerProblems.filter(r =>
+    (buyer.phone && r.customerPhone && phonesMatch(r.customerPhone, buyer.phone)) ||
+    (cleanEmail && r.customerEmail && r.customerEmail.toLowerCase().trim() === cleanEmail)
+  ).map(r => ({
+    id: r.id,
+    caseNumber: r.caseNumber,
+    orderNumber: r.orderNumber,
+    customerName: r.customerName,
+    customerPhone: r.customerPhone,
+    customerEmail: r.customerEmail,
+    category: r.category,
+    description: r.description,
+    priority: r.priority,
+    status: r.status,
+    assignedTo: r.assignedTo,
+    resolution: r.resolution,
+    resolvedAt: r.resolvedAt,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt
+  }));
+
+  buyerReports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  res.json(buyerReports);
+});
+
+// 5f. Buyer Scoped Real-Time Event Stream (Orders, Payments, Chat Replies, Complaints)
+app.get('/api/buyers/realtime', async (req: Request, res: Response) => {
+  const token = String(
+    (req.query.token as string) ||
+    extractBuyerTokenFromReq(req) ||
+    ''
+  ).trim();
+
+  const resolved = token ? await resolveBuyerSession(token) : null;
+  if (!resolved?.buyer) {
+    return res.status(401).json({ error: 'Unauthorized. Buyer account sign-in required for live updates.' });
+  }
+  const buyer = resolved.buyer;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  res.write(`event: db_update\ndata: ${JSON.stringify({
+    type: 'connected',
+    customerId: buyer.id,
+    timestamp: new Date().toISOString()
+  })}\n\n`);
+
+  const meta: BuyerSseMeta = {
+    customerId: buyer.id,
+    phoneKey: normalizePhoneKey(buyer.phone || ''),
+    email: (buyer.email || '').toLowerCase().trim()
+  };
+  buyerSseClients.set(res, meta);
+
+  const pingInterval = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(pingInterval);
+      buyerSseClients.delete(res);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    buyerSseClients.delete(res);
+  });
+  req.on('error', () => {
+    clearInterval(pingInterval);
+    buyerSseClients.delete(res);
+  });
 });
 
 // 6. Buyer Logout (Explicit Permanent Token Revocation)
@@ -5883,7 +6618,7 @@ app.get('/api/database/stream', (req: Request, res: Response) => {
   });
   res.write(`event: db_update\ndata: ${handshake}\n\n`);
 
-  sseClients.add(res);
+  publicSseClients.add(res);
 
   // Ping every 15s to keep cellular & proxy connections alive worldwide
   const pingInterval = setInterval(() => {
@@ -5891,17 +6626,82 @@ app.get('/api/database/stream', (req: Request, res: Response) => {
       res.write(': ping\n\n');
     } catch {
       clearInterval(pingInterval);
-      sseClients.delete(res);
+      publicSseClients.delete(res);
     }
   }, 15000);
 
   req.on('close', () => {
     clearInterval(pingInterval);
-    sseClients.delete(res);
+    publicSseClients.delete(res);
   });
   req.on('error', () => {
     clearInterval(pingInterval);
-    sseClients.delete(res);
+    publicSseClients.delete(res);
+  });
+});
+
+// Scoped Live Tracking SSE Stream (Order payment/delivery updates, Complaint case updates, Contact Us replies)
+app.get('/api/realtime/track', (req: Request, res: Response) => {
+  const orderNumber = String(req.query.orderNumber || '').trim().toUpperCase();
+  const token = String(req.query.token || '').trim();
+  const phone = String(req.query.phone || '').trim();
+  const caseNumber = String(req.query.caseNumber || '').trim().toUpperCase();
+  const messageId = String(req.query.messageId || '').trim();
+
+  if (!orderNumber && !caseNumber && !messageId) {
+    return res.status(400).json({ error: 'Provide orderNumber, caseNumber, or messageId to subscribe to live tracking.' });
+  }
+
+  if (orderNumber) {
+    const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+    if (!order) {
+      return res.status(404).json({ error: `Order #${orderNumber} not found.` });
+    }
+    const tokenOk = Boolean(token && order.trackingToken && token === order.trackingToken);
+    const phoneOk = Boolean(phone && phonesMatch(order.customerPhone, phone));
+    if (!tokenOk && !phoneOk) {
+      return res.status(403).json({ error: 'Valid tracking token or customer phone required to subscribe to order updates.' });
+    }
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  res.write(`event: db_update\ndata: ${JSON.stringify({
+    type: 'connected',
+    orderNumber: orderNumber || undefined,
+    caseNumber: caseNumber || undefined,
+    messageId: messageId || undefined,
+    timestamp: new Date().toISOString()
+  })}\n\n`);
+
+  trackingSseClients.set(res, {
+    orderNumber: orderNumber || undefined,
+    trackingToken: token || undefined,
+    phoneKey: phone ? normalizePhoneKey(phone) : undefined,
+    caseNumber: caseNumber || undefined,
+    messageId: messageId || undefined
+  });
+
+  const pingInterval = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(pingInterval);
+      trackingSseClients.delete(res);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    trackingSseClients.delete(res);
+  });
+  req.on('error', () => {
+    clearInterval(pingInterval);
+    trackingSseClients.delete(res);
   });
 });
 
@@ -6048,7 +6848,7 @@ app.get('/api/admin/realtime', (req: Request, res: Response) => {
   });
   res.write(`event: db_update\ndata: ${initialData}\n\n`);
 
-  sseClients.add(res);
+  adminSseClients.add(res);
 
   // Keep-alive ping every 15 seconds to ensure mobile carriers and reverse proxies do not drop connection
   const pingInterval = setInterval(() => {
@@ -6056,17 +6856,17 @@ app.get('/api/admin/realtime', (req: Request, res: Response) => {
       res.write(': ping\n\n');
     } catch {
       clearInterval(pingInterval);
-      sseClients.delete(res);
+      adminSseClients.delete(res);
     }
   }, 15000);
 
   req.on('close', () => {
     clearInterval(pingInterval);
-    sseClients.delete(res);
+    adminSseClients.delete(res);
   });
   req.on('error', () => {
     clearInterval(pingInterval);
-    sseClients.delete(res);
+    adminSseClients.delete(res);
   });
 });
 
@@ -8555,8 +9355,190 @@ app.post('/api/admin/orders/bulk-delete', requireAdminAuth, requireRole(['owner'
 // ADMIN PAYMENT VERIFICATION & METHODS CONFIG
 // -------------------------------------------------------------
 
-app.get('/api/admin/payments', requireAdminAuth, (req: Request, res: Response) => {
+app.get('/api/admin/payments', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { data: sbPays } = await supabase
+      .from('payments')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (Array.isArray(sbPays) && sbPays.length > 0) {
+      const payMap = new Map<string, PaymentConfirmation>(db.paymentConfirmations.map(p => [String(p.id), p]));
+      for (const p of sbPays) {
+        if (!payMap.has(String(p.id))) {
+          payMap.set(String(p.id), {
+            id: String(p.id),
+            orderId: p.order_id || '',
+            orderNumber: p.order_number || '',
+            customerName: p.customer_name || p.sender_name || 'Customer',
+            paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
+            amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
+            paymentMethod: p.payment_method || 'MTN Mobile Money',
+            transactionId: p.transaction_id || '',
+            screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
+            confirmationMessage: p.confirmation_message || undefined,
+            verificationStatus: p.verification_status || 'Pending Verification',
+            verifiedAt: p.verified_at || undefined,
+            verifiedBy: p.verified_by || undefined,
+            adminNotes: p.admin_notes || p.notes || undefined,
+            flaggedSuspicious: Boolean(p.flagged_suspicious),
+            isDuplicateTxn: Boolean(p.is_duplicate_txn),
+            suspiciousReason: p.suspicious_reason || undefined,
+            verifiedDirectly: Boolean(p.verified_directly),
+            customerNotified: Boolean(p.customer_notified),
+            notificationMessage: p.notification_message || undefined,
+            submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
+          });
+        }
+      }
+      db.paymentConfirmations = Array.from(payMap.values()).sort(
+        (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+      );
+    }
+  } catch {}
   res.json(db.paymentConfirmations);
+});
+
+app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const [{ data: sbTxns }, { data: sbSms }] = await Promise.all([
+      supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(200),
+      supabase.from('sms_notifications').select('*').order('created_at', { ascending: false }).limit(200)
+    ]);
+    if (Array.isArray(sbTxns) && sbTxns.length > 0) {
+      db.paymentTransactions = db.paymentTransactions || [];
+      const txnMap = new Map<string, PaymentTransaction>(db.paymentTransactions.map(t => [String(t.id), t]));
+      for (const t of sbTxns) {
+        if (!txnMap.has(String(t.id))) {
+          const meta = (t.metadata && typeof t.metadata === 'object') ? t.metadata : {};
+          txnMap.set(String(t.id), {
+            id: String(t.id),
+            orderId: t.order_id || '',
+            orderNumber: t.order_number || '',
+            customerPhone: t.customer_phone || '',
+            customerEmail: t.customer_email || undefined,
+            amount: Number(t.amount) || 0,
+            currency: t.currency || 'RWF',
+            paymentMethod: t.payment_method || 'MTN Mobile Money',
+            provider: t.provider || 'MTN Mobile Money',
+            status: t.status || 'Pending',
+            providerTransactionId: meta.providerTransactionId || undefined,
+            financialTransactionId: meta.financialTransactionId || undefined,
+            idempotencyKey: t.idempotency_key || undefined,
+            checkoutUrl: t.checkout_url || undefined,
+            failureReason: meta.failureReason || undefined,
+            verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
+            verifiedAt: meta.verifiedAt || undefined,
+            telecomStatus: meta.telecomStatus || undefined,
+            signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
+            metadata: meta,
+            createdAt: t.created_at || new Date().toISOString(),
+            updatedAt: t.updated_at || t.created_at || new Date().toISOString()
+          });
+        }
+      }
+      db.paymentTransactions = Array.from(txnMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+    if (Array.isArray(sbSms) && sbSms.length > 0) {
+      db.smsNotifications = db.smsNotifications || [];
+      const smsMap = new Map<string, SmsNotification>(db.smsNotifications.map(s => [String(s.id), s]));
+      for (const s of sbSms) {
+        if (!smsMap.has(String(s.id))) {
+          smsMap.set(String(s.id), {
+            id: String(s.id),
+            direction: s.direction || 'incoming',
+            senderPhone: s.sender_phone || '',
+            senderName: s.sender_name || undefined,
+            recipientPhone: s.recipient_phone || undefined,
+            provider: s.provider || 'MTN Mobile Money',
+            message: s.message || '',
+            parsedTransactionId: s.parsed_transaction_id || undefined,
+            parsedAmount: s.parsed_amount !== null && s.parsed_amount !== undefined ? Number(s.parsed_amount) : undefined,
+            orderNumber: s.order_number || undefined,
+            paymentId: s.payment_id || undefined,
+            status: s.status || 'received',
+            createdAt: s.created_at || new Date().toISOString(),
+            metadata: s.metadata || undefined
+          });
+        }
+      }
+      db.smsNotifications = Array.from(smsMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+  } catch {}
+
+  res.json({
+    confirmations: db.paymentConfirmations || [],
+    transactions: db.paymentTransactions || [],
+    smsNotifications: db.smsNotifications || []
+  });
+});
+
+app.post('/api/admin/sms-notifications/send', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager', 'customer_support']), (req: Request, res: Response) => {
+  const admin = (req as any).adminUser;
+  const { phone, recipientName, message, orderNumber, paymentId, provider } = req.body;
+
+  if (!phone || !message || !String(message).trim()) {
+    return res.status(400).json({ error: 'Recipient phone number and SMS message are required.' });
+  }
+
+  const cleanPhone = String(phone).trim();
+  const cleanMsg = String(message).trim();
+  const matchedCustomer = db.customers.find(c => c.phone && phonesMatch(c.phone, cleanPhone));
+
+  const smsNotif: SmsNotification = {
+    id: `sms-out-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    direction: 'outgoing',
+    senderPhone: db.settings.paymentNumber || '0780022600',
+    senderName: admin?.name || 'ContactReach Admin',
+    recipientPhone: cleanPhone,
+    provider: provider || 'ContactReach SMS Gateway',
+    message: cleanMsg,
+    orderNumber: orderNumber ? String(orderNumber).trim() : undefined,
+    paymentId: paymentId ? String(paymentId).trim() : undefined,
+    status: 'sent',
+    createdAt: new Date().toISOString(),
+    metadata: { sentBy: admin?.name || 'Admin', recipientName }
+  };
+
+  db.smsNotifications = db.smsNotifications || [];
+  db.smsNotifications.unshift(smsNotif);
+  saveToFirestoreAsync('smsNotifications', smsNotif.id, smsNotif);
+
+  // Also deliver to customer inbox/chat so buyer sees the notification immediately without refresh
+  const inboxMsg: AdminMessage = {
+    id: `msg-sms-out-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    conversationId: matchedCustomer?.id || `cust-${normalizePhoneKey(cleanPhone)}`,
+    customerId: matchedCustomer?.id || `cust-${normalizePhoneKey(cleanPhone)}`,
+    name: recipientName || matchedCustomer?.name || `Customer (${cleanPhone})`,
+    email: matchedCustomer?.email || `${cleanPhone.replace(/\D/g, '')}@contactreach.rw`,
+    phone: cleanPhone,
+    subject: orderNumber ? `SMS Update for Order #${orderNumber}` : 'SMS Notification from ContactReach Market',
+    message: cleanMsg,
+    orderNumber: orderNumber ? String(orderNumber).trim() : undefined,
+    createdAt: new Date().toISOString(),
+    status: 'replied',
+    sender: 'admin',
+    senderName: admin?.name || 'ContactReach Support',
+    isReadByCustomer: false,
+    isReadByAdmin: true,
+    notificationType: 'sms_notification',
+    metadata: { direction: 'outgoing', smsId: smsNotif.id }
+  };
+  db.messages.unshift(inboxMsg);
+  saveToFirestoreAsync('messages', inboxMsg.id, inboxMsg);
+
+  saveDbToDisk('sms_sent', { smsNotification: smsNotif, message: inboxMsg });
+  logAudit(admin, 'SMS_NOTIFICATION_SENT', `Sent SMS notification to ${cleanPhone}${orderNumber ? ` (Order #${orderNumber})` : ''}`, 'sms', smsNotif.id);
+
+  res.status(201).json({
+    success: true,
+    smsNotification: smsNotif,
+    messageRecord: inboxMsg
+  });
 });
 
 app.post('/api/admin/payments/:id/verify', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
@@ -9058,19 +10040,21 @@ app.post('/api/admin/inventory-logs/bulk-delete', requireAdminAuth, requireRole(
 // -------------------------------------------------------------
 
 app.get('/api/admin/messages', requireAdminAuth, async (req: Request, res: Response) => {
-  if (!db.messages || db.messages.length === 0) {
-    try {
-      const { data: msgs } = await supabase
-        .from('messages')
-        .select('*')
-        .neq('sender', 'admin_notification')
-        .order('created_at', { ascending: false })
-        .limit(300);
-      if (Array.isArray(msgs) && msgs.length > 0) {
-        db.messages = msgs
-          .filter((m: any) => !String(m.notification_type || '').toLowerCase().startsWith('admin_notif'))
-          .map((m: any) => ({
+  try {
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('*')
+      .neq('sender', 'admin_notification')
+      .order('created_at', { ascending: false })
+      .limit(300);
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      const msgMap = new Map<string, AdminMessage>((db.messages || []).map(m => [String(m.id), m]));
+      for (const m of msgs) {
+        if (String(m.notification_type || '').toLowerCase().startsWith('admin_notif')) continue;
+        if (!msgMap.has(String(m.id))) {
+          msgMap.set(String(m.id), {
             id: m.id,
+            conversationId: m.conversation_id || m.customer_id || undefined,
             name: m.name || m.sender_name || 'Customer',
             email: m.email || m.sender_email || '',
             phone: m.phone || m.sender_phone || undefined,
@@ -9088,10 +10072,14 @@ app.get('/api/admin/messages', requireAdminAuth, async (req: Request, res: Respo
             readAt: m.read_at || undefined,
             repliedAt: m.replied_at || undefined,
             replyNote: m.reply_note || m.reply_message || undefined
-          }));
+          });
+        }
       }
-    } catch {}
-  }
+      db.messages = Array.from(msgMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+  } catch {}
   const cleanMessages = (db.messages || []).filter(
     (m: any) => String(m.sender || '').toLowerCase() !== 'admin_notification'
   );
@@ -9103,7 +10091,8 @@ app.patch('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'ad
   const msg = db.messages.find(m => m.id === req.params.id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
 
-  const { status, replyNote } = req.body;
+  const { status, replyNote, replyMessage } = req.body;
+  const effectiveReply = (replyNote ?? replyMessage);
   if (status) {
     msg.status = status;
     if (status === 'read' || status === 'replied') {
@@ -9111,12 +10100,13 @@ app.patch('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'ad
       msg.readAt = msg.readAt || new Date().toISOString();
     }
   }
-  if (replyNote) {
-    msg.replyNote = replyNote;
+  if (effectiveReply && String(effectiveReply).trim()) {
+    msg.replyNote = String(effectiveReply).trim();
     msg.repliedAt = new Date().toISOString();
     msg.repliedBy = admin.name;
     msg.status = 'replied';
     msg.isReadByAdmin = true;
+    msg.isReadByCustomer = false;
     msg.readAt = msg.readAt || new Date().toISOString();
   }
 
@@ -9460,7 +10450,49 @@ app.put('/api/admin/conversations/:customerId/mark-read', requireAdminAuth, (req
 // ADMIN CUSTOMER PROBLEMS & COMPLAINTS
 // -------------------------------------------------------------
 
-app.get('/api/admin/customer-reports', requireAdminAuth, (req: Request, res: Response) => {
+app.get('/api/admin/customer-reports', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { data: probs } = await supabase
+      .from('customer_problems')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (Array.isArray(probs) && probs.length > 0) {
+      const probMap = new Map<string, CustomerProblemReport>((db.customerProblems || []).map(r => [String(r.id), r]));
+      for (const p of probs) {
+        if (!probMap.has(String(p.id))) {
+          let parsedNotes = Array.isArray(p.private_notes) ? p.private_notes : undefined;
+          if (!parsedNotes && typeof p.private_notes === 'string' && p.private_notes.trim().startsWith('[')) {
+            try { parsedNotes = JSON.parse(p.private_notes); } catch {}
+          }
+          if (!parsedNotes && typeof p.admin_notes === 'string' && p.admin_notes.trim().startsWith('[')) {
+            try { parsedNotes = JSON.parse(p.admin_notes); } catch {}
+          }
+          probMap.set(String(p.id), {
+            id: String(p.id),
+            caseNumber: p.case_number || '',
+            orderNumber: p.order_number || undefined,
+            customerName: p.customer_name || 'Customer',
+            customerPhone: p.customer_phone || '',
+            customerEmail: p.customer_email || undefined,
+            category: (p.category || 'other') as any,
+            description: p.description || '',
+            priority: (p.priority || 'medium') as any,
+            status: (p.status || 'New') as any,
+            assignedTo: p.assigned_to || undefined,
+            privateNotes: parsedNotes,
+            resolution: p.resolution || undefined,
+            resolvedAt: p.resolved_at || undefined,
+            createdAt: p.created_at || new Date().toISOString(),
+            updatedAt: p.updated_at || undefined
+          });
+        }
+      }
+      db.customerProblems = Array.from(probMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+  } catch {}
   res.json(db.customerProblems);
 });
 

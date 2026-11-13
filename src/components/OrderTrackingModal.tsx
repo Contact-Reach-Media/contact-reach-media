@@ -7,6 +7,7 @@ import {
 import { Order, OrderStatus } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
@@ -77,30 +78,49 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
     } catch {}
   };
 
-  // Real-Time Auto-Synchronization: Live poll order status every 5 seconds while modal is open
+  // Scoped Real-Time Synchronization via SSE + Supabase Realtime (no polling)
   React.useEffect(() => {
-    if (!isOpen || !trackedOrder) return;
+    if (!isOpen || !trackedOrder?.orderNumber) return;
+    const orderNum = trackedOrder.orderNumber;
+    const phoneParam = (trackedOrder.customerPhone || phoneQuery || '').trim();
+    const qPhone = phoneParam ? `&phone=${encodeURIComponent(phoneParam)}` : '';
 
-    const interval = setInterval(async () => {
-      try {
-        const latest = await api.trackOrder(trackedOrder.orderNumber, trackedOrder.customerPhone || phoneQuery);
-        if (latest) {
-          if (latest.status !== trackedOrder.status || latest.paymentStatus !== trackedOrder.paymentStatus) {
-            setTrackedOrder(latest);
-            playTrackChime();
-            setLiveStatusNotice(`⚡ Order status updated live: "${latest.status}" (${latest.paymentStatus})`);
-            setTimeout(() => setLiveStatusNotice(null), 6000);
-          } else {
-            setTrackedOrder(latest);
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/realtime/track?orderNumber=${encodeURIComponent(orderNum)}${qPhone}`);
+      es.onmessage = async (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type !== 'db_update') return;
+          const latest = await api.trackOrder(orderNum, phoneParam || undefined);
+          if (latest) {
+            setTrackedOrder(prev => {
+              if (prev && (latest.status !== prev.status || latest.paymentStatus !== prev.paymentStatus)) {
+                playTrackChime();
+                setLiveStatusNotice(`⚡ Order status updated live: "${latest.status}" (${latest.paymentStatus})`);
+                setTimeout(() => setLiveStatusNotice(null), 6000);
+              }
+              return latest;
+            });
           }
-        }
-      } catch {}
-    }, 5000);
+        } catch {}
+      };
+    } catch {}
+
+    const unsubOrders = subscribeToSupabaseTable('orders', async (payload) => {
+      const row = payload.new as any;
+      if (row && (row.order_number === orderNum || row.id === trackedOrder.id)) {
+        try {
+          const latest = await api.trackOrder(orderNum, phoneParam || undefined);
+          if (latest) setTrackedOrder(latest);
+        } catch {}
+      }
+    });
 
     const handleFocus = async () => {
-      if (document.visibilityState === 'visible' && trackedOrder) {
+      if (document.visibilityState === 'visible') {
         try {
-          const latest = await api.trackOrder(trackedOrder.orderNumber, trackedOrder.customerPhone || phoneQuery);
+          const latest = await api.trackOrder(orderNum, phoneParam || undefined);
           if (latest) setTrackedOrder(latest);
         } catch {}
       }
@@ -110,11 +130,12 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
     document.addEventListener('visibilitychange', handleFocus);
 
     return () => {
-      clearInterval(interval);
+      if (es) es.close();
+      unsubOrders();
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleFocus);
     };
-  }, [isOpen, trackedOrder?.orderNumber, trackedOrder?.status, trackedOrder?.paymentStatus, phoneQuery]);
+  }, [isOpen, trackedOrder?.orderNumber, trackedOrder?.id, phoneQuery]);
 
   if (!isOpen) return null;
 
@@ -546,11 +567,11 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                       >
                         <div className="flex items-center gap-3">
                           <img
-                            src={resolvedImg}
+                            src={resolvedImg && resolvedImg.trim() ? resolvedImg : '/logo.png'}
                             alt={item.productName}
                             referrerPolicy="no-referrer"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = getProductImageDueToProduct(item);
+                              (e.currentTarget as HTMLImageElement).src = '/logo.png';
                             }}
                             className="w-10 h-10 rounded-lg object-cover bg-white border border-slate-200 shrink-0"
                           />

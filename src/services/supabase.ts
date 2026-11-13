@@ -5,6 +5,8 @@ import type {
   VendorShop,
   Order,
   PaymentConfirmation,
+  PaymentTransaction,
+  SmsNotification,
   Coupon,
   AdminMessage,
   AdminNotification,
@@ -815,64 +817,86 @@ export async function syncAllOrdersToSupabase(orders: any[] = []): Promise<{
 }
 
 // -------------------------------------------------------------
-// 5. PAYMENTS & VERIFICATIONS CRUD
+// 5. PAYMENTS, PAYMENT TRANSACTIONS & SMS NOTIFICATIONS CRUD
 // -------------------------------------------------------------
+export function mapSupabaseRowToPayment(p: any): PaymentConfirmation {
+  return {
+    id: String(p.id),
+    orderId: p.order_id || '',
+    orderNumber: p.order_number || '',
+    customerName: p.customer_name || p.sender_name || 'Customer',
+    paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
+    amountPaid: Number(p.amount_paid ?? p.amount) || 0,
+    paymentMethod: p.payment_method || 'MTN Mobile Money',
+    transactionId: p.transaction_id || '',
+    screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
+    confirmationMessage: p.confirmation_message || undefined,
+    verificationStatus: (p.verification_status || 'Pending Verification') as any,
+    verifiedAt: p.verified_at || undefined,
+    verifiedBy: p.verified_by || undefined,
+    adminNotes: p.admin_notes || p.notes || undefined,
+    flaggedSuspicious: Boolean(p.flagged_suspicious),
+    isDuplicateTxn: Boolean(p.is_duplicate_txn),
+    suspiciousReason: p.suspicious_reason || undefined,
+    verifiedDirectly: Boolean(p.verified_directly),
+    customerNotified: Boolean(p.customer_notified),
+    notificationMessage: p.notification_message || undefined,
+    submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
+  };
+}
+
 export async function getPaymentsFromSupabase(): Promise<PaymentConfirmation[]> {
   try {
     const { data, error } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
     if (error || !data) return [];
-    return data.map((p: any) => ({
-      id: p.id,
-      orderId: p.order_id || '',
-      orderNumber: p.order_number || '',
-      customerName: p.customer_name || 'Customer',
-      paymentPhone: p.payer_phone || p.payment_phone || p.customer_phone || p.sender_phone || '',
-      amountPaid: Number(p.amount_rwf ?? p.amount_paid ?? p.amount) || 0,
-      paymentMethod: p.payment_method || 'MTN Mobile Money',
-      transactionId: p.transaction_id || '',
-      screenshotUrl: p.screenshot_url || p.payment_proof_url || (Array.isArray(p.evidence_paths) && p.evidence_paths[0]) || undefined,
-      confirmationMessage: p.confirmation_message || undefined,
-      verificationStatus: (p.verification_status || (p.status === 'verified' ? 'Verified' : (p.status === 'rejected' ? 'Rejected' : 'Pending Verification'))) as any,
-      verifiedAt: p.verified_at || undefined,
-      verifiedBy: p.verified_by || undefined,
-      adminNotes: p.reject_reason || p.admin_notes || p.notes || undefined,
-      submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
-    }));
+    return data.map(mapSupabaseRowToPayment);
   } catch {
     return [];
   }
 }
 
-export async function savePaymentToSupabase(p: PaymentConfirmation): Promise<void> {
+export async function savePaymentToSupabase(p: PaymentConfirmation): Promise<{ success: boolean; error?: string }> {
   try {
-    await supabase.from('payments').upsert({
+    const row: Record<string, any> = {
       id: p.id,
-      order_id: p.orderId,
-      order_number: p.orderNumber,
-      customer_name: p.customerName,
-      customer_phone: p.paymentPhone,
-      payment_phone: p.paymentPhone,
-      payer_phone: p.paymentPhone,
-      amount: p.amountPaid,
-      amount_paid: p.amountPaid,
-      amount_rwf: Math.round(Number(p.amountPaid) || 0),
-      payment_method: p.paymentMethod,
-      transaction_id: p.transactionId,
+      order_id: p.orderId || null,
+      order_number: p.orderNumber || null,
+      customer_name: p.customerName || 'Customer',
+      customer_phone: p.paymentPhone || '',
+      payment_phone: p.paymentPhone || '',
+      sender_phone: p.paymentPhone || '',
+      sender_name: p.customerName || 'Customer',
+      amount: Math.round(Number(p.amountPaid) || 0),
+      amount_paid: Math.round(Number(p.amountPaid) || 0),
+      payment_method: p.paymentMethod || 'MTN Mobile Money',
+      transaction_id: p.transactionId || null,
       payment_proof_url: p.screenshotUrl || null,
       screenshot_url: p.screenshotUrl || null,
-      evidence_paths: p.screenshotUrl ? [p.screenshotUrl] : [],
       confirmation_message: p.confirmationMessage || null,
-      status: (String(p.verificationStatus || '').toLowerCase().includes('verif') || String(p.verificationStatus || '').toLowerCase().includes('approv')) ? 'verified' : (String(p.verificationStatus || '').toLowerCase().includes('reject') ? 'rejected' : 'submitted'),
+      verification_status: p.verificationStatus || 'Pending Verification',
       verified_at: p.verifiedAt || null,
       verified_by: p.verifiedBy || null,
       notes: p.adminNotes || null,
       admin_notes: p.adminNotes || null,
-      reject_reason: p.adminNotes || null,
+      flagged_suspicious: Boolean(p.flaggedSuspicious),
+      is_duplicate_txn: Boolean(p.isDuplicateTxn),
+      suspicious_reason: p.suspiciousReason || null,
+      verified_directly: Boolean(p.verifiedDirectly),
+      customer_notified: Boolean(p.customerNotified),
+      notification_message: p.notificationMessage || null,
       submitted_at: p.submittedAt || new Date().toISOString(),
       created_at: p.submittedAt || new Date().toISOString()
-    }, { onConflict: 'id' });
-  } catch (err) {
+    };
+
+    const { error } = await supabase.from('payments').upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.warn('[Supabase] Save payment error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
     console.warn('[Supabase] Save payment error:', err);
+    return { success: false, error: err?.message };
   }
 }
 
@@ -888,10 +912,191 @@ export async function deletePaymentFromSupabase(paymentId: string): Promise<bool
 export async function syncAllPaymentsToSupabase(payments: PaymentConfirmation[] = []): Promise<number> {
   let count = 0;
   for (const p of payments) {
-    await savePaymentToSupabase(p);
-    count++;
+    const res = await savePaymentToSupabase(p);
+    if (res.success) count++;
   }
   return count;
+}
+
+export function mapSupabaseRowToPaymentTransaction(t: any): PaymentTransaction {
+  const meta = (t.metadata && typeof t.metadata === 'object') ? t.metadata : {};
+  return {
+    id: String(t.id),
+    orderId: t.order_id || '',
+    orderNumber: t.order_number || '',
+    customerPhone: t.customer_phone || '',
+    customerEmail: t.customer_email || undefined,
+    amount: Number(t.amount) || 0,
+    currency: t.currency || 'RWF',
+    paymentMethod: t.payment_method || 'MTN Mobile Money',
+    provider: t.provider || 'MTN Mobile Money',
+    status: t.status || 'Pending',
+    providerTransactionId: meta.providerTransactionId || undefined,
+    financialTransactionId: meta.financialTransactionId || undefined,
+    idempotencyKey: t.idempotency_key || undefined,
+    checkoutUrl: t.checkout_url || undefined,
+    failureReason: meta.failureReason || undefined,
+    verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
+    verifiedAt: meta.verifiedAt || undefined,
+    telecomStatus: meta.telecomStatus || undefined,
+    signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
+    metadata: meta,
+    createdAt: t.created_at || new Date().toISOString(),
+    updatedAt: t.updated_at || t.created_at || new Date().toISOString()
+  };
+}
+
+export async function getPaymentTransactionsFromSupabase(): Promise<PaymentTransaction[]> {
+  try {
+    const { data, error } = await supabase
+      .from('payment_transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map(mapSupabaseRowToPaymentTransaction);
+  } catch {
+    return [];
+  }
+}
+
+export async function savePaymentTransactionToSupabase(t: PaymentTransaction): Promise<{ success: boolean; error?: string }> {
+  try {
+    const combinedMeta: Record<string, any> = {
+      ...(t.metadata || {}),
+      providerTransactionId: t.providerTransactionId || t.metadata?.providerTransactionId || undefined,
+      financialTransactionId: t.financialTransactionId || t.metadata?.financialTransactionId || undefined,
+      failureReason: t.failureReason || undefined,
+      verifiedDirectly: t.verifiedDirectly,
+      verifiedAt: t.verifiedAt || undefined,
+      telecomStatus: t.telecomStatus || undefined,
+      signatureVerified: t.signatureVerified
+    };
+
+    const row: Record<string, any> = {
+      id: t.id,
+      order_id: t.orderId || null,
+      order_number: t.orderNumber || null,
+      idempotency_key: t.idempotencyKey || null,
+      payment_method: t.paymentMethod || 'MTN Mobile Money',
+      provider: t.provider || 'MTN Mobile Money',
+      amount: Math.round(Number(t.amount) || 0),
+      currency: t.currency || 'RWF',
+      customer_phone: t.customerPhone || null,
+      customer_email: t.customerEmail || null,
+      checkout_url: t.checkoutUrl || null,
+      status: t.status || 'Pending',
+      metadata: combinedMeta,
+      created_at: t.createdAt || new Date().toISOString(),
+      updated_at: t.updatedAt || new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('payment_transactions').upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.warn('[Supabase] Save payment_transaction error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message };
+  }
+}
+
+export async function syncAllPaymentTransactionsToSupabase(txns: PaymentTransaction[] = []): Promise<number> {
+  let count = 0;
+  for (const t of txns) {
+    const res = await savePaymentTransactionToSupabase(t);
+    if (res.success) count++;
+  }
+  return count;
+}
+
+export async function getSmsNotificationsFromSupabase(): Promise<SmsNotification[]> {
+  const results = new Map<string, SmsNotification>();
+  try {
+    const { data, error } = await supabase
+      .from('sms_notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (!error && Array.isArray(data)) {
+      for (const s of data) {
+        results.set(String(s.id), {
+          id: String(s.id),
+          direction: s.direction || 'incoming',
+          senderPhone: s.sender_phone || '',
+          senderName: s.sender_name || undefined,
+          recipientPhone: s.recipient_phone || undefined,
+          provider: s.provider || 'MTN Mobile Money',
+          message: s.message || '',
+          parsedTransactionId: s.parsed_transaction_id || undefined,
+          parsedAmount: s.parsed_amount !== null && s.parsed_amount !== undefined ? Number(s.parsed_amount) : undefined,
+          orderNumber: s.order_number || undefined,
+          paymentId: s.payment_id || undefined,
+          status: s.status || 'received',
+          metadata: s.metadata || undefined,
+          createdAt: s.created_at || new Date().toISOString()
+        });
+      }
+    }
+  } catch {}
+
+  try {
+    const { data: msgRows } = await supabase
+      .from('messages')
+      .select('*')
+      .or('notification_type.eq.sms_notification,subject.ilike.%SMS%,id.ilike.msg-sms-%')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (Array.isArray(msgRows)) {
+      for (const m of msgRows) {
+        if (!results.has(String(m.id))) {
+          results.set(String(m.id), {
+            id: String(m.id),
+            direction: m.sender === 'admin' || m.sender === 'system' ? 'outbound' : 'incoming',
+            senderPhone: m.phone || m.sender_phone || '',
+            senderName: m.name || m.sender_name || undefined,
+            provider: String(m.message || '').toLowerCase().includes('airtel') ? 'Airtel Money' : 'MTN Mobile Money',
+            message: m.message || '',
+            orderNumber: m.order_number || undefined,
+            status: m.status === 'replied' ? 'verified' : (m.order_number ? 'matched' : 'received'),
+            createdAt: m.created_at || new Date().toISOString()
+          });
+        }
+      }
+    }
+  } catch {}
+
+  return Array.from(results.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+export async function saveSmsNotificationToSupabase(sms: SmsNotification): Promise<{ success: boolean; error?: string }> {
+  let saved = false;
+  let lastErr: string | undefined;
+  try {
+    const { error } = await supabase.from('sms_notifications').upsert({
+      id: sms.id,
+      direction: sms.direction || 'incoming',
+      sender_phone: sms.senderPhone || '',
+      sender_name: sms.senderName || null,
+      recipient_phone: sms.recipientPhone || null,
+      provider: sms.provider || 'MTN Mobile Money',
+      message: sms.message || '',
+      parsed_transaction_id: sms.parsedTransactionId || null,
+      parsed_amount: sms.parsedAmount !== undefined ? Math.round(Number(sms.parsedAmount)) : null,
+      order_number: sms.orderNumber || null,
+      payment_id: sms.paymentId || null,
+      status: sms.status || 'received',
+      metadata: sms.metadata || {},
+      created_at: sms.createdAt || new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (!error) saved = true;
+    else lastErr = error.message;
+  } catch (err: any) {
+    lastErr = err?.message;
+  }
+  return { success: saved, error: saved ? undefined : lastErr };
 }
 
 // -------------------------------------------------------------
@@ -1108,6 +1313,7 @@ export function isAdminNotificationSupabaseRow(m: any): boolean {
 export function mapSupabaseRowToMessage(m: any): AdminMessage {
   return {
     id: String(m.id),
+    conversationId: m.conversation_id || m.customer_id || undefined,
     name: m.name || m.sender_name || 'Customer',
     email: m.email || m.sender_email || '',
     phone: m.phone || m.sender_phone || undefined,
@@ -1187,6 +1393,7 @@ export async function saveMessageToSupabase(m: AdminMessage): Promise<{ success:
   try {
     const { error } = await supabase.from('messages').upsert({
       id: m.id,
+      conversation_id: m.conversationId || m.customerId || null,
       name: m.name || m.senderName || 'Customer',
       sender_name: m.name || m.senderName || 'Customer',
       phone: m.phone || null,
@@ -1204,6 +1411,7 @@ export async function saveMessageToSupabase(m: AdminMessage): Promise<{ success:
       notification_type: m.notificationType || 'chat',
       read_at: m.readAt || null,
       reply_note: m.replyNote || null,
+      reply_message: m.replyNote || null,
       replied_at: m.repliedAt || null,
       created_at: m.createdAt || new Date().toISOString()
     }, { onConflict: 'id' });
@@ -1347,39 +1555,52 @@ export async function deleteAdminNotificationFromSupabase(notificationId: string
 // -------------------------------------------------------------
 // 8. ISSUES & CUSTOMER PROBLEMS CRUD
 // -------------------------------------------------------------
+export function mapSupabaseRowToCustomerProblem(p: any): CustomerProblemReport {
+  let parsedPrivateNotes = Array.isArray(p.private_notes) ? p.private_notes : undefined;
+  if (!parsedPrivateNotes && typeof p.private_notes === 'string' && p.private_notes.trim().startsWith('[')) {
+    try { parsedPrivateNotes = JSON.parse(p.private_notes); } catch {}
+  }
+  if (!parsedPrivateNotes && typeof p.admin_notes === 'string' && p.admin_notes.trim().startsWith('[')) {
+    try { parsedPrivateNotes = JSON.parse(p.admin_notes); } catch {}
+  }
+
+  return {
+    id: String(p.id),
+    caseNumber: p.case_number || '',
+    orderNumber: p.order_number || undefined,
+    customerName: p.customer_name || 'Customer',
+    customerPhone: p.customer_phone || '',
+    customerEmail: p.customer_email || undefined,
+    category: (p.category || 'delivery_delay') as any,
+    description: p.description || '',
+    priority: (p.priority || 'medium') as any,
+    status: (p.status || 'New') as any,
+    assignedTo: p.assigned_to || undefined,
+    privateNotes: parsedPrivateNotes,
+    resolution: p.resolution || undefined,
+    resolvedAt: p.resolved_at || undefined,
+    createdAt: p.created_at || new Date().toISOString(),
+    updatedAt: p.updated_at || undefined
+  };
+}
+
 export async function getCustomerProblemsFromSupabase(): Promise<CustomerProblemReport[]> {
   try {
     const { data, error } = await supabase.from('customer_problems').select('*').order('created_at', { ascending: false });
     if (error || !data) return [];
-    return data.map((p: any) => ({
-      id: p.id,
-      caseNumber: p.case_number || undefined,
-      orderNumber: p.order_number,
-      customerName: p.customer_name,
-      customerPhone: p.customer_phone,
-      customerEmail: p.customer_email || undefined,
-      category: p.category || 'delivery_delay',
-      issueType: p.issue_type || undefined,
-      description: p.description,
-      priority: p.priority || 'medium',
-      status: p.status || 'New',
-      assignedTo: p.assigned_to || undefined,
-      adminNotes: p.admin_notes || undefined,
-      resolution: p.resolution || undefined,
-      resolvedAt: p.resolved_at || undefined,
-      createdAt: p.created_at || new Date().toISOString()
-    }));
+    return data.map(mapSupabaseRowToCustomerProblem);
   } catch {
     return [];
   }
 }
 
-export async function saveCustomerProblemToSupabase(p: CustomerProblemReport): Promise<void> {
+export async function saveCustomerProblemToSupabase(p: CustomerProblemReport): Promise<{ success: boolean; error?: string }> {
   try {
-    await supabase.from('customer_problems').upsert({
+    const notesArr = Array.isArray(p.privateNotes) ? p.privateNotes : [];
+    const { error } = await supabase.from('customer_problems').upsert({
       id: p.id,
       case_number: p.caseNumber || null,
-      order_number: p.orderNumber,
+      order_number: p.orderNumber || null,
       customer_name: p.customerName,
       customer_phone: p.customerPhone,
       customer_email: p.customerEmail || null,
@@ -1389,14 +1610,21 @@ export async function saveCustomerProblemToSupabase(p: CustomerProblemReport): P
       priority: p.priority || 'medium',
       status: p.status || 'New',
       assigned_to: p.assignedTo || null,
-      admin_notes: (p as any).adminNotes || (p.privateNotes ? JSON.stringify(p.privateNotes) : null),
+      private_notes: notesArr,
+      admin_notes: (p as any).adminNotes || (notesArr.length > 0 ? JSON.stringify(notesArr) : null),
       resolution: p.resolution || null,
       resolved_at: p.resolvedAt || null,
-      updated_at: new Date().toISOString(),
+      updated_at: p.updatedAt || new Date().toISOString(),
       created_at: p.createdAt || new Date().toISOString()
     }, { onConflict: 'id' });
-  } catch (err) {
+    if (error) {
+      console.warn('[Supabase] Save customer problem error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
     console.warn('[Supabase] Save customer problem error:', err);
+    return { success: false, error: err?.message };
   }
 }
 
@@ -1930,22 +2158,26 @@ export async function syncAllDataToSupabase(db: {
 // -------------------------------------------------------------
 export function subscribeToSupabaseTable(
   tableName: string,
-  onChange: (payload: any) => void
+  onChange: (payload: any) => void,
+  filter?: string
 ): () => void {
   try {
+    const channelKey = `realtime-${tableName}-${filter || 'all'}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const filterOpts: any = { event: '*', schema: 'public', table: tableName };
+    if (filter && filter.trim()) {
+      filterOpts.filter = filter.trim();
+    }
     const channel = supabase
-      .channel(`realtime-${tableName}-${Date.now()}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: tableName },
-        (payload) => {
-          onChange(payload);
-        }
-      )
+      .channel(channelKey)
+      .on('postgres_changes', filterOpts, (payload) => {
+        onChange(payload);
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
     };
   } catch (err) {
     console.warn('[Supabase] Subscription error:', err);

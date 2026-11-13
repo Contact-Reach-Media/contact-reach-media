@@ -19,6 +19,7 @@ interface CheckoutPageProps {
   currentCurrency?: CurrencyCode;
   exchangeRates?: Record<string, number>;
   buyerUser?: CustomerUser | null;
+  onOpenBuyerAuth?: () => void;
 }
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({
@@ -29,7 +30,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   currentLang,
   currentCurrency = 'RWF',
   exchangeRates,
-  buyerUser
+  buyerUser,
+  onOpenBuyerAuth
 }) => {
   const t = translations[currentLang] || translations.en;
 
@@ -163,9 +165,48 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     } catch (err: any) {
       console.error('Checkout error:', err);
       setError(err.message || 'An error occurred while creating order.');
+      if (err?.requiresAuth && onOpenBuyerAuth) {
+        onOpenBuyerAuth();
+      }
       setLoading(false);
     }
   };
+
+  if (!buyerUser && !api.getBuyerToken()) {
+    return (
+      <div className="bg-slate-50 min-h-screen py-12 flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white rounded-3xl border border-orange-200 p-8 max-w-md w-full shadow-xs space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-orange-50 text-[#FF6000] flex items-center justify-center mx-auto">
+            <ShieldCheck className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900">
+            {currentLang === 'en' ? 'Buyer Account Required' : 'Konti y\'Umuguzi Iracyenewe'}
+          </h2>
+          <p className="text-slate-600 text-xs leading-relaxed">
+            {currentLang === 'en'
+              ? 'To buy any product on ContactReach Market, please create a free buyer account or sign in first.'
+              : 'Kugira ngo ugure igicuruzwa icyo ari cyo cyose kuri ContactReach Market, banza ufungure konti cyangwa winjire.'}
+          </p>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => (onOpenBuyerAuth ? onOpenBuyerAuth() : onNavigate('register'))}
+              className="w-full py-3 bg-[#FF6000] hover:bg-orange-600 text-white rounded-xl text-xs font-black shadow-xs cursor-pointer"
+            >
+              {currentLang === 'en' ? 'Create Buyer Account / Sign In' : 'Fungura Konti / Injira'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('cart')}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+            >
+              {currentLang === 'en' ? 'Return to Cart' : 'Subira mu Igate'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (cart.length === 0) {
     return (
@@ -511,10 +552,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                     return (
                       <div key={item.product.id} className="pt-2 first:pt-0 flex items-center gap-2.5 text-xs">
                         <img
-                          src={resolvedImg}
+                          src={resolvedImg && resolvedImg.trim() ? resolvedImg : '/logo.png'}
                           alt={item.product.name}
                           className="w-10 h-10 rounded-lg object-cover bg-white border border-slate-200 shrink-0"
                           referrerPolicy="no-referrer"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                         />
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-slate-800 truncate">{item.product.name}</p>

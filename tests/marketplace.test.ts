@@ -95,6 +95,43 @@ async function runTests() {
     });
   });
 
+  // TEST 3A: Mandatory Buyer Account Gate for Checkout & Shared Test Buyer Session
+  let suiteBuyerToken = '';
+  let suiteBuyerId = '';
+  const suiteBuyerPhone = `0787${String(Date.now()).slice(-6)}`;
+  await test('Mandatory Buyer Account Gate: unauthenticated POST /api/orders is rejected with 401 and registered buyer can place orders', async () => {
+    const unauthOrder = await fetch(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Unauth Guest',
+        customerPhone: '0788123456',
+        deliveryLocation: 'Gasabo',
+        items: [{ productId: 'kikuu-2908001', quantity: 1 }],
+        paymentMethod: 'MTN Mobile Money'
+      })
+    });
+    assert.strictEqual(unauthOrder.status, 401, 'Unauthenticated order placement must return 401');
+    const errJson = await unauthOrder.json();
+    assert.strictEqual(errJson.requiresAuth, true, '401 response must include requiresAuth: true');
+
+    const regRes = await fetch(`${BASE_URL}/api/buyers/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Suite Checkout Buyer',
+        phone: suiteBuyerPhone,
+        email: `suite.buyer.${Date.now()}@contactreachmarket.com`,
+        password: 'SuiteBuyerPass!2026'
+      })
+    });
+    assert.strictEqual(regRes.status, 201, 'Suite buyer registration should succeed');
+    const regData = await regRes.json();
+    assert(regData.token, 'Buyer session token should be issued');
+    suiteBuyerToken = regData.token;
+    suiteBuyerId = regData.user.id;
+  });
+
   // TEST 3B: Admin Google Login Rejection (Google Sign-In is completely disabled for Admin)
   await test('Admin Google Sign-In is completely disabled and rejected with 403', async () => {
     const googleAdminRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
@@ -281,7 +318,10 @@ async function runTests() {
   await test('Customer order checkout calculates delivery fee, commissions, and generates tracking token', async () => {
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Aline Mugabo',
         customerPhone: '0788123456',
@@ -374,7 +414,10 @@ async function runTests() {
     // Create a new order to test pasted SMS confirmation flow
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Kwizera Bosco',
         customerPhone: '0780112233',
@@ -629,7 +672,10 @@ async function runTests() {
     // 1. Create order
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Gisele Umuhoza',
         customerPhone: '0788776655',
@@ -702,7 +748,10 @@ async function runTests() {
 
     const firstRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify(payload)
     });
     assert.strictEqual(firstRes.status, 201);
@@ -711,7 +760,10 @@ async function runTests() {
     // Submit identical order within 2 seconds
     const secondRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify(payload)
     });
     assert.strictEqual(secondRes.status, 200, 'Duplicate rapid submission must return 200 with existing order');
@@ -832,7 +884,10 @@ async function runTests() {
     // Create an order
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Keza Diane',
         customerPhone: '0788998822',
@@ -903,7 +958,10 @@ async function runTests() {
     // 1. Create an order
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Sam Habimana',
         customerPhone: '0780445566',
@@ -1108,7 +1166,10 @@ async function runTests() {
     // 2. Customer A places order for 2 units
     const order1Res = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Customer A',
         customerPhone: `07891${Date.now().toString().slice(-5)}`,
@@ -1122,7 +1183,10 @@ async function runTests() {
     // 3. Customer B attempts to place order for 1 unit immediately (while Customer A is pending)
     const order2Res = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Customer B',
         customerPhone: `07893${Date.now().toString().slice(-5)}`,
@@ -1647,7 +1711,10 @@ async function runTests() {
     // 3. Create a customer order containing the mapped product
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'DSers Workflow Tester',
         customerPhone: '0789123456',
@@ -1871,7 +1938,10 @@ async function runTests() {
 
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Jean Paul Test',
         customerPhone: '0788998877',
@@ -1943,7 +2013,10 @@ async function runTests() {
 
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Aline Testing',
         customerPhone: '0788223344',
@@ -2354,7 +2427,10 @@ async function runTests() {
     // 1. Create order
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Kagabo Emmanuel',
         customerEmail: 'kagabo@test.rw',
@@ -2448,7 +2524,10 @@ async function runTests() {
     // Create second order
     const order2Res = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Impostor Customer',
         customerPhone: '0789998877',
@@ -2488,7 +2567,10 @@ async function runTests() {
     // Create new order
     const order3Res = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Clarisse Umutoni',
         customerPhone: '0781234567',
@@ -2535,7 +2617,10 @@ async function runTests() {
     // 1. Create order
     const orderAirtel = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${suiteBuyerToken}`
+      },
       body: JSON.stringify({
         customerName: 'Gatete Patrick',
         customerPhone: '0731122334',
@@ -2985,6 +3070,177 @@ async function runTests() {
     // 11. Clean up test invitation records
     for (const invId of [createdData.invitation.id, revokeTarget.invitation.id]) {
       await fetch(`${BASE_URL}/api/admin/invitations/${invId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+    }
+  });
+
+  // TEST 67: Real-Time Sync for Payments & SMS, Send Us a Message, Complaints & Scoped SSE Streams
+  await test('Real-time Payments & SMS, Send Us a Message, Complaints & scoped SSE streams work end-to-end', async () => {
+    // 1. Payments & SMS: Incoming SMS + Admin Payment Transactions + Admin Outgoing SMS
+    const smsIncomingRes = await fetch(`${BASE_URL}/api/sms/incoming`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: suiteBuyerPhone,
+        text: 'Y\'ello! Payment confirmation for suite checkout order. TxId: 88123991.',
+        sender: 'MTN MoMo'
+      })
+    });
+    assert.strictEqual(smsIncomingRes.status, 201, 'Incoming SMS should return 201');
+
+    const adminTxnRes = await fetch(`${BASE_URL}/api/admin/payment-transactions`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(adminTxnRes.status, 200, 'Admin payment transactions & SMS bundle should return 200');
+    const txnBundle = await adminTxnRes.json();
+    assert(Array.isArray(txnBundle.transactions), 'transactions must be an array');
+    assert(Array.isArray(txnBundle.smsNotifications), 'smsNotifications must be an array');
+
+    const sendSmsRes = await fetch(`${BASE_URL}/api/admin/sms-notifications/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        phone: suiteBuyerPhone,
+        provider: 'ContactReach',
+        message: 'Your ContactReach Market order update has been dispatched.'
+      })
+    });
+    assert.strictEqual(sendSmsRes.status, 201, 'Admin send SMS notification should return 201');
+    const sentSmsData = await sendSmsRes.json();
+    assert(sentSmsData.smsNotification?.id, 'Sent SMS record ID must be returned');
+
+    // Buyer inbox receives the admin SMS notification
+    const buyerInboxRes = await fetch(`${BASE_URL}/api/buyers/messages`, {
+      headers: { Authorization: `Bearer ${suiteBuyerToken}` }
+    });
+    assert.strictEqual(buyerInboxRes.status, 200);
+    const buyerInbox = await buyerInboxRes.json();
+    assert(
+      buyerInbox.some((m: any) => m.notificationType === 'sms_notification' && m.message.includes('dispatched')),
+      'Buyer inbox must receive admin SMS notification'
+    );
+
+    // 2. Send Us a Message -> Admin Reply -> Live Public Tracking
+    const contactRes = await fetch(`${BASE_URL}/api/contact/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Suite Contact Customer',
+        email: 'contact.suite@contactreachmarket.com',
+        phone: suiteBuyerPhone,
+        subject: 'Live Reply Sync Inquiry',
+        message: 'Can I pick up at Fair View Plaza today?'
+      })
+    });
+    assert.strictEqual(contactRes.status, 201, 'Contact Us message must return 201');
+    const contactData = await contactRes.json();
+    assert(contactData.id, 'Contact message ID required');
+
+    const adminReplyPatch = await fetch(`${BASE_URL}/api/admin/messages/${contactData.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'replied',
+        replyNote: 'Yes! Our Fair View Plaza pickup desk is open until 7:00 PM.'
+      })
+    });
+    assert.strictEqual(adminReplyPatch.status, 200);
+
+    const trackedMsgRes = await fetch(`${BASE_URL}/api/contact/messages/${contactData.id}`);
+    assert.strictEqual(trackedMsgRes.status, 200, 'Live contact message lookup must return 200');
+    const trackedMsg = await trackedMsgRes.json();
+    assert.strictEqual(trackedMsg.status, 'replied');
+    assert(trackedMsg.replyNote.includes('Fair View Plaza'), 'Contact replyNote must sync immediately');
+
+    // 3. Report a Problem or Complaint -> Admin Resolution -> Case Tracking & Buyer Reports
+    const complaintRes = await fetch(`${BASE_URL}/api/customer-reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'Suite Complaint Reporter',
+        customerPhone: suiteBuyerPhone,
+        category: 'delivery_delay',
+        description: 'Package delayed by 2 hours in Remera.',
+        priority: 'high'
+      })
+    });
+    assert.strictEqual(complaintRes.status, 201, 'Complaint submission should return 201');
+    const complaintData = await complaintRes.json();
+    assert(complaintData.caseNumber?.startsWith('CASE-'), 'Complaint must return CASE-XXXX number');
+    const complaintId = complaintData.report?.id;
+    assert(complaintId, 'Complaint ID required');
+
+    const updateComplaintRes = await fetch(`${BASE_URL}/api/admin/customer-reports/${complaintId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Resolved',
+        assignedTo: 'Support Lead',
+        resolution: 'Courier arrived and handed over the order safely.'
+      })
+    });
+    assert.strictEqual(updateComplaintRes.status, 200);
+
+    const caseTrackRes = await fetch(`${BASE_URL}/api/customer-reports/${complaintData.caseNumber}`);
+    assert.strictEqual(caseTrackRes.status, 200);
+    const trackedCase = await caseTrackRes.json();
+    assert.strictEqual(trackedCase.status, 'Resolved');
+    assert(trackedCase.resolution.includes('handed over'), 'Complaint resolution must be visible on case lookup');
+
+    const buyerReportsRes = await fetch(`${BASE_URL}/api/buyers/reports`, {
+      headers: { Authorization: `Bearer ${suiteBuyerToken}` }
+    });
+    assert.strictEqual(buyerReportsRes.status, 200);
+    const buyerReports = await buyerReportsRes.json();
+    assert(
+      buyerReports.some((r: any) => r.caseNumber === complaintData.caseNumber && r.status === 'Resolved'),
+      'Buyer reports endpoint must reflect complaint & admin resolution'
+    );
+
+    // 4. Scoped Real-Time SSE Streams
+    const buyerSseController = new AbortController();
+    const buyerSseRes = await fetch(`${BASE_URL}/api/buyers/realtime?token=${encodeURIComponent(suiteBuyerToken)}`, {
+      headers: { Accept: 'text/event-stream' },
+      signal: buyerSseController.signal
+    });
+    assert.strictEqual(buyerSseRes.status, 200, 'Buyer scoped SSE stream must return 200');
+    assert.strictEqual(buyerSseRes.headers.get('content-type'), 'text/event-stream');
+    buyerSseController.abort();
+
+    const trackCaseSseController = new AbortController();
+    const trackCaseSse = await fetch(`${BASE_URL}/api/realtime/track?caseNumber=${encodeURIComponent(complaintData.caseNumber)}`, {
+      headers: { Accept: 'text/event-stream' },
+      signal: trackCaseSseController.signal
+    });
+    assert.strictEqual(trackCaseSse.status, 200, 'Scoped tracking SSE stream for caseNumber must return 200');
+    trackCaseSseController.abort();
+
+    const trackMsgSseController = new AbortController();
+    const trackMsgSse = await fetch(`${BASE_URL}/api/realtime/track?messageId=${encodeURIComponent(contactData.id)}`, {
+      headers: { Accept: 'text/event-stream' },
+      signal: trackMsgSseController.signal
+    });
+    assert.strictEqual(trackMsgSse.status, 200, 'Scoped tracking SSE stream for messageId must return 200');
+    trackMsgSseController.abort();
+
+    // Clean up temporary suite buyer and test message
+    await fetch(`${BASE_URL}/api/admin/messages/${contactData.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    if (suiteBuyerId) {
+      await fetch(`${BASE_URL}/api/admin/buyers/${suiteBuyerId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${adminToken}` }
       });

@@ -12,7 +12,7 @@ import {
   Database, Bell, MessageSquare, Volume2, Link2, UserPlus, Ban
 } from 'lucide-react';
 import {
-  Product, Order, PaymentConfirmation, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
+  Product, Order, PaymentConfirmation, PaymentTransaction, SmsNotification, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
   PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage, AdminNotification,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   AdminUser, AdminRole, AdminInvitation, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority,
@@ -500,6 +500,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [categories, setCategories] = useState<Category[]>(initialPropCategories);
   const [shops, setShops] = useState<VendorShop[]>([]);
   const [payments, setPayments] = useState<PaymentConfirmation[]>([]);
+  const [paymentTransactions, setPaymentTransactions] = useState<PaymentTransaction[]>([]);
+  const [smsNotifications, setSmsNotifications] = useState<SmsNotification[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
@@ -705,10 +707,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [zoomScreenshot, setZoomScreenshot] = useState<string | null>(null);
   const [printableInvoiceOrder, setPrintableInvoiceOrder] = useState<Order | null>(null);
 
-  // Payment Verification States & Filters
+  // Payment Verification, Telecom Transactions & SMS States
+  const [paymentsSubTab, setPaymentsSubTab] = useState<'confirmations' | 'transactions' | 'sms'>('confirmations');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'successful' | 'pending' | 'failed' | 'refunded'>('all');
   const [paymentSearch, setPaymentSearch] = useState('');
   const [telecomVerifyingId, setTelecomVerifyingId] = useState<string | null>(null);
+  const [smsRecipientPhone, setSmsRecipientPhone] = useState('');
+  const [smsOrderNumber, setSmsOrderNumber] = useState('');
+  const [smsProvider, setSmsProvider] = useState<'MTN MoMo' | 'Airtel Money' | 'ContactReach'>('ContactReach');
+  const [smsMessageText, setSmsMessageText] = useState('');
+  const [sendingSms, setSendingSms] = useState(false);
+  const [replyingMessageId, setReplyingMessageId] = useState<string | null>(null);
+  const [feedReplyNote, setFeedReplyNote] = useState('');
+  const [savingFeedReply, setSavingFeedReply] = useState(false);
 
   // Customer / Buyer Management States
   const [customerSearch, setCustomerSearch] = useState('');
@@ -1700,7 +1711,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         fetchedSupplierApps,
         fetchedSupplierPayouts,
         fetchedSettings,
-        fetchedDriveStatus
+        fetchedDriveStatus,
+        fetchedTxnBundle
       ] = await Promise.all([
         api.adminGetStats().catch(() => null),
         api.adminGetOrders().catch(() => []),
@@ -1719,7 +1731,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         api.adminGetSupplierApplications().catch(() => []),
         api.adminGetSupplierPayouts().catch(() => []),
         api.getSettings().catch(() => null),
-        api.adminGetDriveBackupStatus().catch(() => null)
+        api.adminGetDriveBackupStatus().catch(() => null),
+        api.adminGetPaymentTransactions().catch(() => ({ transactions: [], smsNotifications: [] }))
       ]);
 
       if (fetchedStats) setStats(fetchedStats);
@@ -1751,6 +1764,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         }
         prevPaymentsCountRef.current = sortedPayments.length;
         setPayments(sortedPayments);
+      }
+      if (fetchedTxnBundle && typeof fetchedTxnBundle === 'object') {
+        if (Array.isArray((fetchedTxnBundle as any).transactions)) {
+          setPaymentTransactions((fetchedTxnBundle as any).transactions);
+        }
+        if (Array.isArray((fetchedTxnBundle as any).smsNotifications)) {
+          setSmsNotifications((fetchedTxnBundle as any).smsNotifications);
+        }
       }
       if (fetchedMessages && Array.isArray(fetchedMessages)) {
         const sortedMessages = [...fetchedMessages]
@@ -1991,6 +2012,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 if (prev.some(m => m.id === newMsg.id)) return prev;
                 return [newMsg, ...prev];
               });
+              if (payload?.smsNotification) {
+                const newSms: SmsNotification = payload.smsNotification;
+                setSmsNotifications(prev => prev.some(s => s.id === newSms.id) ? prev : [newSms, ...prev]);
+              }
               playNotificationChime('sms');
               showToast(`💬 Real-time: New SMS / Inquiry from ${newMsg.name || newMsg.phone}!`, 'success');
               sendDesktopNotification('New SMS / Message Received', `${newMsg.name || newMsg.phone}: ${newMsg.message.slice(0, 80)}`);
@@ -2001,6 +2026,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 subtitle: `From ${newMsg.name || newMsg.phone}: "${newMsg.message.slice(0, 120)}"`,
                 timestamp: new Date(),
                 actionTab: 'messages'
+              });
+            } else if (eventType === 'sms_sent' && (payload?.smsNotification || payload?.sms)) {
+              const sentSms: SmsNotification = payload.smsNotification || payload.sms;
+              setSmsNotifications(prev => prev.some(s => s.id === sentSms.id) ? prev : [sentSms, ...prev]);
+            } else if (eventType === 'payment_initiated' && payload?.transaction) {
+              const tx: PaymentTransaction = payload.transaction;
+              setPaymentTransactions(prev => {
+                if (prev.some(t => t.id === tx.id)) return prev.map(t => t.id === tx.id ? tx : t);
+                return [tx, ...prev];
               });
             } else if (eventType === 'payment_submitted' && payload?.payment) {
               const newPay: PaymentConfirmation = payload.payment;
@@ -2178,6 +2212,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       'products',
       'orders',
       'payments',
+      'payment_transactions',
+      'sms_notifications',
       'messages',
       'admin_notifications',
       'customer_problems',
@@ -2296,6 +2332,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           } else if (eventType === 'DELETE' && oldRecord) {
             const delId = String(oldRecord.id);
             setNotifications(prev => prev.filter(n => n.id !== delId));
+          }
+        } else if (tbl === 'sms_notifications') {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+            const mappedSms: SmsNotification = {
+              id: String(newRecord.id),
+              direction: (newRecord.direction || 'incoming') as SmsNotification['direction'],
+              senderPhone: String(newRecord.sender_phone || newRecord.senderPhone || ''),
+              senderName: newRecord.sender_name || newRecord.senderName || undefined,
+              recipientPhone: String(newRecord.recipient_phone || newRecord.recipientPhone || ''),
+              message: String(newRecord.message || ''),
+              provider: String(newRecord.provider || 'ContactReach'),
+              status: String(newRecord.status || 'sent') as SmsNotification['status'],
+              orderNumber: newRecord.order_number || newRecord.orderNumber || undefined,
+              createdAt: String(newRecord.created_at || newRecord.createdAt || new Date().toISOString()),
+            };
+            setSmsNotifications(prev => {
+              const exists = prev.some(s => s.id === mappedSms.id);
+              if (exists) return prev.map(s => s.id === mappedSms.id ? mappedSms : s);
+              return [mappedSms, ...prev];
+            });
+          } else if (eventType === 'DELETE' && oldRecord) {
+            setSmsNotifications(prev => prev.filter(s => s.id !== String(oldRecord.id)));
           }
         }
         fetchAllData(true);
@@ -5949,24 +6008,262 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               return true;
             });
 
+            const safeTxns = Array.isArray(paymentTransactions) ? paymentTransactions : [];
+            const safeSms = Array.isArray(smsNotifications) ? smsNotifications : [];
+            const handleSendAdminSms = async (e: React.FormEvent) => {
+              e.preventDefault();
+              if (!smsRecipientPhone.trim() || !smsMessageText.trim() || sendingSms) return;
+              setSendingSms(true);
+              try {
+                const res = await api.adminSendSmsNotification({
+                  phone: smsRecipientPhone.trim(),
+                  orderNumber: smsOrderNumber.trim() || undefined,
+                  provider: smsProvider,
+                  message: smsMessageText.trim()
+                });
+                if (res?.smsNotification) {
+                  setSmsNotifications(prev => prev.some(s => s.id === res.smsNotification.id) ? prev : [res.smsNotification, ...prev]);
+                }
+                setSmsRecipientPhone('');
+                setSmsOrderNumber('');
+                setSmsMessageText('');
+                showToast('SMS Notification saved to Supabase & delivered in real time!');
+                fetchAllData(true);
+              } catch (err: any) {
+                showToast(err.message || 'Failed to send SMS notification', 'error');
+              } finally {
+                setSendingSms(false);
+              }
+            };
+
             return (
               <div className="space-y-5">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Mobile Money & Payment Verification</h1>
-                    <p className="text-xs text-slate-500">Official automated verification for MTN Mobile Money & Airtel Money Rwanda with strict anti-fraud reconciliation</p>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">Payments, Telecom Gateway & SMS Notifications</h1>
+                    <p className="text-xs text-slate-500">Live Supabase-synced MTN Mobile Money & Airtel Money verifications, transactions, and SMS alerts</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentsSubTab('confirmations')}
+                        className={`px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                          paymentsSubTab === 'confirmations' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Payment Proofs ({safePayments.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentsSubTab('transactions')}
+                        className={`px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                          paymentsSubTab === 'transactions' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Transactions ({safeTxns.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentsSubTab('sms')}
+                        className={`px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                          paymentsSubTab === 'sms' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        SMS Log & Send ({safeSms.length})
+                      </button>
+                    </div>
                     <button
                       onClick={() => fetchAllData()}
                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                      title="Refresh payments and orders"
+                      title="Refresh payments and SMS"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span>Refresh</span>
                     </button>
                   </div>
                 </div>
+
+                {paymentsSubTab === 'transactions' && (
+                  <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-black text-sm text-slate-900">Telecom Gateway Payment Transactions</h3>
+                        <p className="text-[11px] text-slate-500">Server-initiated payment pushes and webhook settlements synced with Supabase</p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold">
+                        {safeTxns.length} Transaction(s)
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-400 font-bold uppercase text-[10px]">
+                            <th className="py-3 px-4">Txn ID</th>
+                            <th className="py-3 px-3">Order #</th>
+                            <th className="py-3 px-3">Customer Phone</th>
+                            <th className="py-3 px-3">Provider</th>
+                            <th className="py-3 px-3">Amount</th>
+                            <th className="py-3 px-3">Provider Ref</th>
+                            <th className="py-3 px-3">Status</th>
+                            <th className="py-3 px-4">Timestamp</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {safeTxns.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-10 text-center text-slate-400">
+                                No telecom gateway transactions recorded yet.
+                              </td>
+                            </tr>
+                          ) : (
+                            safeTxns.map((tx) => (
+                              <tr key={tx.id} className="hover:bg-slate-50/70">
+                                <td className="py-3 px-4 font-mono font-bold text-slate-700 text-[11px]">{tx.id}</td>
+                                <td className="py-3 px-3 font-mono font-black text-slate-900">#{tx.orderNumber}</td>
+                                <td className="py-3 px-3 font-mono text-slate-700">{tx.customerPhone || '—'}</td>
+                                <td className="py-3 px-3 font-bold">{tx.provider || tx.paymentMethod}</td>
+                                <td className="py-3 px-3 font-mono font-black text-slate-900">
+                                  {(tx.amount || 0).toLocaleString()} {tx.currency || 'RWF'}
+                                </td>
+                                <td className="py-3 px-3 font-mono text-blue-700 text-[11px]">{tx.providerTransactionId || tx.financialTransactionId || 'Awaiting Ref'}</td>
+                                <td className="py-3 px-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                    tx.status === 'Successful'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : tx.status === 'Refunded'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : tx.status === 'Failed' || tx.status === 'Cancelled'
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {tx.status}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                                  {tx.createdAt ? new Date(tx.createdAt).toLocaleString() : '—'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {paymentsSubTab === 'sms' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <form onSubmit={handleSendAdminSms} className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 p-5 space-y-3.5 shadow-2xs h-fit">
+                      <div>
+                        <h3 className="font-black text-sm text-slate-900">Send Live Customer SMS</h3>
+                        <p className="text-[11px] text-slate-500">Saved to Supabase & delivered instantly to customer inbox</p>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Recipient Phone *</label>
+                        <input
+                          type="tel"
+                          required
+                          value={smsRecipientPhone}
+                          onChange={(e) => setSmsRecipientPhone(e.target.value)}
+                          placeholder="e.g. 0788123456"
+                          className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-[#FF6000]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Order # (optional)</label>
+                          <input
+                            type="text"
+                            value={smsOrderNumber}
+                            onChange={(e) => setSmsOrderNumber(e.target.value)}
+                            placeholder="CRM-10025"
+                            className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Channel / Provider</label>
+                          <select
+                            value={smsProvider}
+                            onChange={(e) => setSmsProvider(e.target.value as any)}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                          >
+                            <option value="ContactReach">ContactReach SMS</option>
+                            <option value="MTN MoMo">MTN Rwanda</option>
+                            <option value="Airtel Money">Airtel Rwanda</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">SMS Message *</label>
+                        <textarea
+                          rows={4}
+                          required
+                          value={smsMessageText}
+                          onChange={(e) => setSmsMessageText(e.target.value)}
+                          placeholder="e.g. Your payment was confirmed and your order is out for delivery today."
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-[#FF6000]"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={sendingSms || !smsRecipientPhone.trim() || !smsMessageText.trim()}
+                        className="w-full py-2.5 bg-[#FF6000] hover:bg-orange-600 text-white font-black text-xs rounded-xl cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>{sendingSms ? 'Dispatching...' : 'Send & Log SMS Notification'}</span>
+                      </button>
+                    </form>
+
+                    <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-2xs">
+                      <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h3 className="font-black text-sm text-slate-900">SMS Notifications & Telecom Alerts</h3>
+                          <p className="text-[11px] text-slate-500">All incoming gateway SMS and outbound customer notifications</p>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full bg-orange-50 text-[#FF6000] text-[11px] font-bold">
+                          {safeSms.length} SMS Record(s)
+                        </span>
+                      </div>
+                      <div className="divide-y divide-slate-100 max-h-[540px] overflow-y-auto">
+                        {safeSms.length === 0 ? (
+                          <div className="py-12 text-center text-xs text-slate-400">
+                            No SMS notifications logged yet. Send one on the left or receive telecom SMS via gateway.
+                          </div>
+                        ) : (
+                          safeSms.map((sms) => (
+                            <div key={sms.id} className="p-4 hover:bg-slate-50/70 space-y-1.5 text-xs">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-black text-slate-900">{sms.recipientPhone}</span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                                    {sms.provider}
+                                  </span>
+                                  {sms.orderNumber && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-orange-50 text-[#FF6000]">
+                                      #{sms.orderNumber}
+                                    </span>
+                                  )}
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                    sms.status === 'received' || sms.direction === 'incoming' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
+                                  }`}>
+                                    {sms.status}
+                                  </span>
+                                </div>
+                                <span className="font-mono text-[10px] text-slate-400">
+                                  {new Date(sms.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                              <p className="text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100">{sms.message}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {paymentsSubTab === 'confirmations' && (<>
 
                 {/* Stat Summary Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -6228,11 +6525,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <td className="py-3 px-3 max-w-[200px]">
                                   {ord && ord.items && ord.items.length > 0 ? (
                                     <div className="flex items-center gap-2">
-                                      {ord.items[0].imageUrl && (
+                                      {ord.items[0].imageUrl && ord.items[0].imageUrl.trim() && (
                                         <img
                                           src={ord.items[0].imageUrl}
                                           alt=""
                                           className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).src = '/logo.png';
+                                          }}
                                         />
                                       )}
                                       <div className="truncate">
@@ -6462,6 +6762,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </table>
                   </div>
                 </div>
+                </>)}
               </div>
             );
           })()}
@@ -7030,6 +7331,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       Admin Reply
                                     </span>
                                   )}
+                                  {msg.notificationType === 'contact_message' && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-blue-100 text-blue-800 uppercase">
+                                      Contact Form
+                                    </span>
+                                  )}
+                                  {msg.notificationType === 'sms_notification' && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 uppercase">
+                                      SMS Gateway
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-xs text-slate-500 font-mono">
@@ -7077,7 +7388,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </div>
                             )}
 
+                            {replyingMessageId === msg.id && (
+                              <form
+                                onSubmit={async (e) => {
+                                  e.preventDefault();
+                                  if (!feedReplyNote.trim() || savingFeedReply) return;
+                                  setSavingFeedReply(true);
+                                  try {
+                                    const updated = await api.adminUpdateMessage(msg.id, {
+                                      status: 'replied',
+                                      replyNote: feedReplyNote.trim()
+                                    });
+                                    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, ...updated } : m));
+                                    setReplyingMessageId(null);
+                                    setFeedReplyNote('');
+                                    showToast('Official reply saved and synced in real time!');
+                                    fetchAllData(true);
+                                  } catch (err: any) {
+                                    showToast(err.message || 'Failed to save reply', 'error');
+                                  } finally {
+                                    setSavingFeedReply(false);
+                                  }
+                                }}
+                                className="flex flex-col sm:flex-row gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200"
+                              >
+                                <input
+                                  type="text"
+                                  value={feedReplyNote}
+                                  onChange={(e) => setFeedReplyNote(e.target.value)}
+                                  placeholder="Write official reply to sync live to customer..."
+                                  className="flex-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold"
+                                  disabled={savingFeedReply}
+                                />
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="submit"
+                                    disabled={!feedReplyNote.trim() || savingFeedReply}
+                                    className="px-3.5 py-2 bg-[#FF6000] hover:bg-orange-600 text-white font-bold text-xs rounded-lg cursor-pointer disabled:opacity-50"
+                                  >
+                                    {savingFeedReply ? 'Sending...' : 'Send Reply'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReplyingMessageId(null);
+                                      setFeedReplyNote('');
+                                    }}
+                                    className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+
                             <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
+                              {msg.sender !== 'admin' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplyingMessageId(replyingMessageId === msg.id ? null : msg.id);
+                                    setFeedReplyNote(msg.replyNote || '');
+                                  }}
+                                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer flex items-center gap-1"
+                                >
+                                  <Send className="w-3 h-3" />
+                                  <span>{msg.replyNote ? 'Edit Reply' : 'Quick Reply'}</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -9802,11 +10180,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Thumbnail Area */}
                             <div className="relative pt-[80%] bg-slate-100 overflow-hidden">
                               <img
-                                src={imgUrl}
+                                src={imgUrl && imgUrl.trim() ? imgUrl : '/logo.png'}
                                 alt={`Product angle ${idx + 1}`}
                                 className="absolute inset-0 w-full h-full object-cover"
                                 onError={(e) => {
-                                  (e.target as HTMLElement).setAttribute('src', '/src/assets/images/hero_marketplace_shopper_1791966365592.jpg');
+                                  (e.target as HTMLImageElement).src = '/logo.png';
                                 }}
                               />
                             </div>
@@ -10518,11 +10896,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       return (
                         <>
                           <img
-                            src={autoInfo.image}
+                            src={autoInfo.image || '/logo.png'}
                             alt={editingCategory.nameEn}
                             className="w-12 h-12 rounded-lg object-cover border border-orange-200 bg-white shrink-0"
                             onError={(e) => {
-                              (e.target as HTMLElement).setAttribute('src', '/src/assets/images/hero_marketplace_shopper_1791966365592.jpg');
+                              (e.target as HTMLImageElement).src = '/logo.png';
                             }}
                           />
                           <div className="min-w-0 flex-1">
@@ -10540,7 +10918,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 )}
 
                 {/* Custom Image Preview if set */}
-                {catImageUrl && (
+                {catImageUrl && catImageUrl.trim() && (
                   <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <img
@@ -10548,7 +10926,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         alt="Custom Category"
                         className="w-12 h-12 rounded-lg object-cover border border-slate-200 bg-white shrink-0"
                         onError={(e) => {
-                          (e.target as HTMLElement).setAttribute('src', '/src/assets/images/hero_marketplace_shopper_1791966365592.jpg');
+                          (e.target as HTMLImageElement).src = '/logo.png';
                         }}
                       />
                       <div className="min-w-0">
@@ -11291,7 +11669,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ) : null}
 
               {/* Proof Section 2: Uploaded Payment Screenshot */}
-              {verifyModalPayment.screenshotUrl ? (
+              {verifyModalPayment.screenshotUrl && verifyModalPayment.screenshotUrl.trim() ? (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -11314,6 +11692,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       src={verifyModalPayment.screenshotUrl}
                       alt="Payment proof screenshot"
                       className="w-full max-h-56 object-contain rounded-2xl mx-auto"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/logo.png';
+                      }}
                     />
                     <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
                       Click to expand full size
@@ -11497,7 +11878,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Lightbox Screenshot Modal */}
-      {zoomScreenshot && (
+      {zoomScreenshot && zoomScreenshot.trim() && (
         <div
           onClick={() => setZoomScreenshot(null)}
           className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in"
@@ -11513,6 +11894,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               src={zoomScreenshot}
               alt="Payment Screenshot Expanded"
               className="max-h-[82vh] w-auto mx-auto object-contain rounded-xl"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/logo.png';
+              }}
             />
           </div>
         </div>
@@ -11695,11 +12079,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           {/* Thumbnail */}
                           <div className="relative pt-[80%] bg-slate-100 overflow-hidden">
                             <img
-                              src={url}
+                              src={url && url.trim() ? url : '/logo.png'}
                               alt={`Product picture ${idx + 1}`}
                               className="absolute inset-0 w-full h-full object-cover"
                               onError={(e) => {
-                                (e.target as HTMLElement).setAttribute('src', '/src/assets/images/hero_marketplace_shopper_1791966365592.jpg');
+                                (e.target as HTMLImageElement).src = '/logo.png';
                               }}
                             />
                           </div>

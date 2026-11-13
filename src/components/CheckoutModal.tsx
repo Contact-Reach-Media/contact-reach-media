@@ -8,6 +8,7 @@ import {
 import { CartItem, Order, PaymentMethod, AppSettings, CustomerUser, PaymentConfirmation } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
@@ -82,14 +83,75 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [activeTxnId, setActiveTxnId] = useState<string | null>(null);
   const [directVerifyRef, setDirectVerifyRef] = useState<string>('');
   const [isVerifyingDirectly, setIsVerifyingDirectly] = useState(false);
-  const [pollingTimer, setPollingTimer] = useState<any>(null);
 
-  // Clean up polling timer on unmount
+  // Scoped Real-Time Order & Payment Stream (no polling)
   useEffect(() => {
+    if (!isOpen || !createdOrder?.orderNumber) return;
+    const orderNum = createdOrder.orderNumber;
+    const phoneQuery = customerPhone.trim() ? `&phone=${encodeURIComponent(customerPhone.trim())}` : '';
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/realtime/track?orderNumber=${encodeURIComponent(orderNum)}${phoneQuery}`);
+      es.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'db_update' && msg.data) {
+            const d = msg.data;
+            const matchesOrder = d.orderNumber === orderNum || d.order_number === orderNum || d.id === createdOrder.id;
+            if (!matchesOrder) return;
+            const newPayStatus = d.paymentStatus || d.payment_status;
+            const newOrderStatus = d.status;
+            setCreatedOrder(prev => prev ? {
+              ...prev,
+              paymentStatus: newPayStatus || prev.paymentStatus,
+              status: newOrderStatus || prev.status
+            } : prev);
+            if (newPayStatus === 'Paid') {
+              setPaymentPromptStatus('verified');
+              setStep('confirmed');
+            } else if (newPayStatus === 'Failed' || newPayStatus === 'Payment Rejected') {
+              setPaymentPromptStatus('failed');
+            }
+          }
+        } catch {}
+      };
+    } catch {}
+
+    const unsubOrders = subscribeToSupabaseTable('orders', (payload) => {
+      const row = payload.new as any;
+      if (row && (row.order_number === orderNum || row.id === createdOrder.id)) {
+        setCreatedOrder(prev => prev ? {
+          ...prev,
+          paymentStatus: row.payment_status || prev.paymentStatus,
+          status: row.status || prev.status
+        } : prev);
+        if (row.payment_status === 'Paid') {
+          setPaymentPromptStatus('verified');
+          setStep('confirmed');
+        }
+      }
+    });
+
+    const unsubPayments = subscribeToSupabaseTable('payments', (payload) => {
+      const row = payload.new as any;
+      if (row && row.order_number === orderNum) {
+        if (row.status === 'Approved') {
+          setPaymentPromptStatus('verified');
+          setCreatedOrder(prev => prev ? { ...prev, paymentStatus: 'Paid', status: 'Confirmed' } : prev);
+          setStep('confirmed');
+        } else if (row.status === 'Rejected') {
+          setPaymentPromptStatus('failed');
+          setError('Payment confirmation was rejected. Please verify your transaction ID or resubmit.');
+        }
+      }
+    });
+
     return () => {
-      if (pollingTimer) clearInterval(pollingTimer);
+      if (es) es.close();
+      unsubOrders();
+      unsubPayments();
     };
-  }, [pollingTimer]);
+  }, [isOpen, createdOrder?.orderNumber, createdOrder?.id, customerPhone]);
 
   // Sync with buyerUser profile
   useEffect(() => {
@@ -252,16 +314,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     } catch (err: any) {
       console.error('Checkout error:', err);
       setError(err.message || (currentLang === 'en' ? 'An error occurred while creating order.' : 'Habaye ikibazo mu gukora komande.'));
+      if (err?.requiresAuth && onOpenBuyerAuth) {
+        onOpenBuyerAuth();
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Automated Telecom Payment Dispatch & Polling
+  // Automated Telecom Payment Dispatch (status arrives in real-time via SSE/Supabase)
   const handleInitiatePhonePayment = async (orderToUse?: Order) => {
     const ord = orderToUse || createdOrder;
     if (!ord) return;
-    if (pollingTimer) clearInterval(pollingTimer);
 
     setPaymentPromptStatus('initiating');
     setError(null);
@@ -276,39 +340,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setPaymentPromptStatus('awaiting_pin');
       setPaymentFeedback(
         currentLang === 'en'
-          ? `Payment push prompt sent to ${customerPhone}. Please check your phone and enter your Mobile Money PIN.`
-          : `Ubutumwa bwo kwishyura bwoherejwe kuri ${customerPhone}. Nyamuneka shyiramo PIN yawe kuri telefoni.`
+          ? `Payment push prompt sent to ${customerPhone}. Please check your phone and enter your Mobile Money PIN. This screen updates automatically in real time.`
+          : `Ubutumwa bwo kwishyura bwoherejwe kuri ${customerPhone}. Shyiramo PIN yawe kuri telefoni.`
       );
-
-      // Start real-time polling to verify payment directly with provider
-      let attempts = 0;
-      const timer = setInterval(async () => {
-        attempts++;
-        if (attempts > 30) {
-          clearInterval(timer);
-          setPaymentPromptStatus('idle');
-          return;
-        }
-        try {
-          const verifyRes = await api.verifyPaymentDirectly(ord.orderNumber, {
-            transactionReference: res.providerReference || res.transactionId
-          });
-          if (verifyRes.verified && verifyRes.paymentStatus === 'Paid') {
-            clearInterval(timer);
-            setPaymentPromptStatus('verified');
-            ord.paymentStatus = 'Paid';
-            setCreatedOrder({ ...ord, paymentStatus: 'Paid', status: 'Confirmed' });
-            setStep('confirmed');
-          }
-        } catch (pollErr: any) {
-          if (pollErr.message?.includes('declined') || pollErr.message?.includes('cancelled')) {
-            clearInterval(timer);
-            setPaymentPromptStatus('failed');
-            setError(pollErr.message);
-          }
-        }
-      }, 3000);
-      setPollingTimer(timer);
     } catch (err: any) {
       setPaymentPromptStatus('idle');
       console.warn('Payment push notice:', err);
@@ -539,7 +573,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           {/* ============================================================== */}
           {/* STEP 1: CHECKOUT DETAILS & ORDER SUMMARY                       */}
           {/* ============================================================== */}
-          {step === 'details' && (
+          {step === 'details' && (!buyerUser && !api.getBuyerToken()) && (
+            <div className="bg-orange-50/70 border border-orange-200 rounded-2xl p-6 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-orange-200 text-[#FF6000] flex items-center justify-center mx-auto shadow-2xs">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <h3 className="font-black text-base text-slate-900">
+                {currentLang === 'en' ? 'Create a Buyer Account to Buy Any Product' : 'Fungura Konti mbere yo Kugura'}
+              </h3>
+              <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+                {currentLang === 'en'
+                  ? 'Every purchase on ContactReach Market requires a verified buyer account so your orders, payment proofs, and live delivery updates sync across devices.'
+                  : 'Kugira ngo ugure igicuruzwa icyo ari cyo cyose, banza ufungure konti yawe cyangwa winjire.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => onOpenBuyerAuth?.()}
+                className="px-6 py-3 rounded-xl bg-[#FF6000] hover:bg-orange-600 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
+              >
+                {currentLang === 'en' ? 'Create Account or Sign In' : 'Fungura Konti / Injira'}
+              </button>
+            </div>
+          )}
+
+          {step === 'details' && (buyerUser || api.getBuyerToken()) && (
             <form onSubmit={handleCreateOrder} className="space-y-5">
               {/* Compact Order Summary Card */}
               <div className="bg-slate-50 rounded-2xl border border-slate-200/90 p-4 space-y-3">
@@ -561,9 +618,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <div key={item.product.id} className="pt-2 first:pt-0 flex items-center justify-between gap-3 text-xs">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
-                            src={item.product.imageUrl}
+                            src={item.product.imageUrl && item.product.imageUrl.trim() ? item.product.imageUrl : '/logo.png'}
                             alt={item.product.name}
                             className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                           />
                           <div className="truncate">
                             <p className="font-bold text-slate-900 truncate">{item.product.name}</p>

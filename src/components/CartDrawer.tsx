@@ -3,6 +3,7 @@ import { CartItem } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { calculateCartBreakdown, isProductOutOfStock, calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
+import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -81,12 +82,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80"
                 >
                   <img
-                    src={product.imageUrl}
+                    src={product.imageUrl?.trim() ? product.imageUrl : getProductImageDueToProduct(product) || '/logo.png'}
                     alt={product.name}
                     referrerPolicy="no-referrer"
                     className="w-16 h-16 rounded-xl object-cover bg-white shrink-0 border border-slate-100"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/src/assets/images/product_street_sneakers_1791966366958.jpg';
+                      (e.target as HTMLImageElement).src = '/logo.png';
                     }}
                   />
                   <div className="flex-1 min-w-0">

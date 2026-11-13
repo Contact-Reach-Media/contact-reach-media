@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Mail, Phone, MapPin, Clock, MessageCircle, Send, CheckCircle2,
   AlertTriangle, ShieldAlert, FileText, Search, HelpCircle, ArrowRight
@@ -6,6 +6,7 @@ import {
 import { AppSettings, ProblemCategory } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 
 interface ContactSectionProps {
   settings: AppSettings;
@@ -26,6 +27,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
   const [msgLoading, setMsgLoading] = useState(false);
   const [msgSuccess, setMsgSuccess] = useState(false);
   const [msgError, setMsgError] = useState<string | null>(null);
+  const [trackedContactMsg, setTrackedContactMsg] = useState<any | null>(null);
 
   // Problem / Complaint Form State
   const [repName, setRepName] = useState('');
@@ -44,13 +46,109 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
   const [caseLookupResult, setCaseLookupResult] = useState<any | null>(null);
   const [caseLookupError, setCaseLookupError] = useState<string | null>(null);
 
+  // Load previously tracked contact message on mount so customer sees live replies
+  useEffect(() => {
+    try {
+      const savedMsgId = localStorage.getItem('crm_last_contact_msg_id');
+      if (savedMsgId) {
+        api.trackContactMessage(savedMsgId).then(res => {
+          if (res) setTrackedContactMsg(res);
+        }).catch(() => {});
+      }
+    } catch {}
+  }, []);
+
+  // Scoped Real-Time Listener for Contact Message replies
+  useEffect(() => {
+    const msgId = trackedContactMsg?.id;
+    if (!msgId) return;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/realtime/track?messageId=${encodeURIComponent(msgId)}`);
+      es.onmessage = (ev) => {
+        try {
+          const payload = JSON.parse(ev.data);
+          if (payload.type === 'db_update' && payload.data) {
+            const d = payload.data;
+            if (d.id === msgId) {
+              setTrackedContactMsg((prev: any) => prev ? { ...prev, ...d } : d);
+            } else if (payload.event === 'admin_reply_created' && d.subject?.includes(msgId)) {
+              api.trackContactMessage(msgId).then(fresh => { if (fresh) setTrackedContactMsg(fresh); }).catch(() => {});
+            }
+          }
+        } catch {}
+      };
+    } catch {}
+
+    const unsubMsgs = subscribeToSupabaseTable('messages', (payload) => {
+      const row = payload.new as any;
+      if (row && row.id === msgId) {
+        setTrackedContactMsg((prev: any) => ({
+          ...(prev || {}),
+          id: row.id,
+          status: row.status || prev?.status,
+          replyNote: row.reply_note ?? prev?.replyNote,
+          repliedAt: row.replied_at ?? prev?.repliedAt,
+          repliedBy: row.replied_by ?? prev?.repliedBy
+        }));
+      }
+    });
+
+    return () => {
+      if (es) es.close();
+      unsubMsgs();
+    };
+  }, [trackedContactMsg?.id]);
+
+  // Scoped Real-Time Listener for Customer Problem / Complaint Case Status
+  useEffect(() => {
+    const activeCaseNum = caseLookupResult?.caseNumber || generatedCaseNumber;
+    if (!activeCaseNum) return;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/realtime/track?caseNumber=${encodeURIComponent(activeCaseNum)}`);
+      es.onmessage = (ev) => {
+        try {
+          const payload = JSON.parse(ev.data);
+          if (payload.type === 'db_update' && payload.data) {
+            const d = payload.data;
+            if (d.caseNumber === activeCaseNum || d.case_number === activeCaseNum) {
+              setCaseLookupResult((prev: any) => prev ? { ...prev, ...d } : d);
+            }
+          }
+        } catch {}
+      };
+    } catch {}
+
+    const unsubProbs = subscribeToSupabaseTable('customer_problems', (payload) => {
+      const row = payload.new as any;
+      if (row && row.case_number === activeCaseNum) {
+        setCaseLookupResult((prev: any) => ({
+          ...(prev || {}),
+          caseNumber: row.case_number,
+          customerName: row.customer_name || prev?.customerName,
+          category: row.category || prev?.category,
+          status: row.status || prev?.status,
+          assignedTo: row.assigned_to ?? prev?.assignedTo,
+          resolution: row.resolution ?? prev?.resolution,
+          createdAt: row.created_at || prev?.createdAt
+        }));
+      }
+    });
+
+    return () => {
+      if (es) es.close();
+      unsubProbs();
+    };
+  }, [caseLookupResult?.caseNumber, generatedCaseNumber]);
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsgError(null);
     setMsgLoading(true);
 
     try {
-      await api.sendContactMessage({
+      const sent = await api.sendContactMessage({
         name: msgName,
         email: msgEmail,
         phone: msgPhone || undefined,
@@ -58,6 +156,17 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
         message: msgBody,
         orderNumber: msgOrderNum || undefined
       });
+      const tracked = sent.data || {
+        id: sent.id,
+        name: msgName,
+        subject: msgSubject || 'Inquiry',
+        message: msgBody,
+        orderNumber: msgOrderNum || undefined,
+        status: 'unread',
+        createdAt: new Date().toISOString()
+      };
+      setTrackedContactMsg(tracked);
+      try { localStorage.setItem('crm_last_contact_msg_id', tracked.id); } catch {}
       setMsgSuccess(true);
       setMsgName('');
       setMsgEmail('');
@@ -88,6 +197,8 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
         priority: 'high'
       });
       setGeneratedCaseNumber(res.caseNumber);
+      setCaseLookupNum(res.caseNumber);
+      setCaseLookupResult(res);
       setRepName('');
       setRepPhone('');
       setRepEmail('');
@@ -202,14 +313,39 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ settings, curren
                 </div>
 
                 {msgSuccess ? (
-                  <div className="p-8 text-center bg-emerald-50 rounded-2xl border border-emerald-200 space-y-3 animate-in fade-in">
+                  <div className="p-6 text-center bg-emerald-50 rounded-2xl border border-emerald-200 space-y-3 animate-in fade-in">
                     <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
                     <h3 className="font-extrabold text-slate-900 text-sm">
                       Ubutumwa Bwoherejwe Neza!
                     </h3>
                     <p className="text-xs text-slate-600 max-w-md mx-auto">
-                      Thank you for contacting ContactReach Market. Your message has been logged in our administrator inbox. Our support team will reach out promptly.
+                      Thank you for contacting ContactReach Market. Your message is synced live to our administrator inbox. Replies appear below automatically without refreshing!
                     </p>
+                    {trackedContactMsg && (
+                      <div className="text-left bg-white rounded-xl border border-emerald-200 p-4 space-y-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[11px] font-bold text-slate-500">Ref: {trackedContactMsg.id}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            trackedContactMsg.status === 'replied' || trackedContactMsg.replyNote
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {trackedContactMsg.replyNote ? 'Replied' : (trackedContactMsg.status || 'Unread')}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 font-medium">{trackedContactMsg.message}</p>
+                        {trackedContactMsg.replyNote ? (
+                          <div className="p-3 rounded-lg bg-orange-50 border border-orange-200 text-orange-950">
+                            <span className="font-bold text-[#FF6000] block text-[11px]">
+                              Live Admin Reply ({trackedContactMsg.repliedBy || 'Support Team'}):
+                            </span>
+                            <p className="mt-0.5">{trackedContactMsg.replyNote}</p>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic">Waiting for admin reply (updates live)...</p>
+                        )}
+                      </div>
+                    )}
                     <button
                       onClick={() => setMsgSuccess(false)}
                       className="mt-2 px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl hover:bg-emerald-700 cursor-pointer"

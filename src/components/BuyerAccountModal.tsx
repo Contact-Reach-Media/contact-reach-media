@@ -5,8 +5,9 @@ import {
   MessageSquare, Send, Bell, Clock, Truck, Package, Copy, ExternalLink,
   RefreshCw, Check, ArrowRight, Info, Lock, KeyRound, Eye, EyeOff
 } from 'lucide-react';
-import { CustomerUser, Order, AdminMessage } from '../types.ts';
+import { CustomerUser, Order, AdminMessage, CustomerProblemReport } from '../types.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 
@@ -38,9 +39,11 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   const t = translations[currentLang] || translations.en;
   const isRTL = currentLang === 'ar';
 
-  const [activeTab, setActiveTab] = useState<'inbox' | 'orders' | 'profile'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'inbox' | 'orders' | 'reports' | 'profile'>(initialTab);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [reports, setReports] = useState<CustomerProblemReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(true);
 
   // Chat & Inbox state
   const [messages, setMessages] = useState<AdminMessage[]>([]);
@@ -82,20 +85,24 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
     if (!silent) {
       setLoadingOrders(true);
       setLoadingMessages(true);
+      setLoadingReports(true);
     }
     try {
-      const [fetchedOrders, fetchedMessages] = await Promise.all([
+      const [fetchedOrders, fetchedMessages, fetchedReports] = await Promise.all([
         api.buyerGetOrders(),
-        api.buyerGetMessages()
+        api.buyerGetMessages(),
+        api.buyerGetReports().catch(() => [] as CustomerProblemReport[])
       ]);
       setOrders(fetchedOrders);
       setMessages(fetchedMessages);
+      setReports(fetchedReports);
     } catch (err) {
       console.warn('[BuyerAccount] Sync notice:', err);
     } finally {
       if (!silent) {
         setLoadingOrders(false);
         setLoadingMessages(false);
+        setLoadingReports(false);
       }
     }
   };
@@ -108,10 +115,44 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
       setPhone(user.phone || '');
       setErrorMsg(null);
 
-      // Real-time synchronization: silently refresh buyer orders & messages every 4 seconds
-      const syncTimer = setInterval(() => {
-        loadData(true);
-      }, 4000);
+      // Scoped Real-Time Synchronization via Buyer SSE + Supabase Realtime (no polling)
+      const token = api.getBuyerToken();
+      let es: EventSource | null = null;
+      if (token) {
+        try {
+          es = new EventSource(`/api/buyers/realtime?token=${encodeURIComponent(token)}`);
+          es.onmessage = (event) => {
+            try {
+              const payload = JSON.parse(event.data);
+              if (!payload || payload.type === 'connected') return;
+              if (payload.type === 'db_update') {
+                const evtName = payload.event || '';
+                const d = payload.data;
+                if (d && (evtName === 'message_created' || evtName === 'admin_reply_created' || evtName === 'message_updated')) {
+                  setMessages(prev => {
+                    const exists = prev.some(m => m.id === d.id);
+                    if (exists) return prev.map(m => (m.id === d.id ? { ...m, ...d } : m));
+                    return [...prev, d];
+                  });
+                } else if (d && (evtName === 'problem_reported' || evtName === 'problem_updated')) {
+                  setReports(prev => {
+                    const exists = prev.some(r => r.id === d.id);
+                    if (exists) return prev.map(r => (r.id === d.id ? { ...r, ...d } : r));
+                    return [d, ...prev];
+                  });
+                } else {
+                  loadData(true);
+                }
+              }
+            } catch {}
+          };
+        } catch {}
+      }
+
+      const unsubMessages = subscribeToSupabaseTable('messages', () => { loadData(true); });
+      const unsubOrders = subscribeToSupabaseTable('orders', () => { loadData(true); });
+      const unsubPayments = subscribeToSupabaseTable('payments', () => { loadData(true); });
+      const unsubProblems = subscribeToSupabaseTable('customer_problems', () => { loadData(true); });
 
       const handleFocus = () => {
         if (document.visibilityState === 'visible') {
@@ -122,7 +163,11 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
       document.addEventListener('visibilitychange', handleFocus);
 
       return () => {
-        clearInterval(syncTimer);
+        if (es) es.close();
+        unsubMessages();
+        unsubOrders();
+        unsubPayments();
+        unsubProblems();
         window.removeEventListener('focus', handleFocus);
         document.removeEventListener('visibilitychange', handleFocus);
       };
@@ -350,10 +395,28 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
             }`}
           >
             <Truck className="w-3.5 h-3.5 text-blue-600" />
-            <span>{currentLang === 'en' ? 'Order Tracking' : 'Gukurikirana'}</span>
+            <span>{currentLang === 'en' ? 'Orders' : 'Komande'}</span>
             <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px] font-extrabold">
               {orders.length}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('reports')}
+            className={`flex-1 py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'reports'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+            <span>{currentLang === 'en' ? 'Reports' : 'Ibibazo'}</span>
+            {reports.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">
+                {reports.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -366,7 +429,7 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
             }`}
           >
             <User className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{currentLang === 'en' ? 'My Profile' : 'Imyirondoro'}</span>
+            <span>{currentLang === 'en' ? 'Profile' : 'Imyirondoro'}</span>
           </button>
         </div>
 
@@ -444,21 +507,27 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
               ) : (
                 messages.map(msg => {
                   const isCustomer = msg.sender === 'customer';
-                  const isSystem = msg.sender === 'system' || msg.notificationType === 'order_update';
+                  const isSms = msg.notificationType === 'sms_notification';
+                  const isSystem = msg.sender === 'system' || msg.notificationType === 'order_update' || isSms;
 
                   if (isSystem) {
                     return (
-                      <div key={msg.id} className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-2xl text-xs space-y-1 my-2">
+                      <div key={msg.id} className={`p-3 border rounded-2xl text-xs space-y-1 my-2 ${
+                        isSms ? 'bg-blue-50/80 border-blue-200/80' : 'bg-amber-50/80 border-amber-200/80'
+                      }`}>
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 font-bold text-amber-900 text-[11px]">
-                            <Bell className="w-3.5 h-3.5 text-amber-600" />
-                            <span>{msg.subject || 'Order Notification'}</span>
+                          <div className={`flex items-center gap-1.5 font-bold text-[11px] ${isSms ? 'text-blue-900' : 'text-amber-900'}`}>
+                            <Bell className={`w-3.5 h-3.5 ${isSms ? 'text-blue-600' : 'text-amber-600'}`} />
+                            <span>{msg.subject || (isSms ? 'SMS Notification' : 'Order Notification')}</span>
+                            {isSms && (
+                              <span className="px-1.5 py-0.2 rounded bg-blue-600 text-white text-[9px] font-black uppercase">SMS</span>
+                            )}
                           </div>
-                          <span className="text-[10px] text-amber-600/80 font-mono">
+                          <span className={`text-[10px] font-mono ${isSms ? 'text-blue-600/80' : 'text-amber-600/80'}`}>
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <p className="text-[11px] text-amber-900 leading-relaxed font-medium">
+                        <p className={`text-[11px] leading-relaxed font-medium ${isSms ? 'text-blue-900' : 'text-amber-900'}`}>
                           {msg.message}
                         </p>
                         {msg.orderNumber && (
@@ -812,11 +881,12 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                       <div className="space-y-1.5 pt-1">
                         {ord.items?.slice(0, 2).map((it, idx) => (
                           <div key={idx} className="flex items-center gap-2 text-[11px]">
-                            {it.imageUrl && (
+                            {it.imageUrl && it.imageUrl.trim() && (
                               <img
                                 src={it.imageUrl}
                                 alt={it.productName}
                                 className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                               />
                             )}
                             <div className="flex-1 min-w-0">
@@ -875,6 +945,59 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                 })
               )}
             </div>
+          </div>
+        )}
+
+        {/* TAB: COMPLAINTS & PROBLEM REPORTS */}
+        {activeTab === 'reports' && (
+          <div className="flex flex-col flex-1 min-h-[360px] max-h-[55vh] overflow-y-auto space-y-3 pr-1">
+            {loadingReports ? (
+              <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-[#FF6000]" />
+                <span>{currentLang === 'en' ? 'Loading support cases...' : 'Kureba ibibazo watanze...'}</span>
+              </div>
+            ) : reports.length === 0 ? (
+              <div className="py-12 text-center space-y-2 bg-slate-50 rounded-2xl border border-slate-100 p-6">
+                <AlertCircle className="w-10 h-10 text-slate-300 mx-auto" />
+                <p className="text-xs text-slate-600 font-bold">
+                  {currentLang === 'en' ? 'No complaints or problem reports found.' : 'Nta kibazo uratanga.'}
+                </p>
+                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                  {currentLang === 'en'
+                    ? 'Any problem reports or complaints you submit will show live status updates and admin resolutions here.'
+                    : 'Ibibazo byose watanze bizagaragara hano hamwe n\'ibisubizo ako kanya.'}
+                </p>
+              </div>
+            ) : (
+              reports.map(rep => (
+                <div key={rep.id} className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="font-mono font-black text-slate-900">{rep.caseNumber}</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                      rep.status === 'Resolved' || rep.status === 'Closed'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : rep.status === 'In Progress' || rep.status === 'Under Review'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {rep.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">
+                    <span className="font-bold text-slate-700 capitalize">{rep.category.replace('_', ' ')}</span>
+                    {rep.orderNumber && <span className="font-mono">• Order #{rep.orderNumber}</span>}
+                    <span>• {new Date(rep.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-slate-700 leading-relaxed">{rep.description}</p>
+                  {rep.resolution && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px]">
+                      <span className="font-bold block">Official Admin Resolution:</span>
+                      <p className="mt-0.5">{rep.resolution}</p>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         )}
 

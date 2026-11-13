@@ -228,7 +228,7 @@ export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
                 <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <img
-                      src={activeCategory.image}
+                      src={activeCategory.image?.trim() ? activeCategory.image : '/logo.png'}
                       alt={activeCategory.name}
                       className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border border-slate-200 shadow-2xs shrink-0"
                     />

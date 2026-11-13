@@ -670,6 +670,7 @@ export interface CustomerUser {
 
 export interface AdminMessage {
   id: string;
+  conversationId?: string;
   customerId?: string;
   name: string;
   email: string;
@@ -687,7 +688,25 @@ export interface AdminMessage {
   senderName?: string;
   isReadByCustomer?: boolean;
   isReadByAdmin?: boolean;
-  notificationType?: 'chat' | 'order_update' | 'payment_update' | 'general';
+  notificationType?: 'chat' | 'order_update' | 'payment_update' | 'sms_notification' | 'contact_message' | 'general';
+  metadata?: Record<string, any>;
+}
+
+export interface SmsNotification {
+  id: string;
+  direction: 'incoming' | 'outbound' | 'outgoing';
+  senderPhone: string;
+  senderName?: string;
+  recipientPhone?: string;
+  provider?: string;
+  message: string;
+  parsedTransactionId?: string;
+  parsedAmount?: number;
+  orderNumber?: string;
+  paymentId?: string;
+  status: 'received' | 'matched' | 'matched_payment' | 'verified' | 'sent' | 'failed';
+  createdAt: string;
+  metadata?: Record<string, any>;
 }
 
 export type AdminNotificationCategory =

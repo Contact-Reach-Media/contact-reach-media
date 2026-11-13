@@ -289,6 +289,9 @@ export default function App() {
   const [isRequestProductOpen, setIsRequestProductOpen] = useState(false);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
   const [isBuyerAuthOpen, setIsBuyerAuthOpen] = useState(false);
+  const [buyerAuthInitialMode, setBuyerAuthInitialMode] = useState<'signin' | 'register'>('signin');
+  const [buyerAuthPrompt, setBuyerAuthPrompt] = useState<string | null>(null);
+  const [pendingBuyAction, setPendingBuyAction] = useState<(() => void) | null>(null);
   const [isBuyerAccountOpen, setIsBuyerAccountOpen] = useState(false);
 
   // Product quantity display limit for "Reba ibindi"
@@ -359,7 +362,18 @@ export default function App() {
     else if (view === 'how-to-buy') targetPath = '/how-to-buy';
     else if (view === 'contact') targetPath = '/contact';
     else if (view === 'cart') targetPath = '/cart';
-    else if (view === 'checkout') targetPath = '/checkout';
+    else if (view === 'checkout') {
+      if (!buyerUser && !api.getBuyerToken()) {
+        openBuyerAuthForPurchase(() => {
+          setActiveView('checkout');
+          if (typeof window !== 'undefined') {
+            window.history.pushState({ view: 'checkout' }, '', '/checkout');
+          }
+        });
+        return;
+      }
+      targetPath = '/checkout';
+    }
     else if (view === 'payment') {
       const ref = params?.orderRef || confirmationOrder?.orderNumber || trackingOrderNumber || '';
       targetPath = ref ? `/payment?order=${encodeURIComponent(ref)}` : '/payment';
@@ -968,6 +982,22 @@ export default function App() {
     showToast('Item removed from cart');
   };
 
+  const openBuyerAuthForPurchase = useCallback((actionAfterAuth?: () => void) => {
+    setPendingBuyAction(() => actionAfterAuth || null);
+    setBuyerAuthInitialMode('register');
+    setBuyerAuthPrompt(
+      currentLang === 'en'
+        ? 'Please create an account or sign in before buying any product.'
+        : 'Nyamuneka fungura konti cyangwa winjire mbere yo kugura igicuruzwa.'
+    );
+    setIsBuyerAuthOpen(true);
+    showToast(
+      currentLang === 'en'
+        ? 'Please create an account or sign in to continue your purchase.'
+        : 'Banza ufungure konti kugira ngo ugure.'
+    );
+  }, [currentLang]);
+
   const handleQuickBuy = (product: Product, quantity = 1, variation?: { [key: string]: string }) => {
     const availableStock = Math.max(0, product.stock || 0);
     if (availableStock <= 0 || product.status === 'Out of Stock') {
@@ -977,6 +1007,10 @@ export default function App() {
     const safeQty = Math.min(quantity, availableStock);
     setCart([{ product, quantity: safeQty, selectedVariation: variation }]);
     setSelectedProduct(null);
+    if (!buyerUser && !api.getBuyerToken()) {
+      openBuyerAuthForPurchase(() => setIsCheckoutOpen(true));
+      return;
+    }
     setIsCheckoutOpen(true);
   };
 
@@ -1238,7 +1272,15 @@ export default function App() {
                 showToast(`Welcome Administrator ${user.name}`);
               } else {
                 setBuyerUser(user);
-                handleNavigate('home');
+                if (pendingBuyAction) {
+                  const action = pendingBuyAction;
+                  setPendingBuyAction(null);
+                  setBuyerAuthPrompt(null);
+                  handleNavigate('home');
+                  action();
+                } else {
+                  handleNavigate('home');
+                }
                 showToast(currentLang === 'en' ? `Welcome, ${user.name}!` : `Murakaza neza, ${user.name}!`);
               }
             }}
@@ -1301,6 +1343,58 @@ export default function App() {
             </button>
           </div>
         </div>
+      ) : activeView === 'cart' ? (
+        <CartPage
+          cart={cart}
+          onUpdateQuantity={handleUpdateCartQuantity}
+          onRemoveItem={handleRemoveFromCart}
+          onNavigate={handleNavigate}
+          onSelectProduct={(p) => handleSelectProduct(p)}
+          currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
+        />
+      ) : activeView === 'checkout' ? (
+        <CheckoutPage
+          cart={cart}
+          settings={settings}
+          onOrderCreated={(order) => {
+            setCart([]);
+            setConfirmationOrder(order);
+            showToast(`Order #${order.orderNumber} placed`);
+          }}
+          onNavigate={handleNavigate}
+          currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
+          buyerUser={buyerUser}
+          onOpenBuyerAuth={() => openBuyerAuthForPurchase(() => {
+            setActiveView('checkout');
+          })}
+        />
+      ) : activeView === 'payment' ? (
+        <PaymentPage
+          order={confirmationOrder}
+          orderNumberQuery={trackingOrderNumber}
+          onNavigate={handleNavigate}
+          currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
+        />
+      ) : activeView === 'account' ? (
+        <CustomerAccountPage
+          user={buyerUser}
+          onLogout={async () => {
+            await api.buyerLogout();
+            setBuyerUser(null);
+            handleNavigate('home');
+            showToast(currentLang === 'en' ? 'Signed out of buyer account' : 'Mwasohotse muri konti');
+          }}
+          onNavigate={handleNavigate}
+          currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
+        />
       ) : activeView === 'categories' ? (
         <CategoriesPage
           categories={categories}
@@ -1624,10 +1718,11 @@ export default function App() {
                   >
                     <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
                       <img
-                        src={cat.image}
+                        src={cat.image && cat.image.trim() ? cat.image : '/logo.png'}
                         alt={cat.name}
                         className="w-full h-full object-cover rounded-lg group-hover:scale-110 transition-transform duration-300"
                         loading={idx < 6 ? 'eager' : 'lazy'}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                       />
                     </div>
                     <div className="text-center w-full px-1">
@@ -1911,7 +2006,14 @@ export default function App() {
           cart={cart}
           onUpdateQuantity={handleUpdateCartQuantity}
           onRemoveItem={handleRemoveFromCart}
-          onProceedToCheckout={() => setIsCheckoutOpen(true)}
+          onProceedToCheckout={() => {
+            setIsCartOpen(false);
+            if (!buyerUser && !api.getBuyerToken()) {
+              openBuyerAuthForPurchase(() => setIsCheckoutOpen(true));
+              return;
+            }
+            setIsCheckoutOpen(true);
+          }}
           currentLang={currentLang}
           currentCurrency={currentCurrency}
           exchangeRates={exchangeRates}
@@ -1942,7 +2044,7 @@ export default function App() {
           currentCurrency={currentCurrency}
           exchangeRates={exchangeRates}
           buyerUser={buyerUser}
-          onOpenBuyerAuth={() => setIsBuyerAuthOpen(true)}
+          onOpenBuyerAuth={() => openBuyerAuthForPurchase(() => setIsCheckoutOpen(true))}
         />
       )}
 
@@ -2122,10 +2224,22 @@ export default function App() {
       {/* 10. Buyer Authentication Modal (Phone Number & Password) */}
       <BuyerAuthModal
         isOpen={isBuyerAuthOpen}
-        onClose={() => setIsBuyerAuthOpen(false)}
+        onClose={() => {
+          setIsBuyerAuthOpen(false);
+          setBuyerAuthPrompt(null);
+          setPendingBuyAction(null);
+        }}
+        initialMode={buyerAuthInitialMode}
+        promptMessage={buyerAuthPrompt}
         onSuccess={(user: CustomerUser) => {
           setBuyerUser(user);
           setIsBuyerAuthOpen(false);
+          setBuyerAuthPrompt(null);
+          if (pendingBuyAction) {
+            const action = pendingBuyAction;
+            setPendingBuyAction(null);
+            action();
+          }
           showToast(
             currentLang === 'en'
               ? `Welcome, ${user.name}!`

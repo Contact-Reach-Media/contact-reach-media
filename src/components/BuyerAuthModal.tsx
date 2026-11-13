@@ -13,6 +13,8 @@ interface BuyerAuthModalProps {
   onSuccess: (user: CustomerUser) => void;
   currentLang: Language;
   onOpenVendorApplication?: () => void;
+  initialMode?: 'signin' | 'register';
+  promptMessage?: string | null;
 }
 
 export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
@@ -20,10 +22,12 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
   onClose,
   onSuccess,
   currentLang,
-  onOpenVendorApplication
+  onOpenVendorApplication,
+  initialMode = 'signin',
+  promptMessage
 }) => {
   const isEn = currentLang === 'en';
-  const [mode, setMode] = useState<'signin' | 'register' | 'forgot'>('signin');
+  const [mode, setMode] = useState<'signin' | 'register' | 'forgot'>(initialMode);
   const [phone, setPhone] = useState(() => {
     try {
       return localStorage.getItem('crm_remember_buyer') || '';
@@ -42,10 +46,11 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setMode(initialMode);
       setError(null);
       setSuccessMsg(null);
     }
-  }, [isOpen, mode]);
+  }, [isOpen, initialMode]);
 
   if (!isOpen) return null;
 
@@ -232,6 +237,13 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
                 >
                   {isEn ? 'Create Account' : 'Iyandikishe'}
                 </button>
+              </div>
+            )}
+
+            {promptMessage && (
+              <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-orange-900 text-xs flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-[#f95700]" />
+                <span className="font-bold">{promptMessage}</span>
               </div>
             )}
 

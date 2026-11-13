@@ -7,6 +7,7 @@ import {
 import { Order, PaymentConfirmation } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
@@ -62,6 +63,51 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
         .finally(() => setLoadingOrder(false));
     }
   }, [orderNumberQuery, initialOrder]);
+
+  // Scoped Real-Time Order & Payment verification updates
+  useEffect(() => {
+    if (!activeOrder?.orderNumber) return;
+    const orderNum = activeOrder.orderNumber;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/realtime/track?orderNumber=${encodeURIComponent(orderNum)}`);
+      es.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'db_update' && msg.data) {
+            const d = msg.data;
+            if (d.orderNumber === orderNum || d.order_number === orderNum || d.id === activeOrder.id) {
+              setActiveOrder(prev => prev ? {
+                ...prev,
+                paymentStatus: d.paymentStatus || d.payment_status || prev.paymentStatus,
+                status: d.status || prev.status,
+                deliveryStatus: d.deliveryStatus || d.delivery_status || prev.deliveryStatus,
+                trackingNumber: d.trackingNumber ?? d.tracking_number ?? prev.trackingNumber
+              } : prev);
+            }
+          }
+        } catch {}
+      };
+    } catch {}
+
+    const unsubOrders = subscribeToSupabaseTable('orders', (payload) => {
+      const row = payload.new as any;
+      if (row && (row.order_number === orderNum || row.id === activeOrder.id)) {
+        setActiveOrder(prev => prev ? {
+          ...prev,
+          paymentStatus: row.payment_status || prev.paymentStatus,
+          status: row.status || prev.status,
+          deliveryStatus: row.delivery_status || prev.deliveryStatus,
+          trackingNumber: row.tracking_number ?? prev.trackingNumber
+        } : prev);
+      }
+    });
+
+    return () => {
+      if (es) es.close();
+      unsubOrders();
+    };
+  }, [activeOrder?.orderNumber, activeOrder?.id]);
 
   const handleSmsChange = (text: string) => {
     setConfirmationMessage(text);
@@ -240,10 +286,11 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
               {primaryItem ? (
                 <div className="flex items-center gap-2.5 mt-1">
                   <img
-                    src={primaryItemImg}
+                    src={primaryItemImg && primaryItemImg.trim() ? primaryItemImg : '/logo.png'}
                     alt={primaryItem.productName}
                     className="w-10 h-10 rounded-xl object-cover bg-white border border-slate-200 shrink-0"
                     referrerPolicy="no-referrer"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                   />
                   <div className="min-w-0">
                     <span className="font-bold text-slate-900 truncate block text-xs" title={primaryItem.productName}>

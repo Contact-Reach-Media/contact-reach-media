@@ -4,9 +4,10 @@ import {
   Truck, AlertCircle, Send, ArrowLeft, ChevronRight, Phone,
   Mail, MapPin, RefreshCw, ShoppingBag, ShieldCheck
 } from 'lucide-react';
-import { CustomerUser, Order } from '../types.ts';
+import { CustomerUser, Order, CustomerProblemReport } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
@@ -29,11 +30,13 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
 }) => {
   const t = translations[currentLang] || translations.en;
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'inbox'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'inbox' | 'reports'>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [reports, setReports] = useState<CustomerProblemReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
   const [newMsgText, setNewMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
 
@@ -44,25 +47,79 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  const syncAccountData = async (silent = false) => {
+    if (!user) return;
+    if (!silent) {
+      setLoadingOrders(true);
+      setLoadingMessages(true);
+      setLoadingReports(true);
+    }
+    try {
+      const [ords, msgs, reps] = await Promise.all([
+        api.buyerGetOrders().catch(() => []),
+        api.buyerGetMessages().catch(() => []),
+        api.buyerGetReports().catch(() => [])
+      ]);
+      setOrders(Array.isArray(ords) ? ords : []);
+      setMessages(Array.isArray(msgs) ? msgs : []);
+      setReports(Array.isArray(reps) ? reps : []);
+    } finally {
+      if (!silent) {
+        setLoadingOrders(false);
+        setLoadingMessages(false);
+        setLoadingReports(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (user) {
       setEditName(user.name || '');
       setEditPhone(user.phone || '');
       setEditAddress(user.deliveryAddress || '');
+      syncAccountData(false);
 
-      // Load orders for buyer
-      setLoadingOrders(true);
-      api.getBuyerOrders()
-        .then(res => setOrders(Array.isArray(res) ? res : []))
-        .catch(() => setOrders([]))
-        .finally(() => setLoadingOrders(false));
+      const token = api.getBuyerToken();
+      let es: EventSource | null = null;
+      if (token) {
+        try {
+          es = new EventSource(`/api/buyers/realtime?token=${encodeURIComponent(token)}`);
+          es.onmessage = (event) => {
+            try {
+              const payload = JSON.parse(event.data);
+              if (!payload || payload.type !== 'db_update') return;
+              const evtName = payload.event || '';
+              const d = payload.data;
+              if (d && (evtName === 'message_created' || evtName === 'admin_reply_created' || evtName === 'message_updated')) {
+                setMessages(prev => {
+                  const exists = prev.some(m => m.id === d.id);
+                  if (exists) return prev.map(m => (m.id === d.id ? { ...m, ...d } : m));
+                  return [...prev, d];
+                });
+              } else if (d && (evtName === 'problem_reported' || evtName === 'problem_updated')) {
+                setReports(prev => {
+                  const exists = prev.some(r => r.id === d.id);
+                  if (exists) return prev.map(r => (r.id === d.id ? { ...r, ...d } : r));
+                  return [d, ...prev];
+                });
+              } else {
+                syncAccountData(true);
+              }
+            } catch {}
+          };
+        } catch {}
+      }
 
-      // Load messages
-      setLoadingMessages(true);
-      api.getBuyerMessages()
-        .then(res => setMessages(Array.isArray(res) ? res : []))
-        .catch(() => setMessages([]))
-        .finally(() => setLoadingMessages(false));
+      const unsubMsgs = subscribeToSupabaseTable('messages', () => syncAccountData(true));
+      const unsubOrds = subscribeToSupabaseTable('orders', () => syncAccountData(true));
+      const unsubProbs = subscribeToSupabaseTable('customer_problems', () => syncAccountData(true));
+
+      return () => {
+        if (es) es.close();
+        unsubMsgs();
+        unsubOrds();
+        unsubProbs();
+      };
     }
   }, [user]);
 
@@ -203,6 +260,19 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
             <MessageSquare className="w-4 h-4" />
             <span>Inbox & Support ({messages.length})</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('reports')}
+            className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'reports'
+                ? 'border-b-2 border-orange-600 text-orange-600 bg-white shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <AlertCircle className="w-4 h-4" />
+            <span>Complaints & Cases ({reports.length})</span>
+          </button>
         </div>
 
         {/* TAB 1: MY ORDERS */}
@@ -240,10 +310,11 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
                     >
                       <div className="flex items-start sm:items-center gap-3.5 min-w-0">
                         <img
-                          src={itemImg}
+                          src={itemImg && itemImg.trim() ? itemImg : '/logo.png'}
                           alt={firstItem?.productName || 'Order Item'}
                           className="w-14 h-14 rounded-2xl object-cover bg-white border border-slate-200 shrink-0"
                           referrerPolicy="no-referrer"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
                         />
                         <div className="min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -400,6 +471,42 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
                 <span>Send</span>
               </button>
             </form>
+          </div>
+        )}
+
+        {/* TAB 4: COMPLAINTS & CASES */}
+        {activeTab === 'reports' && (
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-4">
+            <h3 className="text-base font-black text-slate-900 border-b border-slate-100 pb-3">
+              Submitted Problem Reports & Cases
+            </h3>
+            {loadingReports ? (
+              <p className="text-xs text-slate-400">Loading your cases...</p>
+            ) : reports.length === 0 ? (
+              <p className="text-xs text-slate-500">You have not filed any problem reports or complaints.</p>
+            ) : (
+              <div className="space-y-3">
+                {reports.map(rep => (
+                  <div key={rep.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-slate-900">{rep.caseNumber}</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                        rep.status === 'Resolved' || rep.status === 'Closed'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>{rep.status}</span>
+                    </div>
+                    <p className="text-slate-700">{rep.description}</p>
+                    {rep.resolution && (
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+                        <span className="font-bold block">Official Resolution:</span>
+                        <p>{rep.resolution}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

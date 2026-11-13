@@ -6,6 +6,7 @@ import {
 import { Order, PaymentMethod, PaymentConfirmation } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
+import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
 
@@ -54,6 +55,59 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
       if (order.totalAmount) setAmountPaid(order.totalAmount);
     }
   }, [order]);
+
+  // Real-time verification updates while viewing PaymentConfirmationModal
+  useEffect(() => {
+    const activeOrderNum = successResult?.order?.orderNumber || orderNumber.trim();
+    if (!isOpen || !activeOrderNum || activeOrderNum === 'CRM-PENDING') return;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/realtime/track?orderNumber=${encodeURIComponent(activeOrderNum)}`);
+      es.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'db_update' && msg.data) {
+            const d = msg.data;
+            if (d.orderNumber === activeOrderNum || d.order_number === activeOrderNum) {
+              const payStatus = d.paymentStatus || d.payment_status;
+              setSuccessResult(prev => prev ? {
+                ...prev,
+                confirmation: {
+                  ...prev.confirmation,
+                  verificationStatus: payStatus === 'Paid' ? 'Approved' : (payStatus === 'Payment Rejected' ? 'Rejected' : prev.confirmation.verificationStatus)
+                },
+                order: {
+                  ...prev.order,
+                  paymentStatus: payStatus || prev.order.paymentStatus,
+                  status: d.status || prev.order.status
+                }
+              } : prev);
+            }
+          }
+        } catch {}
+      };
+    } catch {}
+
+    const unsubPayments = subscribeToSupabaseTable('payments', (payload) => {
+      const row = payload.new as any;
+      if (row && row.order_number === activeOrderNum) {
+        setSuccessResult(prev => prev ? {
+          ...prev,
+          confirmation: { ...prev.confirmation, verificationStatus: row.verification_status || row.status || prev.confirmation.verificationStatus },
+          order: {
+            ...prev.order,
+            paymentStatus: row.status === 'Approved' ? 'Paid' : (row.status === 'Rejected' ? 'Payment Rejected' : prev.order.paymentStatus),
+            status: row.status === 'Approved' ? 'Confirmed' : prev.order.status
+          }
+        } : prev);
+      }
+    });
+
+    return () => {
+      if (es) es.close();
+      unsubPayments();
+    };
+  }, [isOpen, successResult?.order?.orderNumber, orderNumber]);
 
   if (!isOpen) return null;
 
@@ -222,15 +276,37 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
               </div>
 
               {/* Status Notice */}
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 text-left space-y-1.5 shadow-2xs">
-                <div className="font-bold flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                  <span className="text-sm">Status: Pending Admin Review</span>
+              {successResult.order?.paymentStatus === 'Paid' || successResult.confirmation?.verificationStatus === 'Approved' || successResult.confirmation?.verificationStatus === 'Verified/Paid' ? (
+                <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 text-xs text-emerald-950 text-left space-y-1.5 shadow-2xs">
+                  <div className="font-bold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span className="text-sm font-extrabold">Status: Verified & Paid</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Your payment (<span className="font-mono font-bold text-slate-900">{successResult.confirmation.transactionId}</span>) has been approved by ContactReach Market. Your order is now <strong>Confirmed</strong>!
+                  </p>
                 </div>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Your transaction reference (<span className="font-mono font-bold text-slate-900">{successResult.confirmation.transactionId}</span>) will be reconciled with the official telecom statement. Once approved, your order moves to <strong>Confirmed</strong>.
-                </p>
-              </div>
+              ) : successResult.confirmation?.verificationStatus === 'Rejected' ? (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-900 text-left space-y-1.5 shadow-2xs">
+                  <div className="font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600" />
+                    <span className="text-sm font-extrabold">Status: Verification Rejected</span>
+                  </div>
+                  <p className="text-[11px] text-rose-800 leading-relaxed">
+                    Please contact support on WhatsApp (+250 780 022 600) or submit a clear receipt screenshot.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 text-left space-y-1.5 shadow-2xs">
+                  <div className="font-bold flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="text-sm">Status: Pending Admin Review</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Your transaction reference (<span className="font-mono font-bold text-slate-900">{successResult.confirmation.transactionId}</span>) will be reconciled with the official telecom statement. Once approved, your order moves to <strong>Confirmed</strong>.
+                  </p>
+                </div>
+              )}
 
               {/* WhatsApp direct contact */}
               <div className="pt-2 space-y-2.5 max-w-md mx-auto">

@@ -3,7 +3,7 @@ import {
   VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage, AdminNotification, CustomerConversation,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
   PaymentMethodConfig, ProductReview, AdminUser, AdminRole, AdminInvitation,
-  ProblemCategory, ProblemPriority,
+  ProblemCategory, ProblemPriority, PaymentTransaction, SmsNotification,
   CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig,
   AlibabaConfig, AlibabaShippingQuote, DsersConfig
 } from '../types.ts';
@@ -59,6 +59,10 @@ import {
   saveSettingsToSupabase,
   getReviewsFromSupabase,
   saveReviewToSupabase,
+  getPaymentTransactionsFromSupabase,
+  savePaymentTransactionToSupabase,
+  getSmsNotificationsFromSupabase,
+  saveSmsNotificationToSupabase,
   syncAllDataToSupabase,
   testSupabaseConnection
 } from './supabase.ts';
@@ -870,7 +874,7 @@ export const api = {
     return null;
   },
 
-  // Customer Place Order
+  // Customer Place Order (Requires authenticated buyer account)
   async createOrder(orderPayload: {
     customerName: string;
     customerPhone: string;
@@ -885,6 +889,14 @@ export const api = {
     couponCode?: string;
     userId?: string;
   }): Promise<Order> {
+    const buyerToken = getBuyerToken();
+    const adminToken = getAdminToken();
+    if (!buyerToken && !adminToken) {
+      const authErr: any = new Error('Please create an account or sign in before buying any product.');
+      authErr.requiresAuth = true;
+      throw authErr;
+    }
+
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 20000);
@@ -898,22 +910,29 @@ export const api = {
 
       const parsed = await safeParseResponse<Order>(res);
       if (res.ok && parsed.isJson && parsed.json) {
-        // Fire-and-forget sync to Firestore in background: never blocks client UI
-        createOrderInFirestore(parsed.json).catch(fsErr => {
-          // persistent local sync
-        });
+        // Fire-and-forget sync to Supabase in background
+        createOrderInFirestore(parsed.json).catch(() => {});
         return parsed.json;
+      }
+      if (res.status === 401 || (parsed.isJson && (parsed.json as any)?.requiresAuth)) {
+        const authErr: any = new Error((parsed.json as any)?.error || 'Please create an account or sign in before buying any product.');
+        authErr.requiresAuth = true;
+        throw authErr;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
         throw new Error((parsed.json as any).error);
       }
     } catch (err: any) {
+      if (err?.requiresAuth) {
+        throw err;
+      }
       if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.name?.includes('AbortError')) {
         throw err;
       }
     }
 
-    // Direct Firestore fallback
+    // Direct Supabase fallback (only reached for authenticated buyers during transient server restart)
+    const storedBuyer = getStoredBuyerUser();
     const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     const orderNumber = `CRM-${randomSuffix}`;
     const trackingToken = Math.random().toString(36).substring(2, 18);
@@ -926,6 +945,7 @@ export const api = {
       id: `ord-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       orderNumber,
       trackingToken,
+      userId: orderPayload.userId || storedBuyer?.id,
       createdAt: new Date().toISOString(),
       customerName: orderPayload.customerName,
       customerPhone: orderPayload.customerPhone,
@@ -1194,18 +1214,21 @@ export const api = {
     subject?: string;
     message: string;
     orderNumber?: string;
-  }): Promise<{ message: string; id: string }> {
+  }): Promise<{ message: string; id: string; data?: AdminMessage }> {
+    const storedBuyer = getStoredBuyerUser();
     try {
       const res = await fetch('/api/contact/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getBuyerAuthHeaders(),
         body: JSON.stringify(payload)
       });
       const parsed = await safeParseResponse<any>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         const msgId = parsed.json.id || `msg-${Date.now()}`;
-        const newMsg: AdminMessage = {
+        const newMsg: AdminMessage = parsed.json.data || {
           id: msgId,
+          conversationId: storedBuyer?.id,
+          customerId: storedBuyer?.id,
           name: payload.name,
           email: payload.email,
           phone: payload.phone,
@@ -1218,11 +1241,10 @@ export const api = {
           senderName: payload.name,
           isReadByAdmin: false,
           isReadByCustomer: true,
-          notificationType: 'chat'
+          notificationType: 'contact_message'
         };
-        // Non-blocking fire-and-forget sync to Supabase so message is stored in milliseconds
         submitMessageToFirestore(newMsg).catch(() => {});
-        return parsed.json;
+        return { ...parsed.json, data: newMsg };
       }
       if (parsed.isJson && parsed.json?.error) {
         throw new Error(parsed.json.error);
@@ -1236,6 +1258,8 @@ export const api = {
     const msgId = `msg-${Date.now()}`;
     const newMsg: AdminMessage = {
       id: msgId,
+      conversationId: storedBuyer?.id,
+      customerId: storedBuyer?.id,
       name: payload.name,
       email: payload.email,
       phone: payload.phone,
@@ -1248,7 +1272,7 @@ export const api = {
       senderName: payload.name,
       isReadByAdmin: false,
       isReadByCustomer: true,
-      notificationType: 'chat'
+      notificationType: 'contact_message'
     };
     try {
       await submitMessageToFirestore(newMsg);
@@ -1256,8 +1280,49 @@ export const api = {
 
     return {
       message: 'Message received successfully. Our team will respond shortly.',
-      id: msgId
+      id: msgId,
+      data: newMsg
     };
+  },
+
+  async trackContactMessage(id: string): Promise<{
+    id: string;
+    name: string;
+    subject?: string;
+    message: string;
+    orderNumber?: string;
+    status: string;
+    replyNote?: string;
+    repliedAt?: string;
+    repliedBy?: string;
+    createdAt: string;
+  } | null> {
+    try {
+      const res = await fetch(`/api/contact/messages/${encodeURIComponent(id)}`);
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return parsed.json;
+      }
+    } catch {}
+    try {
+      const sbMsgs = await getMessagesFromSupabase();
+      const found = sbMsgs.find(m => m.id === id);
+      if (found) {
+        return {
+          id: found.id,
+          name: found.name,
+          subject: found.subject,
+          message: found.message,
+          orderNumber: found.orderNumber,
+          status: found.status,
+          replyNote: found.replyNote,
+          repliedAt: found.repliedAt,
+          repliedBy: found.repliedBy,
+          createdAt: found.createdAt
+        };
+      }
+    } catch {}
+    return null;
   },
 
   // Customer Problems & Reports
@@ -1326,7 +1391,7 @@ export const api = {
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
-      if (parsed.isJson && parsed.json?.error) {
+      if (parsed.isJson && parsed.json?.error && res.status !== 404) {
         throw new Error(parsed.json.error);
       }
     } catch (err: any) {
@@ -1334,6 +1399,28 @@ export const api = {
         throw err;
       }
     }
+
+    // Direct Supabase fallback
+    try {
+      const sbProblems = await getCustomerProblemsFromSupabase();
+      const found = sbProblems.find(p => p.caseNumber.toUpperCase() === caseNumber.trim().toUpperCase());
+      if (found) {
+        return {
+          id: found.id,
+          caseNumber: found.caseNumber,
+          orderNumber: found.orderNumber,
+          customerName: found.customerName,
+          category: found.category,
+          priority: found.priority,
+          status: found.status,
+          assignedTo: found.assignedTo,
+          createdAt: found.createdAt,
+          updatedAt: found.updatedAt,
+          resolution: found.resolution,
+          resolvedAt: found.resolvedAt
+        };
+      }
+    } catch {}
 
     throw new Error(`Case #${caseNumber} not found.`);
   },
@@ -1841,7 +1928,7 @@ export const api = {
     return { message: `Deleted ${paymentIds.length} payment records`, count: paymentIds.length };
   },
 
-  // Payments
+  // Payments & SMS
   async adminGetPayments(): Promise<PaymentConfirmation[]> {
     try {
       const res = await fetch('/api/admin/payments', { headers: getAuthHeaders() });
@@ -1857,6 +1944,82 @@ export const api = {
     } catch {}
 
     return [];
+  },
+
+  async adminGetPaymentTransactions(): Promise<{
+    confirmations: PaymentConfirmation[];
+    transactions: PaymentTransaction[];
+    smsNotifications: SmsNotification[];
+  }> {
+    try {
+      const res = await fetch('/api/admin/payment-transactions', { headers: getAuthHeaders() });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        return {
+          confirmations: Array.isArray(parsed.json.confirmations) ? parsed.json.confirmations : [],
+          transactions: Array.isArray(parsed.json.transactions) ? parsed.json.transactions : [],
+          smsNotifications: Array.isArray(parsed.json.smsNotifications) ? parsed.json.smsNotifications : []
+        };
+      }
+    } catch {}
+
+    try {
+      const [confirmations, transactions, smsNotifications] = await Promise.all([
+        getPaymentsFromSupabase(),
+        getPaymentTransactionsFromSupabase(),
+        getSmsNotificationsFromSupabase()
+      ]);
+      return { confirmations, transactions, smsNotifications };
+    } catch {}
+
+    return { confirmations: [], transactions: [], smsNotifications: [] };
+  },
+
+  async adminSendSmsNotification(payload: {
+    phone: string;
+    recipientName?: string;
+    message: string;
+    orderNumber?: string;
+    paymentId?: string;
+    provider?: string;
+  }): Promise<{ success: boolean; smsNotification: SmsNotification; messageRecord?: AdminMessage }> {
+    try {
+      const res = await fetch('/api/admin/sms-notifications/send', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json) {
+        if (parsed.json.smsNotification) {
+          saveSmsNotificationToSupabase(parsed.json.smsNotification).catch(() => {});
+        }
+        return parsed.json;
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        throw new Error(parsed.json.error);
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+        throw err;
+      }
+    }
+
+    const smsNotification: SmsNotification = {
+      id: `sms-out-${Date.now()}`,
+      direction: 'outgoing',
+      senderPhone: '0780022600',
+      senderName: 'ContactReach Admin',
+      recipientPhone: payload.phone,
+      provider: payload.provider || 'ContactReach SMS Gateway',
+      message: payload.message,
+      orderNumber: payload.orderNumber,
+      paymentId: payload.paymentId,
+      status: 'sent',
+      createdAt: new Date().toISOString()
+    };
+    await saveSmsNotificationToSupabase(smsNotification).catch(() => {});
+    return { success: true, smsNotification };
   },
 
   async adminVerifyPayment(confirmationId: string, action: 'approve' | 'reject' | 'under_verification' | 'refund', adminNotes?: string): Promise<any> {
@@ -3634,6 +3797,21 @@ export const api = {
         return parsed.json;
       }
     } catch {}
+    const buyer = getStoredBuyerUser();
+    if (buyer) {
+      try {
+        const sbMsgs = await getMessagesFromSupabase();
+        const phoneDigits = String(buyer.phone || '').replace(/\D/g, '').slice(-9);
+        const emailLower = String(buyer.email || '').toLowerCase().trim();
+        return sbMsgs
+          .filter(m =>
+            (m.customerId && m.customerId === buyer.id) ||
+            (phoneDigits && m.phone && String(m.phone).replace(/\D/g, '').endsWith(phoneDigits)) ||
+            (emailLower && m.email && m.email.toLowerCase().trim() === emailLower)
+          )
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      } catch {}
+    }
     return [];
   },
 
@@ -3647,6 +3825,7 @@ export const api = {
     if (!res.ok || !parsed.isJson || !parsed.json?.data) {
       throw new Error(parsed.json?.message || 'Failed to send message');
     }
+    submitMessageToFirestore(parsed.json.data).catch(() => {});
     return parsed.json.data;
   },
 
@@ -3664,6 +3843,29 @@ export const api = {
     return { success: false, updatedCount: 0 };
   },
 
+  async buyerGetReports(): Promise<CustomerProblemReport[]> {
+    try {
+      const res = await fetch('/api/buyers/reports', { headers: getBuyerAuthHeaders() });
+      const parsed = await safeParseResponse<CustomerProblemReport[]>(res);
+      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+        return parsed.json;
+      }
+    } catch {}
+    const buyer = getStoredBuyerUser();
+    if (buyer) {
+      try {
+        const sbProbs = await getCustomerProblemsFromSupabase();
+        const phoneDigits = String(buyer.phone || '').replace(/\D/g, '').slice(-9);
+        const emailLower = String(buyer.email || '').toLowerCase().trim();
+        return sbProbs.filter(r =>
+          (phoneDigits && r.customerPhone && String(r.customerPhone).replace(/\D/g, '').endsWith(phoneDigits)) ||
+          (emailLower && r.customerEmail && r.customerEmail.toLowerCase().trim() === emailLower)
+        );
+      } catch {}
+    }
+    return [];
+  },
+
   async adminGetConversations(): Promise<CustomerConversation[]> {
     try {
       const res = await fetch('/api/admin/conversations', { headers: getAuthHeaders() });
@@ -3671,6 +3873,46 @@ export const api = {
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
         return parsed.json;
       }
+    } catch {}
+    try {
+      const sbMsgs = await getMessagesFromSupabase();
+      const map = new Map<string, CustomerConversation>();
+      for (const m of sbMsgs) {
+        const key = m.customerId || m.phone || m.email || m.id;
+        const existing = map.get(key);
+        if (!existing) {
+          map.set(key, {
+            customerId: key,
+            customerName: m.name || 'Customer',
+            customerEmail: m.email,
+            customerPhone: m.phone,
+            lastMessage: m.message,
+            lastMessageAt: m.createdAt,
+            lastSender: (m.sender || 'customer') as any,
+            unreadAdminCount: m.status === 'unread' && m.sender !== 'admin' ? 1 : 0,
+            unreadCustomerCount: m.isReadByCustomer === false && m.sender === 'admin' ? 1 : 0,
+            totalMessages: 1,
+            orderNumbers: m.orderNumber ? [m.orderNumber] : []
+          });
+        } else {
+          existing.totalMessages += 1;
+          if (m.status === 'unread' && m.sender !== 'admin') existing.unreadAdminCount += 1;
+          if (m.orderNumber) {
+            existing.orderNumbers = existing.orderNumbers || [];
+            if (!existing.orderNumbers.includes(m.orderNumber)) {
+              existing.orderNumbers.push(m.orderNumber);
+            }
+          }
+          if (new Date(m.createdAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
+            existing.lastMessage = m.message;
+            existing.lastMessageAt = m.createdAt;
+            existing.lastSender = (m.sender || 'customer') as any;
+          }
+        }
+      }
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+      );
     } catch {}
     return [];
   },
@@ -3682,6 +3924,17 @@ export const api = {
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
         return parsed.json;
       }
+    } catch {}
+    try {
+      const sbMsgs = await getMessagesFromSupabase();
+      const clean = customerId.toLowerCase().trim();
+      return sbMsgs
+        .filter(m =>
+          m.customerId === customerId ||
+          (m.email && m.email.toLowerCase().trim() === clean) ||
+          (m.phone && clean.length >= 7 && m.phone.replace(/\D/g, '') === clean.replace(/\D/g, ''))
+        )
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     } catch {}
     return [];
   },
@@ -3696,6 +3949,7 @@ export const api = {
     if (!res.ok || !parsed.isJson || !parsed.json?.data) {
       throw new Error((parsed.json as any)?.error || 'Failed to send reply');
     }
+    submitMessageToFirestore(parsed.json.data).catch(() => {});
     return parsed.json.data;
   },
 

@@ -287,7 +287,7 @@ export function NotFoundPage({
                 >
                   <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0">
                     <img
-                      src={item.imageUrl}
+                      src={item.imageUrl?.trim() ? item.imageUrl : '/logo.png'}
                       alt={item.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       onError={(e) => {
