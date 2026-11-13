@@ -2771,6 +2771,226 @@ async function runTests() {
     }
   });
 
+  // TEST 66: Admin Invitation System (Security, Single-Use, Expiration, Verification & Revocation)
+  await test('Admin Invitation System enforces owner-only generation, verification, single-use, expiration, and revocation', async () => {
+    const inviteEmail = `invited.admin.${Date.now()}@contactreachmedia.rw`;
+    const inviteUsername = `inv_adm_${Date.now().toString().slice(-6)}`;
+    const invitePassword = 'StrongAdmin!2026';
+    const revokedEmail = `revoked.admin.${Date.now()}@contactreachmedia.rw`;
+
+    // 1. Unauthenticated caller cannot list or generate invitations
+    const unauthList = await fetch(`${BASE_URL}/api/admin/invitations`);
+    assert.strictEqual(unauthList.status, 401, 'Unauthenticated invitation list must return 401');
+
+    const unauthCreate = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inviteeName: 'Unauthorized Caller',
+        inviteeEmail: inviteEmail,
+        role: 'administrator',
+        expiresInHours: 24
+      })
+    });
+    assert.strictEqual(unauthCreate.status, 401, 'Unauthenticated invitation creation must return 401');
+
+    // 2. Reject past expiration timestamps
+    const pastCreate = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        inviteeName: 'Past Expiry Test',
+        inviteeEmail: inviteEmail,
+        role: 'product_manager',
+        expiresAt: new Date(Date.now() - 60000).toISOString()
+      })
+    });
+    assert.strictEqual(pastCreate.status, 400, 'Invitation with past expiration must be rejected with 400');
+
+    // 3. Main admin generates a unique single-use invitation link
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const createRes = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        inviteeName: 'Verified Staff Admin',
+        inviteeEmail: inviteEmail,
+        inviteePhone: '0788112233',
+        role: 'product_manager',
+        expiresAt
+      })
+    });
+    assert.strictEqual(createRes.status, 201, 'Main admin must be able to generate invitation link');
+    const createdData = await createRes.json();
+    assert(createdData.invitation?.id, 'Invitation ID required');
+    assert.strictEqual(createdData.invitation.status, 'Pending');
+    assert(createdData.invitePath?.includes('/admin/invite?token='), 'Must return unique invitePath');
+    assert(/^\d{6}$/.test(createdData.verificationCode), 'Must return 6-digit verification code');
+
+    const rawToken = decodeURIComponent(createdData.invitePath.split('token=')[1]);
+    const verificationCode = createdData.verificationCode;
+
+    // 4. Verify invitation token via public verification endpoint
+    const verifyRes = await fetch(`${BASE_URL}/api/admin/invitations/verify?token=${encodeURIComponent(rawToken)}`);
+    assert.strictEqual(verifyRes.status, 200, 'Valid pending invitation token must verify');
+    const verifyData = await verifyRes.json();
+    assert.strictEqual(verifyData.valid, true);
+    assert.strictEqual(verifyData.invitation.role, 'product_manager');
+
+    // 5. Reject acceptance when email does not match or verification code is wrong or password is weak
+    const wrongEmailRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: rawToken,
+        email: 'wrong.person@example.com',
+        verificationCode,
+        username: inviteUsername,
+        password: invitePassword
+      })
+    });
+    assert.strictEqual(wrongEmailRes.status, 403, 'Mismatched email must be rejected with 403');
+
+    const wrongCodeRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: rawToken,
+        email: inviteEmail,
+        verificationCode: '000000',
+        username: inviteUsername,
+        password: invitePassword
+      })
+    });
+    assert.strictEqual(wrongCodeRes.status, 403, 'Wrong verification code must be rejected with 403');
+
+    const weakPassRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: rawToken,
+        email: inviteEmail,
+        verificationCode,
+        username: inviteUsername,
+        password: '123'
+      })
+    });
+    assert.strictEqual(weakPassRes.status, 400, 'Weak password must be rejected with 400');
+
+    // 6. Valid verification & acceptance activates the new admin account
+    const acceptRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: rawToken,
+        email: inviteEmail,
+        verificationCode,
+        username: inviteUsername,
+        password: invitePassword
+      })
+    });
+    assert.strictEqual(acceptRes.status, 201, 'Valid verification and acceptance must succeed');
+    const acceptData = await acceptRes.json();
+    assert(acceptData.token, 'Accepted invite must issue signed admin token');
+    assert.strictEqual(acceptData.admin.email, inviteEmail);
+    assert.strictEqual(acceptData.admin.role, 'product_manager');
+    assert.strictEqual(acceptData.admin.verified, true);
+    const invitedAdminId = acceptData.admin.id;
+    const invitedAdminToken = acceptData.token;
+
+    // 7. Single-use enforcement: reusing the accepted token must fail with 410
+    const reuseVerifyRes = await fetch(`${BASE_URL}/api/admin/invitations/verify?token=${encodeURIComponent(rawToken)}`);
+    assert.strictEqual(reuseVerifyRes.status, 410, 'Already accepted token must return 410 on verify');
+
+    const reuseAcceptRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: rawToken,
+        email: inviteEmail,
+        verificationCode,
+        username: `${inviteUsername}_2`,
+        password: invitePassword
+      })
+    });
+    assert.strictEqual(reuseAcceptRes.status, 410, 'Already accepted token must return 410 on second accept');
+
+    // 8. Verified invited admin can authenticate, access permitted routes, and is blocked from owner-only invitation management
+    const invitedMeRes = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${invitedAdminToken}` }
+    });
+    assert.strictEqual(invitedMeRes.status, 200, 'Invited admin session must authenticate via /api/auth/me');
+
+    const nonOwnerInvRes = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      headers: { Authorization: `Bearer ${invitedAdminToken}` }
+    });
+    assert.strictEqual(nonOwnerInvRes.status, 403, 'Non-owner invited admin must be denied /api/admin/invitations with 403');
+
+    const invitedLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: inviteUsername, password: invitePassword })
+    });
+    assert.strictEqual(invitedLoginRes.status, 200, 'Verified invited admin must be able to log in with username + password');
+    const invitedLoginData = await invitedLoginRes.json();
+    assert(invitedLoginData.token);
+
+    // 9. Generate another invitation and revoke it immediately
+    const createRevokeRes = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        inviteeName: 'Revoked Admin Candidate',
+        inviteeEmail: revokedEmail,
+        role: 'customer_support',
+        expiresInHours: 12
+      })
+    });
+    assert.strictEqual(createRevokeRes.status, 201);
+    const revokeTarget = await createRevokeRes.json();
+    const revokeToken = decodeURIComponent(revokeTarget.invitePath.split('token=')[1]);
+
+    const doRevokeRes = await fetch(`${BASE_URL}/api/admin/invitations/${revokeTarget.invitation.id}/revoke`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(doRevokeRes.status, 200);
+    const revokedJson = await doRevokeRes.json();
+    assert.strictEqual(revokedJson.invitation.status, 'Revoked');
+
+    const verifyRevokedRes = await fetch(`${BASE_URL}/api/admin/invitations/verify?token=${encodeURIComponent(revokeToken)}`);
+    assert.strictEqual(verifyRevokedRes.status, 410, 'Revoked invitation token must return 410');
+
+    // 10. Deleting the invited admin immediately revokes their active session tokens
+    const delUserRes = await fetch(`${BASE_URL}/api/admin/users/${invitedAdminId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.strictEqual(delUserRes.status, 200, 'Owner must be able to remove invited admin');
+
+    const postDeleteMeRes = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${invitedLoginData.token}` }
+    });
+    assert.strictEqual(postDeleteMeRes.status, 403, 'Deleted invited admin token must be immediately invalidated');
+
+    // 11. Clean up test invitation records
+    for (const invId of [createdData.invitation.id, revokeTarget.invitation.id]) {
+      await fetch(`${BASE_URL}/api/admin/invitations/${invId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+    }
+  });
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

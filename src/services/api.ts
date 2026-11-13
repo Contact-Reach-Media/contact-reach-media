@@ -2,7 +2,8 @@ import {
   Product, Order, PaymentConfirmation, AppSettings, Category, OrderStatus, OrderDeliveryStatus,
   VendorShop, PaymentStatus, PaymentMethod, ProductStatus, AdminMessage, AdminNotification, CustomerConversation,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
-  PaymentMethodConfig, ProductReview, AdminUser, AdminRole, ProblemCategory, ProblemPriority,
+  PaymentMethodConfig, ProductReview, AdminUser, AdminRole, AdminInvitation,
+  ProblemCategory, ProblemPriority,
   CjDropshippingConfig, GoogleDriveBackupStatus, GoogleSheetSyncConfig,
   AlibabaConfig, AlibabaShippingQuote, DsersConfig
 } from '../types.ts';
@@ -3861,6 +3862,125 @@ export const api = {
       throw new Error(parsed.json?.error || 'Failed to bulk delete admin users');
     }
     return parsed.json;
+  },
+
+  // -----------------------------------------------------------
+  // ADMIN INVITATIONS (SINGLE-USE, EXPIRING, VERIFIED)
+  // -----------------------------------------------------------
+
+  async adminGetInvitations(): Promise<AdminInvitation[]> {
+    const res = await fetch('/api/admin/invitations', {
+      headers: getAuthHeaders(),
+      cache: 'no-store'
+    });
+    const parsed = await safeParseResponse<AdminInvitation[]>(res);
+    if (!res.ok || !parsed.isJson || !Array.isArray(parsed.json)) {
+      throw new Error((parsed.json as any)?.error || 'Failed to fetch admin invitations');
+    }
+    return parsed.json;
+  },
+
+  async adminCreateInvitation(payload: {
+    inviteeName: string;
+    inviteeEmail: string;
+    inviteePhone?: string;
+    role: AdminRole;
+    expiresAt?: string;
+    expiresInHours?: number;
+    notes?: string;
+  }): Promise<{
+    invitation: AdminInvitation;
+    inviteUrl: string;
+    invitePath: string;
+    verificationCode: string;
+  }> {
+    const res = await fetch('/api/admin/invitations', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to generate admin invitation link');
+    }
+    return parsed.json;
+  },
+
+  async adminRevokeInvitation(id: string): Promise<{ message: string; invitation: AdminInvitation }> {
+    const res = await fetch(`/api/admin/invitations/${encodeURIComponent(id)}/revoke`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to revoke invitation');
+    }
+    return parsed.json;
+  },
+
+  async adminDeleteInvitation(id: string): Promise<{ message: string; id: string }> {
+    const res = await fetch(`/api/admin/invitations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (!res.ok || !parsed.isJson || !parsed.json) {
+      throw new Error(parsed.json?.error || 'Failed to delete invitation');
+    }
+    return parsed.json;
+  },
+
+  async verifyAdminInvitationToken(token: string): Promise<{
+    valid: boolean;
+    status: string;
+    error?: string;
+    invitation?: {
+      id: string;
+      inviteeName: string;
+      maskedEmail: string;
+      role: AdminRole;
+      expiresAt: string;
+      createdAt: string;
+      createdByName: string;
+    };
+  }> {
+    const res = await fetch(`/api/admin/invitations/verify?token=${encodeURIComponent(token)}`, {
+      cache: 'no-store'
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (parsed.isJson && parsed.json) {
+      return parsed.json;
+    }
+    throw new Error('Unable to verify invitation link.');
+  },
+
+  async acceptAdminInvitation(payload: {
+    token: string;
+    email: string;
+    verificationCode: string;
+    name?: string;
+    username: string;
+    phone?: string;
+    password: string;
+  }): Promise<{
+    success: boolean;
+    token: string;
+    admin: AdminUser;
+    expiresAt: number;
+    redirectTo?: string;
+  }> {
+    const res = await fetch('/api/admin/invitations/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify(payload)
+    });
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
+      setAdminToken(parsed.json.token, parsed.json.admin);
+      return parsed.json;
+    }
+    throw new Error(parsed.json?.error || 'Failed to verify and accept administrator invitation.');
   },
 
   async getHealthCheck(): Promise<any> {

@@ -101,6 +101,34 @@ export interface AdminUser {
   active: boolean;
   lastLogin?: string;
   phone?: string;
+  verified?: boolean;
+  invitedBy?: string;
+  invitationId?: string;
+}
+
+export type AdminInvitationStatus = 'Pending' | 'Accepted' | 'Revoked' | 'Expired';
+
+export interface AdminInvitation {
+  id: string;
+  inviteeName: string;
+  inviteeEmail: string;
+  inviteePhone?: string;
+  role: AdminRole;
+  status: AdminInvitationStatus;
+  tokenPreview?: string;
+  inviteUrl?: string;
+  verificationCode?: string;
+  createdById: string;
+  createdByName: string;
+  createdByEmail: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt?: string;
+  acceptedUserId?: string;
+  acceptedUsername?: string;
+  revokedAt?: string;
+  revokedBy?: string;
+  notes?: string;
 }
 
 export interface ProductVariation {

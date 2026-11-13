@@ -9,13 +9,13 @@ import {
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders, SlidersHorizontal,
   Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles,
-  Database, Bell, MessageSquare, Volume2
+  Database, Bell, MessageSquare, Volume2, Link2, UserPlus, Ban
 } from 'lucide-react';
 import {
   Product, Order, PaymentConfirmation, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
   PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage, AdminNotification,
   CustomerProblemReport, Coupon, InventoryLog, AuditLog, CustomerUser,
-  AdminUser, AdminRole, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority,
+  AdminUser, AdminRole, AdminInvitation, PaymentMethodConfig, ProductVariation, ProblemStatus, ProblemPriority,
   GoogleDriveBackupStatus
 } from '../types.ts';
 import { api, getStoredAdminUser, isAuthorizedAdminUser } from '../services/api.ts';
@@ -587,12 +587,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [notifPanelOpen]);
-  const [newUserModalOpen, setNewUserModalOpen] = useState(false);
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserPhone, setNewUserPhone] = useState('');
-  const [newUserRole, setNewUserRole] = useState<AdminRole>('administrator');
-  const [creatingUser, setCreatingUser] = useState(false);
+  const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
+  const [inviteFilter, setInviteFilter] = useState<'all' | 'Pending' | 'Accepted' | 'Revoked' | 'Expired'>('all');
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteName, setInviteName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePhone, setInvitePhone] = useState('');
+  const [inviteRole, setInviteRole] = useState<AdminRole>('administrator');
+  const [inviteExpiryPreset, setInviteExpiryPreset] = useState<'1h' | '24h' | '72h' | '168h' | 'custom'>('24h');
+  const [inviteCustomExpiresAt, setInviteCustomExpiresAt] = useState(() => {
+    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  });
+  const [inviteNotes, setInviteNotes] = useState('');
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [generatedInviteResult, setGeneratedInviteResult] = useState<{
+    invitation: AdminInvitation;
+    inviteUrl: string;
+    verificationCode: string;
+  } | null>(null);
+  const [copiedInviteKey, setCopiedInviteKey] = useState<string | null>(null);
   const [disbursePayoutModal, setDisbursePayoutModal] = useState<any | null>(null);
   const [disburseRefInput, setDisburseRefInput] = useState('');
   const [disburseLoading, setDisburseLoading] = useState(false);
@@ -1763,6 +1778,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (Array.isArray(fetchedAuditLogs)) setAuditLogs(fetchedAuditLogs);
       if (Array.isArray(fetchedCustomers)) setCustomers(fetchedCustomers);
       if (Array.isArray(fetchedAdminUsers)) setAdminUsers(fetchedAdminUsers);
+      if (currentUser?.role === 'owner') {
+        api.adminGetInvitations()
+          .then(list => {
+            if (Array.isArray(list)) setInvitations(list);
+          })
+          .catch(() => {});
+      }
       if (Array.isArray(fetchedSupplierApps)) setSupplierApplications(fetchedSupplierApps);
       if (Array.isArray(fetchedSupplierPayouts)) setSupplierPayouts(fetchedSupplierPayouts);
       if (fetchedSettings && typeof fetchedSettings === 'object') setSettings(fetchedSettings);
@@ -7755,21 +7777,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {/* TAB 12B: TEAM & ROLES MANAGEMENT */}
+          {/* TAB 12B: TEAM & ROLES MANAGEMENT + ADMIN INVITATION SYSTEM */}
           {activeTab === 'team' && (
             <div className="space-y-6 max-w-5xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h1 className="text-xl font-black text-slate-900 tracking-tight">Administrative Team & Role Permissions</h1>
-                  <p className="text-xs text-slate-500">Manage staff roles, access privileges, and security enforcement. Account revocations take effect immediately.</p>
+                  <p className="text-xs text-slate-500">Invite verified administrators via single-use expiring links, manage roles, and enforce immediate revocation.</p>
                 </div>
                 {currentUser?.role === 'owner' && (
                   <button
-                    onClick={() => setNewUserModalOpen(true)}
+                    onClick={() => {
+                      const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                      setInviteCustomExpiresAt(d.toISOString().slice(0, 16));
+                      setInviteExpiryPreset('24h');
+                      setGeneratedInviteResult(null);
+                      setInviteModalOpen(true);
+                    }}
                     className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Team Member</span>
+                    <UserPlus className="w-4 h-4" />
+                    <span>Generate Invitation Link</span>
                   </button>
                 )}
               </div>
@@ -7778,26 +7807,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-200/80 rounded-2xl p-4 flex items-start gap-3">
                 <ShieldCheck className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                 <div className="text-xs text-slate-700 leading-relaxed">
-                  <strong className="font-bold text-slate-900">Enforced Role-Based Access Control (RBAC):</strong>
+                  <strong className="font-bold text-slate-900">Enforced Role-Based Access Control & Verified Invitations:</strong>
                   <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600 text-[11px]">
-                    <li><span className="font-semibold text-slate-800">Owner:</span> Full operational and team authority across all functions.</li>
+                    <li><span className="font-semibold text-slate-800">Owner (Main Admin):</span> Generates single-use invitation links, revokes access, and manages team authority.</li>
                     <li><span className="font-semibold text-slate-800">Administrator:</span> Catalog, orders, payments, coupons, and customer inquiries.</li>
-                    <li><span className="font-semibold text-slate-800">Product Manager:</span> Product catalog creation, pricing, and inventory adjustments.</li>
+                    <li><span className="font-semibold text-slate-800">Product / Shop / Order Managers:</span> Role-scoped management access after invitation verification.</li>
                     <li><span className="font-semibold text-slate-800">Customer Support:</span> Inquiry messages, problem tickets, and order tracking assistance.</li>
                   </ul>
                 </div>
               </div>
 
-              {/* Team Table */}
+              {/* Active Admin Team Table */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider">Authorized Admin Accounts ({adminUsers.length})</h2>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px]">
                         <th className="py-3 px-4">Member Name</th>
+                        <th className="py-3 px-3">Username</th>
                         <th className="py-3 px-3">Email Address</th>
                         <th className="py-3 px-3">Role</th>
-                        <th className="py-3 px-3">Phone</th>
                         <th className="py-3 px-3">Status</th>
                         <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
@@ -7806,11 +7838,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       {adminUsers.map(u => (
                         <tr key={u.id} className="hover:bg-slate-50/60">
                           <td className="py-3 px-4 font-bold text-slate-900">
-                            {u.name}
-                            {u.email.toLowerCase() === currentUser?.email.toLowerCase() && (
-                              <span className="ml-2 text-[10px] bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded-full">You</span>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{u.name}</span>
+                              {u.email.toLowerCase() === currentUser?.email.toLowerCase() && (
+                                <span className="text-[10px] bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded-full">You</span>
+                              )}
+                              {u.verified && u.role !== 'owner' && (
+                                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
+                                  <CheckCircle2 className="w-2.5 h-2.5" /> Verified
+                                </span>
+                              )}
+                            </div>
                           </td>
+                          <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{u.username || '—'}</td>
                           <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{u.email}</td>
                           <td className="py-3 px-3">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -7823,7 +7863,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               {u.role.replace('_', ' ')}
                             </span>
                           </td>
-                          <td className="py-3 px-3 text-slate-600">{u.phone || '—'}</td>
                           <td className="py-3 px-3">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               u.active !== false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
@@ -7876,6 +7915,193 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </table>
                 </div>
               </div>
+
+              {/* Main Admin Invitation Tracking & Management Panel */}
+              {currentUser?.role === 'owner' && (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="px-4 py-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70">
+                    <div>
+                      <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                        <Link2 className="w-4 h-4 text-[#FF6000]" />
+                        <span>Admin Invitation Links & Verification Tracking</span>
+                      </h2>
+                      <p className="text-[11px] text-slate-500">
+                        Track single-use invitation links, expiration timestamps, 6-digit verification codes, and instant revocations.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      {(['all', 'Pending', 'Accepted', 'Revoked', 'Expired'] as const).map((statusKey) => {
+                        const count = statusKey === 'all'
+                          ? invitations.length
+                          : invitations.filter(i => i.status === statusKey).length;
+                        return (
+                          <button
+                            key={statusKey}
+                            onClick={() => setInviteFilter(statusKey)}
+                            className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer transition-colors ${
+                              inviteFilter === statusKey
+                                ? 'bg-slate-900 text-white'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {statusKey === 'all' ? 'All' : statusKey} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {invitations.filter(i => inviteFilter === 'all' || i.status === inviteFilter).length === 0 ? (
+                    <div className="p-8 text-center space-y-2 text-xs text-slate-500">
+                      <Link2 className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="font-bold text-slate-700">No {inviteFilter === 'all' ? '' : inviteFilter.toLowerCase() + ' '}invitations found</p>
+                      <p className="text-[11px]">Click "Generate Invitation Link" to create a secure, single-use, expiring invitation for a new administrator.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px]">
+                            <th className="py-3 px-4">Invitee</th>
+                            <th className="py-3 px-3">Role</th>
+                            <th className="py-3 px-3">Status</th>
+                            <th className="py-3 px-3">Expiration / Lifecycle</th>
+                            <th className="py-3 px-3">Link & Verification Code</th>
+                            <th className="py-3 px-4 text-right">Manage</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {invitations
+                            .filter(i => inviteFilter === 'all' || i.status === inviteFilter)
+                            .map((inv) => {
+                              const effectiveUrl = inv.inviteUrl
+                                ? (inv.inviteUrl.startsWith('http') ? inv.inviteUrl : `${window.location.origin}${inv.inviteUrl}`)
+                                : '';
+                              return (
+                                <tr key={inv.id} className="hover:bg-slate-50/60 align-top">
+                                  <td className="py-3 px-4">
+                                    <div className="font-bold text-slate-900">{inv.inviteeName}</div>
+                                    <div className="text-[11px] font-mono text-slate-500">{inv.inviteeEmail}</div>
+                                    {inv.notes && (
+                                      <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate">{inv.notes}</div>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                                      {inv.role.replace('_', ' ')}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      inv.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                      inv.status === 'Accepted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                      inv.status === 'Revoked' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                                      'bg-slate-100 text-slate-600 border border-slate-200'
+                                    }`}>
+                                      {inv.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 text-[11px] text-slate-600 space-y-0.5">
+                                    <div>Created: {new Date(inv.createdAt).toLocaleString()}</div>
+                                    <div>Expires: {new Date(inv.expiresAt).toLocaleString()}</div>
+                                    {inv.acceptedAt && (
+                                      <div className="text-emerald-700 font-semibold">
+                                        Accepted: {new Date(inv.acceptedAt).toLocaleString()}
+                                      </div>
+                                    )}
+                                    {inv.revokedAt && (
+                                      <div className="text-rose-700 font-semibold">
+                                        Revoked: {new Date(inv.revokedAt).toLocaleString()}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    {inv.status === 'Pending' && effectiveUrl ? (
+                                      <div className="space-y-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <button
+                                            onClick={async () => {
+                                              try {
+                                                await navigator.clipboard.writeText(effectiveUrl);
+                                                setCopiedInviteKey(`url-${inv.id}`);
+                                                setTimeout(() => setCopiedInviteKey(null), 2000);
+                                                showToast('Invitation link copied to clipboard');
+                                              } catch {
+                                                showToast('Copy failed. Please copy manually.', 'error');
+                                              }
+                                            }}
+                                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-[10px] cursor-pointer"
+                                          >
+                                            {copiedInviteKey === `url-${inv.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                            <span>{copiedInviteKey === `url-${inv.id}` ? 'Copied' : 'Copy Link'}</span>
+                                          </button>
+                                          {inv.verificationCode && (
+                                            <button
+                                              onClick={async () => {
+                                                try {
+                                                  await navigator.clipboard.writeText(inv.verificationCode || '');
+                                                  setCopiedInviteKey(`code-${inv.id}`);
+                                                  setTimeout(() => setCopiedInviteKey(null), 2000);
+                                                  showToast('Verification code copied');
+                                                } catch {}
+                                              }}
+                                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-[10px] cursor-pointer"
+                                            >
+                                              <KeyRound className="w-3 h-3 text-slate-500" />
+                                              <span>{inv.verificationCode}</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[11px] text-slate-400 italic">Link invalidated</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                                    {inv.status === 'Pending' && (
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            await api.adminRevokeInvitation(inv.id);
+                                            showToast('Invitation revoked and invalidated immediately');
+                                            fetchAllData(true);
+                                          } catch (err: any) {
+                                            showToast(err.message || 'Failed to revoke invitation', 'error');
+                                          }
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer transition-colors"
+                                      >
+                                        <Ban className="w-3 h-3" />
+                                        <span>Revoke</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={async () => {
+                                        if (window.confirm(`Delete invitation record for ${inv.inviteeName}?`)) {
+                                          try {
+                                            await api.adminDeleteInvitation(inv.id);
+                                            showToast('Invitation record deleted');
+                                            fetchAllData(true);
+                                          } catch (err: any) {
+                                            showToast(err.message || 'Failed to delete invitation', 'error');
+                                          }
+                                        }
+                                      }}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 cursor-pointer transition-colors"
+                                      title="Delete record"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -8650,109 +8876,288 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </main>
       </div>
 
-      {/* MODAL: ADD TEAM MEMBER */}
-      {newUserModalOpen && (
+      {/* MODAL: GENERATE SECURE ADMIN INVITATION LINK */}
+      {inviteModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-black text-base text-slate-900">Add Administrative Staff Member</h3>
-              <button onClick={() => setNewUserModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#FF6000] flex items-center justify-center">
+                  <Link2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900">
+                    {generatedInviteResult ? 'Invitation Link Generated' : 'Generate Admin Invitation Link'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Single-use, expiring link with mandatory email & code verification
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setInviteModalOpen(false);
+                  setGeneratedInviteResult(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form
-              onSubmit={async e => {
-                e.preventDefault();
-                if (!newUserName.trim() || !newUserEmail.trim()) {
-                  showToast('Name and email are required', 'error');
-                  return;
-                }
-                setCreatingUser(true);
-                try {
-                  await api.adminCreateUser({
-                    name: newUserName.trim(),
-                    email: newUserEmail.trim(),
-                    role: newUserRole,
-                    phone: newUserPhone.trim() || undefined
-                  });
-                  showToast('Staff member added successfully!');
-                  setNewUserModalOpen(false);
-                  setNewUserName('');
-                  setNewUserEmail('');
-                  setNewUserPhone('');
-                  fetchAllData();
-                } catch (err: any) {
-                  showToast(err.message || 'Failed to create staff member', 'error');
-                } finally {
-                  setCreatingUser(false);
-                }
-              }}
-              className="space-y-3"
-            >
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Eric Kwizera"
-                  value={newUserName}
-                  onChange={e => setNewUserName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
-                />
+
+            {generatedInviteResult ? (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
+                  <div className="font-black flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Unique Single-Use Invitation Ready</span>
+                  </div>
+                  <p className="text-[11px]">
+                    Share both the <strong>Invitation Link</strong> and the <strong>6-Digit Verification Code</strong> with{' '}
+                    <strong>{generatedInviteResult.invitation.inviteeName}</strong> ({generatedInviteResult.invitation.inviteeEmail}).
+                    The link automatically becomes invalid after acceptance, revocation, or expiration.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 block">Unique Invitation Link</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={generatedInviteResult.inviteUrl}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-mono text-[11px] text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(generatedInviteResult.inviteUrl);
+                          setCopiedInviteKey('modal-url');
+                          setTimeout(() => setCopiedInviteKey(null), 2000);
+                          showToast('Invitation link copied!');
+                        } catch {
+                          showToast('Copy failed', 'error');
+                        }
+                      }}
+                      className="px-3 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shrink-0 cursor-pointer inline-flex items-center gap-1"
+                    >
+                      {copiedInviteKey === 'modal-url' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedInviteKey === 'modal-url' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block">6-Digit Verification Code</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-lg font-black font-mono tracking-widest text-slate-900">
+                        {generatedInviteResult.verificationCode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(generatedInviteResult.verificationCode);
+                            setCopiedInviteKey('modal-code');
+                            setTimeout(() => setCopiedInviteKey(null), 2000);
+                            showToast('Verification code copied!');
+                          } catch {}
+                        }}
+                        className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-bold text-[10px] cursor-pointer"
+                      >
+                        {copiedInviteKey === 'modal-code' ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <span className="text-[10px] font-extrabold uppercase text-amber-700 block">Expires At</span>
+                    <div className="font-bold text-amber-900 mt-1">
+                      {new Date(generatedInviteResult.invitation.expiresAt).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInviteModalOpen(false);
+                      setGeneratedInviteResult(null);
+                    }}
+                    className="px-4 py-2 bg-slate-900 hover:bg-black text-white font-bold rounded-xl cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="staff@contactreachmedia.rw"
-                  value={newUserEmail}
-                  onChange={e => setNewUserEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-[11px]"
-                />
-              </div>
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Phone Number (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="078..."
-                  value={newUserPhone}
-                  onChange={e => setNewUserPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Role & Authority</label>
-                <select
-                  value={newUserRole}
-                  onChange={e => setNewUserRole(e.target.value as AdminRole)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
-                >
-                  <option value="administrator">Administrator (Full operational access)</option>
-                  <option value="product_manager">Product Manager (Catalog & inventory)</option>
-                  <option value="order_manager">Order Manager (Order status & payments)</option>
-                  <option value="customer_support">Customer Support (Inquiries & cases)</option>
-                  <option value="shop_manager">Shop Manager (Vendors & suppliers)</option>
-                  <option value="owner">Owner (Complete platform ownership)</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setNewUserModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingUser}
-                  className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shadow-xs cursor-pointer"
-                >
-                  {creatingUser ? 'Creating...' : 'Create Account'}
-                </button>
-              </div>
-            </form>
+            ) : (
+              <form
+                onSubmit={async e => {
+                  e.preventDefault();
+                  if (!inviteName.trim() || !inviteEmail.trim()) {
+                    showToast('Invitee full name and email address are required', 'error');
+                    return;
+                  }
+                  const parsedExpiry = new Date(inviteCustomExpiresAt);
+                  if (!Number.isFinite(parsedExpiry.getTime()) || parsedExpiry.getTime() <= Date.now() + 60000) {
+                    showToast('Please select an expiration date and time in the future', 'error');
+                    return;
+                  }
+                  setCreatingInvite(true);
+                  try {
+                    const res = await api.adminCreateInvitation({
+                      inviteeName: inviteName.trim(),
+                      inviteeEmail: inviteEmail.trim().toLowerCase(),
+                      inviteePhone: invitePhone.trim() || undefined,
+                      role: inviteRole,
+                      expiresAt: parsedExpiry.toISOString(),
+                      notes: inviteNotes.trim() || undefined
+                    });
+                    const fullUrl = res.inviteUrl.startsWith('http')
+                      ? res.inviteUrl
+                      : `${window.location.origin}${res.invitePath}`;
+                    setGeneratedInviteResult({
+                      invitation: res.invitation,
+                      inviteUrl: fullUrl,
+                      verificationCode: res.verificationCode
+                    });
+                    setInviteName('');
+                    setInviteEmail('');
+                    setInvitePhone('');
+                    setInviteNotes('');
+                    showToast('Secure invitation link generated!');
+                    fetchAllData(true);
+                  } catch (err: any) {
+                    showToast(err.message || 'Failed to generate invitation link', 'error');
+                  } finally {
+                    setCreatingInvite(false);
+                  }
+                }}
+                className="space-y-3"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Invitee Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter recipient full name"
+                      value={inviteName}
+                      onChange={e => setInviteName(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Invitee Email Address *</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="Enter recipient email"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-[11px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Phone Number (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="Enter phone number"
+                      value={invitePhone}
+                      onChange={e => setInvitePhone(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Assigned Role *</label>
+                    <select
+                      value={inviteRole}
+                      onChange={e => setInviteRole(e.target.value as AdminRole)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                    >
+                      <option value="administrator">Administrator (Full operational access)</option>
+                      <option value="product_manager">Product Manager (Catalog & inventory)</option>
+                      <option value="order_manager">Order Manager (Order status & payments)</option>
+                      <option value="customer_support">Customer Support (Inquiries & cases)</option>
+                      <option value="shop_manager">Shop Manager (Vendors & suppliers)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Expiration Date & Time *</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {[
+                      { id: '1h' as const, label: '1 Hour', hours: 1 },
+                      { id: '24h' as const, label: '24 Hours', hours: 24 },
+                      { id: '72h' as const, label: '3 Days', hours: 72 },
+                      { id: '168h' as const, label: '7 Days', hours: 168 }
+                    ].map(preset => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setInviteExpiryPreset(preset.id);
+                          const d = new Date(Date.now() + preset.hours * 60 * 60 * 1000);
+                          d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                          setInviteCustomExpiresAt(d.toISOString().slice(0, 16));
+                        }}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-[11px] cursor-pointer transition-colors ${
+                          inviteExpiryPreset === preset.id
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={inviteCustomExpiresAt}
+                    onChange={e => {
+                      setInviteExpiryPreset('custom');
+                      setInviteCustomExpiresAt(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-[11px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Internal Note (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Optional purpose or department note"
+                    value={inviteNotes}
+                    onChange={e => setInviteNotes(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setInviteModalOpen(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingInvite}
+                    className="px-4 py-2 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {creatingInvite ? 'Generating...' : 'Generate Unique Link'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

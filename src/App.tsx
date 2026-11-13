@@ -31,6 +31,7 @@ import { PaymentPage } from './components/PaymentPage.tsx';
 import { OrderTrackingPage } from './components/OrderTrackingPage.tsx';
 import { CustomerAccountPage } from './components/CustomerAccountPage.tsx';
 import { AdminLoginPage } from './components/AdminLoginPage.tsx';
+import { AdminInviteAcceptPage } from './components/AdminInviteAcceptPage.tsx';
 import { VendorApplicationPage } from './components/VendorApplicationPage.tsx';
 import { AppDownloadPage } from './components/AppDownloadPage.tsx';
 import { CategoriesPage } from './components/CategoriesPage.tsx';
@@ -75,6 +76,7 @@ function parseRouteFromLocation() {
       search: '',
       orderRef: '',
       productId: '',
+      inviteToken: '',
       lang: 'en' as Language,
       currency: 'RWF' as CurrencyCode,
     };
@@ -85,6 +87,7 @@ function parseRouteFromLocation() {
   const catParam = searchParams.get('category');
   const searchParam = searchParams.get('search') || searchParams.get('q');
   const orderParam = searchParams.get('order') || searchParams.get('ref');
+  const tokenParam = searchParams.get('token') || '';
   const langParam = searchParams.get('lang');
   const currParam = searchParams.get('currency');
   const viewParam = searchParams.get('view');
@@ -95,6 +98,8 @@ function parseRouteFromLocation() {
 
   if (viewParam === 'admin' || rawPath === '/admin' || rawPath === '/dashboard') {
     view = 'admin';
+  } else if (viewParam === 'admin-invite' || rawPath === '/admin/invite') {
+    view = 'admin-invite';
   } else if (viewParam === 'admin-login' || rawPath === '/admin/login') {
     view = 'admin-login';
   } else if (viewParam === 'shop' || rawPath === '/shop' || rawPath === '/products' || rawPath === '/catalog') {
@@ -157,6 +162,7 @@ function parseRouteFromLocation() {
     search: searchParam || '',
     orderRef: orderParam || '',
     productId,
+    inviteToken: tokenParam,
     lang: resolvedLang,
     currency: resolvedCurr,
   };
@@ -168,6 +174,7 @@ export default function App() {
   const [currentCurrency, setCurrentCurrency] = useState<CurrencyCode>(initialRoute.currency);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
+  const [inviteToken, setInviteToken] = useState<string>(initialRoute.inviteToken || '');
 
   // Core Data loaded dynamically from Supabase
   const [products, setProducts] = useState<Product[]>([]);
@@ -476,6 +483,9 @@ export default function App() {
       }
       if (route.orderRef) {
         setTrackingOrderNumber(route.orderRef);
+      }
+      if (route.inviteToken) {
+        setInviteToken(route.inviteToken);
       }
       if (route.category) {
         setSelectedCategory(route.category);
@@ -1054,7 +1064,7 @@ export default function App() {
   const recommendedProducts = products.slice(0, visibleRecommendedCount);
 
   // Maintenance mode detection for non-admin visitors
-  const isVisitorUnderMaintenance = !isAdminLoggedIn && Boolean(settings.isMaintenanceMode) && activeView !== 'admin';
+  const isVisitorUnderMaintenance = !isAdminLoggedIn && Boolean(settings.isMaintenanceMode) && activeView !== 'admin' && activeView !== 'admin-login' && activeView !== 'admin-invite';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-slate-800 font-sans antialiased selection:bg-orange-500 selection:text-white">
@@ -1119,7 +1129,7 @@ export default function App() {
           )}
 
           {/* In-App PWA Install Banner (Only on customer-facing storefront) */}
-          {!(activeView === 'admin' && isAdminLoggedIn) && (
+          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-invite' && (
             <PWAInstallBanner
               onOpenModal={() => setIsAppDownloadOpen(true)}
               currentLang={currentLang}
@@ -1127,7 +1137,7 @@ export default function App() {
           )}
 
           {/* Main Storefront Header (Hidden when inside Admin Portal) */}
-          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && (
+          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && activeView !== 'admin-invite' && (
             <Header
               currentLang={currentLang}
               onLanguageChange={handleLanguageChange}
@@ -1167,8 +1177,22 @@ export default function App() {
             />
           )}
 
-      {/* VIEW: ADMIN LOGIN OR DASHBOARD */}
-      {activeView === 'admin' || activeView === 'admin-login' ? (
+      {/* VIEW: ADMIN INVITATION ACCEPTANCE */}
+      {activeView === 'admin-invite' ? (
+        <AdminInviteAcceptPage
+          token={inviteToken}
+          onAcceptSuccess={(user) => {
+            setIsAdminLoggedIn(true);
+            setActiveView('admin');
+            if (typeof window !== 'undefined') {
+              window.history.pushState({ view: 'admin' }, '', '/admin');
+            }
+            showToast(`Account verified! Welcome ${user?.name || ''}`);
+          }}
+          onNavigateHome={() => handleNavigate('home')}
+          onNavigateAdminLogin={() => handleNavigate('admin-login')}
+        />
+      ) : activeView === 'admin' || activeView === 'admin-login' ? (
         isAdminLoggedIn ? (
           <ErrorBoundary fallbackTitle="ContactReach Admin Dashboard">
             <AdminDashboard
