@@ -11,6 +11,7 @@ interface SignInPageProps {
   onSuccess: (user: CustomerUser) => void;
   onNavigateHome: () => void;
   onOpenVendorApplication?: () => void;
+  onOpenAdminLogin?: () => void;
   initialMode?: 'signin' | 'register' | 'forgot';
   currentLang?: Language;
 }
@@ -19,6 +20,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   onSuccess,
   onNavigateHome,
   onOpenVendorApplication,
+  onOpenAdminLogin,
   initialMode = 'signin',
   currentLang = 'rw'
 }) => {
@@ -451,6 +453,19 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {onOpenAdminLogin && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={onOpenAdminLogin}
+                  className="text-slate-500 hover:text-slate-900 font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Store Administrator? Sign in at Admin Portal' : 'Umuyobozi? Injira muri Admin Portal'}</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

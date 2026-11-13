@@ -96,9 +96,12 @@ export async function loginWithSupabasePassword(email: string, password: string)
 /**
  * Sign in using Supabase Google OAuth
  */
-export async function loginWithSupabaseGoogle(): Promise<void> {
+export async function loginWithSupabaseGoogle(redirectPath?: string): Promise<void> {
+  const normalizedPath = redirectPath
+    ? (redirectPath.startsWith('/') ? redirectPath : `/${redirectPath}`)
+    : '';
   const redirectUrl = typeof window !== 'undefined'
-    ? window.location.origin
+    ? `${window.location.origin}${normalizedPath}`
     : undefined;
 
   const { error } = await supabase.auth.signInWithOAuth({

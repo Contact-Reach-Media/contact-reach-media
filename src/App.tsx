@@ -100,7 +100,12 @@ function parseRouteFromLocation() {
     view = 'admin';
   } else if (viewParam === 'admin-invite' || rawPath === '/admin/invite') {
     view = 'admin-invite';
-  } else if (viewParam === 'admin-login' || rawPath === '/admin/login') {
+  } else if (
+    viewParam === 'admin-login' ||
+    rawPath === '/admin/login' ||
+    sessionStorage.getItem('crm_admin_google_oauth_pending') === '1' ||
+    searchParams.get('oauth') === '1'
+  ) {
     view = 'admin-login';
   } else if (viewParam === 'shop' || rawPath === '/shop' || rawPath === '/products' || rawPath === '/catalog') {
     view = 'shop';
@@ -427,7 +432,7 @@ export default function App() {
       const token = api.getAdminToken();
       const stored = api.getStoredAdminUser();
       const isAuth = (isAdminLoggedIn || Boolean(token)) && (!stored || (isAuthorizedAdminUser(stored) && stored.active !== false));
-      if (isAuth || token) {
+      if (isAuth && token) {
         setIsAdminLoggedIn(true);
         setAdminInitialTab('products');
         setAutoOpenAddProduct(true);
@@ -1286,6 +1291,7 @@ export default function App() {
             }}
             onNavigateHome={() => handleNavigate('home')}
             onOpenVendorApplication={() => setIsSellerModalOpen(true)}
+            onOpenAdminLogin={() => handleNavigate('admin-login')}
             currentLang={currentLang}
           />
         </div>

@@ -6409,7 +6409,7 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
   const rawPassword = typeof password === 'string' ? password : String(password || '');
 
   if (!rawIdentifier || !rawPassword) {
-    return res.status(400).json({ error: 'Username and password are required.' });
+    return res.status(400).json({ error: 'Email or username and password are required.' });
   }
 
   const cleanUser = rawIdentifier.toLowerCase().replace(/^@/, '');
@@ -6424,26 +6424,49 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     });
   }
 
-  // 1. Check main system owner credentials
+  // 1. Check main system owner credentials (strictly contactreachmedialimited@gmail.com)
   const isOwnerUsername =
     cleanUser === 'crmedia' ||
     cleanUser === 'crm' ||
     cleanUser === 'admin' ||
-    cleanUser === 'contactreachmedialimited@gmail.com' ||
-    cleanUser === 'contactreachmedia@gmail.com' ||
+    cleanUser === AUTHORIZED_ADMIN_EMAIL ||
     cleanUser === (process.env.ADMIN_USERNAME || 'crmedia').toLowerCase() ||
     (process.env.ADMIN_EMAIL ? cleanUser === process.env.ADMIN_EMAIL.toLowerCase().trim() : false);
 
-  const isOwnerPasswordValid = isOwnerUsername && (
+  let isOwnerPasswordValid = isOwnerUsername && (
     timingSafeEqualStr(rawPassword, 'crm@admin!') ||
     timingSafeEqualStr(trimmedPass, 'crm@admin!') ||
     (process.env.ADMIN_PASSWORD ? timingSafeEqualStr(rawPassword, process.env.ADMIN_PASSWORD) : false) ||
     (process.env.ADMIN_PASSWORD ? timingSafeEqualStr(trimmedPass, process.env.ADMIN_PASSWORD) : false)
   );
 
+  let supabaseOwnerUserId: string | undefined;
+  if (isOwnerUsername && !isOwnerPasswordValid) {
+    try {
+      const ephemClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+      let sbRes = await ephemClient.auth.signInWithPassword({
+        email: AUTHORIZED_ADMIN_EMAIL,
+        password: rawPassword
+      });
+      if ((sbRes.error || !sbRes.data?.user) && trimmedPass && trimmedPass !== rawPassword) {
+        sbRes = await ephemClient.auth.signInWithPassword({
+          email: AUTHORIZED_ADMIN_EMAIL,
+          password: trimmedPass
+        });
+      }
+      if (!sbRes.error && sbRes.data?.user && String(sbRes.data.user.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) {
+        isOwnerPasswordValid = true;
+        supabaseOwnerUserId = sbRes.data.user.id;
+      }
+    } catch {}
+  }
+
   if (isOwnerUsername && isOwnerPasswordValid) {
     loginAttempts.delete(cleanUser);
     loginAttempts.delete('crmedia');
+    loginAttempts.delete(AUTHORIZED_ADMIN_EMAIL);
     loginAttempts.delete(rawIdentifier.toLowerCase());
 
     const authorizedAdmin: AdminUser = {
@@ -6473,13 +6496,20 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     saveDbToDisk();
 
     try {
-      await supabase.from('admin_users').update({
-        last_login: new Date().toISOString(),
+      await supabase.from('admin_users').upsert({
+        id: authorizedAdmin.id,
+        ...(supabaseOwnerUserId ? { user_id: supabaseOwnerUserId } : {}),
+        email: AUTHORIZED_ADMIN_EMAIL,
+        name: authorizedAdmin.name,
+        phone: authorizedAdmin.phone || '0780022600',
+        role: 'owner',
+        active: true,
+        last_login: authorizedAdmin.lastLogin,
         updated_at: new Date().toISOString()
-      }).eq('email', AUTHORIZED_ADMIN_EMAIL);
+      }, { onConflict: 'email' });
     } catch {}
 
-    logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Admin signed in successfully using username credentials from ${req.ip || 'remote'}`);
+    logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Admin signed in successfully from ${req.ip || 'remote'}`);
 
     return res.json({
       token,
@@ -6541,6 +6571,14 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     }
   }
 
+  // Reject any unauthorized email address explicitly with 403
+  if (cleanUser.includes('@') && !isOwnerUsername && !invitedAdmin) {
+    logAudit({ name: 'Security', role: 'security' }, 'ADMIN_LOGIN_DENIED', `Rejected unauthorized admin email attempt: ${cleanUser}`);
+    return res.status(403).json({
+      error: `Access denied: Only ${AUTHORIZED_ADMIN_EMAIL} is authorized to access the admin dashboard.`
+    });
+  }
+
   // Failed authentication attempt
   const currentAttempts = (attemptInfo?.attempts || 0) + 1;
   if (currentAttempts >= 5) {
@@ -6552,15 +6590,94 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
   return res.status(401).json({ error: 'Invalid administrator credentials.' });
 });
 
-// Admin Google and external authentication methods are completely disabled
-const handleGoogleLoginDisabled = async (req: Request, res: Response) => {
-  return res.status(403).json({
-    error: 'Google Sign-In is disabled. Administrators must sign in using authorized username and password credentials only.'
-  });
-};
+// Verified Supabase Auth / Google OAuth admin sign-in — strictly restricted to contactreachmedialimited@gmail.com
+async function handleVerifiedSupabaseAdminLogin(req: Request, res: Response) {
+  const accessToken = String(req.body?.accessToken || '').trim();
+  if (!accessToken) {
+    return res.status(403).json({
+      error: 'A verified Supabase authentication token is required. Only contactreachmedialimited@gmail.com is authorized.'
+    });
+  }
 
-app.post('/api/auth/google-login', handleGoogleLoginDisabled);
-app.post('/api/auth/firebase-login', handleGoogleLoginDisabled);
+  try {
+    const ephemClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    const { data, error } = await ephemClient.auth.getUser(accessToken);
+    if (error || !data?.user) {
+      return res.status(401).json({ error: 'Invalid or expired Supabase session. Please sign in again.' });
+    }
+
+    const verifiedEmail = String(data.user.email || '').toLowerCase().trim();
+    if (verifiedEmail !== AUTHORIZED_ADMIN_EMAIL) {
+      logAudit(
+        { name: 'Security', role: 'security' },
+        'ADMIN_OAUTH_DENIED',
+        `Denied admin dashboard access to unauthorized email: ${verifiedEmail || 'unknown'}`
+      );
+      return res.status(403).json({
+        unauthorized: true,
+        error: `Access denied: Only ${AUTHORIZED_ADMIN_EMAIL} is authorized to access the admin dashboard.`
+      });
+    }
+
+    const authorizedAdmin: AdminUser = {
+      id: 'adm-owner-crmedia',
+      name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || 'Administrator',
+      username: ADMIN_USERNAME,
+      email: AUTHORIZED_ADMIN_EMAIL,
+      role: 'owner',
+      active: true,
+      verified: true,
+      phone: '0780022600',
+      lastLogin: new Date().toISOString()
+    };
+
+    const { token, expiresAt } = createSignedAdminToken(authorizedAdmin);
+    const otherVerifiedAdmins = db.adminUsers.filter(
+      u => u.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL && isVerifiedAuthorizedAdminRecord(u)
+    );
+    db.adminUsers = [authorizedAdmin, ...otherVerifiedAdmins];
+    db.adminTokens.set(token, {
+      user: authorizedAdmin,
+      expiresAt
+    });
+    saveDbToDisk();
+
+    try {
+      await supabase.from('admin_users').upsert({
+        id: authorizedAdmin.id,
+        user_id: data.user.id,
+        email: AUTHORIZED_ADMIN_EMAIL,
+        name: authorizedAdmin.name,
+        phone: authorizedAdmin.phone || '0780022600',
+        role: 'owner',
+        active: true,
+        last_login: authorizedAdmin.lastLogin,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+    } catch {}
+
+    logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Verified Supabase/OAuth admin login for ${AUTHORIZED_ADMIN_EMAIL}`);
+
+    return res.json({
+      token,
+      admin: authorizedAdmin,
+      expiresAt,
+      redirectTo: '/admin'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Unable to verify Supabase administrator session.' });
+  }
+}
+
+app.post('/api/auth/supabase-login', handleVerifiedSupabaseAdminLogin);
+app.post('/api/auth/google-login', handleVerifiedSupabaseAdminLogin);
+app.post('/api/auth/firebase-login', (_req: Request, res: Response) => {
+  return res.status(403).json({
+    error: 'Legacy Firebase login is disabled. Please sign in with authorized credentials or Google via Supabase.'
+  });
+});
 
 app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
   const user = (req as any).adminUser;
