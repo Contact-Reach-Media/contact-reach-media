@@ -3249,6 +3249,151 @@ async function runTests() {
     }
   });
 
+  // TEST 68: One-Click Single-Use Admin Invitation Link (No Extra Info, Single Use, Immediate Invalidation)
+  await test('One-Click Admin Invitation Link generates unique tokens, enforces auth, grants admin access once, and invalidates immediately', async () => {
+    // 1. Unauthenticated caller cannot generate a one-click invitation link
+    const unauthRes = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(unauthRes.status, 401, 'Unauthenticated one-click invite generation must return 401');
+
+    // 2. Non-full-admin (e.g., scoped product_manager) must be rejected with 403
+    const scopedInviteRes = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        inviteeName: 'Scoped Manager',
+        inviteeEmail: `scoped.pm.${Date.now()}@contactreachmedia.rw`,
+        role: 'product_manager',
+        expiresInHours: 1
+      })
+    });
+    assert.strictEqual(scopedInviteRes.status, 201);
+    const scopedInviteData = await scopedInviteRes.json();
+    const scopedRawToken = decodeURIComponent(scopedInviteData.invitePath.split('token=')[1]);
+    const scopedAcceptRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: scopedRawToken,
+        email: scopedInviteData.invitation.inviteeEmail,
+        verificationCode: scopedInviteData.verificationCode,
+        username: `pm_${Date.now().toString().slice(-6)}`,
+        password: 'StrongPm!2026'
+      })
+    });
+    assert.strictEqual(scopedAcceptRes.status, 201);
+    const scopedAcceptData = await scopedAcceptRes.json();
+
+    const pmAttemptRes = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${scopedAcceptData.token}`
+      },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(pmAttemptRes.status, 403, 'Non-full-admin must not generate admin invitation links');
+
+    // Clean up temporary scoped manager
+    await fetch(`${BASE_URL}/api/admin/users/${scopedAcceptData.admin.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+
+    // 3. Authorized admin generates two one-click links with empty payload ({}) — must succeed with unique URLs
+    const gen1 = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(gen1.status, 201, 'Authorized admin must generate one-click invite with no extra inputs');
+    const data1 = await gen1.json();
+    assert(data1.inviteUrl && data1.invitePath.includes('/admin/invite?token='), 'Must return full inviteUrl and invitePath');
+    assert.strictEqual(data1.invitation.inviteMode, 'one_click', 'Invitation mode must be one_click');
+
+    const gen2 = await fetch(`${BASE_URL}/api/admin/invitations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(gen2.status, 201);
+    const data2 = await gen2.json();
+    assert.notStrictEqual(data1.invitePath, data2.invitePath, 'Each generated invitation link must be cryptographically unique');
+
+    const oneClickToken1 = decodeURIComponent(data1.invitePath.split('token=')[1]);
+    const oneClickToken2 = decodeURIComponent(data2.invitePath.split('token=')[1]);
+
+    // 4. Verify token returns mode: 'one_click' before acceptance
+    const verifyRes = await fetch(`${BASE_URL}/api/admin/invitations/verify?token=${encodeURIComponent(oneClickToken1)}`);
+    assert.strictEqual(verifyRes.status, 200);
+    const verifyData = await verifyRes.json();
+    assert.strictEqual(verifyData.valid, true);
+    assert.strictEqual(verifyData.mode, 'one_click');
+
+    // 5. Accept one-click link without supplying email, verificationCode, username, or password
+    const acceptRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: oneClickToken1 })
+    });
+    assert.strictEqual(acceptRes.status, 201, 'One-click invite acceptance must succeed with token only');
+    const acceptData = await acceptRes.json();
+    assert.strictEqual(acceptData.success, true);
+    assert(acceptData.token, 'Must issue signed admin session token');
+    assert.strictEqual(acceptData.admin?.role, 'administrator', 'One-click invite must grant administrator access');
+
+    // 6. Issued session token must grant immediate access to Admin Dashboard APIs
+    const meRes = await fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${acceptData.token}` }
+    });
+    assert.strictEqual(meRes.status, 200, 'One-click invited admin session must verify via /api/auth/me');
+
+    const statsRes = await fetch(`${BASE_URL}/api/admin/stats`, {
+      headers: { Authorization: `Bearer ${acceptData.token}` }
+    });
+    assert.strictEqual(statsRes.status, 200, 'One-click invited admin must access protected admin dashboard endpoints');
+
+    // 7. Link must become invalid immediately after its single successful use
+    const reVerifyRes = await fetch(`${BASE_URL}/api/admin/invitations/verify?token=${encodeURIComponent(oneClickToken1)}`);
+    assert.strictEqual(reVerifyRes.status, 410, 'Used one-click invite link must immediately return 410 on verify');
+
+    const reAcceptRes = await fetch(`${BASE_URL}/api/admin/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: oneClickToken1 })
+    });
+    assert.strictEqual(reAcceptRes.status, 410, 'Used one-click invite link must immediately return 410 on replay accept');
+
+    // 8. Clean up temporary invited admin and unused second token
+    await fetch(`${BASE_URL}/api/admin/invitations/${data2.invitation.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    await fetch(`${BASE_URL}/api/admin/users/${acceptData.admin.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    // Also remove the used invitation record if still present
+    await fetch(`${BASE_URL}/api/admin/invitations/${data1.invitation.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(oneClickToken2.length >= 32, 'Second token should be full cryptographic length');
+  });
+
+
   console.log('\n====================================================');
   console.log(`📊 Test Results: ${passed} passed, ${failed} failed`);
   console.log('====================================================');

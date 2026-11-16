@@ -110,6 +110,7 @@ export type AdminInvitationStatus = 'Pending' | 'Accepted' | 'Revoked' | 'Expire
 
 export interface AdminInvitation {
   id: string;
+  inviteMode?: 'one_click' | 'verified';
   inviteeName: string;
   inviteeEmail: string;
   inviteePhone?: string;

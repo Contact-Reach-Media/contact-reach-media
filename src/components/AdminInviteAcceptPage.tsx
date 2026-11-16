@@ -13,6 +13,9 @@ interface AdminInviteAcceptPageProps {
   onNavigateAdminLogin: () => void;
 }
 
+// Deduplicate React StrictMode double-mounts so single-use token is consumed cleanly once
+const inFlightOneClickAccepts = new Map<string, Promise<any>>();
+
 export const AdminInviteAcceptPage: React.FC<AdminInviteAcceptPageProps> = ({
   token,
   onAcceptSuccess,
@@ -32,7 +35,7 @@ export const AdminInviteAcceptPage: React.FC<AdminInviteAcceptPageProps> = ({
     createdByName: string;
   } | null>(null);
 
-  // Verification & onboarding inputs
+  // Verification & onboarding inputs (for structured invitations if used)
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [name, setName] = useState('');
@@ -46,7 +49,8 @@ export const AdminInviteAcceptPage: React.FC<AdminInviteAcceptPageProps> = ({
 
   useEffect(() => {
     let active = true;
-    if (!token || !token.trim()) {
+    const trimmedToken = token ? token.trim() : '';
+    if (!trimmedToken) {
       setVerifying(false);
       setInviteStatus('Invalid');
       setVerifyError('No invitation token was found in this link.');
@@ -55,25 +59,47 @@ export const AdminInviteAcceptPage: React.FC<AdminInviteAcceptPageProps> = ({
 
     setVerifying(true);
     setVerifyError(null);
-    api.verifyAdminInvitationToken(token.trim())
-      .then((res) => {
+    api.verifyAdminInvitationToken(trimmedToken)
+      .then(async (res) => {
         if (!active) return;
         if (res.valid && res.invitation) {
+          const isOneClick = res.mode === 'one_click' || !res.invitation.maskedEmail;
+          if (isOneClick) {
+            try {
+              let acceptPromise = inFlightOneClickAccepts.get(trimmedToken);
+              if (!acceptPromise) {
+                acceptPromise = api.acceptAdminInvitation({ token: trimmedToken });
+                inFlightOneClickAccepts.set(trimmedToken, acceptPromise);
+              }
+              const acceptRes = await acceptPromise;
+              if (!active) return;
+              if (acceptRes?.token && acceptRes?.admin) {
+                onAcceptSuccess(acceptRes.admin, acceptRes.token);
+                return;
+              }
+            } catch (acceptErr: any) {
+              if (!active) return;
+              setInviteStatus('Invalid');
+              setVerifyError(acceptErr?.message || 'This invitation link is no longer valid.');
+              setVerifying(false);
+              return;
+            }
+          }
           setInviteStatus('Pending');
           setInviteInfo(res.invitation);
           setName(res.invitation.inviteeName || '');
+          setVerifying(false);
         } else {
           setInviteStatus((res.status as any) || 'Invalid');
           setVerifyError(res.error || 'This invitation link is no longer valid.');
+          setVerifying(false);
         }
       })
       .catch((err: any) => {
         if (!active) return;
         setInviteStatus('Invalid');
         setVerifyError(err?.message || 'Unable to verify invitation link.');
-      })
-      .finally(() => {
-        if (active) setVerifying(false);
+        setVerifying(false);
       });
 
     return () => {

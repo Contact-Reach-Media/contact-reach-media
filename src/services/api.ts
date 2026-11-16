@@ -4169,18 +4169,19 @@ export const api = {
   },
 
   async adminCreateInvitation(payload: {
-    inviteeName: string;
-    inviteeEmail: string;
+    oneClick?: boolean;
+    inviteeName?: string;
+    inviteeEmail?: string;
     inviteePhone?: string;
-    role: AdminRole;
+    role?: AdminRole;
     expiresAt?: string;
     expiresInHours?: number;
     notes?: string;
-  }): Promise<{
+  } = { oneClick: true }): Promise<{
     invitation: AdminInvitation;
     inviteUrl: string;
     invitePath: string;
-    verificationCode: string;
+    verificationCode?: string;
   }> {
     const res = await fetch('/api/admin/invitations', {
       method: 'POST',
@@ -4221,6 +4222,7 @@ export const api = {
   async verifyAdminInvitationToken(token: string): Promise<{
     valid: boolean;
     status: string;
+    mode?: 'one_click' | 'verified';
     error?: string;
     invitation?: {
       id: string;
@@ -4244,12 +4246,12 @@ export const api = {
 
   async acceptAdminInvitation(payload: {
     token: string;
-    email: string;
-    verificationCode: string;
+    email?: string;
+    verificationCode?: string;
     name?: string;
-    username: string;
+    username?: string;
     phone?: string;
-    password: string;
+    password?: string;
   }): Promise<{
     success: boolean;
     token: string;

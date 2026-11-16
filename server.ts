@@ -6420,6 +6420,7 @@ app.get('/api/buyers/reports', requireBuyerAuth, async (req: Request, res: Respo
   const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
 
   try {
+    const deletedSet = new Set((db.deletedRecordIds || []).map(String));
     const { data: sbProbs } = await supabase
       .from('customer_problems')
       .select('*')
@@ -6428,8 +6429,10 @@ app.get('/api/buyers/reports', requireBuyerAuth, async (req: Request, res: Respo
     if (Array.isArray(sbProbs) && sbProbs.length > 0) {
       const probMap = new Map<string, CustomerProblemReport>(db.customerProblems.map(p => [String(p.id), p]));
       for (const p of sbProbs) {
-        probMap.set(String(p.id), {
-          id: String(p.id),
+        const probId = String(p.id);
+        if (deletedSet.has(probId)) continue;
+        const sbProb: CustomerProblemReport = {
+          id: probId,
           caseNumber: p.case_number || '',
           orderNumber: p.order_number || undefined,
           customerName: p.customer_name || 'Customer',
@@ -6444,9 +6447,19 @@ app.get('/api/buyers/reports', requireBuyerAuth, async (req: Request, res: Respo
           resolvedAt: p.resolved_at || undefined,
           createdAt: p.created_at || new Date().toISOString(),
           updatedAt: p.updated_at || undefined
-        });
+        };
+        const existing = probMap.get(probId);
+        if (!existing) {
+          probMap.set(probId, sbProb);
+        } else {
+          const sbTs = sbProb.updatedAt ? Date.parse(sbProb.updatedAt) || 0 : 0;
+          const locTs = existing.updatedAt ? Date.parse(existing.updatedAt) || 0 : 0;
+          if (sbTs > locTs) {
+            probMap.set(probId, { ...existing, ...sbProb });
+          }
+        }
       }
-      db.customerProblems = Array.from(probMap.values());
+      db.customerProblems = Array.from(probMap.values()).filter(r => !deletedSet.has(String(r.id)));
     }
   } catch {}
 
@@ -11497,8 +11510,8 @@ function findInvitationByRawToken(rawToken: string): StoredAdminInvitation | und
   });
 }
 
-// 1. Main admin lists & tracks all invitations
-app.get('/api/admin/invitations', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
+// 1. Authorized admins list & track invitations
+app.get('/api/admin/invitations', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
   syncExpiredInvitations();
   const sorted = [...(db.adminInvitations || [])]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -11506,28 +11519,16 @@ app.get('/api/admin/invitations', requireAdminAuth, requireRole(['owner']), (req
   res.json(sorted);
 });
 
-// 2. Main admin generates a secure, unique, single-use, expiring invitation link
-app.post('/api/admin/invitations', requireAdminAuth, requireRole(['owner']), async (req: Request, res: Response) => {
+// 2. Authorized admins generate a secure, unique, single-use invitation link (supports 1-click generation with zero extra info)
+app.post('/api/admin/invitations', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser as AdminUser;
   syncExpiredInvitations();
 
-  const inviteeName = String(req.body?.inviteeName || '').trim();
-  const inviteeEmail = String(req.body?.inviteeEmail || '').trim().toLowerCase();
-  const inviteePhone = req.body?.inviteePhone ? String(req.body.inviteePhone).trim() : undefined;
-  const role = String(req.body?.role || 'administrator').trim() as AdminRole;
-  const notes = req.body?.notes ? String(req.body.notes).trim().slice(0, 300) : undefined;
-  const rawExpiresAt = req.body?.expiresAt;
-  const expiresInHours = req.body?.expiresInHours !== undefined ? Number(req.body.expiresInHours) : undefined;
-
-  if (inviteeName.length < 2) {
-    return res.status(400).json({ error: 'Invitee full name must be at least 2 characters.' });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
-    return res.status(400).json({ error: 'Please provide a valid invitee email address.' });
-  }
-  if (inviteeEmail === AUTHORIZED_ADMIN_EMAIL) {
-    return res.status(400).json({ error: 'Cannot create an invitation for the main system owner email.' });
-  }
+  const hasStructuredInput = Boolean(
+    (typeof req.body?.inviteeEmail === 'string' && req.body.inviteeEmail.trim()) ||
+    (typeof req.body?.inviteeName === 'string' && req.body.inviteeName.trim())
+  );
+  const isOneClick = req.body?.oneClick === true || !hasStructuredInput;
 
   const allowedInviteRoles: AdminRole[] = [
     'administrator',
@@ -11536,26 +11537,50 @@ app.post('/api/admin/invitations', requireAdminAuth, requireRole(['owner']), asy
     'order_manager',
     'customer_support'
   ];
-  if (!allowedInviteRoles.includes(role)) {
+  const requestedRole = String(req.body?.role || 'administrator').trim() as AdminRole;
+  if (!allowedInviteRoles.includes(requestedRole)) {
     return res.status(400).json({ error: 'Invalid administrative role selected for invitation.' });
   }
 
-  // Prevent duplicate active admin account for this email
-  const existingActiveAdmin = db.adminUsers.find(
-    u => u.email.toLowerCase().trim() === inviteeEmail && u.active !== false
-  );
-  if (existingActiveAdmin) {
-    return res.status(409).json({ error: 'An active administrator account already exists for this email address.' });
+  let inviteeName = 'Invited Administrator';
+  let inviteeEmail = '';
+  let inviteePhone: string | undefined = undefined;
+  let notes: string | undefined = undefined;
+
+  if (!isOneClick) {
+    inviteeName = String(req.body?.inviteeName || '').trim();
+    inviteeEmail = String(req.body?.inviteeEmail || '').trim().toLowerCase();
+    inviteePhone = req.body?.inviteePhone ? String(req.body.inviteePhone).trim() : undefined;
+    notes = req.body?.notes ? String(req.body.notes).trim().slice(0, 300) : undefined;
+
+    if (inviteeName.length < 2) {
+      return res.status(400).json({ error: 'Invitee full name must be at least 2 characters.' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
+      return res.status(400).json({ error: 'Please provide a valid invitee email address.' });
+    }
+    if (inviteeEmail === AUTHORIZED_ADMIN_EMAIL) {
+      return res.status(400).json({ error: 'Cannot create an invitation for the main system owner email.' });
+    }
+
+    const existingActiveAdmin = db.adminUsers.find(
+      u => u.email.toLowerCase().trim() === inviteeEmail && u.active !== false
+    );
+    if (existingActiveAdmin) {
+      return res.status(409).json({ error: 'An active administrator account already exists for this email address.' });
+    }
   }
 
-  // Resolve and validate expiration date & time
+  // Resolve and validate expiration date & time (default 7 days for one-click, 24h for structured)
+  const rawExpiresAt = req.body?.expiresAt;
+  const expiresInHours = req.body?.expiresInHours !== undefined ? Number(req.body.expiresInHours) : undefined;
   let expiresAtDate: Date;
   if (rawExpiresAt) {
     expiresAtDate = new Date(String(rawExpiresAt));
   } else if (expiresInHours !== undefined && Number.isFinite(expiresInHours)) {
     expiresAtDate = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
   } else {
-    expiresAtDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    expiresAtDate = new Date(Date.now() + (isOneClick ? 7 * 24 : 24) * 60 * 60 * 1000);
   }
 
   const nowMs = Date.now();
@@ -11570,11 +11595,11 @@ app.post('/api/admin/invitations', requireAdminAuth, requireRole(['owner']), asy
     return res.status(400).json({ error: 'Invitation expiration cannot exceed 90 days.' });
   }
 
-  // Generate cryptographically random single-use token and 6-digit verification code
+  // Generate cryptographically random 256-bit single-use token
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashInviteToken(rawToken);
-  const verificationCode = String(crypto.randomInt(100000, 999999));
-  const verificationCodeHash = hashVerificationCode(verificationCode);
+  const verificationCode = isOneClick ? undefined : String(crypto.randomInt(100000, 999999));
+  const verificationCodeHash = verificationCode ? hashVerificationCode(verificationCode) : undefined;
   const inviteId = `inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 
   const forwardedProto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
@@ -11587,10 +11612,11 @@ app.post('/api/admin/invitations', requireAdminAuth, requireRole(['owner']), asy
 
   const newInvitation: StoredAdminInvitation = {
     id: inviteId,
+    inviteMode: isOneClick ? 'one_click' : 'verified',
     inviteeName,
     inviteeEmail,
     inviteePhone,
-    role,
+    role: requestedRole,
     status: 'Pending',
     tokenHash,
     tokenPreview: `${rawToken.slice(0, 8)}...${rawToken.slice(-6)}`,
@@ -11613,31 +11639,21 @@ app.post('/api/admin/invitations', requireAdminAuth, requireRole(['owner']), asy
   logAudit(
     admin,
     'ADMIN_INVITATION_CREATED',
-    `Generated single-use admin invitation for ${inviteeName} (${inviteeEmail}) with role=${role}, expires=${newInvitation.expiresAt}`,
+    `Generated single-use ${isOneClick ? 'one-click ' : ''}admin invitation (${newInvitation.id})`,
     'admin_invitation',
     newInvitation.id
   );
-
-  createAdminNotification({
-    category: 'system',
-    title: 'Admin Invitation Generated',
-    message: `Single-use ${role.replace('_', ' ')} invitation created for ${inviteeName} (${inviteeEmail}), expiring ${newInvitation.expiresAt}.`,
-    senderName: admin.name,
-    senderEmail: inviteeEmail,
-    actionTab: 'team',
-    entityId: newInvitation.id
-  });
 
   res.status(201).json({
     invitation: sanitizeInvitationForOwner(newInvitation),
     inviteUrl,
     invitePath,
-    verificationCode
+    ...(verificationCode ? { verificationCode } : {})
   });
 });
 
-// 3. Main admin revokes an active invitation
-app.post('/api/admin/invitations/:id/revoke', requireAdminAuth, requireRole(['owner']), async (req: Request, res: Response) => {
+// 3. Authorized admin revokes an active invitation
+app.post('/api/admin/invitations/:id/revoke', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser as AdminUser;
   syncExpiredInvitations();
 
@@ -11664,7 +11680,7 @@ app.post('/api/admin/invitations/:id/revoke', requireAdminAuth, requireRole(['ow
   logAudit(
     admin,
     'ADMIN_INVITATION_REVOKED',
-    `Revoked admin invitation ${inv.id} for ${inv.inviteeName} (${inv.inviteeEmail})`,
+    `Revoked admin invitation ${inv.id}`,
     'admin_invitation',
     inv.id
   );
@@ -11675,8 +11691,8 @@ app.post('/api/admin/invitations/:id/revoke', requireAdminAuth, requireRole(['ow
   });
 });
 
-// 4. Main admin deletes an invitation record from tracking history
-app.delete('/api/admin/invitations/:id', requireAdminAuth, requireRole(['owner']), async (req: Request, res: Response) => {
+// 4. Authorized admin deletes an invitation record
+app.delete('/api/admin/invitations/:id', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser as AdminUser;
   db.adminInvitations = db.adminInvitations || [];
   const idx = db.adminInvitations.findIndex(i => i.id === req.params.id);
@@ -11691,7 +11707,7 @@ app.delete('/api/admin/invitations/:id', requireAdminAuth, requireRole(['owner']
   logAudit(
     admin,
     'ADMIN_INVITATION_DELETED',
-    `Deleted admin invitation record ${removed.id} (${removed.inviteeEmail})`,
+    `Deleted admin invitation record ${removed.id}`,
     'admin_invitation',
     removed.id
   );
@@ -11713,10 +11729,10 @@ app.get('/api/admin/invitations/verify', (req: Request, res: Response) => {
   }
 
   if (inv.status === 'Revoked') {
-    return res.status(410).json({ valid: false, status: 'Revoked', error: 'This invitation link has been revoked by the main administrator.' });
+    return res.status(410).json({ valid: false, status: 'Revoked', error: 'This invitation link has been revoked.' });
   }
   if (inv.status === 'Accepted') {
-    return res.status(410).json({ valid: false, status: 'Accepted', error: 'This invitation link has already been accepted and can only be used once.' });
+    return res.status(410).json({ valid: false, status: 'Accepted', error: 'This invitation link has already been used and is no longer valid.' });
   }
   if (inv.status === 'Expired' || Date.now() >= new Date(inv.expiresAt).getTime()) {
     if (inv.status !== 'Expired') {
@@ -11729,13 +11745,16 @@ app.get('/api/admin/invitations/verify', (req: Request, res: Response) => {
     return res.status(410).json({ valid: false, status: 'Expired', error: 'This invitation link has expired and is no longer valid.' });
   }
 
+  const mode = inv.inviteMode || (inv.inviteeEmail ? 'verified' : 'one_click');
+
   return res.json({
     valid: true,
     status: 'Pending',
+    mode,
     invitation: {
       id: inv.id,
       inviteeName: inv.inviteeName,
-      maskedEmail: maskEmailForVerification(inv.inviteeEmail),
+      maskedEmail: inv.inviteeEmail ? maskEmailForVerification(inv.inviteeEmail) : '',
       role: inv.role,
       expiresAt: inv.expiresAt,
       createdAt: inv.createdAt,
@@ -11744,18 +11763,11 @@ app.get('/api/admin/invitations/verify', (req: Request, res: Response) => {
   });
 });
 
-// 6. Secure verification & single-use acceptance endpoint for invited admin onboarding
+// 6. Secure single-use acceptance endpoint for invited admin access
 app.post('/api/admin/invitations/accept', async (req: Request, res: Response) => {
   syncExpiredInvitations();
 
   const rawToken = String(req.body?.token || '').trim();
-  const emailInput = String(req.body?.email || '').trim().toLowerCase();
-  const verificationCodeInput = String(req.body?.verificationCode || '').trim();
-  const nameInput = String(req.body?.name || '').trim();
-  const usernameInput = String(req.body?.username || '').trim().replace(/^@/, '');
-  const phoneInput = req.body?.phone ? String(req.body.phone).trim() : undefined;
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
-
   if (!rawToken) {
     return res.status(400).json({ error: 'Invitation token is required.' });
   }
@@ -11779,14 +11791,93 @@ app.post('/api/admin/invitations/accept', async (req: Request, res: Response) =>
     return res.status(410).json({ error: 'This invitation link has expired.' });
   }
 
-  // Brute-force protection on invitation verification
+  const mode = inv.inviteMode || (inv.inviteeEmail ? 'verified' : 'one_click');
+  const nowIso = new Date().toISOString();
+  const newAdminId = `adm-inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+
+  if (mode === 'one_click') {
+    // Atomic single-use transition BEFORE async I/O so link becomes invalid immediately
+    const randomSuffix = crypto.randomBytes(4).toString('hex');
+    const generatedUsername = `admin_${randomSuffix}`;
+    const generatedEmail = `${generatedUsername}@admin.contactreachmarket.local`;
+    const internalSecretHash = hashBuyerPassword(crypto.randomBytes(24).toString('hex'));
+
+    inv.status = 'Accepted';
+    inv.acceptedAt = nowIso;
+    inv.acceptedUserId = newAdminId;
+    inv.acceptedUsername = generatedUsername;
+    inv.inviteUrl = undefined;
+    inv.verificationCode = undefined;
+
+    const newAdmin: AdminUser = {
+      id: newAdminId,
+      name: 'Administrator',
+      username: generatedUsername,
+      email: generatedEmail,
+      role: inv.role || 'administrator',
+      active: true,
+      verified: true,
+      invitedBy: inv.createdByEmail,
+      invitationId: inv.id,
+      lastLogin: nowIso
+    };
+
+    db.adminCredentials = db.adminCredentials || {};
+    db.adminCredentials[newAdmin.id] = {
+      id: newAdmin.id,
+      email: newAdmin.email,
+      username: generatedUsername,
+      passwordHash: internalSecretHash,
+      verifiedAt: nowIso,
+      invitationId: inv.id
+    };
+
+    db.adminUsers.push(newAdmin);
+
+    const { token, expiresAt } = createSignedAdminToken(newAdmin);
+    db.adminTokens.set(token, {
+      user: { ...newAdmin },
+      expiresAt
+    });
+
+    saveDbToDisk('admin_invitation_accepted', { user: newAdmin, invitation: sanitizeInvitationForOwner(inv) });
+    await Promise.all([
+      saveToSupabaseAsync('adminUsers', newAdmin.id, newAdmin),
+      saveToSupabaseAsync('adminCredentials', 'admin_credentials', db.adminCredentials),
+      saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations)
+    ]);
+
+    logAudit(
+      { name: newAdmin.name, role: newAdmin.role },
+      'ADMIN_INVITATION_ACCEPTED',
+      `One-click admin invitation ${inv.id} accepted and invalidated immediately`,
+      'admin_user',
+      newAdmin.id
+    );
+
+    return res.status(201).json({
+      success: true,
+      token,
+      admin: newAdmin,
+      expiresAt,
+      redirectTo: '/admin'
+    });
+  }
+
+  // Verified invitation flow (with email & 6-digit verification code)
+  const emailInput = String(req.body?.email || '').trim().toLowerCase();
+  const verificationCodeInput = String(req.body?.verificationCode || '').trim();
+  const nameInput = String(req.body?.name || '').trim();
+  const usernameInput = String(req.body?.username || '').trim().replace(/^@/, '');
+  const phoneInput = req.body?.phone ? String(req.body.phone).trim() : undefined;
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
   const lockKey = inv.id;
   const attemptRec = inviteVerificationAttempts.get(lockKey);
   if (attemptRec?.lockedUntil && Date.now() < attemptRec.lockedUntil) {
     return res.status(429).json({ error: 'Too many failed verification attempts. Please try again later or request a new invitation.' });
   }
 
-  // Verify invited email matches strictly
   if (!emailInput || emailInput !== inv.inviteeEmail.toLowerCase().trim()) {
     const nextAttempts = (attemptRec?.attempts || 0) + 1;
     inviteVerificationAttempts.set(lockKey, {
@@ -11796,7 +11887,6 @@ app.post('/api/admin/invitations/accept', async (req: Request, res: Response) =>
     return res.status(403).json({ error: 'Verification failed: email address does not match the invited recipient.' });
   }
 
-  // Verify 6-digit verification code matches strictly using timing-safe comparison
   if (!verificationCodeInput || !inv.verificationCodeHash) {
     return res.status(400).json({ error: 'The 6-digit verification code provided by the main administrator is required.' });
   }
@@ -11815,7 +11905,6 @@ app.post('/api/admin/invitations/accept', async (req: Request, res: Response) =>
     return res.status(403).json({ error: 'Invalid verification code. Please check the 6-digit code shared by the main administrator.' });
   }
 
-  // Validate username & strong password requirements before granting admin access
   if (!/^[a-zA-Z0-9._-]{3,32}$/.test(usernameInput)) {
     return res.status(400).json({ error: 'Username must be 3–32 characters using letters, numbers, dots, underscores, or hyphens.' });
   }
@@ -11831,14 +11920,10 @@ app.post('/api/admin/invitations/accept', async (req: Request, res: Response) =>
     return res.status(400).json({ error: 'Password must include both letters and at least one number or special character.' });
   }
 
-  // Prevent duplicate account
   if (db.adminUsers.some(u => u.email.toLowerCase().trim() === inv.inviteeEmail.toLowerCase().trim() && u.active !== false)) {
     return res.status(409).json({ error: 'An active administrator account already exists for this email address.' });
   }
 
-  // Atomic single-use transition BEFORE async I/O
-  const nowIso = new Date().toISOString();
-  const newAdminId = `adm-inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const passwordHash = hashBuyerPassword(password);
 
   inv.status = 'Accepted';
