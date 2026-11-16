@@ -563,6 +563,26 @@ ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public all payment_transactions" ON public.payment_transactions;
 CREATE POLICY "Allow public all payment_transactions" ON public.payment_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+CREATE TABLE IF NOT EXISTS public.sms_notifications (
+    id TEXT PRIMARY KEY,
+    direction TEXT NOT NULL DEFAULT 'incoming',
+    sender_phone TEXT NOT NULL DEFAULT '',
+    sender_name TEXT,
+    recipient_phone TEXT NOT NULL DEFAULT '',
+    message TEXT NOT NULL,
+    provider TEXT DEFAULT 'ContactReach',
+    status TEXT DEFAULT 'sent',
+    order_number TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.sms_notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all sms_notifications" ON public.sms_notifications;
+CREATE POLICY "Allow public all sms_notifications" ON public.sms_notifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Note: For strict production hardening, set SUPABASE_SERVICE_ROLE_KEY on the backend server
+-- and restrict client-facing RLS write policies to authenticated users / service_role only.
+
 -- ==============================================================================
 -- 10. CUSTOMERS TABLE
 -- ==============================================================================
@@ -1039,7 +1059,8 @@ DO $$
 DECLARE
     tbl text;
     realtime_tables text[] := ARRAY[
-        'products', 'orders', 'payments', 'messages', 'admin_notifications', 'customer_problems',
+        'products', 'orders', 'payments', 'payment_transactions', 'sms_notifications',
+        'messages', 'admin_notifications', 'customer_problems',
         'categories', 'shops', 'coupons', 'inventory_logs', 'audit_logs',
         'supplier_applications', 'supplier_payouts', 'app_settings'
     ];

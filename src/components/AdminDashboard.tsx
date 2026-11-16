@@ -26,7 +26,10 @@ import {
   mapSupabaseRowToOrder,
   mapSupabaseRowToMessage,
   isAdminNotificationSupabaseRow,
-  mapSupabaseRowToAdminNotification
+  mapSupabaseRowToAdminNotification,
+  mapSupabaseRowToPayment,
+  mapSupabaseRowToPaymentTransaction,
+  mapSupabaseRowToCustomerProblem
 } from '../services/supabase.ts';
 import { getGoogleAccessToken, loginWithGoogle, syncProductsToGoogleDrive, importProductsFromGoogleDrive } from '../services/googleDrive.ts';
 import { getCategoryCoverImage, getCategoryImageSource } from '../utils/categoryImage.ts';
@@ -2355,6 +2358,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             });
           } else if (eventType === 'DELETE' && oldRecord) {
             setSmsNotifications(prev => prev.filter(s => s.id !== String(oldRecord.id)));
+          }
+        } else if (tbl === 'payments') {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+            const mappedPay = mapSupabaseRowToPayment(newRecord);
+            setPayments(prev => {
+              const exists = prev.some(p => p.id === mappedPay.id);
+              if (exists) return prev.map(p => p.id === mappedPay.id ? mappedPay : p);
+              return [mappedPay, ...prev];
+            });
+            if (eventType === 'INSERT') {
+              playNotificationChime('payment');
+              showToast(`💳 Real-time: Payment submission for Order #${mappedPay.orderNumber} (${Number(mappedPay.amountPaid || 0).toLocaleString()} RWF)`, 'success');
+            }
+          } else if (eventType === 'DELETE' && oldRecord) {
+            setPayments(prev => prev.filter(p => p.id !== String(oldRecord.id)));
+          }
+        } else if (tbl === 'payment_transactions') {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+            const mappedTx = mapSupabaseRowToPaymentTransaction(newRecord);
+            setPaymentTransactions(prev => {
+              const exists = prev.some(t => t.id === mappedTx.id);
+              if (exists) return prev.map(t => t.id === mappedTx.id ? mappedTx : t);
+              return [mappedTx, ...prev];
+            });
+          } else if (eventType === 'DELETE' && oldRecord) {
+            setPaymentTransactions(prev => prev.filter(t => t.id !== String(oldRecord.id)));
+          }
+        } else if (tbl === 'customer_problems') {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+            const mappedProb = mapSupabaseRowToCustomerProblem(newRecord);
+            setProblems(prev => {
+              const exists = prev.some(r => r.id === mappedProb.id || r.caseNumber === mappedProb.caseNumber);
+              if (exists) return prev.map(r => (r.id === mappedProb.id || r.caseNumber === mappedProb.caseNumber) ? mappedProb : r);
+              return [mappedProb, ...prev];
+            });
+            if (eventType === 'INSERT') {
+              playNotificationChime('alert');
+              showToast(`⚠️ Real-time: New customer complaint #${mappedProb.caseNumber || mappedProb.id} received!`, 'error');
+            }
+          } else if (eventType === 'DELETE' && oldRecord) {
+            const delId = String(oldRecord.id);
+            setProblems(prev => prev.filter(r => r.id !== delId));
           }
         }
         fetchAllData(true);

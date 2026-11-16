@@ -1492,7 +1492,7 @@ export const api = {
     const rawPass = typeof password === 'string' ? password : String(password || '');
 
     if (!cleanIdentifier || !rawPass) {
-      throw new Error('Please enter your administrator email or username and password.');
+      throw new Error('Please enter your administrator username and password.');
     }
 
     try {
@@ -1511,7 +1511,7 @@ export const api = {
       if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
         if (!isAuthorizedAdminUser(parsed.json.admin)) {
           removeAdminToken();
-          throw new Error('Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.');
+          throw new Error('Access denied: Unauthorized administrator account.');
         }
         setAdminToken(parsed.json.token, parsed.json.admin);
         return { token: parsed.json.token, admin: parsed.json.admin };
@@ -1521,7 +1521,7 @@ export const api = {
         throw new Error(parsed.json.error);
       }
 
-      throw new Error('Invalid administrator credentials. Please check your email/username and password.');
+      throw new Error('Invalid administrator credentials. Please check your username and password.');
     } catch (err: any) {
       const msg = String(err?.message || '');
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError') {
@@ -1531,58 +1531,19 @@ export const api = {
     }
   },
 
-  async adminLoginWithSupabaseToken(accessToken: string): Promise<{ token: string; admin: any }> {
-    const cleanToken = String(accessToken || '').trim();
-    if (!cleanToken) {
-      removeAdminToken();
-      throw new Error('A verified Google/Supabase session token is required.');
-    }
-
-    try {
-      const res = await fetch('/api/auth/supabase-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ accessToken: cleanToken })
-      });
-      const parsed = await safeParseResponse<{ token: string; admin: any; error?: string; unauthorized?: boolean }>(res);
-
-      if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
-        if (!isAuthorizedAdminUser(parsed.json.admin)) {
-          removeAdminToken();
-          throw new Error('Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.');
-        }
-        setAdminToken(parsed.json.token, parsed.json.admin);
-        return { token: parsed.json.token, admin: parsed.json.admin };
-      }
-
-      removeAdminToken();
-      if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
-      }
-      throw new Error('Access denied: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.');
-    } catch (err: any) {
-      removeAdminToken();
-      const msg = String(err?.message || '');
-      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError') {
-        throw new Error('Unable to reach authentication server. Please check your internet connection and try again.');
-      }
-      throw err;
-    }
+  async adminLoginWithSupabaseToken(_accessToken: string): Promise<{ token: string; admin: any }> {
+    removeAdminToken();
+    throw new Error('Google Sign-In is disabled for administrators. Please sign in with your username and password.');
   },
 
-  async adminGoogleLogin(userOrToken: any): Promise<{ token: string; admin: any }> {
-    const token = typeof userOrToken === 'string'
-      ? userOrToken
-      : (userOrToken?.access_token || userOrToken?.session?.access_token || '');
-    if (!token) {
-      throw new Error('Please sign in with Google (contactreachmedialimited@gmail.com) via the Admin Portal.');
-    }
-    return this.adminLoginWithSupabaseToken(token);
+  async adminGoogleLogin(_userOrToken: any): Promise<{ token: string; admin: any }> {
+    removeAdminToken();
+    throw new Error('Google Sign-In is disabled for administrators. Please sign in with your username and password.');
   },
 
   async adminFirebaseLogin(_user: any): Promise<{ token: string; admin: any }> {
-    throw new Error('Firebase login is disabled for administrators. Please sign in with your administrator credentials or Google.');
+    removeAdminToken();
+    throw new Error('Google Sign-In is disabled for administrators. Please sign in with your username and password.');
   },
 
   async adminSupabaseLogin(username: string, pass: string): Promise<{ token: string; admin: any }> {

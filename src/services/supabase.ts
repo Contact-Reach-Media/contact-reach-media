@@ -94,29 +94,6 @@ export async function loginWithSupabasePassword(email: string, password: string)
 }
 
 /**
- * Sign in using Supabase Google OAuth
- */
-export async function loginWithSupabaseGoogle(redirectPath?: string): Promise<void> {
-  const normalizedPath = redirectPath
-    ? (redirectPath.startsWith('/') ? redirectPath : `/${redirectPath}`)
-    : '';
-  const redirectUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}${normalizedPath}`
-    : undefined;
-
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: redirectUrl
-    }
-  });
-
-  if (error) {
-    throw new Error(error.message || 'Supabase Google sign-in failed');
-  }
-}
-
-/**
  * Get current Supabase session
  */
 export async function getSupabaseSession() {

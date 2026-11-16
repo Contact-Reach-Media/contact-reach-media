@@ -134,18 +134,20 @@ async function runTests() {
 
   // TEST 3B: Admin Google Login Rejection (Google Sign-In is completely disabled for Admin)
   await test('Admin Google Sign-In is completely disabled and rejected with 403', async () => {
-    const googleAdminRes = await fetch(`${BASE_URL}/api/auth/firebase-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'contactreachmedialimited@gmail.com',
-        displayName: 'Administrator',
-        uid: 'google-admin-owner-uid-123'
-      })
-    });
-    assert.strictEqual(googleAdminRes.status, 403, 'Admin Google login must be rejected with 403');
-    const googleData = await googleAdminRes.json();
-    assert(googleData.error?.includes('disabled'), 'Error must state Google Sign-In is disabled');
+    for (const endpoint of ['/api/auth/firebase-login', '/api/auth/google-login', '/api/auth/supabase-login']) {
+      const googleAdminRes = await fetch(`${BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'contactreachmedialimited@gmail.com',
+          displayName: 'Administrator',
+          uid: 'google-admin-owner-uid-123'
+        })
+      });
+      assert.strictEqual(googleAdminRes.status, 403, `${endpoint} must be rejected with 403`);
+      const googleData = await googleAdminRes.json();
+      assert(googleData.error?.includes('disabled'), `${endpoint} error must state Google Sign-In is disabled`);
+    }
   });
 
   // TEST 4: Protected Admin Endpoints Guard
@@ -337,7 +339,7 @@ async function runTests() {
     assert(order.trackingToken, 'Unguessable tracking token must be generated');
     assert.strictEqual(order.subtotal, 35000);
     assert.strictEqual(order.deliveryFee, 1500, 'Gasabo delivery fee should be 1500 FRW');
-    assert.strictEqual(order.totalAmount, 36500, 'Total should be 35000 + 1500 = 36500');
+    assert.strictEqual(order.totalAmount, 41500, 'Total should be 35000 subtotal + 1500 delivery + 5000 shipping = 41500');
     assert.strictEqual(order.commissionEarned, 3500, '10% marketplace commission on 35000 should be 3500');
     assert.strictEqual(order.supplierPayoutAmount, 31500, 'Supplier payout should be 31500');
 
@@ -375,7 +377,7 @@ async function runTests() {
         customerName: 'Aline Mugabo',
         paymentPhone: '0788123456',
         paymentMethod: 'MTN Mobile Money',
-        amountPaid: 36500,
+        amountPaid: 41500,
         transactionId: `TXN${Date.now()}`
       })
     });
@@ -441,7 +443,7 @@ async function runTests() {
         customerName: 'Kwizera Bosco',
         paymentPhone: '0780112233',
         paymentMethod: 'MTN Merchant Code',
-        amountPaid: 36500,
+        amountPaid: 41500,
         confirmationMessage: sampleSms,
         screenshotUrl: sampleScreenshot
       })
@@ -3254,6 +3256,7 @@ async function runTests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runTests().catch(err => {

@@ -14,8 +14,9 @@ const SUPABASE_PROJECT_NAME = 'contactreachmarket';
 const SUPABASE_PROJECT_ID = 'hfwfjbvwhkjfrdodqyyw';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hfwfjbvwhkjfrdodqyyw.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_vBneCzN_L_4VDjE_mPwxHw_vib-ua-5';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
-const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false }
 });
 
@@ -6274,6 +6275,7 @@ app.get('/api/buyers/messages', requireBuyerAuth, async (req: Request, res: Resp
   const cleanEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
 
   try {
+    const deletedSet = new Set((db.deletedRecordIds || []).map(String));
     const { data: sbMsgs } = await supabase
       .from('messages')
       .select('*')
@@ -6283,28 +6285,39 @@ app.get('/api/buyers/messages', requireBuyerAuth, async (req: Request, res: Resp
     if (Array.isArray(sbMsgs) && sbMsgs.length > 0) {
       const msgMap = new Map<string, AdminMessage>(db.messages.map(m => [String(m.id), m]));
       for (const m of sbMsgs) {
-        if (!msgMap.has(String(m.id))) {
-          msgMap.set(String(m.id), {
-            id: String(m.id),
-            conversationId: m.conversation_id || m.customer_id || undefined,
-            customerId: m.customer_id || undefined,
-            name: m.name || m.sender_name || 'Customer',
-            email: m.email || m.sender_email || '',
-            phone: m.phone || m.sender_phone || undefined,
-            subject: m.subject || '',
-            message: m.message || '',
-            orderNumber: m.order_number || undefined,
-            status: m.status || 'unread',
-            sender: m.sender || 'customer',
-            senderName: m.name || m.sender_name || undefined,
-            isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
-            isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
-            notificationType: (m.notification_type || undefined) as any,
-            createdAt: m.created_at || new Date().toISOString(),
-            readAt: m.read_at || undefined,
-            repliedAt: m.replied_at || undefined,
-            replyNote: m.reply_note || m.reply_message || undefined
-          });
+        const msgId = String(m.id);
+        if (deletedSet.has(msgId)) continue;
+        if (String(m.notification_type || '').toLowerCase().startsWith('admin_notif')) continue;
+        const sbMsg: AdminMessage = {
+          id: msgId,
+          conversationId: m.conversation_id || m.customer_id || undefined,
+          customerId: m.customer_id || undefined,
+          name: m.name || m.sender_name || 'Customer',
+          email: m.email || m.sender_email || '',
+          phone: m.phone || m.sender_phone || undefined,
+          subject: m.subject || '',
+          message: m.message || '',
+          orderNumber: m.order_number || undefined,
+          status: m.status || 'unread',
+          sender: m.sender || 'customer',
+          senderName: m.name || m.sender_name || undefined,
+          isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
+          isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
+          notificationType: (m.notification_type || undefined) as any,
+          createdAt: m.created_at || new Date().toISOString(),
+          readAt: m.read_at || undefined,
+          repliedAt: m.replied_at || undefined,
+          replyNote: m.reply_note || m.reply_message || undefined
+        };
+        const existing = msgMap.get(msgId);
+        if (!existing) {
+          msgMap.set(msgId, sbMsg);
+        } else {
+          const sbTs = Math.max(sbMsg.repliedAt ? Date.parse(sbMsg.repliedAt) || 0 : 0, sbMsg.readAt ? Date.parse(sbMsg.readAt) || 0 : 0);
+          const locTs = Math.max(existing.repliedAt ? Date.parse(existing.repliedAt) || 0 : 0, existing.readAt ? Date.parse(existing.readAt) || 0 : 0);
+          if (sbTs > locTs || (!existing.replyNote && sbMsg.replyNote)) {
+            msgMap.set(msgId, { ...existing, ...sbMsg });
+          }
         }
       }
       db.messages = Array.from(msgMap.values());
@@ -6701,7 +6714,7 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
   if (cleanUser.includes('@') && !isOwnerUsername && !invitedAdmin) {
     logAudit({ name: 'Security', role: 'security' }, 'ADMIN_LOGIN_DENIED', `Rejected unauthorized admin email attempt: ${cleanUser}`);
     return res.status(403).json({
-      error: `Access denied: Only ${AUTHORIZED_ADMIN_EMAIL} is authorized to access the admin dashboard.`
+      error: 'Access denied: This account is not authorized to access the admin dashboard.'
     });
   }
 
@@ -6716,94 +6729,16 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
   return res.status(401).json({ error: 'Invalid administrator credentials.' });
 });
 
-// Verified Supabase Auth / Google OAuth admin sign-in — strictly restricted to contactreachmedialimited@gmail.com
-async function handleVerifiedSupabaseAdminLogin(req: Request, res: Response) {
-  const accessToken = String(req.body?.accessToken || '').trim();
-  if (!accessToken) {
-    return res.status(403).json({
-      error: 'A verified Supabase authentication token is required. Only contactreachmedialimited@gmail.com is authorized.'
-    });
-  }
-
-  try {
-    const ephemClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-    const { data, error } = await ephemClient.auth.getUser(accessToken);
-    if (error || !data?.user) {
-      return res.status(401).json({ error: 'Invalid or expired Supabase session. Please sign in again.' });
-    }
-
-    const verifiedEmail = String(data.user.email || '').toLowerCase().trim();
-    if (verifiedEmail !== AUTHORIZED_ADMIN_EMAIL) {
-      logAudit(
-        { name: 'Security', role: 'security' },
-        'ADMIN_OAUTH_DENIED',
-        `Denied admin dashboard access to unauthorized email: ${verifiedEmail || 'unknown'}`
-      );
-      return res.status(403).json({
-        unauthorized: true,
-        error: `Access denied: Only ${AUTHORIZED_ADMIN_EMAIL} is authorized to access the admin dashboard.`
-      });
-    }
-
-    const authorizedAdmin: AdminUser = {
-      id: 'adm-owner-crmedia',
-      name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || 'Administrator',
-      username: ADMIN_USERNAME,
-      email: AUTHORIZED_ADMIN_EMAIL,
-      role: 'owner',
-      active: true,
-      verified: true,
-      phone: '0780022600',
-      lastLogin: new Date().toISOString()
-    };
-
-    const { token, expiresAt } = createSignedAdminToken(authorizedAdmin);
-    const otherVerifiedAdmins = db.adminUsers.filter(
-      u => u.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL && isVerifiedAuthorizedAdminRecord(u)
-    );
-    db.adminUsers = [authorizedAdmin, ...otherVerifiedAdmins];
-    db.adminTokens.set(token, {
-      user: authorizedAdmin,
-      expiresAt
-    });
-    saveDbToDisk();
-
-    try {
-      await supabase.from('admin_users').upsert({
-        id: authorizedAdmin.id,
-        user_id: data.user.id,
-        email: AUTHORIZED_ADMIN_EMAIL,
-        name: authorizedAdmin.name,
-        phone: authorizedAdmin.phone || '0780022600',
-        role: 'owner',
-        active: true,
-        last_login: authorizedAdmin.lastLogin,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'email' });
-    } catch {}
-
-    logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Verified Supabase/OAuth admin login for ${AUTHORIZED_ADMIN_EMAIL}`);
-
-    return res.json({
-      token,
-      admin: authorizedAdmin,
-      expiresAt,
-      redirectTo: '/admin'
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: err?.message || 'Unable to verify Supabase administrator session.' });
-  }
+function handleDisabledGoogleAdminLogin(_req: Request, res: Response) {
+  return res.status(403).json({
+    unauthorized: true,
+    error: 'Google Sign-In is disabled for administrators. Please sign in using authorized administrator username and password credentials.'
+  });
 }
 
-app.post('/api/auth/supabase-login', handleVerifiedSupabaseAdminLogin);
-app.post('/api/auth/google-login', handleVerifiedSupabaseAdminLogin);
-app.post('/api/auth/firebase-login', (_req: Request, res: Response) => {
-  return res.status(403).json({
-    error: 'Legacy Firebase login is disabled. Please sign in with authorized credentials or Google via Supabase.'
-  });
-});
+app.post('/api/auth/supabase-login', handleDisabledGoogleAdminLogin);
+app.post('/api/auth/google-login', handleDisabledGoogleAdminLogin);
+app.post('/api/auth/firebase-login', handleDisabledGoogleAdminLogin);
 
 app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
   const user = (req as any).adminUser;
@@ -9597,6 +9532,7 @@ app.post('/api/admin/orders/bulk-delete', requireAdminAuth, requireRole(['owner'
 
 app.get('/api/admin/payments', requireAdminAuth, async (req: Request, res: Response) => {
   try {
+    const deletedSet = new Set((db.deletedRecordIds || []).map(String));
     const { data: sbPays } = await supabase
       .from('payments')
       .select('*')
@@ -9605,30 +9541,40 @@ app.get('/api/admin/payments', requireAdminAuth, async (req: Request, res: Respo
     if (Array.isArray(sbPays) && sbPays.length > 0) {
       const payMap = new Map<string, PaymentConfirmation>(db.paymentConfirmations.map(p => [String(p.id), p]));
       for (const p of sbPays) {
-        if (!payMap.has(String(p.id))) {
-          payMap.set(String(p.id), {
-            id: String(p.id),
-            orderId: p.order_id || '',
-            orderNumber: p.order_number || '',
-            customerName: p.customer_name || p.sender_name || 'Customer',
-            paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
-            amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
-            paymentMethod: p.payment_method || 'MTN Mobile Money',
-            transactionId: p.transaction_id || '',
-            screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
-            confirmationMessage: p.confirmation_message || undefined,
-            verificationStatus: p.verification_status || 'Pending Verification',
-            verifiedAt: p.verified_at || undefined,
-            verifiedBy: p.verified_by || undefined,
-            adminNotes: p.admin_notes || p.notes || undefined,
-            flaggedSuspicious: Boolean(p.flagged_suspicious),
-            isDuplicateTxn: Boolean(p.is_duplicate_txn),
-            suspiciousReason: p.suspicious_reason || undefined,
-            verifiedDirectly: Boolean(p.verified_directly),
-            customerNotified: Boolean(p.customer_notified),
-            notificationMessage: p.notification_message || undefined,
-            submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
-          });
+        const payId = String(p.id);
+        if (deletedSet.has(payId)) continue;
+        const mappedPay: PaymentConfirmation = {
+          id: payId,
+          orderId: p.order_id || '',
+          orderNumber: p.order_number || '',
+          customerName: p.customer_name || p.sender_name || 'Customer',
+          paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
+          amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
+          paymentMethod: p.payment_method || 'MTN Mobile Money',
+          transactionId: p.transaction_id || '',
+          screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
+          confirmationMessage: p.confirmation_message || undefined,
+          verificationStatus: p.verification_status || 'Pending Verification',
+          verifiedAt: p.verified_at || undefined,
+          verifiedBy: p.verified_by || undefined,
+          adminNotes: p.admin_notes || p.notes || undefined,
+          flaggedSuspicious: Boolean(p.flagged_suspicious),
+          isDuplicateTxn: Boolean(p.is_duplicate_txn),
+          suspiciousReason: p.suspicious_reason || undefined,
+          verifiedDirectly: Boolean(p.verified_directly),
+          customerNotified: Boolean(p.customer_notified),
+          notificationMessage: p.notification_message || undefined,
+          submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
+        };
+        const existing = payMap.get(payId);
+        if (!existing) {
+          payMap.set(payId, mappedPay);
+        } else {
+          const sbVerAt = mappedPay.verifiedAt ? Date.parse(mappedPay.verifiedAt) || 0 : 0;
+          const locVerAt = existing.verifiedAt ? Date.parse(existing.verifiedAt) || 0 : 0;
+          if (sbVerAt > locVerAt) {
+            payMap.set(payId, { ...existing, ...mappedPay });
+          }
         }
       }
       db.paymentConfirmations = Array.from(payMap.values()).sort(
@@ -9641,6 +9587,7 @@ app.get('/api/admin/payments', requireAdminAuth, async (req: Request, res: Respo
 
 app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
+    const deletedSet = new Set((db.deletedRecordIds || []).map(String));
     const [{ data: sbTxns }, { data: sbSms }] = await Promise.all([
       supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('sms_notifications').select('*').order('created_at', { ascending: false }).limit(200)
@@ -9649,32 +9596,36 @@ app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Reques
       db.paymentTransactions = db.paymentTransactions || [];
       const txnMap = new Map<string, PaymentTransaction>(db.paymentTransactions.map(t => [String(t.id), t]));
       for (const t of sbTxns) {
-        if (!txnMap.has(String(t.id))) {
-          const meta = (t.metadata && typeof t.metadata === 'object') ? t.metadata : {};
-          txnMap.set(String(t.id), {
-            id: String(t.id),
-            orderId: t.order_id || '',
-            orderNumber: t.order_number || '',
-            customerPhone: t.customer_phone || '',
-            customerEmail: t.customer_email || undefined,
-            amount: Number(t.amount) || 0,
-            currency: t.currency || 'RWF',
-            paymentMethod: t.payment_method || 'MTN Mobile Money',
-            provider: t.provider || 'MTN Mobile Money',
-            status: t.status || 'Pending',
-            providerTransactionId: meta.providerTransactionId || undefined,
-            financialTransactionId: meta.financialTransactionId || undefined,
-            idempotencyKey: t.idempotency_key || undefined,
-            checkoutUrl: t.checkout_url || undefined,
-            failureReason: meta.failureReason || undefined,
-            verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
-            verifiedAt: meta.verifiedAt || undefined,
-            telecomStatus: meta.telecomStatus || undefined,
-            signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
-            metadata: meta,
-            createdAt: t.created_at || new Date().toISOString(),
-            updatedAt: t.updated_at || t.created_at || new Date().toISOString()
-          });
+        const tId = String(t.id);
+        if (deletedSet.has(tId)) continue;
+        const meta = (t.metadata && typeof t.metadata === 'object') ? t.metadata : {};
+        const sbTxn: PaymentTransaction = {
+          id: tId,
+          orderId: t.order_id || '',
+          orderNumber: t.order_number || '',
+          customerPhone: t.customer_phone || '',
+          customerEmail: t.customer_email || undefined,
+          amount: Number(t.amount) || 0,
+          currency: t.currency || 'RWF',
+          paymentMethod: t.payment_method || 'MTN Mobile Money',
+          provider: t.provider || 'MTN Mobile Money',
+          status: t.status || 'Pending',
+          providerTransactionId: meta.providerTransactionId || undefined,
+          financialTransactionId: meta.financialTransactionId || undefined,
+          idempotencyKey: t.idempotency_key || undefined,
+          checkoutUrl: t.checkout_url || undefined,
+          failureReason: meta.failureReason || undefined,
+          verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
+          verifiedAt: meta.verifiedAt || undefined,
+          telecomStatus: meta.telecomStatus || undefined,
+          signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
+          metadata: meta,
+          createdAt: t.created_at || new Date().toISOString(),
+          updatedAt: t.updated_at || t.created_at || new Date().toISOString()
+        };
+        const existing = txnMap.get(tId);
+        if (!existing || Date.parse(sbTxn.updatedAt || sbTxn.createdAt) > Date.parse(existing.updatedAt || existing.createdAt)) {
+          txnMap.set(tId, existing ? { ...existing, ...sbTxn } : sbTxn);
         }
       }
       db.paymentTransactions = Array.from(txnMap.values()).sort(
@@ -9685,9 +9636,11 @@ app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Reques
       db.smsNotifications = db.smsNotifications || [];
       const smsMap = new Map<string, SmsNotification>(db.smsNotifications.map(s => [String(s.id), s]));
       for (const s of sbSms) {
-        if (!smsMap.has(String(s.id))) {
-          smsMap.set(String(s.id), {
-            id: String(s.id),
+        const sId = String(s.id);
+        if (deletedSet.has(sId)) continue;
+        if (!smsMap.has(sId)) {
+          smsMap.set(sId, {
+            id: sId,
             direction: s.direction || 'incoming',
             senderPhone: s.sender_phone || '',
             senderName: s.sender_name || undefined,
@@ -10116,16 +10069,22 @@ app.post('/api/admin/payments/:id/telecom-verify', requireAdminAuth, requireRole
   }
 });
 
-app.delete('/api/admin/payments/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+app.delete('/api/admin/payments/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const idx = db.paymentConfirmations.findIndex(p => p.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Payment record not found' });
 
   const removed = db.paymentConfirmations.splice(idx, 1)[0];
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(removed.id)) {
+    db.deletedRecordIds.push(removed.id);
+  }
   logAudit(admin, 'PAYMENT_DELETED', `Deleted payment record #${removed.id} for Order #${removed.orderNumber}`, 'payment', removed.id);
-  saveDbToDisk();
-  deleteFromFirestoreAsync('paymentConfirmations', removed.id);
-  deleteFromFirestoreAsync('payments', removed.id);
+  saveDbToDisk('payment_deleted', { paymentId: removed.id });
+  await Promise.all([
+    deleteFromFirestoreAsync('paymentConfirmations', removed.id),
+    deleteFromFirestoreAsync('payments', removed.id)
+  ]);
   res.json({ message: 'Payment record deleted', removed });
 });
 
@@ -10281,6 +10240,7 @@ app.post('/api/admin/inventory-logs/bulk-delete', requireAdminAuth, requireRole(
 
 app.get('/api/admin/messages', requireAdminAuth, async (req: Request, res: Response) => {
   try {
+    const deletedSet = new Set((db.deletedRecordIds || []).map(String));
     const { data: msgs } = await supabase
       .from('messages')
       .select('*')
@@ -10290,38 +10250,49 @@ app.get('/api/admin/messages', requireAdminAuth, async (req: Request, res: Respo
     if (Array.isArray(msgs) && msgs.length > 0) {
       const msgMap = new Map<string, AdminMessage>((db.messages || []).map(m => [String(m.id), m]));
       for (const m of msgs) {
+        const msgId = String(m.id);
+        if (deletedSet.has(msgId)) continue;
         if (String(m.notification_type || '').toLowerCase().startsWith('admin_notif')) continue;
-        if (!msgMap.has(String(m.id))) {
-          msgMap.set(String(m.id), {
-            id: m.id,
-            conversationId: m.conversation_id || m.customer_id || undefined,
-            name: m.name || m.sender_name || 'Customer',
-            email: m.email || m.sender_email || '',
-            phone: m.phone || m.sender_phone || undefined,
-            subject: m.subject || '',
-            message: m.message || '',
-            status: m.status || 'unread',
-            orderNumber: m.order_number || undefined,
-            customerId: m.customer_id || undefined,
-            sender: m.sender || 'customer',
-            senderName: m.name || m.sender_name || undefined,
-            isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
-            isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
-            notificationType: (m.notification_type || undefined) as any,
-            createdAt: m.created_at || new Date().toISOString(),
-            readAt: m.read_at || undefined,
-            repliedAt: m.replied_at || undefined,
-            replyNote: m.reply_note || m.reply_message || undefined
-          });
+        const sbMsg: AdminMessage = {
+          id: msgId,
+          conversationId: m.conversation_id || m.customer_id || undefined,
+          name: m.name || m.sender_name || 'Customer',
+          email: m.email || m.sender_email || '',
+          phone: m.phone || m.sender_phone || undefined,
+          subject: m.subject || '',
+          message: m.message || '',
+          status: m.status || 'unread',
+          orderNumber: m.order_number || undefined,
+          customerId: m.customer_id || undefined,
+          sender: m.sender || 'customer',
+          senderName: m.name || m.sender_name || undefined,
+          isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
+          isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
+          notificationType: (m.notification_type || undefined) as any,
+          createdAt: m.created_at || new Date().toISOString(),
+          readAt: m.read_at || undefined,
+          repliedAt: m.replied_at || undefined,
+          replyNote: m.reply_note || m.reply_message || undefined
+        };
+        const existing = msgMap.get(msgId);
+        if (!existing) {
+          msgMap.set(msgId, sbMsg);
+        } else {
+          const sbTs = Math.max(sbMsg.repliedAt ? Date.parse(sbMsg.repliedAt) || 0 : 0, sbMsg.readAt ? Date.parse(sbMsg.readAt) || 0 : 0);
+          const locTs = Math.max(existing.repliedAt ? Date.parse(existing.repliedAt) || 0 : 0, existing.readAt ? Date.parse(existing.readAt) || 0 : 0);
+          if (sbTs > locTs || (!existing.replyNote && sbMsg.replyNote)) {
+            msgMap.set(msgId, { ...existing, ...sbMsg });
+          }
         }
       }
-      db.messages = Array.from(msgMap.values()).sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      db.messages = Array.from(msgMap.values())
+        .filter(m => !deletedSet.has(String(m.id)))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
   } catch {}
+  const deletedSet = new Set((db.deletedRecordIds || []).map(String));
   const cleanMessages = (db.messages || []).filter(
-    (m: any) => String(m.sender || '').toLowerCase() !== 'admin_notification'
+    (m: any) => !deletedSet.has(String(m.id)) && String(m.sender || '').toLowerCase() !== 'admin_notification'
   );
   res.json(cleanMessages);
 });
@@ -10458,7 +10429,7 @@ app.post('/api/admin/notifications/clear-read', requireAdminAuth, (_req: Request
   res.json({ success: true, deletedCount: toDelete.length });
 });
 
-app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const idx = db.messages.findIndex(m => m.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Message not found' });
@@ -10469,8 +10440,8 @@ app.delete('/api/admin/messages/:id', requireAdminAuth, requireRole(['owner', 'a
     db.deletedRecordIds.push(removed.id);
   }
   logAudit(admin, 'MESSAGE_DELETED', `Deleted message #${removed.id} from ${removed.name}`, 'message', removed.id);
-  saveDbToDisk();
-  deleteFromFirestoreAsync('messages', removed.id);
+  saveDbToDisk('message_deleted', { messageId: removed.id });
+  await deleteFromFirestoreAsync('messages', removed.id);
   res.json({ message: 'Message deleted', removed });
 });
 
@@ -10505,7 +10476,51 @@ app.post('/api/admin/messages/bulk-delete', requireAdminAuth, requireRole(['owne
 // ADMIN CONVERSATIONS & REAL-TIME CHAT THREADS
 // -------------------------------------------------------------
 
-app.get('/api/admin/conversations', requireAdminAuth, (req: Request, res: Response) => {
+app.get('/api/admin/conversations', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const deletedSet = new Set((db.deletedRecordIds || []).map(String));
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('*')
+      .neq('sender', 'admin_notification')
+      .order('created_at', { ascending: false })
+      .limit(300);
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      const msgMap = new Map<string, AdminMessage>((db.messages || []).map(m => [String(m.id), m]));
+      for (const m of msgs) {
+        const msgId = String(m.id);
+        if (deletedSet.has(msgId)) continue;
+        if (String(m.notification_type || '').toLowerCase().startsWith('admin_notif')) continue;
+        if (!msgMap.has(msgId)) {
+          msgMap.set(msgId, {
+            id: msgId,
+            conversationId: m.conversation_id || m.customer_id || undefined,
+            name: m.name || m.sender_name || 'Customer',
+            email: m.email || m.sender_email || '',
+            phone: m.phone || m.sender_phone || undefined,
+            subject: m.subject || '',
+            message: m.message || '',
+            status: m.status || 'unread',
+            orderNumber: m.order_number || undefined,
+            customerId: m.customer_id || undefined,
+            sender: m.sender || 'customer',
+            senderName: m.name || m.sender_name || undefined,
+            isReadByCustomer: m.is_read_by_customer !== undefined ? Boolean(m.is_read_by_customer) : undefined,
+            isReadByAdmin: m.is_read_by_admin !== undefined ? Boolean(m.is_read_by_admin) : undefined,
+            notificationType: (m.notification_type || undefined) as any,
+            createdAt: m.created_at || new Date().toISOString(),
+            readAt: m.read_at || undefined,
+            repliedAt: m.replied_at || undefined,
+            replyNote: m.reply_note || m.reply_message || undefined
+          });
+        }
+      }
+      db.messages = Array.from(msgMap.values())
+        .filter(m => !deletedSet.has(String(m.id)))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  } catch {}
+
   const threadMap = new Map<string, {
     customerId: string;
     customerName: string;
@@ -10521,6 +10536,8 @@ app.get('/api/admin/conversations', requireAdminAuth, (req: Request, res: Respon
   }>();
 
   for (const m of db.messages) {
+    if (String((m as any).sender || '').toLowerCase() === 'admin_notification') continue;
+    if (String((m as any).notificationType || '').toLowerCase().startsWith('admin_notif')) continue;
     const key = (m.customerId && m.customerId.trim()) ||
       (m.email && m.email.toLowerCase().trim()) ||
       (m.phone && m.phone.replace(/\D/g, '')) ||
@@ -10692,6 +10709,7 @@ app.put('/api/admin/conversations/:customerId/mark-read', requireAdminAuth, (req
 
 app.get('/api/admin/customer-reports', requireAdminAuth, async (req: Request, res: Response) => {
   try {
+    const deletedSet = new Set((db.deletedRecordIds || []).map(String));
     const { data: probs } = await supabase
       .from('customer_problems')
       .select('*')
@@ -10700,37 +10718,47 @@ app.get('/api/admin/customer-reports', requireAdminAuth, async (req: Request, re
     if (Array.isArray(probs) && probs.length > 0) {
       const probMap = new Map<string, CustomerProblemReport>((db.customerProblems || []).map(r => [String(r.id), r]));
       for (const p of probs) {
-        if (!probMap.has(String(p.id))) {
-          let parsedNotes = Array.isArray(p.private_notes) ? p.private_notes : undefined;
-          if (!parsedNotes && typeof p.private_notes === 'string' && p.private_notes.trim().startsWith('[')) {
-            try { parsedNotes = JSON.parse(p.private_notes); } catch {}
+        const probId = String(p.id);
+        if (deletedSet.has(probId)) continue;
+        let parsedNotes = Array.isArray(p.private_notes) ? p.private_notes : undefined;
+        if (!parsedNotes && typeof p.private_notes === 'string' && p.private_notes.trim().startsWith('[')) {
+          try { parsedNotes = JSON.parse(p.private_notes); } catch {}
+        }
+        if (!parsedNotes && typeof p.admin_notes === 'string' && p.admin_notes.trim().startsWith('[')) {
+          try { parsedNotes = JSON.parse(p.admin_notes); } catch {}
+        }
+        const sbProb: CustomerProblemReport = {
+          id: probId,
+          caseNumber: p.case_number || '',
+          orderNumber: p.order_number || undefined,
+          customerName: p.customer_name || 'Customer',
+          customerPhone: p.customer_phone || '',
+          customerEmail: p.customer_email || undefined,
+          category: (p.category || 'other') as any,
+          description: p.description || '',
+          priority: (p.priority || 'medium') as any,
+          status: (p.status || 'New') as any,
+          assignedTo: p.assigned_to || undefined,
+          privateNotes: parsedNotes,
+          resolution: p.resolution || undefined,
+          resolvedAt: p.resolved_at || undefined,
+          createdAt: p.created_at || new Date().toISOString(),
+          updatedAt: p.updated_at || undefined
+        };
+        const existing = probMap.get(probId);
+        if (!existing) {
+          probMap.set(probId, sbProb);
+        } else {
+          const sbTs = sbProb.updatedAt ? Date.parse(sbProb.updatedAt) || 0 : 0;
+          const locTs = existing.updatedAt ? Date.parse(existing.updatedAt) || 0 : 0;
+          if (sbTs > locTs) {
+            probMap.set(probId, { ...existing, ...sbProb });
           }
-          if (!parsedNotes && typeof p.admin_notes === 'string' && p.admin_notes.trim().startsWith('[')) {
-            try { parsedNotes = JSON.parse(p.admin_notes); } catch {}
-          }
-          probMap.set(String(p.id), {
-            id: String(p.id),
-            caseNumber: p.case_number || '',
-            orderNumber: p.order_number || undefined,
-            customerName: p.customer_name || 'Customer',
-            customerPhone: p.customer_phone || '',
-            customerEmail: p.customer_email || undefined,
-            category: (p.category || 'other') as any,
-            description: p.description || '',
-            priority: (p.priority || 'medium') as any,
-            status: (p.status || 'New') as any,
-            assignedTo: p.assigned_to || undefined,
-            privateNotes: parsedNotes,
-            resolution: p.resolution || undefined,
-            resolvedAt: p.resolved_at || undefined,
-            createdAt: p.created_at || new Date().toISOString(),
-            updatedAt: p.updated_at || undefined
-          });
         }
       }
-      db.customerProblems = Array.from(probMap.values()).sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      db.customerProblems = Array.from(probMap.values())
+        .filter(r => !deletedSet.has(String(r.id)))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
   } catch {}
   res.json(db.customerProblems);
@@ -10767,16 +10795,22 @@ app.patch('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['own
   res.json(report);
 });
 
-app.delete('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
+app.delete('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const idx = db.customerProblems.findIndex(r => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Report not found' });
 
   const removed = db.customerProblems.splice(idx, 1)[0];
+  db.deletedRecordIds = db.deletedRecordIds || [];
+  if (!db.deletedRecordIds.includes(removed.id)) {
+    db.deletedRecordIds.push(removed.id);
+  }
   logAudit(admin, 'PROBLEM_REPORT_DELETED', `Deleted report case #${removed.caseNumber}`, 'problem_report', removed.id);
-  saveDbToDisk();
-  deleteFromFirestoreAsync('customerProblems', removed.id);
-  deleteFromFirestoreAsync('reports', removed.id);
+  saveDbToDisk('problem_deleted', { reportId: removed.id });
+  await Promise.all([
+    deleteFromFirestoreAsync('customerProblems', removed.id),
+    deleteFromFirestoreAsync('reports', removed.id)
+  ]);
   res.json({ message: 'Report deleted', removed });
 });
 
