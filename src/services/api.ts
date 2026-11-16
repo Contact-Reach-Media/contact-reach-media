@@ -211,68 +211,79 @@ function emitAdminAuthChanged(authenticated: boolean) {
   } catch {}
 }
 
+let inMemoryAdminToken: string | null = null;
+let inMemoryAdminUser: AdminUser | null = null;
+
 export function getAdminToken(): string | null {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token && typeof token === 'string' && token.trim()) {
+      inMemoryAdminToken = token.trim();
       return token.trim();
     }
-    // Recover from persistent same-site cookie if localStorage was evicted
-    const cookieToken = readAdminCookie();
-    if (cookieToken) {
-      try {
-        localStorage.setItem(TOKEN_KEY, cookieToken);
-        localStorage.setItem(SESSION_FLAG_KEY, 'true');
-      } catch {}
-      return cookieToken;
-    }
-    return null;
-  } catch {
-    return readAdminCookie();
+  } catch {}
+  // Recover from persistent same-site cookie or in-memory fallback if localStorage was evicted or blocked in iframe
+  const cookieToken = readAdminCookie();
+  if (cookieToken) {
+    inMemoryAdminToken = cookieToken;
+    try {
+      localStorage.setItem(TOKEN_KEY, cookieToken);
+      localStorage.setItem(SESSION_FLAG_KEY, 'true');
+    } catch {}
+    return cookieToken;
   }
+  return inMemoryAdminToken;
 }
 
 export function setAdminToken(token: string, user?: any) {
+  const cleanToken = typeof token === 'string' ? token.trim() : '';
+  if (!cleanToken) {
+    removeAdminToken();
+    throw new Error('Invalid authentication token.');
+  }
+  if (user && !isAuthorizedAdminUser(user)) {
+    removeAdminToken();
+    throw new Error('Access denied: Unauthorized administrator account.');
+  }
+  const userToSave: AdminUser = (user && isAuthorizedAdminUser(user)) ? user : {
+    id: 'adm-owner-crmedia',
+    name: 'Administrator',
+    username: AUTHORIZED_ADMIN_USERNAME,
+    email: AUTHORIZED_ADMIN_EMAIL,
+    role: 'owner',
+    active: true,
+    phone: '0780022600',
+    lastLogin: new Date().toISOString()
+  };
+
+  inMemoryAdminToken = cleanToken;
+  inMemoryAdminUser = userToSave;
+  writeAdminCookie(cleanToken);
+
   try {
-    const cleanToken = typeof token === 'string' ? token.trim() : '';
-    if (!cleanToken) {
-      removeAdminToken();
-      throw new Error('Invalid authentication token.');
-    }
-    if (user && !isAuthorizedAdminUser(user)) {
-      removeAdminToken();
-      throw new Error('Access denied: Unauthorized administrator account.');
-    }
     localStorage.setItem(TOKEN_KEY, cleanToken);
     localStorage.setItem(SESSION_FLAG_KEY, 'true');
-    writeAdminCookie(cleanToken);
-    const userToSave = (user && isAuthorizedAdminUser(user)) ? user : {
-      id: 'adm-owner-crmedia',
-      name: 'Administrator',
-      username: AUTHORIZED_ADMIN_USERNAME,
-      email: AUTHORIZED_ADMIN_EMAIL,
-      role: 'owner',
-      active: true,
-      phone: '0780022600',
-      lastLogin: new Date().toISOString()
-    };
     localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(userToSave));
-    emitAdminAuthChanged(true);
-  } catch (err: any) {
-    if (err.message?.includes('Access denied') || err.message?.includes('Invalid authentication')) throw err;
-  }
+  } catch {}
+  emitAdminAuthChanged(true);
 }
 
 export function getStoredAdminUser(): AdminUser | null {
   try {
     const token = getAdminToken();
     if (!token) return null;
-    const raw = localStorage.getItem(ADMIN_USER_KEY);
-    if (raw) {
-      const user = JSON.parse(raw);
-      if (user && isAuthorizedAdminUser(user) && user.active !== false) {
-        return user;
+    try {
+      const raw = localStorage.getItem(ADMIN_USER_KEY);
+      if (raw) {
+        const user = JSON.parse(raw);
+        if (user && isAuthorizedAdminUser(user) && user.active !== false) {
+          inMemoryAdminUser = user;
+          return user;
+        }
       }
+    } catch {}
+    if (inMemoryAdminUser && isAuthorizedAdminUser(inMemoryAdminUser) && inMemoryAdminUser.active !== false) {
+      return inMemoryAdminUser;
     }
     // Maintain user profile when a verified token is present in localStorage/cookie
     const fallbackUser: AdminUser = {
@@ -285,16 +296,19 @@ export function getStoredAdminUser(): AdminUser | null {
       phone: '0780022600',
       lastLogin: new Date().toISOString()
     };
+    inMemoryAdminUser = fallbackUser;
     try {
       localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(fallbackUser));
     } catch {}
     return fallbackUser;
   } catch {
-    return null;
+    return inMemoryAdminUser;
   }
 }
 
 export function removeAdminToken() {
+  inMemoryAdminToken = null;
+  inMemoryAdminUser = null;
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ADMIN_USER_KEY);
@@ -1521,7 +1535,11 @@ export const api = {
         throw new Error(parsed.json.error);
       }
 
-      throw new Error('Invalid administrator credentials. Please check your username and password.');
+      if (!parsed.isJson && parsed.errorMessage) {
+        throw new Error(parsed.errorMessage);
+      }
+
+      throw new Error('Invalid administrator credentials.');
     } catch (err: any) {
       const msg = String(err?.message || '');
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError') {

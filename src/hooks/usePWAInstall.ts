@@ -32,7 +32,11 @@ export function usePWAInstall() {
         }).catch(() => {});
       }
 
-      // 4. Register service worker for offline & PWA installability
+      // 4. Purge legacy v1 caches and register service worker for offline & PWA installability
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        caches.delete('crm-cache-v1').catch(() => {});
+        caches.delete('crm-api-cache-v1').catch(() => {});
+      }
       if ('serviceWorker' in navigator && process.env.NODE_ENV !== 'test') {
         navigator.serviceWorker
           .register('/sw.js')

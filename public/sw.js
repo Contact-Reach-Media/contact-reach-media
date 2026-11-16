@@ -1,8 +1,7 @@
 // ContactReach Market Progressive Web App Service Worker
-const CACHE_NAME = 'crm-cache-v1';
+const CACHE_NAME = 'crm-cache-v2';
+const API_CACHE_NAME = 'crm-api-cache-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/site.webmanifest',
   '/favicon.svg',
@@ -32,7 +31,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME && key !== 'crm-api-cache-v1') {
+          if (key !== CACHE_NAME && key !== API_CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -116,15 +115,16 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
+  // Skip non-GET requests (e.g. POST /api/auth/login)
   if (request.method !== 'GET') {
     return;
   }
 
-  // Bypass service worker for SSE real-time streams, version checks, and dynamic translation API
+  // Bypass service worker for SSE real-time streams, version checks, auth, and dynamic translation API
   if (
     url.pathname.includes('/stream') ||
     url.pathname.includes('/realtime') ||
+    url.pathname.startsWith('/api/auth') ||
     url.pathname.startsWith('/api/version') ||
     url.pathname.startsWith('/api/sync') ||
     url.pathname.startsWith('/api/translate')
@@ -139,7 +139,7 @@ self.addEventListener('fetch', (event) => {
         .then((response) => {
           if (response && response.status === 200) {
             const clone = response.clone();
-            caches.open('crm-api-cache-v1').then((cache) => cache.put(request, clone));
+            caches.open(API_CACHE_NAME).then((cache) => cache.put(request, clone));
           }
           return response;
         })
@@ -156,7 +156,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle static assets & navigation
+  // Handle navigation, HTML, and app code bundles with Network-First so fresh updates always load immediately
+  const isCodeOrNavigation =
+    request.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.startsWith('/admin') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.css');
+
+  if (isCodeOrNavigation) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => networkResponse)
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Static images/icons: stale-while-revalidate
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request)

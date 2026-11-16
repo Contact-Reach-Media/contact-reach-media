@@ -6544,11 +6544,11 @@ app.post('/api/buyers/logout', (req: Request, res: Response) => {
 
 app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Response) => {
   const { username, email, password } = req.body;
-  const rawIdentifier = String(username || email || '').trim();
-  const rawPassword = typeof password === 'string' ? password : String(password || '');
+  const rawIdentifier = String(username || email || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  const rawPassword = (typeof password === 'string' ? password : String(password || '')).replace(/[\u200B-\u200D\uFEFF]/g, '');
 
   if (!rawIdentifier || !rawPassword) {
-    return res.status(400).json({ error: 'Email or username and password are required.' });
+    return res.status(400).json({ error: 'Username and password are required.' });
   }
 
   const cleanUser = rawIdentifier.toLowerCase().replace(/^@/, '');
