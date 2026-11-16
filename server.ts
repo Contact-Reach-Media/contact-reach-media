@@ -2630,8 +2630,8 @@ function resolveAdminSession(token: string): { user: AdminUser; expiresAt: numbe
       const payloadEmail = String(signedPayload.email || '').toLowerCase().trim();
       const liveUser =
         payloadEmail === AUTHORIZED_ADMIN_EMAIL
-          ? (db.adminUsers.find(u => u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) || defaultAdminUsers[0])
-          : db.adminUsers.find(u => (u.id === signedPayload.sub || u.email.toLowerCase().trim() === payloadEmail) && isVerifiedAuthorizedAdminRecord(u));
+          ? ((db.adminUsers || []).find(u => (u?.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) || defaultAdminUsers[0])
+          : (db.adminUsers || []).find(u => u && (u.id === signedPayload.sub || (u.email || '').toLowerCase().trim() === payloadEmail) && isVerifiedAuthorizedAdminRecord(u));
       if (liveUser && liveUser.active !== false) {
         session = {
           user: { ...liveUser },
@@ -2667,8 +2667,8 @@ function resolveAdminSession(token: string): { user: AdminUser; expiresAt: numbe
   );
 
   const liveAdmin = isOwnerSession
-    ? db.adminUsers.find(u => u.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL)
-    : db.adminUsers.find(u => u.id === sessionUser?.id || u.email.toLowerCase().trim() === sessionEmail);
+    ? (db.adminUsers || []).find(u => (u?.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL)
+    : (db.adminUsers || []).find(u => u && (u.id === sessionUser?.id || (sessionEmail && (u.email || '').toLowerCase().trim() === sessionEmail)));
 
   if (isOwnerSession) {
     if (liveAdmin) {
@@ -11540,136 +11540,153 @@ app.get('/api/admin/invitations', requireAdminAuth, requireRole(['owner', 'admin
 });
 
 // 2. Authorized admins generate a secure, unique, single-use invitation link (supports 1-click generation with zero extra info)
-app.post('/api/admin/invitations', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser as AdminUser;
-  syncExpiredInvitations();
+app.post(['/api/admin/invitations', '/api/admin/invitations/generate'], requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
+  try {
+    const admin = ((req as any).adminUser || {}) as AdminUser;
+    syncExpiredInvitations();
 
-  const hasStructuredInput = Boolean(
-    (typeof req.body?.inviteeEmail === 'string' && req.body.inviteeEmail.trim()) ||
-    (typeof req.body?.inviteeName === 'string' && req.body.inviteeName.trim())
-  );
-  const isOneClick = req.body?.oneClick === true || !hasStructuredInput;
-
-  const allowedInviteRoles: AdminRole[] = [
-    'administrator',
-    'product_manager',
-    'shop_manager',
-    'order_manager',
-    'customer_support'
-  ];
-  const requestedRole = String(req.body?.role || 'administrator').trim() as AdminRole;
-  if (!allowedInviteRoles.includes(requestedRole)) {
-    return res.status(400).json({ error: 'Invalid administrative role selected for invitation.' });
-  }
-
-  let inviteeName = 'Invited Administrator';
-  let inviteeEmail = '';
-  let inviteePhone: string | undefined = undefined;
-  let notes: string | undefined = undefined;
-
-  if (!isOneClick) {
-    inviteeName = String(req.body?.inviteeName || '').trim();
-    inviteeEmail = String(req.body?.inviteeEmail || '').trim().toLowerCase();
-    inviteePhone = req.body?.inviteePhone ? String(req.body.inviteePhone).trim() : undefined;
-    notes = req.body?.notes ? String(req.body.notes).trim().slice(0, 300) : undefined;
-
-    if (inviteeName.length < 2) {
-      return res.status(400).json({ error: 'Invitee full name must be at least 2 characters.' });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
-      return res.status(400).json({ error: 'Please provide a valid invitee email address.' });
-    }
-    if (inviteeEmail === AUTHORIZED_ADMIN_EMAIL) {
-      return res.status(400).json({ error: 'Cannot create an invitation for the main system owner email.' });
-    }
-
-    const existingActiveAdmin = db.adminUsers.find(
-      u => u.email.toLowerCase().trim() === inviteeEmail && u.active !== false
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const hasStructuredInput = Boolean(
+      (typeof body.inviteeEmail === 'string' && body.inviteeEmail.trim()) ||
+      (typeof body.inviteeName === 'string' && body.inviteeName.trim())
     );
-    if (existingActiveAdmin) {
-      return res.status(409).json({ error: 'An active administrator account already exists for this email address.' });
+    const isOneClick = body.oneClick === true || !hasStructuredInput;
+
+    const allowedInviteRoles: AdminRole[] = [
+      'administrator',
+      'product_manager',
+      'shop_manager',
+      'order_manager',
+      'customer_support'
+    ];
+    const requestedRole = String(body.role || 'administrator').trim() as AdminRole;
+    if (!allowedInviteRoles.includes(requestedRole)) {
+      return res.status(400).json({ error: 'Invalid administrative role selected for invitation.' });
     }
+
+    let inviteeName = 'Invited Administrator';
+    let inviteeEmail = '';
+    let inviteePhone: string | undefined = undefined;
+    let notes: string | undefined = undefined;
+
+    if (!isOneClick) {
+      inviteeName = String(body.inviteeName || '').trim();
+      inviteeEmail = String(body.inviteeEmail || '').trim().toLowerCase();
+      inviteePhone = body.inviteePhone ? String(body.inviteePhone).trim() : undefined;
+      notes = body.notes ? String(body.notes).trim().slice(0, 300) : undefined;
+
+      if (inviteeName.length < 2) {
+        return res.status(400).json({ error: 'Invitee full name must be at least 2 characters.' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
+        return res.status(400).json({ error: 'Please provide a valid invitee email address.' });
+      }
+      if (inviteeEmail === AUTHORIZED_ADMIN_EMAIL) {
+        return res.status(400).json({ error: 'Cannot create an invitation for the main system owner email.' });
+      }
+
+      const existingActiveAdmin = (db.adminUsers || []).find(
+        u => u && (u.email || '').toLowerCase().trim() === inviteeEmail && u.active !== false
+      );
+      if (existingActiveAdmin) {
+        return res.status(409).json({ error: 'An active administrator account already exists for this email address.' });
+      }
+    }
+
+    // Resolve and validate expiration date & time (default 7 days for one-click, 24h for structured)
+    const rawExpiresAt = body.expiresAt;
+    const expiresInHours = body.expiresInHours !== undefined ? Number(body.expiresInHours) : undefined;
+    let expiresAtDate: Date;
+    if (rawExpiresAt) {
+      expiresAtDate = new Date(String(rawExpiresAt));
+    } else if (expiresInHours !== undefined && Number.isFinite(expiresInHours)) {
+      expiresAtDate = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+    } else {
+      expiresAtDate = new Date(Date.now() + (isOneClick ? 7 * 24 : 24) * 60 * 60 * 1000);
+    }
+
+    const nowMs = Date.now();
+    const expMs = expiresAtDate.getTime();
+    if (!Number.isFinite(expMs)) {
+      return res.status(400).json({ error: 'Invalid expiration date and time.' });
+    }
+    if (expMs <= nowMs + 60 * 1000) {
+      return res.status(400).json({ error: 'Expiration date and time must be at least 1 minute in the future.' });
+    }
+    if (expMs > nowMs + 90 * 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: 'Invitation expiration cannot exceed 90 days.' });
+    }
+
+    // Generate cryptographically random 256-bit single-use token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashInviteToken(rawToken);
+    const verificationCode = isOneClick ? undefined : String(crypto.randomInt(100000, 999999));
+    const verificationCodeHash = verificationCode ? hashVerificationCode(verificationCode) : undefined;
+    const inviteId = `inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+    const host = String(req.headers['x-forwarded-host'] || req.get('host') || '').split(',')[0].trim();
+    const origin = req.headers.origin
+      ? String(req.headers.origin)
+      : (host ? `${forwardedProto}://${host}` : '');
+    const invitePath = `/admin/invite?token=${encodeURIComponent(rawToken)}`;
+    const inviteUrl = origin ? `${origin}${invitePath}` : invitePath;
+
+    const newInvitation: StoredAdminInvitation = {
+      id: inviteId,
+      inviteMode: isOneClick ? 'one_click' : 'verified',
+      inviteeName,
+      inviteeEmail,
+      inviteePhone,
+      role: requestedRole,
+      status: 'Pending',
+      tokenHash,
+      tokenPreview: `${rawToken.slice(0, 8)}...${rawToken.slice(-6)}`,
+      inviteUrl,
+      verificationCode,
+      verificationCodeHash,
+      createdById: admin.id || 'adm-owner-crmedia',
+      createdByName: admin.name || 'Administrator',
+      createdByEmail: admin.email || AUTHORIZED_ADMIN_EMAIL,
+      createdAt: new Date().toISOString(),
+      expiresAt: expiresAtDate.toISOString(),
+      notes
+    };
+
+    db.adminInvitations = db.adminInvitations || [];
+    db.adminInvitations.unshift(newInvitation);
+    if (db.adminInvitations.length > 200) {
+      const pending = db.adminInvitations.filter(i => i.status === 'Pending');
+      const nonPending = db.adminInvitations.filter(i => i.status !== 'Pending').slice(0, Math.max(0, 200 - pending.length));
+      db.adminInvitations = [...pending, ...nonPending];
+    }
+
+    saveDbToDisk('admin_invitation_created', { invitation: sanitizeInvitationForOwner(newInvitation) });
+    await Promise.race([
+      saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations),
+      new Promise(resolve => setTimeout(resolve, 1500))
+    ]).catch(() => {});
+
+    try {
+      logAudit(
+        { name: admin.name || 'Administrator', role: admin.role || 'owner' },
+        'ADMIN_INVITATION_CREATED',
+        `Generated single-use ${isOneClick ? 'one-click ' : ''}admin invitation (${newInvitation.id})`,
+        'admin_invitation',
+        newInvitation.id
+      );
+    } catch {}
+
+    return res.status(201).json({
+      invitation: sanitizeInvitationForOwner(newInvitation),
+      inviteUrl,
+      invitePath,
+      ...(verificationCode ? { verificationCode } : {})
+    });
+  } catch (err: any) {
+    console.error('[Admin Invitation Create] Error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'Unable to generate admin invitation link. Please try again.' });
   }
-
-  // Resolve and validate expiration date & time (default 7 days for one-click, 24h for structured)
-  const rawExpiresAt = req.body?.expiresAt;
-  const expiresInHours = req.body?.expiresInHours !== undefined ? Number(req.body.expiresInHours) : undefined;
-  let expiresAtDate: Date;
-  if (rawExpiresAt) {
-    expiresAtDate = new Date(String(rawExpiresAt));
-  } else if (expiresInHours !== undefined && Number.isFinite(expiresInHours)) {
-    expiresAtDate = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
-  } else {
-    expiresAtDate = new Date(Date.now() + (isOneClick ? 7 * 24 : 24) * 60 * 60 * 1000);
-  }
-
-  const nowMs = Date.now();
-  const expMs = expiresAtDate.getTime();
-  if (!Number.isFinite(expMs)) {
-    return res.status(400).json({ error: 'Invalid expiration date and time.' });
-  }
-  if (expMs <= nowMs + 60 * 1000) {
-    return res.status(400).json({ error: 'Expiration date and time must be at least 1 minute in the future.' });
-  }
-  if (expMs > nowMs + 90 * 24 * 60 * 60 * 1000) {
-    return res.status(400).json({ error: 'Invitation expiration cannot exceed 90 days.' });
-  }
-
-  // Generate cryptographically random 256-bit single-use token
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = hashInviteToken(rawToken);
-  const verificationCode = isOneClick ? undefined : String(crypto.randomInt(100000, 999999));
-  const verificationCodeHash = verificationCode ? hashVerificationCode(verificationCode) : undefined;
-  const inviteId = `inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-
-  const forwardedProto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
-  const host = String(req.headers['x-forwarded-host'] || req.get('host') || '').split(',')[0].trim();
-  const origin = req.headers.origin
-    ? String(req.headers.origin)
-    : (host ? `${forwardedProto}://${host}` : '');
-  const invitePath = `/admin/invite?token=${encodeURIComponent(rawToken)}`;
-  const inviteUrl = origin ? `${origin}${invitePath}` : invitePath;
-
-  const newInvitation: StoredAdminInvitation = {
-    id: inviteId,
-    inviteMode: isOneClick ? 'one_click' : 'verified',
-    inviteeName,
-    inviteeEmail,
-    inviteePhone,
-    role: requestedRole,
-    status: 'Pending',
-    tokenHash,
-    tokenPreview: `${rawToken.slice(0, 8)}...${rawToken.slice(-6)}`,
-    inviteUrl,
-    verificationCode,
-    verificationCodeHash,
-    createdById: admin.id,
-    createdByName: admin.name,
-    createdByEmail: admin.email,
-    createdAt: new Date().toISOString(),
-    expiresAt: expiresAtDate.toISOString(),
-    notes
-  };
-
-  db.adminInvitations = db.adminInvitations || [];
-  db.adminInvitations.unshift(newInvitation);
-  saveDbToDisk('admin_invitation_created', { invitation: sanitizeInvitationForOwner(newInvitation) });
-  await saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations);
-
-  logAudit(
-    admin,
-    'ADMIN_INVITATION_CREATED',
-    `Generated single-use ${isOneClick ? 'one-click ' : ''}admin invitation (${newInvitation.id})`,
-    'admin_invitation',
-    newInvitation.id
-  );
-
-  res.status(201).json({
-    invitation: sanitizeInvitationForOwner(newInvitation),
-    inviteUrl,
-    invitePath,
-    ...(verificationCode ? { verificationCode } : {})
-  });
 });
 
 // 3. Authorized admin revokes an active invitation

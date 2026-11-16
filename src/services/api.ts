@@ -4220,16 +4220,50 @@ export const api = {
     invitePath: string;
     verificationCode?: string;
   }> {
-    const res = await fetch('/api/admin/invitations', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json) {
-      throw new Error(parsed.json?.error || 'Failed to generate admin invitation link');
+    const endpoints = ['/api/admin/invitations', '/api/admin/invitations/generate'];
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < endpoints.length; attempt++) {
+      try {
+        const res = await fetch(endpoints[attempt], {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            Accept: 'application/json'
+          },
+          credentials: 'same-origin',
+          cache: 'no-store',
+          body: JSON.stringify(payload || { oneClick: true })
+        });
+        const parsed = await safeParseResponse<any>(res);
+
+        if (res.ok && parsed.isJson && parsed.json && (parsed.json.inviteUrl || parsed.json.invitePath)) {
+          return parsed.json;
+        }
+
+        if (parsed.isJson && parsed.json?.error) {
+          throw new Error(parsed.json.error);
+        }
+
+        if ((!parsed.isJson || res.status >= 500) && attempt < endpoints.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 350));
+          continue;
+        }
+
+        throw new Error(parsed.json?.error || parsed.errorMessage || `Failed to generate admin invitation link (HTTP ${res.status})`);
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        const isTransient = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
+        if (isTransient && attempt < endpoints.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 350));
+          continue;
+        }
+        lastError = err instanceof Error ? err : new Error(msg || 'Failed to generate admin invitation link');
+        break;
+      }
     }
-    return parsed.json;
+
+    throw lastError || new Error('Failed to generate admin invitation link');
   },
 
   async adminRevokeInvitation(id: string): Promise<{ message: string; invitation: AdminInvitation }> {
