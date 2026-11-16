@@ -1683,11 +1683,22 @@ async function runTests() {
   });
 
   await test('DSers & AliExpress: Product mapping, manual order approval, and tracking updates', async () => {
-    // 1. Get products list to find a product to map
-    const prodsRes = await fetch(`${BASE_URL}/api/products`);
-    const prods = await prodsRes.json();
-    assert(prods.length > 0, 'Catalog should have products');
-    const targetProd = prods[0];
+    // 1. Create a fresh temporary product to map and test DSers/AliExpress fulfillment
+    const tempProdRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: `DSers Mapped Product ${Date.now()}`,
+        price: 16500,
+        category: 'electronics',
+        stock: 20
+      })
+    });
+    assert.strictEqual(tempProdRes.status, 201, 'Temporary DSers test product creation must succeed');
+    const targetProd = await tempProdRes.json();
 
     // 2. Save AliExpress URL and exact supplier variant for product SKU
     const mapRes = await fetch(`${BASE_URL}/api/admin/products/${targetProd.id}/supplier-mapping`, {
@@ -1777,6 +1788,17 @@ async function runTests() {
     const publicTrack = await publicTrackRes.json();
     assert.strictEqual(publicTrack.trackingNumber, 'LP0069284019284');
     assert.strictEqual(publicTrack.trackingCarrier, 'AliExpress Standard Shipping');
+
+    // Clean up temporary DSers order & product
+    await fetch(`${BASE_URL}/api/admin/orders/${order.orderNumber}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ status: 'Cancelled' })
+    });
+    await fetch(`${BASE_URL}/api/admin/products/${targetProd.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
   });
 
   // TEST 43: Customer Order Privacy & Protection Against Unauthorized Snooping
@@ -1933,10 +1955,22 @@ async function runTests() {
   });
 
   await test('Payment Gateway: Cardholder data protection, server-side initiation, and idempotency', async () => {
-    // 1. Create a test order
-    const prodsRes = await fetch(`${BASE_URL}/api/products`);
-    const prods = await prodsRes.json();
-    const testProd = prods.find((p: any) => p.stock > 5);
+    // 1. Create a dedicated test product & order
+    const tempProdRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: `Gateway Test Product ${Date.now()}`,
+        price: 15000,
+        category: 'electronics',
+        stock: 25
+      })
+    });
+    assert.strictEqual(tempProdRes.status, 201, 'Temporary test product creation must succeed');
+    const testProd = await tempProdRes.json();
 
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
@@ -2004,13 +2038,36 @@ async function runTests() {
     const retryData = await retryRes.json();
     assert(retryData.isIdempotentReplay, 'Response should confirm idempotent replay');
     assert.strictEqual(retryData.transaction.id, initData.transactionId);
+
+    // Clean up temporary order & product
+    await fetch(`${BASE_URL}/api/admin/orders/${order.orderNumber}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ status: 'Cancelled' })
+    });
+    await fetch(`${BASE_URL}/api/admin/products/${testProd.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
   });
 
   await test('Payment Webhook: Processes charge.completed, deducts stock, and charge.refunded restores stock', async () => {
-    // 1. Create a fresh order
-    const prodsRes = await fetch(`${BASE_URL}/api/products`);
-    const prods = await prodsRes.json();
-    const testProd = prods.find((p: any) => p.stock > 5);
+    // 1. Create a fresh dedicated product and order
+    const tempProdRes = await fetch(`${BASE_URL}/api/admin/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        name: `Webhook Test Product ${Date.now()}`,
+        price: 18000,
+        category: 'electronics',
+        stock: 20
+      })
+    });
+    assert.strictEqual(tempProdRes.status, 201, 'Temporary webhook test product must be created');
+    const testProd = await tempProdRes.json();
     const initialStock = testProd.stock;
 
     const orderRes = await fetch(`${BASE_URL}/api/orders`, {
@@ -2028,6 +2085,7 @@ async function runTests() {
         paymentMethod: 'MTN Mobile Money'
       })
     });
+    assert([200, 201].includes(orderRes.status), 'Webhook test order creation must succeed');
     const order = await orderRes.json();
 
     // 2. Reject unauthenticated webhook
@@ -2094,6 +2152,12 @@ async function runTests() {
     assert.strictEqual(statusQueryRes.status, 200);
     const statusData = await statusQueryRes.json();
     assert.strictEqual(statusData.paymentStatus, 'Refunded');
+
+    // Clean up temporary webhook test product
+    await fetch(`${BASE_URL}/api/admin/products/${testProd.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
   });
 
   await test('Persistence & Database status endpoint returns detailed operational metrics', async () => {

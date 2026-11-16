@@ -5375,7 +5375,7 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
 // PUBLIC API: CUSTOMER PROBLEMS & COMPLAINTS
 // -------------------------------------------------------------
 
-app.post('/api/customer-reports', (req: Request, res: Response) => {
+app.post('/api/customer-reports', async (req: Request, res: Response) => {
   const { customerName, customerPhone, customerEmail, orderNumber, category, description, priority } = req.body;
 
   if (!customerName || !customerPhone || !category || !description) {
@@ -5401,7 +5401,7 @@ app.post('/api/customer-reports', (req: Request, res: Response) => {
 
   db.customerProblems.unshift(newReport);
   saveDbToDisk('problem_reported', { report: newReport });
-  saveToFirestoreAsync('customerProblems', newReport.id, newReport);
+  await saveToSupabaseAsync('customerProblems', newReport.id, newReport);
   createAdminNotification({
     category: 'problem',
     title: `Issue Reported: ${newReport.caseNumber}`,
@@ -10777,7 +10777,7 @@ app.get('/api/admin/customer-reports', requireAdminAuth, async (req: Request, re
   res.json(db.customerProblems);
 });
 
-app.patch('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'customer_support']), (req: Request, res: Response) => {
+app.patch('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'customer_support']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const report = db.customerProblems.find(r => r.id === req.params.id);
   if (!report) return res.status(404).json({ error: 'Report not found' });
@@ -10804,7 +10804,7 @@ app.patch('/api/admin/customer-reports/:id', requireAdminAuth, requireRole(['own
   report.updatedAt = new Date().toISOString();
   logAudit(admin, 'PROBLEM_REPORT_UPDATED', `Case #${report.caseNumber} updated to ${report.status}`, 'problem_report', report.id);
   saveDbToDisk('problem_updated', { report });
-  saveToFirestoreAsync('customerProblems', report.id, report);
+  await saveToSupabaseAsync('customerProblems', report.id, report);
   res.json(report);
 });
 
