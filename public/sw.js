@@ -1,6 +1,6 @@
 // ContactReach Market Progressive Web App Service Worker
-const CACHE_NAME = 'crm-cache-v2';
-const API_CACHE_NAME = 'crm-api-cache-v2';
+const CACHE_NAME = 'crm-cache-v3';
+const API_CACHE_NAME = 'crm-api-cache-v3';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/site.webmanifest',

@@ -619,6 +619,17 @@ export async function safeParseResponse<T = any>(res: Response): Promise<{
     };
   }
 
+  if (!trimmed) {
+    return {
+      isJson: false,
+      status,
+      text: rawText,
+      errorMessage: status >= 500
+        ? 'Authentication server is starting up. Please try again in a moment.'
+        : 'Empty response from server. Please try again.'
+    };
+  }
+
   try {
     const parsed = JSON.parse(rawText);
     return { isJson: true, status, json: parsed, text: rawText };
@@ -627,7 +638,9 @@ export async function safeParseResponse<T = any>(res: Response): Promise<{
       isJson: false,
       status,
       text: rawText,
-      errorMessage: 'Invalid JSON response from server'
+      errorMessage: status >= 500
+        ? 'Service temporarily unavailable. Please try again in a moment.'
+        : 'Unable to process server response. Please try again.'
     };
   }
 }
@@ -1509,44 +1522,68 @@ export const api = {
       throw new Error('Please enter your administrator username and password.');
     }
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({
-          username: cleanIdentifier,
-          email: cleanIdentifier,
-          password: rawPass
-        })
-      });
-      const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
+    const endpoints = ['/api/auth/login', '/api/admin/login'];
+    let lastError: Error | null = null;
 
-      if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
-        if (!isAuthorizedAdminUser(parsed.json.admin)) {
-          removeAdminToken();
-          throw new Error('Access denied: Unauthorized administrator account.');
+    for (let attempt = 0; attempt < endpoints.length; attempt++) {
+      try {
+        const res = await fetch(endpoints[attempt], {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+          },
+          credentials: 'same-origin',
+          cache: 'no-store',
+          body: JSON.stringify({
+            username: cleanIdentifier,
+            email: cleanIdentifier,
+            password: rawPass
+          })
+        });
+        const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
+
+        if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
+          if (!isAuthorizedAdminUser(parsed.json.admin)) {
+            removeAdminToken();
+            throw new Error('Access denied: Unauthorized administrator account.');
+          }
+          setAdminToken(parsed.json.token, parsed.json.admin);
+          return { token: parsed.json.token, admin: parsed.json.admin };
         }
-        setAdminToken(parsed.json.token, parsed.json.admin);
-        return { token: parsed.json.token, admin: parsed.json.admin };
-      }
 
-      if (parsed.isJson && parsed.json?.error) {
-        throw new Error(parsed.json.error);
-      }
+        if (parsed.isJson && parsed.json?.error) {
+          throw new Error(parsed.json.error);
+        }
 
-      if (!parsed.isJson && parsed.errorMessage) {
-        throw new Error(parsed.errorMessage);
-      }
+        // Retry once if gateway/server returned a transient non-JSON or 5xx response during startup
+        if ((!parsed.isJson || res.status >= 500) && attempt < endpoints.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 400));
+          continue;
+        }
 
-      throw new Error('Invalid administrator credentials.');
-    } catch (err: any) {
-      const msg = String(err?.message || '');
-      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError') {
-        throw new Error('Unable to reach authentication server. Please check your internet connection and try again.');
+        if (!parsed.isJson && parsed.errorMessage) {
+          throw new Error(parsed.errorMessage);
+        }
+
+        throw new Error('Invalid administrator credentials.');
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        const isTransientNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
+        if (isTransientNetwork && attempt < endpoints.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 400));
+          continue;
+        }
+        if (isTransientNetwork) {
+          lastError = new Error('Unable to reach authentication server. Please check your internet connection and try again.');
+        } else {
+          lastError = err instanceof Error ? err : new Error(msg || 'Authentication failed.');
+        }
+        break;
       }
-      throw err;
     }
+
+    throw lastError || new Error('Authentication failed. Please try again.');
   },
 
   async adminLoginWithSupabaseToken(_accessToken: string): Promise<{ token: string; admin: any }> {

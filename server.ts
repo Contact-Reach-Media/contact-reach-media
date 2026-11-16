@@ -6555,14 +6555,17 @@ app.post('/api/buyers/logout', (req: Request, res: Response) => {
 // ADMIN AUTHENTICATION & SESSIONS
 // -------------------------------------------------------------
 
-app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Response) => {
-  const { username, email, password } = req.body;
-  const rawIdentifier = String(username || email || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-  const rawPassword = (typeof password === 'string' ? password : String(password || '')).replace(/[\u200B-\u200D\uFEFF]/g, '');
+let initialSupabaseHydrationPromise: Promise<void> | null = null;
 
-  if (!rawIdentifier || !rawPassword) {
-    return res.status(400).json({ error: 'Username and password are required.' });
-  }
+app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Response) => {
+  try {
+    const { username, email, password } = req.body || {};
+    const rawIdentifier = String(username || email || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const rawPassword = (typeof password === 'string' ? password : String(password || '')).replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+    if (!rawIdentifier || !rawPassword) {
+      return res.status(400).json({ error: 'Username and password are required.' });
+    }
 
   const cleanUser = rawIdentifier.toLowerCase().replace(/^@/, '');
   const trimmedPass = rawPassword.trim();
@@ -6636,8 +6639,8 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     const { token, expiresAt } = createSignedAdminToken(authorizedAdmin);
 
     // Upsert owner in db.adminUsers while preserving verified invited administrators
-    const otherVerifiedAdmins = db.adminUsers.filter(
-      u => u.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL && isVerifiedAuthorizedAdminRecord(u)
+    const otherVerifiedAdmins = (db.adminUsers || []).filter(
+      u => u && (u.email || '').toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL && isVerifiedAuthorizedAdminRecord(u)
     );
     db.adminUsers = [authorizedAdmin, ...otherVerifiedAdmins];
 
@@ -6671,8 +6674,19 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     });
   }
 
+  // Wait briefly for initial Supabase hydration if an invited admin signs in right at startup
+  if (initialSupabaseHydrationPromise) {
+    try {
+      await Promise.race([
+        initialSupabaseHydrationPromise,
+        new Promise(resolve => setTimeout(resolve, 2500))
+      ]);
+    } catch {}
+  }
+
   // 2. Check verified invited administrators
-  const invitedAdmin = db.adminUsers.find(u => {
+  const invitedAdmin = (db.adminUsers || []).find(u => {
+    if (!u) return false;
     const uEmail = String(u.email || '').toLowerCase().trim();
     const uName = String(u.username || '').toLowerCase().trim().replace(/^@/, '');
     if (uEmail === AUTHORIZED_ADMIN_EMAIL) return false;
@@ -6695,7 +6709,9 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
       }
 
       loginAttempts.delete(cleanUser);
-      loginAttempts.delete(invitedAdmin.email.toLowerCase());
+      if (invitedAdmin.email) {
+        loginAttempts.delete(invitedAdmin.email.toLowerCase());
+      }
       invitedAdmin.lastLogin = new Date().toISOString();
 
       const { token, expiresAt } = createSignedAdminToken(invitedAdmin);
@@ -6712,7 +6728,7 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
         }).eq('id', invitedAdmin.id);
       } catch {}
 
-      logAudit({ name: invitedAdmin.name, role: invitedAdmin.role }, 'ADMIN_LOGIN', `Invited administrator ${invitedAdmin.email} signed in from ${req.ip || 'remote'}`);
+      logAudit({ name: invitedAdmin.name, role: invitedAdmin.role }, 'ADMIN_LOGIN', `Invited administrator ${invitedAdmin.email || invitedAdmin.username} signed in from ${req.ip || 'remote'}`);
 
       return res.json({
         token,
@@ -6740,6 +6756,10 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     loginAttempts.set(cleanUser, { attempts: currentAttempts });
   }
   return res.status(401).json({ error: 'Invalid administrator credentials.' });
+  } catch (err: any) {
+    console.error('[Admin Login] Error:', err?.message || err);
+    return res.status(500).json({ error: 'Authentication service encountered a temporary error. Please try again.' });
+  }
 });
 
 function handleDisabledGoogleAdminLogin(_req: Request, res: Response) {
@@ -14122,10 +14142,12 @@ app.use('/api', (err: any, req: Request, res: Response, next: NextFunction) => {
 async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // Load all live products, orders, and users directly from Supabase
-  await loadAllDataFromSupabase().catch(err => {
-    console.warn('[Supabase] Initial startup load notice:', err?.message || err);
-  });
+  // Hydrate all live modules from Supabase in parallel with server startup so HTTP port binds immediately
+  initialSupabaseHydrationPromise = loadAllDataFromSupabase()
+    .catch(err => {
+      console.warn('[Supabase] Initial startup load notice:', err?.message || err);
+    })
+    .then(() => undefined);
 
   // Automated Google Sheet periodic sync runner (every 10 mins)
   setInterval(() => {

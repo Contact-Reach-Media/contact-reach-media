@@ -235,11 +235,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
 
-  // Security Verification: Only logout if user account is explicitly marked inactive
+  // Security Verification & Profile Sync: refresh currentUser and logout only if explicitly inactive
   useEffect(() => {
     const user = getStoredAdminUser();
     if (user && user.active === false) {
       onLogout();
+      return;
+    }
+    if (user) {
+      setCurrentUser(user);
+    } else {
+      api.adminCheckAuth()
+        .then((valid) => {
+          if (valid) {
+            const refreshed = getStoredAdminUser();
+            if (refreshed) setCurrentUser(refreshed);
+          }
+        })
+        .catch(() => {});
     }
   }, [onLogout]);
 
@@ -1630,31 +1643,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteAdminUserWithConfirm = (u: AdminUser) => {
-    if (u.email.toLowerCase() === 'contactreachmedialimited@gmail.com') {
+    const targetEmail = (u?.email || '').toLowerCase();
+    const selfEmail = (currentUser?.email || '').toLowerCase();
+    if (targetEmail === 'contactreachmedialimited@gmail.com' || u?.role === 'owner') {
       showToast('System owner account cannot be deleted.', 'error');
       return;
     }
-    if (u.email.toLowerCase() === currentUser?.email.toLowerCase()) {
+    if ((u?.id && currentUser?.id && u.id === currentUser.id) || (targetEmail && selfEmail && targetEmail === selfEmail)) {
       showToast('You cannot delete your own administrative account.', 'error');
       return;
     }
     setDeleteConfirmModal({
       isOpen: true,
-      title: `Remove Administrator: ${u.name}`,
-      message: `Permanently delete administrator account for ${u.name} (${u.email}) from Supabase and revoke all active sessions immediately?`,
+      title: `Remove Administrator: ${u.name || 'Administrator'}`,
+      message: `Permanently delete administrator account for ${u.name || 'Administrator'}${u.email ? ` (${u.email})` : ''} from Supabase and revoke all active sessions immediately?`,
       onConfirm: async () => {
         setAdminUsers(prev => prev.filter(item => item.id !== u.id));
         await api.adminDeleteUser(u.id);
-        showToast(`Administrator ${u.name} permanently removed.`);
+        showToast(`Administrator ${u.name || 'Administrator'} permanently removed.`);
         fetchAllData(true);
       }
     });
   };
 
   const handleBulkDeleteAdminUsers = () => {
+    const selfEmail = (currentUser?.email || '').toLowerCase();
     const validIds = selectedAdminUserIds.filter(id => {
       const u = adminUsers.find(item => item.id === id);
-      return u && u.email.toLowerCase() !== 'contactreachmedialimited@gmail.com' && u.email.toLowerCase() !== currentUser?.email.toLowerCase();
+      if (!u) return false;
+      const targetEmail = (u.email || '').toLowerCase();
+      const isOwner = u.role === 'owner' || targetEmail === 'contactreachmedialimited@gmail.com';
+      const isSelf = (currentUser?.id && u.id === currentUser.id) || (Boolean(targetEmail) && Boolean(selfEmail) && targetEmail === selfEmail);
+      return !isOwner && !isSelf;
     });
     if (validIds.length === 0) {
       showToast('No eligible administrative accounts selected for deletion.', 'error');
@@ -8394,15 +8414,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
-                      {adminUsers.map(u => (
-                        <tr key={u.id} className="hover:bg-slate-50/60">
+                      {(Array.isArray(adminUsers) ? adminUsers : []).filter(Boolean).map(u => {
+                        const rowEmail = (u.email || '').toLowerCase();
+                        const selfEmail = (currentUser?.email || '').toLowerCase();
+                        const isSelf = Boolean((currentUser?.id && u.id === currentUser.id) || (rowEmail && selfEmail && rowEmail === selfEmail));
+                        const safeRole = u.role || 'administrator';
+                        const isOwnerRow = safeRole === 'owner' || rowEmail === 'contactreachmedialimited@gmail.com';
+                        return (
+                        <tr key={u.id || u.username || rowEmail} className="hover:bg-slate-50/60">
                           <td className="py-3 px-4 font-bold text-slate-900">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span>{u.name}</span>
-                              {u.email.toLowerCase() === currentUser?.email.toLowerCase() && (
+                              <span>{u.name || 'Administrator'}</span>
+                              {isSelf && (
                                 <span className="text-[10px] bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded-full">You</span>
                               )}
-                              {u.verified && u.role !== 'owner' && (
+                              {u.verified && safeRole !== 'owner' && (
                                 <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
                                   <CheckCircle2 className="w-2.5 h-2.5" /> Verified
                                 </span>
@@ -8410,16 +8436,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </div>
                           </td>
                           <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{u.username || '—'}</td>
-                          <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{u.email}</td>
+                          <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{u.email || '—'}</td>
                           <td className="py-3 px-3">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                              u.role === 'owner' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
-                              u.role === 'administrator' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                              u.role === 'product_manager' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                              u.role === 'order_manager' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                              safeRole === 'owner' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                              safeRole === 'administrator' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                              safeRole === 'product_manager' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                              safeRole === 'order_manager' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
                               'bg-slate-100 text-slate-700 border border-slate-200'
                             }`}>
-                              {u.role.replace('_', ' ')}
+                              {safeRole.replace(/_/g, ' ')}
                             </span>
                           </td>
                           <td className="py-3 px-3">
@@ -8430,7 +8456,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right space-x-2">
-                            {currentUser?.role === 'owner' && u.email.toLowerCase() !== currentUser?.email.toLowerCase() && (
+                            {currentUser?.role === 'owner' && !isSelf && !isOwnerRow && (
                               <>
                                 <button
                                   onClick={async () => {
@@ -8451,10 +8477,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 </button>
                                 <button
                                   onClick={async () => {
-                                    if (window.confirm(`Are you sure you want to remove administrator ${u.name}?`)) {
+                                    if (window.confirm(`Are you sure you want to remove administrator ${u.name || 'Administrator'}?`)) {
                                       try {
                                         await api.adminDeleteUser(u.id);
-                                        showToast(`Removed administrator ${u.name}`);
+                                        showToast(`Removed administrator ${u.name || 'Administrator'}`);
                                         fetchAllData();
                                       } catch (err: any) {
                                         showToast(err.message || 'Failed to remove user', 'error');
@@ -8469,7 +8495,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
