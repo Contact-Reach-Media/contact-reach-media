@@ -171,15 +171,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     }
   };
 
+  const openExternalUrl = (url: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleShareFacebook = () => {
     const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productShareUrl)}`;
-    window.open(fbUrl, '_blank', 'noopener,noreferrer,width=600,height=500');
+    openExternalUrl(fbUrl);
   };
 
   const handleShareWhatsApp = () => {
     const text = `Reba iki gicuruzwa kuri ContactReach Market: ${product.name} - ${formatCurrencyPrice(unitPrice, currentCurrency, exchangeRates).primary}\n${productShareUrl}`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
+    openExternalUrl(waUrl);
   };
 
   const handleNativeShare = async () => {

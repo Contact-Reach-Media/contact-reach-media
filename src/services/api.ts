@@ -77,6 +77,7 @@ import {
   SUPABASE_URL
 } from './supabase.ts';
 import { logoutUser } from './googleDrive.ts';
+import { calculateProductShippingUnitCost, getEffectiveUnitPrice } from '../utils/shippingCalculator.ts';
 
 // Supabase live database synchronization adapters
 const getProductsFromFirestore = getProductsFromSupabase;
@@ -793,22 +794,20 @@ export const api = {
       const parsed = await safeParseResponse<Product[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
         const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
-        const seenImgs = new Set<string>();
+        const seenIds = new Set<string>();
         return parsed.json
           .filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())))
           .filter(p => {
-            const raw = (p.imageUrl || '').trim();
-            const norm = raw ? raw.split('?')[0].toLowerCase().trim() : '';
-            if (!norm) return true;
-            if (seenImgs.has(norm)) return false;
-            seenImgs.add(norm);
+            const idKey = String(p.id || '').toLowerCase().trim();
+            if (!idKey || seenIds.has(idKey)) return false;
+            seenIds.add(idKey);
             return true;
           });
       }
     } catch {}
 
     const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
-    const seenFallbackImgs = new Set<string>();
+    const seenFallbackIds = new Set<string>();
 
     // Fallback to Cloud Firestore
     try {
@@ -817,11 +816,9 @@ export const api = {
         fsProds = fsProds
           .filter(p => !deletedSet.has(p.id.toLowerCase()) && (!p.sku || !deletedSet.has(p.sku.toLowerCase())))
           .filter(p => {
-            const raw = (p.imageUrl || '').trim();
-            const norm = raw ? raw.split('?')[0].toLowerCase().trim() : '';
-            if (!norm) return true;
-            if (seenFallbackImgs.has(norm)) return false;
-            seenFallbackImgs.add(norm);
+            const idKey = String(p.id || '').toLowerCase().trim();
+            if (!idKey || seenFallbackIds.has(idKey)) return false;
+            seenFallbackIds.add(idKey);
             return true;
           });
         if (params?.category && params.category !== 'all') {
@@ -931,9 +928,32 @@ export const api = {
     const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     const orderNumber = `CRM-${randomSuffix}`;
     const trackingToken = Math.random().toString(36).substring(2, 18);
-    const subtotal = orderPayload.items.reduce((sum, item) => sum + (15000 * item.quantity), 0);
+
+    let catalogMap = new Map<string, Product>();
+    try {
+      const sbCatalog = await getProductsFromFirestore();
+      catalogMap = new Map(sbCatalog.map(p => [String(p.id), p]));
+    } catch {}
+
+    const resolvedItems = orderPayload.items.map(i => {
+      const prod = catalogMap.get(String(i.productId));
+      const unitPrice = prod ? getEffectiveUnitPrice(prod, i.quantity) : 0;
+      const unitShip = prod ? calculateProductShippingUnitCost(prod, unitPrice) : 0;
+      return {
+        productId: i.productId,
+        productName: prod?.name || 'Marketplace Product',
+        price: unitPrice,
+        shippingUnit: unitShip,
+        quantity: i.quantity,
+        imageUrl: prod?.imageUrl || '/logo.png',
+        variation: i.variation
+      };
+    });
+
+    const subtotal = resolvedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const computedShipping = resolvedItems.reduce((sum, item) => sum + (item.shippingUnit * item.quantity), 0);
     const deliveryFee = orderPayload.deliveryType === 'pickup' ? 0 : 1500;
-    const shippingCost = orderPayload.shippingCost || 0;
+    const shippingCost = orderPayload.shippingCost !== undefined ? Math.max(0, Number(orderPayload.shippingCost) || 0) : computedShipping;
     const totalAmount = subtotal + deliveryFee + shippingCost;
 
     const fallbackOrder: Order = {
@@ -949,14 +969,7 @@ export const api = {
       deliveryLocation: orderPayload.deliveryLocation || 'Kigali Area',
       deliveryAddress: orderPayload.deliveryAddress,
       deliveryNotes: orderPayload.deliveryNotes,
-      items: orderPayload.items.map(i => ({
-        productId: i.productId,
-        productName: 'Marketplace Product',
-        price: 15000,
-        quantity: i.quantity,
-        imageUrl: '/logo.png',
-        variation: i.variation
-      })),
+      items: resolvedItems.map(({ shippingUnit: _s, ...item }) => item),
       subtotal,
       deliveryFee,
       shippingCost,
@@ -984,9 +997,7 @@ export const api = {
     };
 
     // Fire-and-forget fallback order persistence
-    createOrderInFirestore(fallbackOrder).catch(fsErr => {
-      // persistent local sync
-    });
+    createOrderInFirestore(fallbackOrder).catch(() => {});
 
     return fallbackOrder;
   },
@@ -4032,7 +4043,7 @@ export const api = {
     const token = getBuyerToken();
     const activeBuyer = getStoredBuyerUser() || payload.buyer;
 
-    if (!token?.startsWith('crm_sb_buyer_')) {
+    if (token && !token.startsWith('crm_sb_buyer_')) {
       try {
         const res = await fetch('/api/buyers/messages', {
           method: 'POST',
@@ -4048,19 +4059,22 @@ export const api = {
           submitMessageToFirestore(parsed.json.data).catch(() => {});
           return parsed.json.data;
         }
-        if (parsed.isJson && (res.status === 400 || res.status === 403)) {
-          throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to send message');
+        const errText = String((parsed.isJson && (parsed.json?.error || parsed.json?.message)) || '');
+        if (res.status === 400 && errText) {
+          throw new Error(errText);
         }
-        if (parsed.isJson && res.status === 401 && !activeBuyer?.phone) {
-          throw new Error(parsed.json?.error || 'Please sign in with your phone number and password.');
+        if (res.status === 403 && errText.toLowerCase().includes('suspended')) {
+          throw new Error(errText);
+        }
+        if ((res.status === 401 || res.status === 403) && !activeBuyer) {
+          throw new Error(errText || 'Please sign in with your phone number and password.');
         }
       } catch (err: any) {
         const msg = String(err?.message || '');
-        const isNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
-        if (!isNetwork && !msg.includes('Please sign in')) {
+        if (msg.toLowerCase().includes('suspended') || msg === 'Message text is required.') {
           throw err;
         }
-        if (msg.includes('Please sign in') && !activeBuyer?.phone) {
+        if (!activeBuyer) {
           throw err;
         }
       }
@@ -4072,6 +4086,7 @@ export const api = {
 
     const cleanPhoneDigits = String(activeBuyer.phone || '').replace(/\D/g, '');
     const fallbackEmail = activeBuyer.email || (cleanPhoneDigits ? `${cleanPhoneDigits}@contactreach.rw` : 'customer@contactreach.rw');
+    const resolvedSubject = payload.subject?.trim() || (payload.orderNumber ? `Inquiry regarding Order #${payload.orderNumber}` : 'Customer Support Chat');
     const newMessage: AdminMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
       conversationId: activeBuyer.id,
@@ -4079,7 +4094,7 @@ export const api = {
       name: activeBuyer.name || 'Customer',
       email: fallbackEmail,
       phone: activeBuyer.phone || '',
-      subject: payload.subject?.trim() || (payload.orderNumber ? `Inquiry regarding Order #${payload.orderNumber}` : 'Customer Support Chat'),
+      subject: resolvedSubject,
       message: text,
       orderNumber: payload.orderNumber?.trim() || undefined,
       createdAt: new Date().toISOString(),
@@ -4092,28 +4107,52 @@ export const api = {
     };
 
     const sbRes = await saveMessageToSupabase(newMessage);
-    if (!sbRes.success) {
+
+    // Also mirror to Express server in case buyer logged in via Supabase fallback token
+    let serverSavedData: AdminMessage | null = null;
+    try {
+      const mirrorRes = await fetch('/api/contact/messages', {
+        method: 'POST',
+        headers: getBuyerAuthHeaders(),
+        body: JSON.stringify({
+          name: newMessage.name,
+          email: newMessage.email,
+          phone: newMessage.phone,
+          subject: newMessage.subject,
+          message: newMessage.message,
+          orderNumber: newMessage.orderNumber
+        })
+      });
+      const mirrorParsed = await safeParseResponse<{ data?: AdminMessage }>(mirrorRes);
+      if (mirrorRes.ok && mirrorParsed.isJson && mirrorParsed.json?.data) {
+        serverSavedData = mirrorParsed.json.data;
+      }
+    } catch {}
+
+    if (!sbRes.success && !serverSavedData) {
       throw new Error(sbRes.error || 'Failed to send message. Please try again.');
     }
+
+    const finalMsg = sbRes.success ? newMessage : (serverSavedData || newMessage);
 
     saveAdminNotificationToSupabase({
       id: `notif-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
       category: 'message',
-      title: `Customer Chat from ${newMessage.name}`,
-      message: newMessage.message.slice(0, 180),
-      senderName: newMessage.name,
-      senderPhone: newMessage.phone,
-      senderEmail: newMessage.email,
-      orderNumber: newMessage.orderNumber,
-      customerId: newMessage.customerId,
+      title: `Customer Chat from ${finalMsg.name}`,
+      message: finalMsg.message.slice(0, 180),
+      senderName: finalMsg.name,
+      senderPhone: finalMsg.phone,
+      senderEmail: finalMsg.email,
+      orderNumber: finalMsg.orderNumber,
+      customerId: finalMsg.customerId,
       actionTab: 'messages',
-      entityId: newMessage.id,
+      entityId: finalMsg.id,
       isRead: false,
-      createdAt: newMessage.createdAt,
-      metadata: { subject: newMessage.subject }
+      createdAt: finalMsg.createdAt,
+      metadata: { subject: finalMsg.subject }
     }).catch(() => {});
 
-    return newMessage;
+    return finalMsg;
   },
 
   async buyerMarkMessagesRead(): Promise<{ success: boolean; updatedCount: number }> {

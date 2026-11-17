@@ -7001,7 +7001,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 showToast('Reply sent to customer inbox in real time!');
                 fetchAllData();
               } catch (err: any) {
-                alert(err.message || 'Failed to send reply to customer.');
+                showToast(err.message || 'Failed to send reply to customer.', 'error');
               } finally {
                 setSendingAdminChatReply(false);
               }
@@ -8076,7 +8076,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                           showToast(`Buyer status set to ${nextStatus}`);
                                           fetchAllData();
                                         } catch (err: any) {
-                                          alert(err.message || 'Failed to update status');
+                                          showToast(err.message || 'Failed to update status', 'error');
                                         }
                                       }}
                                       className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
@@ -8101,7 +8101,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                             showToast(`Customer account "${c.name}" deleted.`);
                                             fetchAllData();
                                           } catch (err: any) {
-                                            alert(err.message || 'Failed to delete customer');
+                                            showToast(err.message || 'Failed to delete customer', 'error');
                                           }
                                         }
                                       }}
@@ -11062,7 +11062,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       showToast(`Buyer account ${nextStatus}`);
                       fetchAllData();
                     } catch (err: any) {
-                      alert(err.message || 'Failed to update status');
+                      showToast(err.message || 'Failed to update status', 'error');
                     }
                   }}
                   className={`px-3.5 py-2 text-xs font-bold rounded-xl border cursor-pointer ${

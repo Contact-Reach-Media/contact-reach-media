@@ -969,7 +969,7 @@ function isTransientNetworkError(errOrMsg: any): boolean {
 
 async function runSupabaseWithRetry<T = any>(
   op: () => PromiseLike<{ data?: T; error?: any }>,
-  maxRetries = 2
+  maxRetries = 3
 ): Promise<{ data?: T; error?: any }> {
   let lastResult: { data?: T; error?: any } = { error: null };
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -986,7 +986,7 @@ async function runSupabaseWithRetry<T = any>(
       }
     }
     if (attempt < maxRetries) {
-      await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+      await new Promise(resolve => setTimeout(resolve, 400 * Math.pow(2, attempt)));
     }
   }
   return lastResult;
@@ -1188,6 +1188,8 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         brand: data.brand || null,
         unit: data.unit || 'Piece',
         shipping_cost: (data.shippingCost !== undefined && data.shippingCost !== null && Number(data.shippingCost) > 0) ? Math.max(0, Number(data.shippingCost)) : null,
+        promo_start_date: data.promoStartDate || null,
+        promo_end_date: data.promoEndDate || null,
         specifications: data.specifications || null,
         storage: data.storage || null,
         packaging_info: data.packagingInfo || null,
@@ -1198,7 +1200,31 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         source: data.source || 'local',
         review_status: (data as any).reviewStatus || 'Approved',
         alibaba_product_id: data.alibabaProductId || null,
+        alibaba_item_url: data.alibabaItemUrl || null,
+        alibaba_supplier_name: data.alibabaSupplierName || null,
+        alibaba_supplier_location: data.alibabaSupplierLocation || null,
+        alibaba_moq: data.alibabaMoq ?? null,
+        alibaba_weight_kg: data.alibabaWeightKg ?? null,
+        alibaba_dimensions_cm: data.alibabaDimensionsCm || null,
+        alibaba_original_cost_usd: data.alibabaOriginalCostUsd ?? null,
+        alibaba_shipping_cost_usd: data.alibabaShippingCostUsd ?? null,
+        alibaba_shipping_cost_rwf: data.alibabaShippingCostRwf ?? null,
+        alibaba_shipping_method: data.alibabaShippingMethod || null,
+        alibaba_lead_time_days: data.alibabaLeadTimeDays ?? null,
+        alibaba_trade_assurance: data.alibabaTradeAssurance ?? false,
+        alibaba_verified_supplier: data.alibabaVerifiedSupplier ?? false,
+        alibaba_last_sync_at: data.alibabaLastSyncAt || null,
         cj_product_id: data.cjProductId || null,
+        cj_product_sku: data.cjProductSku || null,
+        cj_original_cost_usd: data.cjOriginalCostUsd ?? null,
+        cj_last_sync_at: data.cjLastSyncAt || null,
+        ali_express_url: data.aliExpressUrl || null,
+        supplier_variant: data.supplierVariant || null,
+        supplier_sku: data.supplierSku || null,
+        supplier_product_url: data.supplierProductUrl || null,
+        is_supplier_mapped: Boolean(data.isSupplierMapped),
+        last_verified_at: data.lastVerifiedAt || null,
+        history: Array.isArray(data.history) ? data.history : [],
         updated_at: new Date().toISOString()
       };
       if (data.id) {
@@ -1207,47 +1233,69 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
       if (data.createdAt) {
         prodRow.created_at = data.createdAt;
       }
-      const { error: sbErr } = await supabase.from('products').upsert(prodRow, { onConflict: 'id' });
+      const { error: sbErr } = await runSupabaseWithRetry(() =>
+        supabase.from('products').upsert(prodRow, { onConflict: 'id' })
+      );
       if (sbErr) {
-        console.error('[Supabase] Product upsert notice:', sbErr.message);
+        console.warn('[Supabase] Product upsert notice:', sbErr.message);
       } else {
         console.log(`[Supabase] Live synchronized product "${data.name}" (${data.id}) to Supabase.`);
       }
     } else if (entityType === 'categories' || entityType === 'category') {
-      await supabase.from('categories').upsert({
-        id: data.id,
-        name: data.nameEn || data.name || '',
-        name_en: data.nameEn || data.name || '',
-        name_rw: data.nameRw || null,
-        icon: data.icon || 'Tag',
-        image_url: data.imageUrl || null,
-        description: data.description || null,
-        parent_id: data.parentId || null,
-        sort_order: data.sortOrder ?? 0,
-        is_active: data.isActive !== false,
-        subcategories: data.subcategories || [],
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      await runSupabaseWithRetry(() =>
+        supabase.from('categories').upsert({
+          id: data.id,
+          name: data.nameEn || data.name || '',
+          name_en: data.nameEn || data.name || '',
+          name_rw: data.nameRw || null,
+          name_fr: data.nameFr || null,
+          slug: data.slug || toCategorySlug(data.nameEn || data.name || data.id),
+          level: data.level ?? (data.parentId ? 2 : 1),
+          icon: data.icon || 'Tag',
+          image_url: data.imageUrl || null,
+          description: data.description || null,
+          parent_id: data.parentId || null,
+          sort_order: data.sortOrder ?? 0,
+          is_active: data.isActive !== false,
+          active: data.isActive !== false,
+          item_count: Number(data.itemCount) || 0,
+          keywords: Array.isArray(data.keywords) ? data.keywords : [],
+          subcategories: data.subcategories || [],
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' })
+      );
     } else if (entityType === 'shops' || entityType === 'shop') {
-      await supabase.from('shops').upsert({
-        id: data.id,
-        name: data.name,
-        category: data.category || 'all',
-        phone: data.phone || '',
-        email: data.email || null,
-        location: data.location || 'Kigali, Rwanda',
-        address: data.address || null,
-        logo: data.logo || 'ShoppingBag',
-        logo_url: data.logo || null,
-        banner_color: data.bannerColor || 'from-orange-500 to-amber-600',
-        total_sales: data.totalSales || 0,
-        status: data.isActive === false ? 'Inactive' : 'Active',
-        is_verified: Boolean(data.isVerified),
-        is_recommended: Boolean(data.isRecommended),
-        followers_count: data.followersCount || 0,
-        description: data.description || null,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      await runSupabaseWithRetry(() =>
+        supabase.from('shops').upsert({
+          id: data.id,
+          name: data.name,
+          category: data.category || 'all',
+          phone: data.phone || '',
+          email: data.email || null,
+          tin_number: data.tinNumber || null,
+          contact_person: data.ownerName || data.contactPerson || null,
+          owner_name: data.ownerName || null,
+          commission_rate: Number(data.commissionRate) || 10,
+          commission_pct: Number(data.commissionRate) || 10,
+          payout_method: data.payoutMethod || 'MTN Mobile Money',
+          payout_account: data.payoutAccount || data.phone || null,
+          payout_receiver_name: data.payoutReceiverName || data.ownerName || data.name || null,
+          location: data.location || 'Kigali, Rwanda',
+          address: data.address || null,
+          logo: data.logo || 'ShoppingBag',
+          logo_url: data.logo || null,
+          banner_color: data.bannerColor || 'from-orange-500 to-amber-600',
+          total_sales: data.totalSales || 0,
+          status: data.isActive === false ? 'Inactive' : 'Active',
+          is_active: data.isActive !== false,
+          is_verified: Boolean(data.isVerified),
+          is_recommended: Boolean(data.isRecommended),
+          followers_count: data.followersCount || 0,
+          categories: Array.isArray(data.categories) ? data.categories : [],
+          description: data.description || null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' })
+      );
     } else if (entityType === 'paymentConfirmations' || entityType === 'payments' || entityType === 'payment') {
       const payRow: Record<string, any> = {
         id: String(data.id || `conf-${Date.now()}`),
@@ -1346,7 +1394,17 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         supabase.from('messages').upsert(msgRow, { onConflict: 'id' })
       );
       if (msgErr) {
-        console.error('[Supabase Message Sync] Error:', msgErr.message);
+        const msgText = msgErr.message || String(msgErr);
+        if (isTransientNetworkError(msgText)) {
+          console.warn('[Supabase Message Sync] Transient network notice (saved locally):', msgText);
+        } else {
+          const { error: insertErr } = await runSupabaseWithRetry(() =>
+            supabase.from('messages').insert(msgRow)
+          );
+          if (insertErr) {
+            console.warn('[Supabase Message Sync] Notice:', insertErr.message || msgText);
+          }
+        }
       }
     } else if (entityType === 'adminNotifications' || entityType === 'admin_notifications' || entityType === 'notification') {
       // Persist to messages table (guaranteed live schema) with sender='admin_notification'
@@ -13937,8 +13995,9 @@ app.all('/api/*', (req: Request, res: Response) => {
 });
 
 app.use('/api', (err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('[API Error]:', err);
-  res.status(500).json({ error: err?.message || 'Internal server error' });
+  console.error('[API Error]:', err?.message || err);
+  if (res.headersSent) return next(err);
+  res.status(err?.status || 500).json({ error: err?.message || 'Internal server error' });
 });
 
 // -------------------------------------------------------------

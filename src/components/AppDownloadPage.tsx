@@ -17,6 +17,7 @@ export const AppDownloadPage: React.FC<AppDownloadPageProps> = ({
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
+  const [installHelp, setInstallHelp] = useState(false);
 
   useEffect(() => {
     const handleBeforeInstall = (e: any) => {
@@ -40,10 +41,11 @@ export const AppDownloadPage: React.FC<AppDownloadPageProps> = ({
       if (choiceResult.outcome === 'accepted') {
         setIsInstalled(true);
         setInstallSuccess(true);
+        setInstallHelp(false);
       }
       setDeferredPrompt(null);
     } else {
-      alert('To install ContactReach Market on your phone: Tap your browser menu (3 dots or share icon) and select "Add to Home screen".');
+      setInstallHelp(true);
     }
   };
 
@@ -101,6 +103,15 @@ export const AppDownloadPage: React.FC<AppDownloadPageProps> = ({
                 Open in Web Browser
               </button>
             </div>
+
+            {installHelp && (
+              <div className="mt-3 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-start gap-2 text-left">
+                <Smartphone className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                <span>
+                  To install ContactReach Market on your phone: Tap your browser menu (3 dots or Share icon) and select <strong>"Add to Home screen"</strong>.
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

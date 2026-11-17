@@ -356,8 +356,11 @@ export function mapSupabaseRowToProduct(row: any): Product {
     costPrice: row.cost_price !== null && row.cost_price !== undefined ? Number(row.cost_price) : undefined,
     costOverriddenByAdmin: Boolean(row.cost_overridden_by_admin),
     commissionRate: row.commission_rate !== null && row.commission_rate !== undefined ? Number(row.commission_rate) : 10,
+    profitMargin: row.profit_margin !== null && row.profit_margin !== undefined ? Number(row.profit_margin) : undefined,
     discountPercent: Number(row.discount_pct ?? row.discount_percent) || 0,
     discountPrice: row.discount_price !== null && row.discount_price !== undefined ? Number(row.discount_price) : undefined,
+    promoStartDate: row.promo_start_date || undefined,
+    promoEndDate: row.promo_end_date || undefined,
     category: row.category || 'clothing',
     subcategory: row.subcategory || undefined,
     mainCategoryId: row.main_category_id || undefined,
@@ -373,10 +376,12 @@ export function mapSupabaseRowToProduct(row: any): Product {
     shopId: row.shop_id || undefined,
     receiverName: row.receiver_name || undefined,
     receiverPhone: row.receiver_phone || undefined,
+    paymentMethods: Array.isArray(row.payment_methods) ? row.payment_methods : undefined,
     merchantCode: row.merchant_code || undefined,
     location: row.location || 'Kigali, Rwanda',
     deliveryInfo: row.delivery_info || undefined,
     status: (row.status || (row.visible === false ? 'Out of Stock' : 'Available')) as any,
+    reviewStatus: (row.review_status || 'Approved') as any,
     isFeatured: Boolean(row.featured ?? row.is_featured),
     isNewArrival: Boolean(row.is_new ?? row.is_new_arrival),
     isBestSeller: Boolean(row.is_best_seller),
@@ -392,8 +397,33 @@ export function mapSupabaseRowToProduct(row: any): Product {
     reviewsCount: Number(row.reviews_count) || 0,
     source: row.source || 'local',
     alibabaProductId: row.alibaba_product_id || undefined,
+    alibabaItemUrl: row.alibaba_item_url || undefined,
+    alibabaSupplierName: row.alibaba_supplier_name || undefined,
+    alibabaSupplierLocation: row.alibaba_supplier_location || undefined,
+    alibabaMoq: row.alibaba_moq !== null && row.alibaba_moq !== undefined ? Number(row.alibaba_moq) : undefined,
+    alibabaWeightKg: row.alibaba_weight_kg !== null && row.alibaba_weight_kg !== undefined ? Number(row.alibaba_weight_kg) : undefined,
+    alibabaDimensionsCm: row.alibaba_dimensions_cm || undefined,
+    alibabaOriginalCostUsd: row.alibaba_original_cost_usd !== null && row.alibaba_original_cost_usd !== undefined ? Number(row.alibaba_original_cost_usd) : undefined,
+    alibabaShippingCostUsd: row.alibaba_shipping_cost_usd !== null && row.alibaba_shipping_cost_usd !== undefined ? Number(row.alibaba_shipping_cost_usd) : undefined,
+    alibabaShippingCostRwf: row.alibaba_shipping_cost_rwf !== null && row.alibaba_shipping_cost_rwf !== undefined ? Number(row.alibaba_shipping_cost_rwf) : undefined,
+    alibabaShippingMethod: row.alibaba_shipping_method || undefined,
+    alibabaLeadTimeDays: row.alibaba_lead_time_days !== null && row.alibaba_lead_time_days !== undefined ? Number(row.alibaba_lead_time_days) : undefined,
+    alibabaTradeAssurance: row.alibaba_trade_assurance !== null && row.alibaba_trade_assurance !== undefined ? Boolean(row.alibaba_trade_assurance) : undefined,
+    alibabaVerifiedSupplier: row.alibaba_verified_supplier !== null && row.alibaba_verified_supplier !== undefined ? Boolean(row.alibaba_verified_supplier) : undefined,
+    alibabaLastSyncAt: row.alibaba_last_sync_at || undefined,
     cjProductId: row.cj_product_id || undefined,
-    createdAt: row.created_at || new Date().toISOString()
+    cjProductSku: row.cj_product_sku || undefined,
+    cjOriginalCostUsd: row.cj_original_cost_usd !== null && row.cj_original_cost_usd !== undefined ? Number(row.cj_original_cost_usd) : undefined,
+    cjLastSyncAt: row.cj_last_sync_at || undefined,
+    aliExpressUrl: row.ali_express_url || undefined,
+    supplierVariant: row.supplier_variant || undefined,
+    supplierSku: row.supplier_sku || undefined,
+    supplierProductUrl: row.supplier_product_url || undefined,
+    isSupplierMapped: row.is_supplier_mapped !== null && row.is_supplier_mapped !== undefined ? Boolean(row.is_supplier_mapped) : undefined,
+    lastVerifiedAt: row.last_verified_at || undefined,
+    history: Array.isArray(row.history) ? row.history : undefined,
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || undefined
   };
 }
 
@@ -425,6 +455,8 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
       profit_margin: p.profitMargin !== undefined ? Number(p.profitMargin) : 0,
       discount_percent: Number(p.discountPercent) || 0,
       discount_price: p.discountPrice !== undefined ? Number(p.discountPrice) : null,
+      promo_start_date: p.promoStartDate || null,
+      promo_end_date: p.promoEndDate || null,
       category: p.category || 'clothing',
       subcategory: p.subcategory || null,
       main_category_id: p.mainCategoryId || null,
@@ -461,7 +493,31 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
       source: p.source || 'local',
       review_status: (p as any).reviewStatus || 'Approved',
       alibaba_product_id: p.alibabaProductId || null,
+      alibaba_item_url: p.alibabaItemUrl || null,
+      alibaba_supplier_name: p.alibabaSupplierName || null,
+      alibaba_supplier_location: p.alibabaSupplierLocation || null,
+      alibaba_moq: p.alibabaMoq ?? null,
+      alibaba_weight_kg: p.alibabaWeightKg ?? null,
+      alibaba_dimensions_cm: p.alibabaDimensionsCm || null,
+      alibaba_original_cost_usd: p.alibabaOriginalCostUsd ?? null,
+      alibaba_shipping_cost_usd: p.alibabaShippingCostUsd ?? null,
+      alibaba_shipping_cost_rwf: p.alibabaShippingCostRwf ?? null,
+      alibaba_shipping_method: p.alibabaShippingMethod || null,
+      alibaba_lead_time_days: p.alibabaLeadTimeDays ?? null,
+      alibaba_trade_assurance: p.alibabaTradeAssurance ?? false,
+      alibaba_verified_supplier: p.alibabaVerifiedSupplier ?? false,
+      alibaba_last_sync_at: p.alibabaLastSyncAt || null,
       cj_product_id: p.cjProductId || null,
+      cj_product_sku: p.cjProductSku || null,
+      cj_original_cost_usd: p.cjOriginalCostUsd ?? null,
+      cj_last_sync_at: p.cjLastSyncAt || null,
+      ali_express_url: p.aliExpressUrl || null,
+      supplier_variant: p.supplierVariant || null,
+      supplier_sku: p.supplierSku || null,
+      supplier_product_url: p.supplierProductUrl || null,
+      is_supplier_mapped: Boolean(p.isSupplierMapped),
+      last_verified_at: p.lastVerifiedAt || null,
+      history: Array.isArray(p.history) ? p.history : [],
       updated_at: new Date().toISOString()
     };
 
@@ -1561,7 +1617,7 @@ export async function saveMessageToSupabase(m: AdminMessage): Promise<{ success:
   try {
     const rawConvId = typeof m.conversationId === 'string' ? m.conversationId.trim() : '';
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawConvId);
-    const { error } = await supabase.from('messages').upsert({
+    const row = {
       id: m.id,
       conversation_id: isUuid ? rawConvId : null,
       name: m.name || m.senderName || 'Customer',
@@ -1584,10 +1640,15 @@ export async function saveMessageToSupabase(m: AdminMessage): Promise<{ success:
       reply_message: m.replyNote || null,
       replied_at: m.repliedAt || null,
       created_at: m.createdAt || new Date().toISOString()
-    }, { onConflict: 'id' });
+    };
+    const { error } = await supabase.from('messages').upsert(row, { onConflict: 'id' });
     if (error) {
-      console.warn('[Supabase] Save message error:', error.message);
-      return { success: false, error: error.message };
+      // Fallback to plain insert if RLS update policy blocks upsert on existing client sessions
+      const { error: insertErr } = await supabase.from('messages').insert(row);
+      if (insertErr) {
+        console.warn('[Supabase] Save message error:', error.message, insertErr.message);
+        return { success: false, error: insertErr.message || error.message };
+      }
     }
     return { success: true };
   } catch (err: any) {

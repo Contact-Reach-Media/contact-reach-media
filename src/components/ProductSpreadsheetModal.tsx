@@ -292,15 +292,25 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
 
     setIsExportingToSheet(true);
     try {
+      const openSheetUrl = (url: string) => {
+        if (!url) return;
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
       if (createNew) {
         const title = `ContactReach Market Products - ${new Date().toISOString().split('T')[0]}`;
         const result = await createNewGoogleSheetWithProducts(title, products, categories, token);
         showToast(`Created new Google Sheet with ${result.updatedRows} products!`, 'success');
-        window.open(result.spreadsheetUrl, '_blank');
+        openSheetUrl(result.spreadsheetUrl);
       } else {
         const result = await writeProductsToGoogleSheet(sheetId, targetTab, products, categories, token);
         showToast(`Successfully saved ${result.updatedRows} products to Google Sheet!`, 'success');
-        window.open(result.spreadsheetUrl, '_blank');
+        openSheetUrl(result.spreadsheetUrl);
       }
       onProductsUpdated();
     } catch (err: any) {
