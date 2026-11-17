@@ -4297,7 +4297,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     onClick={handlePullProductsFromSupabase}
                     disabled={pullingFromSupabase}
                     className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
-                    title="Pull live products directly from Supabase (thierry8-cloud's Project)"
+                    title="Pull live products directly from Supabase (contactreachmarket)"
                   >
                     <Database className={`w-4 h-4 ${pullingFromSupabase ? 'animate-spin' : ''}`} />
                     <span>{pullingFromSupabase ? 'Pulling...' : 'Pull from Supabase'}</span>
@@ -9130,7 +9130,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </span>
                       </div>
                       <div className="text-[11px] text-teal-900 space-y-1">
-                        <div>Project: <strong>thierry8-cloud&apos;s Project</strong></div>
+                        <div>Project: <strong>contactreachmarket</strong></div>
                         <div className="truncate font-mono text-[10px]">enmxlqdouiqnqfhmmzha.supabase.co</div>
                         <div className="text-[10px] text-teal-700">Live Table: <strong>public.products</strong></div>
                       </div>

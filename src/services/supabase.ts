@@ -23,13 +23,24 @@ import { toCategorySlug } from '../data/categoryStructure.ts';
 
 // -------------------------------------------------------------
 // SUPABASE PROJECT CONFIGURATION
-// Project Name: thierry8-cloud's Project
+// Project Name: contactreachmarket
 // Project ID: enmxlqdouiqnqfhmmzha
+// Project URL: https://enmxlqdouiqnqfhmmzha.supabase.co
 // -------------------------------------------------------------
-export const SUPABASE_PROJECT_NAME = "thierry8-cloud's Project";
+export const SUPABASE_PROJECT_NAME = 'contactreachmarket';
 export const SUPABASE_PROJECT_ID = 'enmxlqdouiqnqfhmmzha';
-export const SUPABASE_URL = 'https://enmxlqdouiqnqfhmmzha.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9';
+const envViteUrl = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL
+  ? String((import.meta as any).env.VITE_SUPABASE_URL).replace(/\/rest\/v1\/?$/, '').trim()
+  : '';
+const envViteKey = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY
+  ? String((import.meta as any).env.VITE_SUPABASE_ANON_KEY).trim()
+  : '';
+export const SUPABASE_URL = (envViteUrl && envViteUrl.includes(SUPABASE_PROJECT_ID))
+  ? envViteUrl
+  : 'https://enmxlqdouiqnqfhmmzha.supabase.co';
+export const SUPABASE_ANON_KEY = (envViteUrl && envViteUrl.includes(SUPABASE_PROJECT_ID) && envViteKey)
+  ? envViteKey
+  : 'sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9';
 
 // Initialize Supabase Client
 export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -556,13 +567,50 @@ export async function syncAllProductsToSupabase(products: Product[] = []): Promi
       description: p.description || '',
       price: Math.max(0, Number(p.price) || 0),
       cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
+      cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
+      commission_rate: p.commissionRate !== undefined ? Number(p.commissionRate) : 10,
+      profit_margin: p.profitMargin !== undefined ? Number(p.profitMargin) : 0,
+      discount_percent: Number(p.discountPercent) || 0,
+      discount_price: p.discountPrice !== undefined ? Number(p.discountPrice) : null,
+      promo_start_date: p.promoStartDate || null,
+      promo_end_date: p.promoEndDate || null,
       shipping_cost: p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0 ? Math.max(0, Number(p.shippingCost)) : null,
-      category: p.category,
+      category: p.category || 'clothing',
+      subcategory: p.subcategory || null,
+      main_category_id: p.mainCategoryId || null,
+      sub_category_id: p.subCategoryId || null,
+      category_name: p.categoryName || null,
+      sub_category_name: p.subCategoryName || null,
       stock: Math.max(0, Number(p.stock ?? 0)),
-      image_url: p.imageUrl || '',
+      image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
       images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
-      shop_name: p.shopName || null,
+      video_url: p.videoUrl || null,
+      youtube_url: p.youtubeUrl || null,
+      shop_name: p.shopName || 'ContactReach Market',
+      shop_id: p.shopId || null,
+      receiver_name: p.receiverName || null,
+      receiver_phone: p.receiverPhone || null,
+      payment_methods: Array.isArray(p.paymentMethods) ? p.paymentMethods : [],
+      merchant_code: p.merchantCode || null,
+      location: p.location || 'Kigali, Rwanda',
+      delivery_info: p.deliveryInfo || null,
       status: p.status || 'Available',
+      is_featured: Boolean(p.isFeatured),
+      is_new_arrival: Boolean(p.isNewArrival),
+      is_best_seller: Boolean(p.isBestSeller),
+      brand: p.brand || null,
+      unit: p.unit || 'Piece',
+      specifications: p.specifications || null,
+      storage: p.storage || null,
+      packaging_info: p.packagingInfo || null,
+      attributes: Array.isArray(p.attributes) ? p.attributes : [],
+      variations: Array.isArray(p.variations) ? p.variations : [],
+      rating: Number(p.rating) || 5.0,
+      reviews_count: Number(p.reviewsCount) || 0,
+      source: p.source || 'local',
+      review_status: (p as any).reviewStatus || 'Approved',
+      alibaba_product_id: p.alibabaProductId || null,
+      cj_product_id: p.cjProductId || null,
       created_at: p.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString()
     }));
@@ -2187,15 +2235,15 @@ export async function syncAllDataToSupabase(db: {
   };
 
   try {
-    if (db.products?.length) {
-      const prodRes = await syncAllProductsToSupabase(db.products);
-      results.products = prodRes.syncedCount;
-    }
     if (db.categories?.length) {
       results.categories = await syncAllCategoriesToSupabase(db.categories);
     }
     if (db.shops?.length) {
       results.shops = await syncAllShopsToSupabase(db.shops);
+    }
+    if (db.products?.length) {
+      const prodRes = await syncAllProductsToSupabase(db.products);
+      results.products = prodRes.syncedCount;
     }
     if (db.orders?.length) {
       const ordRes = await syncAllOrdersToSupabase(db.orders);

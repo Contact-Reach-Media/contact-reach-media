@@ -1,862 +1,1528 @@
 -- ==============================================================================
--- ContactReach Market: Production Supabase Database Schema & Real-Time Security
--- Project: thierry8-cloud's Project
--- Database: Supabase PostgreSQL (enmxlqdouiqnqfhmmzha)
--- Includes: Complete Tables, Safe Migrations, Atomic RPCs, Strict RLS, Realtime
+-- ContactReach Market: Complete Production Supabase Schema, Relationships & RLS
+-- Project Name: contactreachmarket
+-- Project ID: enmxlqdouiqnqfhmmzha
+-- Project URL: https://enmxlqdouiqnqfhmmzha.supabase.co
+-- ==============================================================================
+-- Safe, idempotent, and non-destructive SQL script:
+--   - Preserves all existing tables and data (CREATE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS)
+--   - Creates all tables, foreign key relationships, indexes, RLS policies, triggers & Realtime
+--   - Inserts NO demo products or sample records (only required system/owner config)
 -- ==============================================================================
 
-create extension if not exists pgcrypto;
-create extension if not exists "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Helper function to automatically update updated_at timestamps
-create or replace function public.handle_updated_at()
-returns trigger as $$
-begin
-    new.updated_at = now();
-    return new;
-end;
-$$ language plpgsql;
+-- Helper function to automatically maintain updated_at timestamps
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- ---------- Staff & Roles - Strict single-owner admin authorization ----------
--- Database Rule: Only contactreachmedialimited@gmail.com is authorized as system owner
-create table if not exists admin_users (
-  id text primary key default gen_random_uuid()::text,
-  user_id uuid references auth.users(id) on delete cascade,
-  email text unique not null,
-  name text not null default 'Ruth (System Owner)',
-  phone text default '0780022600',
-  role text not null default 'owner',
-  permissions text[] default array['all'],
-  active boolean not null default true,
-  last_login timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+-- ==============================================================================
+-- 1. SYSTEM OWNER, STAFF ROLES, ADMIN INVITATIONS & CREDENTIALS
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.admin_roles (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT UNIQUE NOT NULL,
+  description TEXT,
+  permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-create or replace function enforce_authorized_admin_email()
-returns trigger as $$
-begin
-  if lower(trim(new.role)) = 'owner' and lower(trim(new.email)) != 'contactreachmedialimited@gmail.com' then
-    raise exception 'Security violation: Only contactreachmedialimited@gmail.com is authorized as system owner.';
-  end if;
-  return new;
-end;
-$$ language plpgsql;
-
-drop trigger if exists trigger_enforce_admin_email on admin_users;
-create trigger trigger_enforce_admin_email
-  before insert or update on admin_users
-  for each row execute function enforce_authorized_admin_email();
-
-create table if not exists staff_accounts (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('owner','administrator','product_manager','shop_manager','order_manager','customer_support')),
-  full_name text,
-  active boolean not null default true,
-  created_at timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS public.admin_users (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id UUID,
+  profile_id UUID,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL DEFAULT 'Ruth (System Owner)',
+  phone TEXT DEFAULT '0780022600',
+  role TEXT NOT NULL DEFAULT 'owner',
+  permissions TEXT[] DEFAULT ARRAY['all'],
+  active BOOLEAN NOT NULL DEFAULT true,
+  last_login TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Strict owner / authorized staff email helper
-create or replace function is_staff(roles text[] default null) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (
-    select 1 from auth.users u
-    where u.id = auth.uid()
-      and lower(trim(u.email)) = 'contactreachmedialimited@gmail.com'
-  ) or exists (
-    select 1 from auth.users u
-    join staff_accounts s on s.user_id = u.id
-    where u.id = auth.uid()
-      and lower(trim(u.email)) = 'contactreachmedialimited@gmail.com'
-      and s.active
-      and (roles is null or s.role = any(roles))
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS profile_id UUID;
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '0780022600';
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT ARRAY['all'];
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true;
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ;
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE OR REPLACE FUNCTION public.enforce_authorized_admin_email()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF LOWER(TRIM(NEW.role)) = 'owner' AND LOWER(TRIM(NEW.email)) != 'contactreachmedialimited@gmail.com' THEN
+    RAISE EXCEPTION 'Security violation: Only contactreachmedialimited@gmail.com is authorized as system owner.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_enforce_admin_email ON public.admin_users;
+CREATE TRIGGER trigger_enforce_admin_email
+  BEFORE INSERT OR UPDATE ON public.admin_users
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_authorized_admin_email();
+
+CREATE TABLE IF NOT EXISTS public.staff_accounts (
+  user_id UUID PRIMARY KEY,
+  role TEXT NOT NULL CHECK (role IN ('owner','administrator','product_manager','shop_manager','order_manager','customer_support')),
+  full_name TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.admin_invitations (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'administrator',
+  status TEXT NOT NULL DEFAULT 'pending',
+  token_hash TEXT NOT NULL,
+  verification_code_hash TEXT,
+  invite_url TEXT,
+  created_by_id TEXT,
+  created_by_name TEXT,
+  created_by_email TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  accepted_at TIMESTAMPTZ,
+  accepted_user_id TEXT,
+  accepted_username TEXT,
+  revoked_at TIMESTAMPTZ,
+  revoked_by TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.admin_credentials (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  invitation_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Strict owner / authorized staff helper
+CREATE OR REPLACE FUNCTION public.is_staff(roles TEXT[] DEFAULT NULL)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM auth.users u
+    WHERE u.id = auth.uid()
+      AND LOWER(TRIM(u.email)) = 'contactreachmedialimited@gmail.com'
+  ) OR EXISTS (
+    SELECT 1 FROM auth.users u
+    JOIN public.staff_accounts s ON s.user_id = u.id
+    WHERE u.id = auth.uid()
+      AND LOWER(TRIM(u.email)) = 'contactreachmedialimited@gmail.com'
+      AND s.active
+      AND (roles IS NULL OR s.role = ANY(roles))
   );
 $$;
 
--- ---------- Customers & Profiles ----------
-create table if not exists profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  phone text unique,
-  delivery_address text,
-  created_at timestamptz not null default now()
+-- ==============================================================================
+-- 2. PROFILES, USERS, CUSTOMERS & ACCOUNTS
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID PRIMARY KEY,
+  user_id UUID,
+  full_name TEXT,
+  email TEXT UNIQUE,
+  phone TEXT UNIQUE,
+  role TEXT NOT NULL DEFAULT 'buyer',
+  avatar_url TEXT,
+  delivery_address TEXT,
+  city TEXT DEFAULT 'Kigali',
+  country TEXT DEFAULT 'Rwanda',
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create table if not exists users (
-  id text primary key,
-  full_name text not null default 'Customer',
-  email text,
-  phone text,
-  role text not null default 'customer',
-  default_address text,
-  city text default 'Kigali',
-  country text default 'Rwanda',
-  is_active boolean not null default true,
-  metadata jsonb default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  full_name TEXT NOT NULL DEFAULT 'Customer',
+  email TEXT,
+  phone TEXT,
+  role TEXT NOT NULL DEFAULT 'customer',
+  default_address TEXT,
+  city TEXT DEFAULT 'Kigali',
+  country TEXT DEFAULT 'Rwanda',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-create index if not exists users_phone_idx on users(phone);
-create index if not exists users_email_idx on users(lower(email));
-
-create table if not exists customers (
-  id text primary key,
-  email text,
-  phone text,
-  name text not null default 'Customer',
-  role text not null default 'customer',
-  delivery_address text,
-  default_address text,
-  city text default 'Kigali',
-  country text default 'Rwanda',
-  total_orders integer not null default 0,
-  total_spent numeric not null default 0,
-  is_active boolean not null default true,
-  status text default 'Active',
-  is_registered_buyer boolean default true,
-  metadata jsonb default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS public.customers (
+  id TEXT PRIMARY KEY,
+  email TEXT,
+  phone TEXT,
+  name TEXT NOT NULL DEFAULT 'Customer',
+  role TEXT NOT NULL DEFAULT 'customer',
+  delivery_address TEXT,
+  default_address TEXT,
+  city TEXT DEFAULT 'Kigali',
+  country TEXT DEFAULT 'Rwanda',
+  total_orders INTEGER NOT NULL DEFAULT 0,
+  total_spent NUMERIC NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  status TEXT DEFAULT 'Active',
+  is_registered_buyer BOOLEAN DEFAULT true,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-create index if not exists customers_phone_idx on customers(phone);
-
--- ---------- Catalogue ----------
-create table if not exists categories (
-  id text primary key,
-  name text not null,
-  name_en text,
-  name_rw text,
-  slug text,
-  icon text default 'Tag',
-  image_url text,
-  description text,
-  parent_id text,
-  sort_order integer default 0,
-  is_active boolean default true,
-  active boolean default true,
-  subcategories jsonb default '[]'::jsonb,
-  updated_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS public.accounts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE,
+  phone TEXT,
+  role TEXT NOT NULL DEFAULT 'buyer',
+  status TEXT NOT NULL DEFAULT 'Active',
+  active BOOLEAN DEFAULT true,
+  delivery_address TEXT,
+  total_orders INTEGER DEFAULT 0,
+  total_spent NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create table if not exists shops (
-  id text primary key,
-  name text not null,
-  category text default 'all',
-  owner_user uuid references auth.users(id),
-  commission_pct numeric(5,2) not null default 10 check (commission_pct between 0 and 100),
-  phone text,
-  email text,
-  location text default 'Kigali, Rwanda',
-  address text,
-  logo text default 'ShoppingBag',
-  logo_url text,
-  banner_color text,
-  total_sales numeric default 0,
-  status text default 'Active',
-  is_verified boolean default false,
-  is_recommended boolean default false,
-  followers_count integer default 0,
-  description text,
-  is_active boolean default true,
-  active boolean default true,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+-- ==============================================================================
+-- 3. CATEGORIES, SHOPS, PRODUCTS & INVENTORY
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_en TEXT,
+  name_rw TEXT,
+  name_fr TEXT,
+  slug TEXT,
+  icon TEXT DEFAULT 'Tag',
+  image_url TEXT,
+  description TEXT,
+  parent_id TEXT,
+  level INTEGER DEFAULT 1,
+  sort_order INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  active BOOLEAN DEFAULT true,
+  item_count INTEGER DEFAULT 0,
+  keywords JSONB DEFAULT '[]'::jsonb,
+  subcategories JSONB DEFAULT '[]'::jsonb,
+  subcategories_list JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create table if not exists products (
-  id text primary key,
-  sku text,
-  name text not null,
-  description text,
-  category text default 'clothing',
-  subcategory text,
-  main_category_id text,
-  sub_category_id text,
-  category_name text,
-  sub_category_name text,
-  category_id text,
-  shop_id text,
-  shop_name text default 'ContactReach Market',
-  price integer not null default 0,
-  price_rwf integer default 0,
-  cost_price integer,
-  cost_overridden_by_admin boolean default false,
-  commission_rate numeric(5,2) default 10,
-  profit_margin numeric default 0,
-  discount_percent numeric(5,2) default 0,
-  discount_pct numeric(5,2) default 0,
-  discount_price integer,
-  stock integer not null default 0,
-  stock_quantity integer default 0,
-  image_url text default '',
-  images text[] default '{}',
-  video_url text,
-  youtube_url text,
-  receiver_name text,
-  receiver_phone text,
-  payment_methods text[] default '{}',
-  merchant_code text,
-  location text default 'Kigali, Rwanda',
-  delivery_info text,
-  status text default 'Available',
-  is_featured boolean default false,
-  featured boolean default false,
-  is_new_arrival boolean default false,
-  is_new boolean default false,
-  is_best_seller boolean default false,
-  brand text,
-  unit text default 'Piece',
-  shipping_cost integer default 0,
-  specifications text,
-  storage text,
-  packaging_info text,
-  attributes jsonb default '[]'::jsonb,
-  variations jsonb default '[]'::jsonb,
-  rating numeric(3,2) default 5.0,
-  reviews_count integer default 0,
-  source text default 'local',
-  review_status text default 'Approved',
-  alibaba_product_id text,
-  cj_product_id text,
-  visible boolean default true,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS name_fr TEXT;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS item_count INTEGER DEFAULT 0;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS keywords JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS subcategories_list JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE TABLE IF NOT EXISTS public.shops (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_rw TEXT,
+  category TEXT DEFAULT 'all',
+  owner_user UUID,
+  commission_pct NUMERIC(5,2) NOT NULL DEFAULT 10 CHECK (commission_pct BETWEEN 0 AND 100),
+  commission_rate NUMERIC DEFAULT 10,
+  phone TEXT,
+  email TEXT,
+  tin_number TEXT,
+  contact_person TEXT,
+  payout_method TEXT DEFAULT 'MTN Mobile Money',
+  payout_account TEXT,
+  payout_receiver_name TEXT,
+  location TEXT DEFAULT 'Kigali, Rwanda',
+  address TEXT,
+  logo TEXT DEFAULT 'ShoppingBag',
+  logo_url TEXT,
+  banner_color TEXT DEFAULT 'from-orange-500 to-amber-600',
+  banner_url TEXT,
+  rating REAL DEFAULT 5.0,
+  total_sales NUMERIC DEFAULT 0,
+  total_payouts_paid NUMERIC DEFAULT 0,
+  pending_payout NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'Active',
+  is_verified BOOLEAN DEFAULT false,
+  is_recommended BOOLEAN DEFAULT false,
+  followers_count INTEGER DEFAULT 0,
+  description TEXT,
+  delivery_info TEXT,
+  categories JSONB DEFAULT '[]'::jsonb,
+  owner_name TEXT,
+  is_active BOOLEAN DEFAULT true,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index if not exists products_cat_idx on products(category);
-create index if not exists products_name_idx on products using gin (to_tsvector('simple', name));
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS name_rw TEXT;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS tin_number TEXT;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS contact_person TEXT;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS commission_rate NUMERIC DEFAULT 10;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS payout_method TEXT DEFAULT 'MTN Mobile Money';
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS payout_account TEXT;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS payout_receiver_name TEXT;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS banner_url TEXT;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS rating REAL DEFAULT 5.0;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS delivery_info TEXT;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS categories JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS owner_name TEXT;
 
-create table if not exists inventory_logs (
-  id text primary key,
-  product_id text,
-  product_name text,
-  previous_stock integer,
-  new_stock integer,
-  change_amount integer default 0,
-  quantity_changed integer default 0,
-  reason text not null,
-  performed_by text,
-  admin_name text,
+CREATE TABLE IF NOT EXISTS public.products (
+  id TEXT PRIMARY KEY,
+  sku TEXT,
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT NOT NULL DEFAULT 'clothing',
+  subcategory TEXT,
+  main_category_id TEXT,
+  sub_category_id TEXT,
+  category_name TEXT,
+  sub_category_name TEXT,
+  category_id TEXT,
+  shop_id TEXT,
+  shop_name TEXT DEFAULT 'ContactReach Market',
+  price NUMERIC NOT NULL DEFAULT 0,
+  price_rwf NUMERIC DEFAULT 0,
+  cost_price NUMERIC,
+  cost_overridden_by_admin BOOLEAN DEFAULT false,
+  commission_rate NUMERIC(5,2) DEFAULT 10,
+  profit_margin NUMERIC DEFAULT 0,
+  discount_percent NUMERIC(5,2) DEFAULT 0,
+  discount_pct NUMERIC(5,2) DEFAULT 0,
+  discount_price NUMERIC,
+  promo_start_date TIMESTAMPTZ,
+  promo_end_date TIMESTAMPTZ,
+  stock INTEGER NOT NULL DEFAULT 0,
+  stock_quantity INTEGER DEFAULT 0,
+  image_url TEXT DEFAULT '',
+  images JSONB DEFAULT '[]'::jsonb,
+  video_url TEXT,
+  youtube_url TEXT,
+  receiver_name TEXT,
+  receiver_phone TEXT,
+  payment_methods JSONB DEFAULT '[]'::jsonb,
+  merchant_code TEXT,
+  location TEXT DEFAULT 'Kigali, Rwanda',
+  delivery_info TEXT,
+  status TEXT NOT NULL DEFAULT 'Available',
+  is_featured BOOLEAN DEFAULT false,
+  featured BOOLEAN DEFAULT false,
+  is_new_arrival BOOLEAN DEFAULT false,
+  is_new BOOLEAN DEFAULT false,
+  is_best_seller BOOLEAN DEFAULT false,
+  brand TEXT,
+  unit TEXT DEFAULT 'Piece',
+  shipping_cost NUMERIC DEFAULT 0,
+  specifications TEXT,
+  storage TEXT,
+  packaging_info TEXT,
+  attributes JSONB DEFAULT '[]'::jsonb,
+  variations JSONB DEFAULT '[]'::jsonb,
+  rating NUMERIC(3,2) DEFAULT 5.0,
+  reviews_count INTEGER DEFAULT 0,
+  source TEXT DEFAULT 'local',
+  review_status TEXT DEFAULT 'Approved',
+  cj_product_id TEXT,
+  cj_product_sku TEXT,
+  cj_original_cost_usd NUMERIC,
+  cj_last_sync_at TIMESTAMPTZ,
+  alibaba_product_id TEXT,
+  alibaba_item_url TEXT,
+  alibaba_supplier_name TEXT,
+  alibaba_supplier_location TEXT,
+  alibaba_moq INTEGER DEFAULT 1,
+  alibaba_weight_kg NUMERIC,
+  alibaba_dimensions_cm JSONB,
+  alibaba_original_cost_usd NUMERIC,
+  alibaba_shipping_cost_usd NUMERIC,
+  alibaba_shipping_cost_rwf NUMERIC,
+  alibaba_shipping_method TEXT,
+  alibaba_lead_time_days INTEGER,
+  alibaba_trade_assurance BOOLEAN DEFAULT true,
+  alibaba_verified_supplier BOOLEAN DEFAULT false,
+  alibaba_last_sync_at TIMESTAMPTZ,
+  ali_express_url TEXT,
+  supplier_variant TEXT,
+  supplier_sku TEXT,
+  supplier_product_url TEXT,
+  is_supplier_mapped BOOLEAN DEFAULT false,
+  last_verified_at TIMESTAMPTZ,
+  history JSONB DEFAULT '[]'::jsonb,
+  visible BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Safe column additions if products table already existed from an earlier minimal schema
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS promo_start_date TIMESTAMPTZ;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS promo_end_date TIMESTAMPTZ;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS cj_product_sku TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS cj_original_cost_usd NUMERIC;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS cj_last_sync_at TIMESTAMPTZ;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_item_url TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_supplier_name TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_supplier_location TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_moq INTEGER DEFAULT 1;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_weight_kg NUMERIC;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_dimensions_cm JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_original_cost_usd NUMERIC;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_shipping_cost_usd NUMERIC;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_shipping_cost_rwf NUMERIC;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_shipping_method TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_lead_time_days INTEGER;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_trade_assurance BOOLEAN DEFAULT true;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_verified_supplier BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS alibaba_last_sync_at TIMESTAMPTZ;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS ali_express_url TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS supplier_variant TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS supplier_sku TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS supplier_product_url TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_supplier_mapped BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS last_verified_at TIMESTAMPTZ;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS history JSONB DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.inventory (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  product_id TEXT,
+  stock_quantity INTEGER NOT NULL DEFAULT 0,
+  reserved_quantity INTEGER NOT NULL DEFAULT 0,
+  available_quantity INTEGER NOT NULL DEFAULT 0,
+  low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+  location TEXT DEFAULT 'Kigali Main Warehouse',
+  last_restocked_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory_logs (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  product_name TEXT,
+  transaction_type TEXT DEFAULT 'adjustment',
+  previous_stock INTEGER,
+  new_stock INTEGER,
+  change_amount INTEGER DEFAULT 0,
+  quantity_changed INTEGER DEFAULT 0,
+  reason TEXT NOT NULL,
+  performed_by TEXT,
+  admin_name TEXT,
   order_id text,
-  actor uuid,
-  timestamp timestamptz default now(),
-  created_at timestamptz default now()
+  actor UUID,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ---------- Coupons ----------
-create table if not exists coupons (
-  id text primary key,
-  code text unique not null,
-  discount_type text default 'percentage',
-  discount_value integer default 0,
-  min_order_amount integer default 0,
-  max_discount integer,
-  expires_at timestamptz,
-  usage_limit integer,
-  times_used integer not null default 0,
-  is_active boolean default true,
-  created_at timestamptz default now()
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS transaction_type TEXT DEFAULT 'adjustment';
+
+CREATE TABLE IF NOT EXISTS public.inventory_transactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  product_id TEXT NOT NULL,
+  product_name TEXT,
+  transaction_type TEXT DEFAULT 'adjustment',
+  previous_stock INTEGER,
+  new_stock INTEGER,
+  change_amount INTEGER,
+  reason TEXT,
+  performed_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ---------- Delivery zones ----------
-create table if not exists delivery_zones (
-  name text primary key,
-  fee_rwf integer not null check (fee_rwf >= 0),
-  eta text,
-  active boolean default true
+-- ==============================================================================
+-- 4. COUPONS, PROMO CODES & DELIVERY ZONES
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.coupons (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  discount_type TEXT NOT NULL DEFAULT 'percentage',
+  discount_value NUMERIC NOT NULL DEFAULT 0,
+  min_order_amount NUMERIC DEFAULT 0,
+  max_discount NUMERIC,
+  max_discount_amount NUMERIC,
+  expires_at TIMESTAMPTZ,
+  usage_limit INTEGER,
+  times_used INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-insert into delivery_zones(name, fee_rwf, eta) values
- ('Gasabo', 1500, 'Same Day / Next Day'),
- ('Nyarugenge', 1500, 'Same Day / Next Day'),
- ('Kicukiro', 1500, 'Same Day / Next Day'),
- ('Kigali Express', 2500, '2-4 Hours'),
- ('Outside Kigali', 3500, '1-2 Days'),
- ('Store Pickup', 0, 'Instant at Office')
-on conflict (name) do nothing;
+ALTER TABLE public.coupons ADD COLUMN IF NOT EXISTS max_discount_amount NUMERIC;
 
--- ---------- Orders ----------
-create sequence if not exists order_no_seq start 1000;
-
-create table if not exists orders (
-  id text primary key,
-  order_number text unique not null,
-  user_id text,
-  tracking_token text,
-  tracking_number text,
-  tracking_carrier text,
-  tracking_url text,
-  tracking_added_at timestamptz,
-  customer_name text not null,
-  customer_phone text not null,
-  customer_email text,
-  delivery_type text default 'delivery',
-  delivery_location text default 'Kigali',
-  delivery_address text default 'Kigali, Rwanda',
-  delivery_notes text,
-  items jsonb default '[]'::jsonb,
-  subtotal integer not null default 0,
-  delivery_fee integer not null default 0,
-  shipping_cost integer not null default 0,
-  discount_amount integer not null default 0,
-  coupon_code text,
-  total_amount integer not null default 0,
-  commission_rate numeric(5,2) default 10,
-  commission_earned integer default 0,
-  supplier_payout_amount integer default 0,
-  supplier_payout_status text default 'Pending',
-  supplier_fulfillment_status text default 'Pending',
-  supplier_payout_ref text,
-  payment_method text not null default 'MTN Mobile Money',
-  receiver_name text default 'Ruth',
-  receiver_details text default '0780022600',
-  shop_name text,
-  payment_status text not null default 'Pending Payment',
-  status text not null default 'New',
-  delivery_status text default 'Pending',
-  expected_delivery_date text,
-  supplier_name text,
-  supplier_order_ref text,
-  dispatch_date timestamptz,
-  stock_deducted boolean default false,
-  assigned_courier text,
-  courier_phone text,
-  internal_notes text,
-  supplier_approval_status text default 'Pending Review',
-  supplier_approved_at timestamptz,
-  supplier_approved_by text,
-  supplier_rejection_reason text,
-  cj_fulfillment_status text default 'Not Applicable',
-  cj_fulfillment_approved_at timestamptz,
-  cj_fulfillment_approved_by text,
-  cj_tracking_number text,
-  alibaba_fulfillment_status text default 'Not Applicable',
-  alibaba_fulfillment_approved_at timestamptz,
-  alibaba_fulfillment_approved_by text,
-  alibaba_order_ref text,
-  alibaba_tracking_number text,
-  alibaba_shipping_method text,
-  status_history jsonb default '[]'::jsonb,
-  payment_confirmation jsonb,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS public.promo_codes (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  discount_type TEXT NOT NULL DEFAULT 'percentage',
+  discount_value NUMERIC NOT NULL DEFAULT 0,
+  min_order_amount NUMERIC DEFAULT 0,
+  max_discount NUMERIC,
+  expires_at TIMESTAMPTZ,
+  usage_limit INTEGER,
+  times_used INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index if not exists orders_user_id_idx on orders(user_id);
-create index if not exists orders_phone_idx on orders(customer_phone);
-
-create table if not exists order_items (
-  id text primary key default gen_random_uuid()::text,
-  order_id text not null references orders(id) on delete cascade,
-  product_id text,
-  product_name text,
-  quantity integer not null default 1,
-  unit_price integer not null default 0,
-  variation jsonb default '{}'::jsonb
+CREATE TABLE IF NOT EXISTS public.promo_code_usage (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  promo_code_id TEXT,
+  code TEXT NOT NULL,
+  order_id TEXT,
+  customer_id TEXT,
+  discount_applied NUMERIC NOT NULL DEFAULT 0,
+  used_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ---------- Payments & Real-Time Telecom / SMS Logging ----------
-create table if not exists payments (
-  id text primary key,
-  order_id text,
-  order_number text,
-  customer_name text,
-  customer_phone text,
-  payment_phone text,
-  sender_phone text,
-  sender_name text,
-  amount numeric default 0,
-  amount_paid numeric default 0,
-  payment_method text default 'MTN Mobile Money',
-  transaction_id text,
-  payment_proof_url text,
-  screenshot_url text,
-  confirmation_message text,
-  verification_status text default 'Pending Verification',
-  verified_at timestamptz,
-  verified_by text,
-  notes text,
-  admin_notes text,
-  flagged_suspicious boolean default false,
-  is_duplicate_txn boolean default false,
-  suspicious_reason text,
-  verified_directly boolean default false,
-  customer_notified boolean default false,
-  notification_message text,
-  submitted_at timestamptz default now(),
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS public.delivery_zones (
+  name TEXT PRIMARY KEY,
+  fee_rwf INTEGER NOT NULL CHECK (fee_rwf >= 0),
+  eta TEXT,
+  active BOOLEAN DEFAULT true
 );
 
-alter table payments add column if not exists verification_status text default 'Pending Verification';
-alter table payments add column if not exists customer_notified boolean default false;
-alter table payments add column if not exists notification_message text;
-alter table payments add column if not exists flagged_suspicious boolean default false;
-alter table payments add column if not exists is_duplicate_txn boolean default false;
-alter table payments add column if not exists suspicious_reason text;
-alter table payments add column if not exists verified_directly boolean default false;
+-- ==============================================================================
+-- 5. ORDERS, ORDER ITEMS & DELIVERIES
+-- ==============================================================================
+CREATE SEQUENCE IF NOT EXISTS public.order_no_seq START 1000;
 
-create index if not exists payments_order_number_idx on payments(order_number);
-create unique index if not exists payments_verified_txn_uq
-  on payments(lower(transaction_id))
-  where verification_status in ('Verified/Paid', 'Approved', 'verified') and transaction_id is not null and transaction_id != '';
-
-create table if not exists payment_transactions (
-  id text primary key,
-  order_id text,
-  order_number text,
-  idempotency_key text unique,
-  payment_method text not null default 'MTN Mobile Money',
-  provider text not null default 'MTN Mobile Money',
-  amount numeric not null default 0,
-  currency text not null default 'RWF',
-  customer_phone text,
-  customer_email text,
-  checkout_url text,
-  status text not null default 'Pending',
-  metadata jsonb default '{}'::jsonb,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS public.orders (
+  id TEXT PRIMARY KEY,
+  order_number TEXT UNIQUE NOT NULL,
+  user_id TEXT,
+  tracking_token TEXT,
+  tracking_number TEXT,
+  tracking_carrier TEXT,
+  tracking_url TEXT,
+  tracking_added_at TIMESTAMPTZ,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT NOT NULL,
+  customer_email TEXT,
+  delivery_type TEXT DEFAULT 'delivery',
+  delivery_location TEXT DEFAULT 'Kigali',
+  delivery_address TEXT DEFAULT 'Kigali, Rwanda',
+  delivery_notes TEXT,
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  subtotal NUMERIC NOT NULL DEFAULT 0,
+  delivery_fee NUMERIC NOT NULL DEFAULT 0,
+  shipping_cost NUMERIC NOT NULL DEFAULT 0,
+  discount_amount NUMERIC NOT NULL DEFAULT 0,
+  coupon_code TEXT,
+  total_amount NUMERIC NOT NULL DEFAULT 0,
+  commission_rate NUMERIC(5,2) DEFAULT 10,
+  commission_earned NUMERIC DEFAULT 0,
+  supplier_payout_amount NUMERIC DEFAULT 0,
+  supplier_payout_status TEXT DEFAULT 'Pending',
+  supplier_fulfillment_status TEXT DEFAULT 'Pending',
+  supplier_payout_ref TEXT,
+  payment_method TEXT NOT NULL DEFAULT 'MTN Mobile Money',
+  receiver_name TEXT DEFAULT 'Ruth',
+  receiver_details TEXT DEFAULT '0780022600',
+  shop_name TEXT,
+  payment_status TEXT NOT NULL DEFAULT 'Pending Payment',
+  status TEXT NOT NULL DEFAULT 'New',
+  delivery_status TEXT DEFAULT 'Pending',
+  expected_delivery_date TEXT,
+  supplier_name TEXT,
+  supplier_order_ref TEXT,
+  dispatch_date TIMESTAMPTZ,
+  stock_deducted BOOLEAN DEFAULT false,
+  assigned_courier TEXT,
+  courier_phone TEXT,
+  internal_notes TEXT,
+  supplier_approval_status TEXT DEFAULT 'Pending Review',
+  supplier_approved_at TIMESTAMPTZ,
+  supplier_approved_by TEXT,
+  supplier_rejection_reason TEXT,
+  cj_fulfillment_status TEXT DEFAULT 'Not Applicable',
+  cj_fulfillment_approved_at TIMESTAMPTZ,
+  cj_fulfillment_approved_by TEXT,
+  cj_tracking_number TEXT,
+  alibaba_fulfillment_status TEXT DEFAULT 'Not Applicable',
+  alibaba_fulfillment_approved_at TIMESTAMPTZ,
+  alibaba_fulfillment_approved_by TEXT,
+  alibaba_order_ref TEXT,
+  alibaba_tracking_number TEXT,
+  alibaba_shipping_method TEXT,
+  status_history JSONB DEFAULT '[]'::jsonb,
+  payment_confirmation JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index if not exists payment_txns_order_number_idx on payment_transactions(order_number);
-
-create table if not exists sms_notifications (
-  id text primary key,
-  direction text not null default 'incoming' check (direction in ('incoming','outbound','outgoing')),
-  sender_phone text not null,
-  sender_name text,
-  recipient_phone text,
-  provider text default 'MTN Mobile Money',
-  message text not null,
-  parsed_transaction_id text,
-  parsed_amount numeric,
-  order_number text,
-  payment_id text,
-  status text not null default 'received',
-  metadata jsonb default '{}'::jsonb,
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS public.order_items (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  order_id TEXT NOT NULL,
+  product_id TEXT,
+  product_name TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  unit_price NUMERIC NOT NULL DEFAULT 0,
+  line_total NUMERIC DEFAULT 0,
+  variation JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-alter table sms_notifications drop constraint if exists sms_notifications_direction_check;
-alter table sms_notifications add constraint sms_notifications_direction_check check (direction in ('incoming','outbound','outgoing'));
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS line_total NUMERIC DEFAULT 0;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
-create index if not exists sms_notifications_order_idx on sms_notifications(order_number);
-create index if not exists sms_notifications_phone_idx on sms_notifications(sender_phone);
-
--- ---------- Customer Chat, Contact Us Messages & Admin Notifications ----------
-create table if not exists messages (
-  id text primary key,
-  conversation_id text,
-  customer_id text,
-  name text,
-  sender_name text,
-  email text,
-  sender_email text,
-  phone text,
-  sender_phone text,
-  subject text,
-  message text not null,
-  order_number text,
-  status text default 'unread',
-  read_at timestamptz,
-  replied_at timestamptz,
-  reply_note text,
-  reply_message text,
-  replied_by text,
-  sender text default 'customer',
-  is_read_by_customer boolean default true,
-  is_read_by_admin boolean default false,
-  notification_type text default 'chat',
-  metadata jsonb default '{}'::jsonb,
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS public.deliveries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id TEXT,
+  order_number TEXT NOT NULL,
+  tracking_number TEXT,
+  courier_name TEXT,
+  courier_phone TEXT,
+  delivery_address TEXT NOT NULL,
+  delivery_city TEXT DEFAULT 'Kigali',
+  delivery_district TEXT,
+  delivery_fee NUMERIC DEFAULT 0,
+  delivery_status TEXT NOT NULL DEFAULT 'Pending',
+  expected_delivery_date TIMESTAMPTZ,
+  actual_delivery_date TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-alter table messages add column if not exists conversation_id text;
-alter table messages add column if not exists replied_by text;
-alter table messages add column if not exists metadata jsonb default '{}'::jsonb;
+-- ==============================================================================
+-- 6. PAYMENTS, PAYMENT TRANSACTIONS & SMS NOTIFICATIONS
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.payments (
+  id TEXT PRIMARY KEY,
+  order_id TEXT,
+  order_number TEXT,
+  customer_name TEXT,
+  customer_phone TEXT,
+  payment_phone TEXT,
+  sender_phone TEXT,
+  sender_name TEXT,
+  amount NUMERIC DEFAULT 0,
+  amount_paid NUMERIC DEFAULT 0,
+  payment_method TEXT DEFAULT 'MTN Mobile Money',
+  transaction_id TEXT,
+  payment_proof_url TEXT,
+  screenshot_url TEXT,
+  confirmation_message TEXT,
+  verification_status TEXT DEFAULT 'Pending Verification',
+  verified_at TIMESTAMPTZ,
+  verified_by TEXT,
+  notes TEXT,
+  admin_notes TEXT,
+  flagged_suspicious BOOLEAN DEFAULT false,
+  is_duplicate_txn BOOLEAN DEFAULT false,
+  duplicate_order_numbers JSONB DEFAULT '[]'::jsonb,
+  suspicious_reason TEXT,
+  verified_directly BOOLEAN DEFAULT false,
+  telecom_verified BOOLEAN DEFAULT false,
+  telecom_reference TEXT,
+  customer_notified BOOLEAN DEFAULT false,
+  notification_message TEXT,
+  submitted_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-create index if not exists messages_customer_id_idx on messages(customer_id);
-create index if not exists messages_phone_idx on messages(phone);
-create index if not exists messages_sender_idx on messages(sender);
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS verification_status TEXT DEFAULT 'Pending Verification';
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS customer_notified BOOLEAN DEFAULT false;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS notification_message TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS flagged_suspicious BOOLEAN DEFAULT false;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS is_duplicate_txn BOOLEAN DEFAULT false;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS duplicate_order_numbers JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS suspicious_reason TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS verified_directly BOOLEAN DEFAULT false;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS telecom_verified BOOLEAN DEFAULT false;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS telecom_reference TEXT;
 
-create table if not exists admin_notifications (
-  id text primary key,
-  category text not null default 'system',
-  title text not null,
-  message text not null,
-  sender_name text,
-  sender_phone text,
-  sender_email text,
-  order_number text,
-  customer_id text,
+CREATE TABLE IF NOT EXISTS public.payment_verifications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  payment_id TEXT,
+  order_number TEXT NOT NULL,
+  verified_by TEXT NOT NULL,
+  verification_method TEXT DEFAULT 'manual',
+  telecom_reference TEXT,
+  amount_verified NUMERIC NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'Verified',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.payment_transactions (
+  id TEXT PRIMARY KEY,
+  order_id TEXT,
+  order_number TEXT,
+  idempotency_key TEXT UNIQUE,
+  payment_method TEXT NOT NULL DEFAULT 'MTN Mobile Money',
+  provider TEXT NOT NULL DEFAULT 'MTN Mobile Money',
+  amount NUMERIC NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'RWF',
+  customer_phone TEXT,
+  customer_email TEXT,
+  checkout_url TEXT,
+  status TEXT NOT NULL DEFAULT 'Pending',
+  provider_transaction_id TEXT,
+  financial_transaction_id TEXT,
+  failure_reason TEXT,
+  verified_directly BOOLEAN DEFAULT false,
+  verified_at TIMESTAMPTZ,
+  telecom_status TEXT,
+  signature_verified BOOLEAN DEFAULT false,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS provider_transaction_id TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS financial_transaction_id TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS failure_reason TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS verified_directly BOOLEAN DEFAULT false;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS telecom_status TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS signature_verified BOOLEAN DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS public.sms_notifications (
+  id TEXT PRIMARY KEY,
+  direction TEXT NOT NULL DEFAULT 'incoming' CHECK (direction IN ('incoming','outbound','outgoing')),
+  sender_phone TEXT NOT NULL DEFAULT '',
+  sender_name TEXT,
+  recipient_phone TEXT DEFAULT '',
+  provider TEXT DEFAULT 'MTN Mobile Money',
+  message TEXT NOT NULL,
+  parsed_transaction_id TEXT,
+  parsed_amount NUMERIC,
+  order_number TEXT,
+  payment_id TEXT,
+  status TEXT NOT NULL DEFAULT 'received',
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.sms_notifications DROP CONSTRAINT IF EXISTS sms_notifications_direction_check;
+ALTER TABLE public.sms_notifications ADD CONSTRAINT sms_notifications_direction_check CHECK (direction IN ('incoming','outbound','outgoing'));
+
+-- ==============================================================================
+-- 7. CHAT CONVERSATIONS, MESSAGES & ADMIN NOTIFICATIONS
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.conversations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_id TEXT,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT,
+  customer_email TEXT,
+  last_message TEXT,
+  unread_count INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.messages (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT,
+  customer_id TEXT,
+  name TEXT,
+  sender_name TEXT,
+  email TEXT,
+  sender_email TEXT,
+  phone TEXT,
+  sender_phone TEXT,
+  subject TEXT,
+  message TEXT NOT NULL,
+  order_number TEXT,
+  status TEXT DEFAULT 'unread',
+  read_at TIMESTAMPTZ,
+  replied_at TIMESTAMPTZ,
+  reply_note TEXT,
+  reply_message TEXT,
+  replied_by TEXT,
+  sender TEXT DEFAULT 'customer',
+  is_read_by_customer BOOLEAN DEFAULT true,
+  is_read_by_admin BOOLEAN DEFAULT false,
+  notification_type TEXT DEFAULT 'chat',
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS conversation_id TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS replied_by TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.customer_messages (
+  id TEXT PRIMARY KEY,
+  conversation_id UUID,
+  customer_id TEXT,
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  message TEXT NOT NULL,
+  order_number TEXT,
+  status TEXT DEFAULT 'unread',
+  reply_note TEXT,
+  sender TEXT DEFAULT 'customer',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.admin_notifications (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL DEFAULT 'system',
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  sender_name TEXT,
+  sender_phone TEXT,
+  sender_email TEXT,
+  order_number TEXT,
+  customer_id TEXT,
   action_tab text,
+  entity_id TEXT,
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  read_at TIMESTAMPTZ,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.notification_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  channel TEXT NOT NULL DEFAULT 'sms',
+  recipient TEXT NOT NULL,
+  subject TEXT,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'sent',
+  error_message TEXT,
+  sent_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 8. CUSTOMER PROBLEMS, ISSUES & REPORTS
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.customer_problems (
+  id TEXT PRIMARY KEY,
+  case_number TEXT UNIQUE,
+  order_number TEXT,
+  customer_id TEXT,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT NOT NULL,
+  customer_email TEXT,
+  category TEXT NOT NULL DEFAULT 'delivery_delay',
+  issue_type TEXT,
+  description TEXT NOT NULL,
+  priority TEXT DEFAULT 'medium',
+  status TEXT DEFAULT 'New',
+  assigned_to TEXT,
+  admin_notes TEXT,
+  private_notes JSONB DEFAULT '[]'::jsonb,
+  resolution TEXT,
+  resolved_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.customer_problems ADD COLUMN IF NOT EXISTS customer_id TEXT;
+ALTER TABLE public.customer_problems ADD COLUMN IF NOT EXISTS private_notes JSONB DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.issues (
+  id TEXT PRIMARY KEY,
+  case_number TEXT,
+  order_number TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT NOT NULL,
+  category TEXT DEFAULT 'delivery_delay',
+  description TEXT NOT NULL,
+  priority TEXT DEFAULT 'medium',
+  status TEXT NOT NULL DEFAULT 'New',
+  resolution TEXT,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  report_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  filters JSONB DEFAULT '{}'::jsonb,
+  generated_by TEXT,
+  file_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 9. SUPPLIERS, PAYOUTS & FULFILLMENT
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.suppliers (
+  id TEXT PRIMARY KEY,
+  business_name TEXT NOT NULL,
+  owner_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  tin_number TEXT,
+  location TEXT,
+  category TEXT,
+  description TEXT,
+  documents JSONB DEFAULT '[]'::jsonb,
+  status TEXT NOT NULL DEFAULT 'Pending',
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.supplier_applications (
+  id TEXT PRIMARY KEY,
+  business_name TEXT NOT NULL,
+  owner_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  tin_number TEXT,
+  location TEXT,
+  category TEXT,
+  description TEXT,
+  status TEXT DEFAULT 'Pending',
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.supplier_payouts (
+  id TEXT PRIMARY KEY,
+  shop_id TEXT,
+  shop_name TEXT,
+  order_id TEXT,
+  order_number TEXT,
+  order_total NUMERIC DEFAULT 0,
+  commission_rate NUMERIC DEFAULT 0.1,
+  commission_earned NUMERIC DEFAULT 0,
+  payout_amount NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'Pending',
+  payment_reference TEXT,
+  paid_at TIMESTAMPTZ,
+  approved_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.supplier_products (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  supplier_id TEXT,
+  product_id TEXT,
+  supplier_sku TEXT,
+  wholesale_price NUMERIC NOT NULL DEFAULT 0,
+  moq INTEGER DEFAULT 1,
+  lead_time_days INTEGER DEFAULT 3,
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.supplier_imports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source TEXT NOT NULL,
+  imported_count INTEGER DEFAULT 0,
+  approved_count INTEGER DEFAULT 0,
+  rejected_count INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'completed',
+  error_details TEXT,
+  imported_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.fulfillment_records (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id TEXT,
+  order_number TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  supplier_order_ref TEXT,
+  tracking_number TEXT,
+  fulfillment_status TEXT DEFAULT 'Pending',
+  sync_status TEXT DEFAULT 'synced',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 10. SETTINGS, REVIEWS, TOMBSTONES & AUDIT LOGS
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.app_settings (
+  id TEXT PRIMARY KEY DEFAULT 'global',
+  market_name TEXT DEFAULT 'ContactReach Market',
+  company_name TEXT DEFAULT 'ContactReach Media Ltd',
+  slogan TEXT DEFAULT 'Discover Products. Pay Easily. Shop with Confidence.',
+  phone TEXT DEFAULT '+250780022600',
+  email TEXT DEFAULT 'contactreachmedialimited@gmail.com',
+  address TEXT DEFAULT 'KG 622 St, Fair View Plaza, Kigali, Rwanda',
+  receiver_name TEXT DEFAULT 'Ruth',
+  payment_number TEXT DEFAULT '0780022600',
+  merchant_code TEXT DEFAULT '2328354',
+  mtn_ussd_pattern TEXT DEFAULT '*182*1*1*0780022600*{AMOUNT}#',
+  airtel_ussd_pattern TEXT DEFAULT '*182*1*2*0780022600*{AMOUNT}#',
+  whats_app_number TEXT DEFAULT '+250780022600',
+  delivery_fee_kigali NUMERIC DEFAULT 1500,
+  delivery_fee_upcountry NUMERIC DEFAULT 3500,
+  free_delivery_threshold NUMERIC DEFAULT 50000,
+  outside_kigali_notice TEXT,
+  is_maintenance_mode BOOLEAN DEFAULT false,
+  maintenance_title TEXT,
+  maintenance_message TEXT,
+  maintenance_estimated_time TEXT,
+  maintenance_updated_at TIMESTAMPTZ,
+  socials JSONB DEFAULT '{}'::jsonb,
+  kigali_areas JSONB DEFAULT '[]'::jsonb,
+  cj_config JSONB DEFAULT '{}'::jsonb,
+  drive_backup_status JSONB DEFAULT '{}'::jsonb,
+  google_sheet_config JSONB DEFAULT '{}'::jsonb,
+  alibaba_config JSONB DEFAULT '{}'::jsonb,
+  dsers_config JSONB DEFAULT '{}'::jsonb,
+  supabase_config JSONB DEFAULT '{}'::jsonb,
+  settings_data JSONB DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.website_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.store_settings (
+  id TEXT PRIMARY KEY DEFAULT 'global',
+  settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.reviews (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT,
+  rating NUMERIC NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment TEXT NOT NULL DEFAULT '',
+  verified_purchase BOOLEAN DEFAULT false,
+  status TEXT DEFAULT 'approved',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.deleted_tombstones (
+  id TEXT PRIMARY KEY,
+  product_name TEXT,
+  deleted_by TEXT,
+  deleted_at TIMESTAMPTZ DEFAULT NOW(),
+  reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  actor UUID,
+  admin_name TEXT,
+  admin_role TEXT,
+  action TEXT NOT NULL,
+  details TEXT,
+  entity TEXT,
+  entity_type TEXT,
   entity_id text,
-  is_read boolean not null default false,
-  read_at timestamptz,
-  metadata jsonb default '{}'::jsonb,
-  created_at timestamptz default now()
+  detail JSONB,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index if not exists admin_notifications_read_idx on admin_notifications(is_read, created_at desc);
+-- ==============================================================================
+-- 11. RELATIONSHIPS (SAFE FOREIGN KEY CONSTRAINTS)
+-- ==============================================================================
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_admin_users_auth_user') THEN
+    BEGIN
+      ALTER TABLE public.admin_users
+        ADD CONSTRAINT fk_admin_users_auth_user
+        FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
--- ---------- Report a Problem / Complaints ----------
-create table if not exists customer_problems (
-  id text primary key,
-  case_number text unique,
-  order_number text,
-  customer_id text,
-  customer_name text not null,
-  customer_phone text not null,
-  customer_email text,
-  category text not null default 'delivery_delay',
-  issue_type text,
-  description text not null,
-  priority text default 'medium',
-  status text default 'New',
-  assigned_to text,
-  admin_notes text,
-  private_notes jsonb default '[]'::jsonb,
-  resolution text,
-  resolved_at timestamptz,
-  updated_at timestamptz default now(),
-  created_at timestamptz default now()
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_staff_accounts_auth_user') THEN
+    BEGIN
+      ALTER TABLE public.staff_accounts
+        ADD CONSTRAINT fk_staff_accounts_auth_user
+        FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-alter table customer_problems add column if not exists customer_id text;
-alter table customer_problems add column if not exists private_notes jsonb default '[]'::jsonb;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_profiles_auth_user') THEN
+    BEGIN
+      ALTER TABLE public.profiles
+        ADD CONSTRAINT fk_profiles_auth_user
+        FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create index if not exists customer_problems_case_idx on customer_problems(case_number);
-create index if not exists customer_problems_phone_idx on customer_problems(customer_phone);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_categories_parent') THEN
+    BEGIN
+      ALTER TABLE public.categories
+        ADD CONSTRAINT fk_categories_parent
+        FOREIGN KEY (parent_id) REFERENCES public.categories(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
--- ---------- Settings, Suppliers, Reviews, Audits & Tombstones ----------
-create table if not exists supplier_applications (
-  id text primary key,
-  business_name text not null,
-  owner_name text not null,
-  phone text not null,
-  email text,
-  tin_number text,
-  location text,
-  category text,
-  description text,
-  status text default 'Pending',
-  reviewed_by text,
-  reviewed_at timestamptz,
-  created_at timestamptz default now()
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_shops_owner_user') THEN
+    BEGIN
+      ALTER TABLE public.shops
+        ADD CONSTRAINT fk_shops_owner_user
+        FOREIGN KEY (owner_user) REFERENCES auth.users(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create table if not exists supplier_payouts (
-  id text primary key,
-  shop_id text,
-  shop_name text,
-  order_id text,
-  order_number text,
-  order_total numeric default 0,
-  commission_rate numeric default 0.1,
-  commission_earned numeric default 0,
-  payout_amount numeric default 0,
-  status text default 'Pending',
-  payment_reference text,
-  paid_at timestamptz,
-  approved_by text,
-  created_at timestamptz default now()
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_products_shop') THEN
+    BEGIN
+      ALTER TABLE public.products
+        ADD CONSTRAINT fk_products_shop
+        FOREIGN KEY (shop_id) REFERENCES public.shops(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create table if not exists app_settings (
-  id text primary key,
-  market_name text,
-  company_name text,
-  phone text,
-  email text,
-  receiver_name text,
-  payment_number text,
-  merchant_code text,
-  mtn_ussd_pattern text,
-  airtel_ussd_pattern text,
-  delivery_fee_kigali integer,
-  delivery_fee_upcountry integer,
-  free_delivery_threshold integer,
-  is_maintenance_mode boolean default false,
-  maintenance_title text,
-  maintenance_message text,
-  settings_data jsonb default '{}'::jsonb,
-  updated_at timestamptz default now()
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_inventory_product') THEN
+    BEGIN
+      ALTER TABLE public.inventory
+        ADD CONSTRAINT fk_inventory_product
+        FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create table if not exists website_settings (
-  key text primary key,
-  value jsonb not null
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_inventory_logs_product') THEN
+    BEGIN
+      ALTER TABLE public.inventory_logs
+        ADD CONSTRAINT fk_inventory_logs_product
+        FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create table if not exists reviews (
-  id text primary key,
-  product_id text not null,
-  customer_name text not null,
-  customer_phone text,
-  rating integer not null check (rating between 1 and 5),
-  comment text not null,
-  verified_purchase boolean default false,
-  status text default 'approved',
-  created_at timestamptz default now()
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_order_items_order') THEN
+    BEGIN
+      ALTER TABLE public.order_items
+        ADD CONSTRAINT fk_order_items_order
+        FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create table if not exists deleted_tombstones (
-  id text primary key,
-  product_name text,
-  deleted_by text,
-  deleted_at timestamptz default now(),
-  reason text
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_order_items_product') THEN
+    BEGIN
+      ALTER TABLE public.order_items
+        ADD CONSTRAINT fk_order_items_product
+        FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create table if not exists audit_logs (
-  id text primary key default gen_random_uuid()::text,
-  actor uuid,
-  admin_name text,
-  admin_role text,
-  action text not null,
-  details text,
-  entity text,
-  entity_type text,
-  entity_id text,
-  detail jsonb,
-  timestamp timestamptz default now(),
-  created_at timestamptz default now()
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_deliveries_order') THEN
+    BEGIN
+      ALTER TABLE public.deliveries
+        ADD CONSTRAINT fk_deliveries_order
+        FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-create table if not exists accounts (
-  id text primary key,
-  name text not null,
-  email text unique,
-  phone text,
-  role text not null default 'buyer',
-  status text not null default 'Active',
-  active boolean default true,
-  delivery_address text,
-  total_orders integer default 0,
-  total_spent numeric default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payments_order') THEN
+    BEGIN
+      ALTER TABLE public.payments
+        ADD CONSTRAINT fk_payments_order
+        FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
--- ---------- Row Level Security (RLS) Enablement ----------
-alter table admin_users enable row level security;
-alter table staff_accounts enable row level security;
-alter table profiles enable row level security;
-alter table users enable row level security;
-alter table customers enable row level security;
-alter table accounts enable row level security;
-alter table categories enable row level security;
-alter table shops enable row level security;
-alter table products enable row level security;
-alter table inventory_logs enable row level security;
-alter table coupons enable row level security;
-alter table delivery_zones enable row level security;
-alter table orders enable row level security;
-alter table order_items enable row level security;
-alter table payments enable row level security;
-alter table payment_transactions enable row level security;
-alter table sms_notifications enable row level security;
-alter table messages enable row level security;
-alter table admin_notifications enable row level security;
-alter table customer_problems enable row level security;
-alter table supplier_applications enable row level security;
-alter table supplier_payouts enable row level security;
-alter table app_settings enable row level security;
-alter table website_settings enable row level security;
-alter table reviews enable row level security;
-alter table deleted_tombstones enable row level security;
-alter table audit_logs enable row level security;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payment_verifications_payment') THEN
+    BEGIN
+      ALTER TABLE public.payment_verifications
+        ADD CONSTRAINT fk_payment_verifications_payment
+        FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
--- ---------- RLS Policies (Compatible with sb_publishable_* API Keys & Supabase Auth) ----------
--- 1. System Owner & Staff Tables: Locked exclusively to contactreachmedialimited@gmail.com via trigger_enforce_admin_email
-drop policy if exists "only owner can read admin_users" on admin_users;
-create policy "only owner can read admin_users" on admin_users for select
-  to anon, authenticated
-  using (is_staff(array['owner']) or lower(trim(email)) = 'contactreachmedialimited@gmail.com');
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payment_transactions_order') THEN
+    BEGIN
+      ALTER TABLE public.payment_transactions
+        ADD CONSTRAINT fk_payment_transactions_order
+        FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-drop policy if exists "only owner can manage admin_users" on admin_users;
-create policy "only owner can manage admin_users" on admin_users for all
-  to anon, authenticated
-  using (is_staff(array['owner']) or lower(trim(email)) = 'contactreachmedialimited@gmail.com')
-  with check (lower(trim(email)) = 'contactreachmedialimited@gmail.com');
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_supplier_payouts_shop') THEN
+    BEGIN
+      ALTER TABLE public.supplier_payouts
+        ADD CONSTRAINT fk_supplier_payouts_shop
+        FOREIGN KEY (shop_id) REFERENCES public.shops(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-drop policy if exists "staff read staff" on staff_accounts;
-create policy "staff read staff" on staff_accounts for select to authenticated using (is_staff());
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_supplier_payouts_order') THEN
+    BEGIN
+      ALTER TABLE public.supplier_payouts
+        ADD CONSTRAINT fk_supplier_payouts_order
+        FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE SET NULL NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
-drop policy if exists "owner manages staff" on staff_accounts;
-create policy "owner manages staff" on staff_accounts for all to authenticated using (is_staff(array['owner'])) with check (is_staff(array['owner']));
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_supplier_products_product') THEN
+    BEGIN
+      ALTER TABLE public.supplier_products
+        ADD CONSTRAINT fk_supplier_products_product
+        FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
--- 2. Profiles & Buyer Accounts
-drop policy if exists "own profile" on profiles;
-create policy "own profile" on profiles for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_reviews_product') THEN
+    BEGIN
+      ALTER TABLE public.reviews
+        ADD CONSTRAINT fk_reviews_product
+        FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE NOT VALID;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+END $$;
 
-drop policy if exists "staff read profiles" on profiles;
-create policy "staff read profiles" on profiles for select to authenticated using (is_staff());
+-- ==============================================================================
+-- 12. PERFORMANCE & LOOKUP INDEXES
+-- ==============================================================================
+CREATE INDEX IF NOT EXISTS admin_invitations_token_idx ON public.admin_invitations(token_hash);
+CREATE INDEX IF NOT EXISTS admin_invitations_status_idx ON public.admin_invitations(status);
+CREATE INDEX IF NOT EXISTS users_phone_idx ON public.users(phone);
+CREATE INDEX IF NOT EXISTS users_email_idx ON public.users(LOWER(email));
+CREATE INDEX IF NOT EXISTS customers_phone_idx ON public.customers(phone);
+CREATE INDEX IF NOT EXISTS customers_email_idx ON public.customers(LOWER(email));
+CREATE INDEX IF NOT EXISTS categories_parent_idx ON public.categories(parent_id);
+CREATE INDEX IF NOT EXISTS categories_slug_idx ON public.categories(slug);
+CREATE INDEX IF NOT EXISTS categories_sort_idx ON public.categories(sort_order);
+CREATE INDEX IF NOT EXISTS shops_name_idx ON public.shops(LOWER(name));
+CREATE INDEX IF NOT EXISTS shops_status_idx ON public.shops(status);
+CREATE INDEX IF NOT EXISTS products_cat_idx ON public.products(category);
+CREATE INDEX IF NOT EXISTS products_main_cat_idx ON public.products(main_category_id);
+CREATE INDEX IF NOT EXISTS products_sub_cat_idx ON public.products(sub_category_id);
+CREATE INDEX IF NOT EXISTS products_shop_idx ON public.products(shop_id);
+CREATE INDEX IF NOT EXISTS products_sku_idx ON public.products(sku);
+CREATE INDEX IF NOT EXISTS products_status_idx ON public.products(status);
+CREATE INDEX IF NOT EXISTS products_created_idx ON public.products(created_at DESC);
+CREATE INDEX IF NOT EXISTS products_name_idx ON public.products USING GIN (to_tsvector('simple', name));
+CREATE INDEX IF NOT EXISTS inventory_logs_product_idx ON public.inventory_logs(product_id);
+CREATE INDEX IF NOT EXISTS orders_number_idx ON public.orders(order_number);
+CREATE INDEX IF NOT EXISTS orders_user_id_idx ON public.orders(user_id);
+CREATE INDEX IF NOT EXISTS orders_phone_idx ON public.orders(customer_phone);
+CREATE INDEX IF NOT EXISTS orders_status_idx ON public.orders(status);
+CREATE INDEX IF NOT EXISTS orders_created_idx ON public.orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS order_items_order_idx ON public.order_items(order_id);
+CREATE INDEX IF NOT EXISTS order_items_product_idx ON public.order_items(product_id);
+CREATE INDEX IF NOT EXISTS payments_order_id_idx ON public.payments(order_id);
+CREATE INDEX IF NOT EXISTS payments_order_number_idx ON public.payments(order_number);
+CREATE INDEX IF NOT EXISTS payments_status_idx ON public.payments(verification_status);
+CREATE UNIQUE INDEX IF NOT EXISTS payments_verified_txn_uq
+  ON public.payments(LOWER(transaction_id))
+  WHERE verification_status IN ('Verified/Paid', 'Approved', 'verified') AND transaction_id IS NOT NULL AND transaction_id != '';
+CREATE INDEX IF NOT EXISTS payment_txns_order_id_idx ON public.payment_transactions(order_id);
+CREATE INDEX IF NOT EXISTS payment_txns_order_number_idx ON public.payment_transactions(order_number);
+CREATE INDEX IF NOT EXISTS sms_notifications_order_idx ON public.sms_notifications(order_number);
+CREATE INDEX IF NOT EXISTS sms_notifications_phone_idx ON public.sms_notifications(sender_phone);
+CREATE INDEX IF NOT EXISTS messages_customer_id_idx ON public.messages(customer_id);
+CREATE INDEX IF NOT EXISTS messages_phone_idx ON public.messages(phone);
+CREATE INDEX IF NOT EXISTS messages_sender_idx ON public.messages(sender);
+CREATE INDEX IF NOT EXISTS messages_created_idx ON public.messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS admin_notifications_read_idx ON public.admin_notifications(is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS customer_problems_case_idx ON public.customer_problems(case_number);
+CREATE INDEX IF NOT EXISTS customer_problems_order_idx ON public.customer_problems(order_number);
+CREATE INDEX IF NOT EXISTS customer_problems_phone_idx ON public.customer_problems(customer_phone);
+CREATE INDEX IF NOT EXISTS reviews_product_idx ON public.reviews(product_id);
+CREATE INDEX IF NOT EXISTS audit_logs_created_idx ON public.audit_logs(created_at DESC);
 
-drop policy if exists "buyer accounts read policy" on users;
-drop policy if exists "buyer accounts upsert policy" on users;
-drop policy if exists "buyer accounts update policy" on users;
-drop policy if exists "staff delete users" on users;
-drop policy if exists "Allow public all users" on users;
-create policy "Allow public all users" on users for all to anon, authenticated using (true) with check (true);
+-- ==============================================================================
+-- 13. ROW LEVEL SECURITY (RLS) & POLICIES
+-- ==============================================================================
+ALTER TABLE public.admin_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_invitations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_credentials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promo_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promo_code_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.delivery_zones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.deliveries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sms_notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_problems ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.issues ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.supplier_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.supplier_payouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.supplier_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.supplier_imports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fulfillment_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.website_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.store_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.deleted_tombstones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
-drop policy if exists "customers read policy" on customers;
-drop policy if exists "customers insert policy" on customers;
-drop policy if exists "customers update policy" on customers;
-drop policy if exists "staff delete customers" on customers;
-drop policy if exists "Allow public all customers" on customers;
-create policy "Allow public all customers" on customers for all to anon, authenticated using (true) with check (true);
+-- Owner / Staff Authorization Policies
+DROP POLICY IF EXISTS "Allow public all admin_roles" ON public.admin_roles;
+CREATE POLICY "Allow public all admin_roles" ON public.admin_roles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "Allow public all accounts" on accounts;
-create policy "Allow public all accounts" on accounts for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "only owner can read admin_users" ON public.admin_users;
+CREATE POLICY "only owner can read admin_users" ON public.admin_users FOR SELECT
+  TO anon, authenticated
+  USING (public.is_staff(ARRAY['owner']) OR LOWER(TRIM(email)) = 'contactreachmedialimited@gmail.com');
 
--- 3. Catalog Tables
-drop policy if exists "public read categories" on categories;
-drop policy if exists "manage categories" on categories;
-drop policy if exists "Allow public all categories" on categories;
-create policy "Allow public all categories" on categories for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "only owner can manage admin_users" ON public.admin_users;
+DROP POLICY IF EXISTS "Allow public all admin_users" ON public.admin_users;
+CREATE POLICY "only owner can manage admin_users" ON public.admin_users FOR ALL
+  TO anon, authenticated
+  USING (public.is_staff(ARRAY['owner']) OR LOWER(TRIM(email)) = 'contactreachmedialimited@gmail.com')
+  WITH CHECK (LOWER(TRIM(email)) = 'contactreachmedialimited@gmail.com');
 
-drop policy if exists "public read shops" on shops;
-drop policy if exists "manage shops" on shops;
-drop policy if exists "Allow public all shops" on shops;
-create policy "Allow public all shops" on shops for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "staff read staff" ON public.staff_accounts;
+CREATE POLICY "staff read staff" ON public.staff_accounts FOR SELECT TO authenticated USING (public.is_staff());
 
-drop policy if exists "public read products" on products;
-drop policy if exists "manage products" on products;
-drop policy if exists "Allow public all products" on products;
-create policy "Allow public all products" on products for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "owner manages staff" ON public.staff_accounts;
+CREATE POLICY "owner manages staff" ON public.staff_accounts FOR ALL TO authenticated USING (public.is_staff(ARRAY['owner'])) WITH CHECK (public.is_staff(ARRAY['owner']));
 
-drop policy if exists "manage inventory_logs" on inventory_logs;
-drop policy if exists "Allow public all inventory_logs" on inventory_logs;
-create policy "Allow public all inventory_logs" on inventory_logs for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "owner manages admin_invitations" ON public.admin_invitations;
+CREATE POLICY "owner manages admin_invitations" ON public.admin_invitations FOR ALL TO authenticated USING (public.is_staff(ARRAY['owner','administrator'])) WITH CHECK (public.is_staff(ARRAY['owner','administrator']));
 
-drop policy if exists "public read coupons" on coupons;
-drop policy if exists "manage coupons" on coupons;
-drop policy if exists "Allow public all coupons" on coupons;
-create policy "Allow public all coupons" on coupons for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "owner manages admin_credentials" ON public.admin_credentials;
+CREATE POLICY "owner manages admin_credentials" ON public.admin_credentials FOR ALL TO authenticated USING (public.is_staff(ARRAY['owner'])) WITH CHECK (public.is_staff(ARRAY['owner']));
 
-drop policy if exists "public zones" on delivery_zones;
-create policy "public zones" on delivery_zones for select to anon, authenticated using (true);
-drop policy if exists "staff zones" on delivery_zones;
-create policy "staff zones" on delivery_zones for all to anon, authenticated using (true) with check (true);
+-- Profiles & Customer Accounts
+DROP POLICY IF EXISTS "own profile" ON public.profiles;
+CREATE POLICY "own profile" ON public.profiles FOR ALL TO authenticated USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
--- 4. Orders, Payments, Payment Transactions & SMS Notifications
-drop policy if exists "orders select policy" on orders;
-drop policy if exists "orders insert policy" on orders;
-drop policy if exists "orders update policy" on orders;
-drop policy if exists "orders delete staff only" on orders;
-drop policy if exists "Allow public all orders" on orders;
-create policy "Allow public all orders" on orders for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "staff read profiles" ON public.profiles;
+CREATE POLICY "staff read profiles" ON public.profiles FOR SELECT TO authenticated USING (public.is_staff());
 
-drop policy if exists "order_items policy" on order_items;
-drop policy if exists "Allow public all order_items" on order_items;
-create policy "Allow public all order_items" on order_items for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all users" ON public.users;
+CREATE POLICY "Allow public all users" ON public.users FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "payments select policy" on payments;
-drop policy if exists "payments insert policy" on payments;
-drop policy if exists "payments update policy" on payments;
-drop policy if exists "payments delete staff only" on payments;
-drop policy if exists "Allow public all payments" on payments;
-create policy "Allow public all payments" on payments for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all customers" ON public.customers;
+CREATE POLICY "Allow public all customers" ON public.customers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "payment_transactions select policy" on payment_transactions;
-drop policy if exists "payment_transactions write policy" on payment_transactions;
-drop policy if exists "payment_transactions update policy" on payment_transactions;
-drop policy if exists "payment_transactions delete staff only" on payment_transactions;
-drop policy if exists "Allow public all payment_transactions" on payment_transactions;
-create policy "Allow public all payment_transactions" on payment_transactions for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all accounts" ON public.accounts;
+CREATE POLICY "Allow public all accounts" ON public.accounts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "sms_notifications select policy" on sms_notifications;
-drop policy if exists "sms_notifications insert policy" on sms_notifications;
-drop policy if exists "sms_notifications update policy" on sms_notifications;
-drop policy if exists "sms_notifications delete staff only" on sms_notifications;
-drop policy if exists "Allow public all sms_notifications" on sms_notifications;
-create policy "Allow public all sms_notifications" on sms_notifications for all to anon, authenticated using (true) with check (true);
+-- Catalog, Inventory & Storefront Operational Policies (Compatible with sb_publishable_* & Auth)
+DROP POLICY IF EXISTS "Allow public all categories" ON public.categories;
+CREATE POLICY "Allow public all categories" ON public.categories FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 5. Customer Chat, Send Us a Message & Admin Notifications
-drop policy if exists "messages select policy" on messages;
-drop policy if exists "messages insert policy" on messages;
-drop policy if exists "messages update policy" on messages;
-drop policy if exists "messages delete staff only" on messages;
-drop policy if exists "Allow public all messages" on messages;
-create policy "Allow public all messages" on messages for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all shops" ON public.shops;
+CREATE POLICY "Allow public all shops" ON public.shops FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "admin_notifications policy" on admin_notifications;
-drop policy if exists "Allow public all admin_notifications" on admin_notifications;
-create policy "Allow public all admin_notifications" on admin_notifications for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all products" ON public.products;
+CREATE POLICY "Allow public all products" ON public.products FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 6. Customer Problems & Complaints
-drop policy if exists "customer_problems select policy" on customer_problems;
-drop policy if exists "customer_problems insert policy" on customer_problems;
-drop policy if exists "customer_problems update policy" on customer_problems;
-drop policy if exists "customer_problems delete staff only" on customer_problems;
-drop policy if exists "Allow public all customer_problems" on customer_problems;
-create policy "Allow public all customer_problems" on customer_problems for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all inventory" ON public.inventory;
+CREATE POLICY "Allow public all inventory" ON public.inventory FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 7. Settings, Suppliers, Reviews, Audit Logs & Tombstones
-drop policy if exists "app_settings read policy" on app_settings;
-drop policy if exists "app_settings write policy" on app_settings;
-drop policy if exists "Allow public all app_settings" on app_settings;
-create policy "Allow public all app_settings" on app_settings for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all inventory_logs" ON public.inventory_logs;
+CREATE POLICY "Allow public all inventory_logs" ON public.inventory_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "public settings" on website_settings;
-create policy "public settings" on website_settings for select to anon, authenticated using (key not like 'private.%');
-drop policy if exists "staff settings" on website_settings;
-create policy "staff settings" on website_settings for all to authenticated using (is_staff()) with check (is_staff());
+DROP POLICY IF EXISTS "Allow public all inventory_transactions" ON public.inventory_transactions;
+CREATE POLICY "Allow public all inventory_transactions" ON public.inventory_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "reviews read policy" on reviews;
-drop policy if exists "reviews write policy" on reviews;
-drop policy if exists "reviews admin policy" on reviews;
-drop policy if exists "Allow public all reviews" on reviews;
-create policy "Allow public all reviews" on reviews for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all coupons" ON public.coupons;
+CREATE POLICY "Allow public all coupons" ON public.coupons FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "supplier_applications policy" on supplier_applications;
-drop policy if exists "Allow public all supplier_applications" on supplier_applications;
-create policy "Allow public all supplier_applications" on supplier_applications for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all promo_codes" ON public.promo_codes;
+CREATE POLICY "Allow public all promo_codes" ON public.promo_codes FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "supplier_payouts policy" on supplier_payouts;
-drop policy if exists "Allow public all supplier_payouts" on supplier_payouts;
-create policy "Allow public all supplier_payouts" on supplier_payouts for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all promo_code_usage" ON public.promo_code_usage;
+CREATE POLICY "Allow public all promo_code_usage" ON public.promo_code_usage FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "deleted_tombstones policy" on deleted_tombstones;
-drop policy if exists "Allow public all deleted_tombstones" on deleted_tombstones;
-create policy "Allow public all deleted_tombstones" on deleted_tombstones for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "public zones" ON public.delivery_zones;
+CREATE POLICY "public zones" ON public.delivery_zones FOR SELECT TO anon, authenticated USING (true);
+DROP POLICY IF EXISTS "staff zones" ON public.delivery_zones;
+CREATE POLICY "staff zones" ON public.delivery_zones FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop policy if exists "staff audit read" on audit_logs;
-drop policy if exists "staff audit insert" on audit_logs;
-drop policy if exists "Allow public all audit_logs" on audit_logs;
-create policy "Allow public all audit_logs" on audit_logs for all to anon, authenticated using (true) with check (true);
+DROP POLICY IF EXISTS "Allow public all orders" ON public.orders;
+CREATE POLICY "Allow public all orders" ON public.orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Automatic updated_at triggers
-drop trigger if exists trigger_products_updated_at on public.products;
-create trigger trigger_products_updated_at before update on public.products for each row execute function public.handle_updated_at();
+DROP POLICY IF EXISTS "Allow public all order_items" ON public.order_items;
+CREATE POLICY "Allow public all order_items" ON public.order_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop trigger if exists trigger_orders_updated_at on public.orders;
-create trigger trigger_orders_updated_at before update on public.orders for each row execute function public.handle_updated_at();
+DROP POLICY IF EXISTS "Allow public all deliveries" ON public.deliveries;
+CREATE POLICY "Allow public all deliveries" ON public.deliveries FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-drop trigger if exists trigger_customer_problems_updated_at on public.customer_problems;
-create trigger trigger_customer_problems_updated_at before update on public.customer_problems for each row execute function public.handle_updated_at();
+DROP POLICY IF EXISTS "Allow public all payments" ON public.payments;
+CREATE POLICY "Allow public all payments" ON public.payments FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- ---------- Initial Seed Data (Admin Owner, Store Settings, Welcome Coupon) ----------
-insert into public.admin_users (id, name, email, phone, role, permissions, active)
-values (
+DROP POLICY IF EXISTS "Allow public all payment_verifications" ON public.payment_verifications;
+CREATE POLICY "Allow public all payment_verifications" ON public.payment_verifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all payment_transactions" ON public.payment_transactions;
+CREATE POLICY "Allow public all payment_transactions" ON public.payment_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all sms_notifications" ON public.sms_notifications;
+CREATE POLICY "Allow public all sms_notifications" ON public.sms_notifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all conversations" ON public.conversations;
+CREATE POLICY "Allow public all conversations" ON public.conversations FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all messages" ON public.messages;
+CREATE POLICY "Allow public all messages" ON public.messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all customer_messages" ON public.customer_messages;
+CREATE POLICY "Allow public all customer_messages" ON public.customer_messages FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all admin_notifications" ON public.admin_notifications;
+CREATE POLICY "Allow public all admin_notifications" ON public.admin_notifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all notification_logs" ON public.notification_logs;
+CREATE POLICY "Allow public all notification_logs" ON public.notification_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all customer_problems" ON public.customer_problems;
+CREATE POLICY "Allow public all customer_problems" ON public.customer_problems FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all issues" ON public.issues;
+CREATE POLICY "Allow public all issues" ON public.issues FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all reports" ON public.reports;
+CREATE POLICY "Allow public all reports" ON public.reports FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all suppliers" ON public.suppliers;
+CREATE POLICY "Allow public all suppliers" ON public.suppliers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all supplier_applications" ON public.supplier_applications;
+CREATE POLICY "Allow public all supplier_applications" ON public.supplier_applications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all supplier_payouts" ON public.supplier_payouts;
+CREATE POLICY "Allow public all supplier_payouts" ON public.supplier_payouts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all supplier_products" ON public.supplier_products;
+CREATE POLICY "Allow public all supplier_products" ON public.supplier_products FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all supplier_imports" ON public.supplier_imports;
+CREATE POLICY "Allow public all supplier_imports" ON public.supplier_imports FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all fulfillment_records" ON public.fulfillment_records;
+CREATE POLICY "Allow public all fulfillment_records" ON public.fulfillment_records FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all app_settings" ON public.app_settings;
+CREATE POLICY "Allow public all app_settings" ON public.app_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "public settings" ON public.website_settings;
+CREATE POLICY "public settings" ON public.website_settings FOR SELECT TO anon, authenticated USING (key NOT LIKE 'private.%');
+DROP POLICY IF EXISTS "staff settings" ON public.website_settings;
+CREATE POLICY "staff settings" ON public.website_settings FOR ALL TO authenticated USING (public.is_staff()) WITH CHECK (public.is_staff());
+
+DROP POLICY IF EXISTS "Allow public all store_settings" ON public.store_settings;
+CREATE POLICY "Allow public all store_settings" ON public.store_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all reviews" ON public.reviews;
+CREATE POLICY "Allow public all reviews" ON public.reviews FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all deleted_tombstones" ON public.deleted_tombstones;
+CREATE POLICY "Allow public all deleted_tombstones" ON public.deleted_tombstones FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public all audit_logs" ON public.audit_logs;
+CREATE POLICY "Allow public all audit_logs" ON public.audit_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- ==============================================================================
+-- 14. AUTOMATIC UPDATED_AT TRIGGERS
+-- ==============================================================================
+DROP TRIGGER IF EXISTS trigger_admin_users_updated_at ON public.admin_users;
+CREATE TRIGGER trigger_admin_users_updated_at BEFORE UPDATE ON public.admin_users FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_users_updated_at ON public.users;
+CREATE TRIGGER trigger_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_customers_updated_at ON public.customers;
+CREATE TRIGGER trigger_customers_updated_at BEFORE UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_accounts_updated_at ON public.accounts;
+CREATE TRIGGER trigger_accounts_updated_at BEFORE UPDATE ON public.accounts FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_categories_updated_at ON public.categories;
+CREATE TRIGGER trigger_categories_updated_at BEFORE UPDATE ON public.categories FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_shops_updated_at ON public.shops;
+CREATE TRIGGER trigger_shops_updated_at BEFORE UPDATE ON public.shops FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_products_updated_at ON public.products;
+CREATE TRIGGER trigger_products_updated_at BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_orders_updated_at ON public.orders;
+CREATE TRIGGER trigger_orders_updated_at BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_payment_transactions_updated_at ON public.payment_transactions;
+CREATE TRIGGER trigger_payment_transactions_updated_at BEFORE UPDATE ON public.payment_transactions FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_customer_problems_updated_at ON public.customer_problems;
+CREATE TRIGGER trigger_customer_problems_updated_at BEFORE UPDATE ON public.customer_problems FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_app_settings_updated_at ON public.app_settings;
+CREATE TRIGGER trigger_app_settings_updated_at BEFORE UPDATE ON public.app_settings FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- ==============================================================================
+-- 15. REQUIRED SYSTEM CONFIGURATION (NO DEMO PRODUCTS OR SAMPLE RECORDS)
+-- ==============================================================================
+INSERT INTO public.admin_users (id, name, email, phone, role, permissions, active)
+VALUES (
   'adm-owner-crmedia',
   'Administrator',
   'contactreachmedialimited@gmail.com',
   '0780022600',
   'owner',
-  array['all'],
+  ARRAY['all'],
   true
 )
-on conflict (email) do update set
+ON CONFLICT (email) DO UPDATE SET
   role = 'owner',
   active = true,
-  updated_at = now();
+  updated_at = NOW();
 
-insert into public.app_settings (id, market_name, company_name, phone, email, receiver_name, payment_number, merchant_code, mtn_ussd_pattern, airtel_ussd_pattern, delivery_fee_kigali, delivery_fee_upcountry, free_delivery_threshold, is_maintenance_mode)
-values (
+INSERT INTO public.app_settings (
+  id, market_name, company_name, phone, email, receiver_name, payment_number,
+  merchant_code, mtn_ussd_pattern, airtel_ussd_pattern,
+  delivery_fee_kigali, delivery_fee_upcountry, free_delivery_threshold, is_maintenance_mode
+)
+VALUES (
   'global',
   'ContactReach Market',
   'ContactReach Media Ltd',
@@ -872,38 +1538,69 @@ values (
   50000,
   false
 )
-on conflict (id) do nothing;
+ON CONFLICT (id) DO NOTHING;
 
-insert into public.coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, is_active, times_used)
-values ('coup-welcome10', 'WELCOME10', 'percentage', 10, 10000, 20000, true, 0)
-on conflict (code) do nothing;
+INSERT INTO public.delivery_zones (name, fee_rwf, eta) VALUES
+  ('Gasabo', 1500, 'Same Day / Next Day'),
+  ('Nyarugenge', 1500, 'Same Day / Next Day'),
+  ('Kicukiro', 1500, 'Same Day / Next Day'),
+  ('Kigali Express', 2500, '2-4 Hours'),
+  ('Outside Kigali', 3500, '1-2 Days'),
+  ('Store Pickup', 0, 'Instant at Office')
+ON CONFLICT (name) DO NOTHING;
 
--- ---------- Enable Supabase Realtime Across All Operational Tables ----------
-do $$
-declare
-  tbl text;
-  realtime_tables text[] := array[
-    'orders',
-    'payments',
-    'payment_transactions',
-    'sms_notifications',
-    'messages',
-    'admin_notifications',
-    'customer_problems',
+-- ==============================================================================
+-- 16. REALTIME PUBLICATION & REPLICA IDENTITY CONFIGURATION
+-- ==============================================================================
+DO $$
+DECLARE
+  tbl TEXT;
+  realtime_tables TEXT[] := ARRAY[
     'products',
     'categories',
     'shops',
+    'orders',
+    'order_items',
+    'deliveries',
+    'payments',
+    'payment_transactions',
+    'sms_notifications',
+    'conversations',
+    'messages',
+    'admin_notifications',
+    'customer_problems',
+    'coupons',
+    'inventory_logs',
+    'audit_logs',
+    'supplier_applications',
+    'supplier_payouts',
+    'reviews',
     'users',
     'customers',
     'app_settings'
   ];
-begin
-  foreach tbl in array realtime_tables loop
-    begin
-      execute format('alter publication supabase_realtime add table public.%I', tbl);
-    exception
-      when duplicate_object then null;
-      when undefined_table then null;
-    end;
-  end loop;
-end $$;
+BEGIN
+  FOREACH tbl IN ARRAY realtime_tables LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE public.%I REPLICA IDENTITY FULL', tbl);
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END LOOP;
+
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    FOREACH tbl IN ARRAY realtime_tables LOOP
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = tbl
+      ) THEN
+        BEGIN
+          EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+          WHEN undefined_table THEN NULL;
+          WHEN OTHERS THEN NULL;
+        END;
+      END IF;
+    END LOOP;
+  END IF;
+END $$;

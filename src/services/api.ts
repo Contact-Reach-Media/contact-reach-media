@@ -72,6 +72,7 @@ import {
   logoutSupabase,
   supabase,
   AUTHORIZED_ADMIN_EMAIL,
+  SUPABASE_PROJECT_NAME,
   SUPABASE_PROJECT_ID,
   SUPABASE_URL
 } from './supabase.ts';
@@ -5435,7 +5436,7 @@ export const api = {
       configured: false,
       databaseExists: true,
       localProductsCount: 0,
-      message: `Migrated to Supabase project thierry8-cloud's Project (${SUPABASE_PROJECT_ID})`
+      message: `Migrated to Supabase project ${SUPABASE_PROJECT_NAME} (${SUPABASE_PROJECT_ID})`
     };
   },
 

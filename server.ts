@@ -10,7 +10,7 @@ import crypto from 'crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase Database Engine Configuration
-const SUPABASE_PROJECT_NAME = "thierry8-cloud's Project";
+const SUPABASE_PROJECT_NAME = (process.env.SUPABASE_PROJECT_NAME || '').trim() || 'contactreachmarket';
 const TARGET_SUPABASE_PROJECT_ID = 'enmxlqdouiqnqfhmmzha';
 const envProjectId = (process.env.SUPABASE_PROJECT_ID || '').trim();
 const envSupabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/rest\/v1\/?$/, '').trim();
@@ -13112,7 +13112,7 @@ app.post('/api/admin/google-sheet/sync-push', requireAdminAuth, async (req: Requ
 
 // -------------------------------------------------------------
 // SUPABASE DATABASE STATUS & SYNCHRONIZATION ENDPOINTS
-// Project: thierry8-cloud's Project (enmxlqdouiqnqfhmmzha)
+// Project: contactreachmarket (enmxlqdouiqnqfhmmzha)
 // -------------------------------------------------------------
 
 app.get('/api/supabase/status', async (_req: Request, res: Response) => {
@@ -13246,18 +13246,59 @@ app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: 
       }
     }
 
-    // Sync products in batches of 50
+    // Sync products in batches of 50 with full metadata & hierarchy columns
     for (let i = 0; i < db.products.length; i += 50) {
       const chunk = db.products.slice(i, i + 50).map(p => ({
         id: p.id,
         name: p.name,
         sku: p.sku || null,
         description: p.description || '',
-        price: p.price,
-        stock: p.stock,
-        category: p.category,
-        image_url: p.imageUrl || '',
+        price: Math.max(0, Number(p.price) || 0),
+        cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
+        cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
+        commission_rate: p.commissionRate !== undefined ? Number(p.commissionRate) : 10,
+        profit_margin: p.profitMargin !== undefined ? Number(p.profitMargin) : 0,
+        discount_percent: Number(p.discountPercent) || 0,
+        discount_price: p.discountPrice !== undefined ? Number(p.discountPrice) : null,
+        promo_start_date: p.promoStartDate || null,
+        promo_end_date: p.promoEndDate || null,
+        category: p.category || 'clothing',
+        subcategory: p.subcategory || null,
+        main_category_id: p.mainCategoryId || null,
+        sub_category_id: p.subCategoryId || null,
+        category_name: p.categoryName || null,
+        sub_category_name: p.subCategoryName || null,
+        stock: Math.max(0, Number(p.stock ?? 0)),
+        image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
+        images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
+        video_url: p.videoUrl || null,
+        youtube_url: p.youtubeUrl || null,
+        shop_name: p.shopName || 'ContactReach Market',
+        shop_id: p.shopId || null,
+        receiver_name: p.receiverName || null,
+        receiver_phone: p.receiverPhone || null,
+        payment_methods: Array.isArray(p.paymentMethods) ? p.paymentMethods : [],
+        merchant_code: p.merchantCode || null,
+        location: p.location || 'Kigali, Rwanda',
+        delivery_info: p.deliveryInfo || null,
         status: p.status || 'Available',
+        is_featured: Boolean(p.isFeatured),
+        is_new_arrival: Boolean(p.isNewArrival),
+        is_best_seller: Boolean(p.isBestSeller),
+        brand: p.brand || null,
+        unit: p.unit || 'Piece',
+        shipping_cost: (p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0) ? Math.max(0, Number(p.shippingCost)) : null,
+        specifications: p.specifications || null,
+        storage: p.storage || null,
+        packaging_info: p.packagingInfo || null,
+        attributes: Array.isArray(p.attributes) ? p.attributes : [],
+        variations: Array.isArray(p.variations) ? p.variations : [],
+        rating: Number(p.rating) || 5.0,
+        reviews_count: Number(p.reviewsCount) || 0,
+        source: p.source || 'local',
+        review_status: (p as any).reviewStatus || 'Approved',
+        alibaba_product_id: p.alibabaProductId || null,
+        cj_product_id: p.cjProductId || null,
         created_at: p.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));
