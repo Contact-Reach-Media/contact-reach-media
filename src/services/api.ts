@@ -989,10 +989,20 @@ export const api = {
   },
 
   // Customer Order Tracking
-  async trackOrder(orderNumber: string, phone?: string): Promise<Order> {
-    const q = phone ? `?phone=${encodeURIComponent(phone)}` : '';
+  async trackOrder(orderNumber: string, phone?: string, trackingToken?: string): Promise<Order> {
+    const cleanRef = String(orderNumber || '').trim().toUpperCase();
+    const storedBuyer = getStoredBuyerUser();
+    const effectivePhone = (phone || storedBuyer?.phone || '').trim();
+    const params = new URLSearchParams();
+    if (effectivePhone) params.set('phone', effectivePhone);
+    if (trackingToken) params.set('token', trackingToken.trim());
+    const qs = params.toString() ? `?${params.toString()}` : '';
+
     try {
-      const res = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}${q}`);
+      const res = await fetch(`/api/orders/${encodeURIComponent(cleanRef)}${qs}`, {
+        headers: getBuyerAuthHeaders(),
+        cache: 'no-store'
+      });
       const parsed = await safeParseResponse<Order>(res);
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
@@ -1001,18 +1011,38 @@ export const api = {
         throw new Error((parsed.json as any).error);
       }
     } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+      const msg = String(err?.message || '');
+      const isNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('API endpoint') || err?.name === 'TypeError';
+      if (!isNetwork && msg) {
         throw err;
       }
     }
 
-    // Direct Firestore fallback
+    // Direct Supabase fallback
     try {
-      const fsOrder = await getOrderFromFirestore(orderNumber);
-      if (fsOrder) return fsOrder;
-    } catch {}
+      const sbOrders = await getOrdersFromSupabase();
+      const matched = sbOrders.find(o => String(o.orderNumber || '').trim().toUpperCase() === cleanRef);
+      if (matched) {
+        if (!effectivePhone && !trackingToken) {
+          return matched;
+        }
+        const orderDigits = String(matched.customerPhone || '').replace(/\D/g, '');
+        const searchDigits = effectivePhone.replace(/\D/g, '');
+        const phoneOk = Boolean(searchDigits && orderDigits && (orderDigits.endsWith(searchDigits) || searchDigits.endsWith(orderDigits)));
+        const tokenOk = Boolean(trackingToken && matched.trackingToken && matched.trackingToken === trackingToken);
+        const ownerOk = Boolean(storedBuyer && ((matched.userId && matched.userId === storedBuyer.id) || (storedBuyer.email && matched.customerEmail?.toLowerCase() === storedBuyer.email.toLowerCase())));
+        if (phoneOk || tokenOk || ownerOk) {
+          return matched;
+        }
+        throw new Error('To view order tracking details, please provide your recipient phone number.');
+      }
+    } catch (err: any) {
+      if (err?.message && err.message.includes('recipient phone')) {
+        throw err;
+      }
+    }
 
-    throw new Error(`Order #${orderNumber} not found. Please verify your reference number.`);
+    throw new Error(`Order #${cleanRef} not found. Please verify your reference number.`);
   },
 
   // Invoice Data

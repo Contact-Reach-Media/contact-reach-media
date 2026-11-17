@@ -3793,12 +3793,63 @@ app.post('/api/orders', async (req: Request, res: Response) => {
 });
 
 // Secure Order Tracking (Authenticated Admin or Token / Phone Verified Customer)
-app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
+app.get('/api/orders/:orderNumber', async (req: Request, res: Response) => {
   const orderNumber = req.params.orderNumber.trim().toUpperCase();
   const phone = req.query.phone ? (req.query.phone as string).trim() : null;
   const token = req.query.token ? (req.query.token as string).trim() : null;
 
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+  let order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+  if (!order) {
+    try {
+      const { data: sbOrder } = await supabase
+        .from('orders')
+        .select('*')
+        .ilike('order_number', orderNumber)
+        .limit(1)
+        .maybeSingle();
+      if (sbOrder) {
+        order = {
+          id: String(sbOrder.id),
+          orderNumber: sbOrder.order_number || orderNumber,
+          trackingToken: sbOrder.tracking_token || undefined,
+          trackingNumber: sbOrder.tracking_number || undefined,
+          trackingCarrier: sbOrder.tracking_carrier || undefined,
+          trackingUrl: sbOrder.tracking_url || undefined,
+          trackingAddedAt: sbOrder.tracking_added_at || undefined,
+          customerName: sbOrder.customer_name || 'Customer',
+          customerPhone: sbOrder.customer_phone || '',
+          customerEmail: sbOrder.customer_email || undefined,
+          deliveryType: sbOrder.delivery_type || 'delivery',
+          deliveryLocation: sbOrder.delivery_location || 'Kigali',
+          deliveryAddress: sbOrder.delivery_address || 'Kigali, Rwanda',
+          deliveryNotes: sbOrder.delivery_notes || undefined,
+          items: Array.isArray(sbOrder.items) ? sbOrder.items : [],
+          subtotal: Number(sbOrder.subtotal) || 0,
+          deliveryFee: Number(sbOrder.delivery_fee) || 0,
+          shippingCost: Number(sbOrder.shipping_cost) || 0,
+          discountAmount: Number(sbOrder.discount_amount) || 0,
+          couponCode: sbOrder.coupon_code || undefined,
+          totalAmount: Number(sbOrder.total_amount) || 0,
+          paymentMethod: sbOrder.payment_method || 'MTN Mobile Money',
+          receiverName: sbOrder.receiver_name || 'Ruth',
+          receiverDetails: sbOrder.receiver_details || '0780022600',
+          paymentStatus: sbOrder.payment_status || 'Pending Payment',
+          deliveryStatus: sbOrder.delivery_status || 'Pending',
+          status: sbOrder.status || 'New',
+          stockDeducted: Boolean(sbOrder.stock_deducted),
+          expectedDeliveryDate: sbOrder.expected_delivery_date || undefined,
+          dispatchDate: sbOrder.dispatch_date || undefined,
+          assignedCourier: sbOrder.assigned_courier || undefined,
+          courierPhone: sbOrder.courier_phone || undefined,
+          userId: sbOrder.user_id || undefined,
+          statusHistory: Array.isArray(sbOrder.status_history) ? sbOrder.status_history : [],
+          createdAt: sbOrder.created_at || new Date().toISOString(),
+          updatedAt: sbOrder.updated_at || undefined
+        } as Order;
+      }
+    } catch {}
+  }
+
   if (!order) {
     return res.status(404).json({ error: `Order #${orderNumber} not found. Please verify your reference number.` });
   }
@@ -3820,10 +3871,26 @@ app.get('/api/orders/:orderNumber', (req: Request, res: Response) => {
     if (phone) {
       const cleanOrderPhone = order.customerPhone.replace(/\D/g, '');
       const cleanSearchPhone = phone.replace(/\D/g, '');
-      phoneMatches = cleanOrderPhone.endsWith(cleanSearchPhone) || cleanSearchPhone.endsWith(cleanOrderPhone);
+      phoneMatches = Boolean(cleanOrderPhone && cleanSearchPhone && (cleanOrderPhone.endsWith(cleanSearchPhone) || cleanSearchPhone.endsWith(cleanOrderPhone)));
     }
 
+    let buyerMatches = false;
     if (!tokenMatches && !phoneMatches) {
+      const buyerToken = extractBuyerTokenFromReq(req);
+      if (buyerToken) {
+        const buyerSession = await resolveBuyerSession(buyerToken);
+        const buyer = buyerSession?.buyer;
+        if (buyer) {
+          buyerMatches = Boolean(
+            (order.userId && order.userId === buyer.id) ||
+            (buyer.phone && order.customerPhone && phonesMatch(order.customerPhone, buyer.phone)) ||
+            (buyer.email && order.customerEmail && order.customerEmail.toLowerCase().trim() === buyer.email.toLowerCase().trim())
+          );
+        }
+      }
+    }
+
+    if (!tokenMatches && !phoneMatches && !buyerMatches) {
       return res.status(403).json({
         error: 'To view order tracking details, please provide your recipient phone number or access via your secure order confirmation link.'
       });

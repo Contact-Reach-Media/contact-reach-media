@@ -10,6 +10,7 @@ import { api } from '../services/api.ts';
 import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { OrderTrackStatusSummary } from './OrderTrackStatusSummary.tsx';
 
 interface CustomerAccountPageProps {
   user: CustomerUser | null;
@@ -40,6 +41,7 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
   const [newMsgText, setNewMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const [msgError, setMsgError] = useState<string | null>(null);
+  const [selectedTrackOrderRef, setSelectedTrackOrderRef] = useState<string | undefined>(undefined);
 
   // Profile Edit fields
   const [editName, setEditName] = useState(user?.name || '');
@@ -282,7 +284,17 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
 
         {/* TAB 1: MY ORDERS */}
         {activeTab === 'orders' && (
-          <div className="space-y-4">
+          <div className="space-y-5">
+            <OrderTrackStatusSummary
+              orders={orders}
+              initialOrderRef={selectedTrackOrderRef}
+              customerPhone={user.phone}
+              currentLang={currentLang}
+              currentCurrency={currentCurrency}
+              exchangeRates={exchangeRates}
+              onOpenFullTracking={(orderRef) => onNavigate('track-order', { orderRef })}
+            />
+
             {loadingOrders ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center">
                 <RefreshCw className="w-6 h-6 text-orange-600 animate-spin mx-auto mb-2" />
@@ -354,14 +366,26 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
                           </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => onNavigate('track-order', { orderRef: ord.orderNumber })}
-                          className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <Truck className="w-3.5 h-3.5" />
-                          <span>Track Delivery</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTrackOrderRef(ord.orderNumber);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                          >
+                            Live Status
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onNavigate('track-order', { orderRef: ord.orderNumber })}
+                            className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                            <span>Track Delivery</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

@@ -10,6 +10,7 @@ import { api } from '../services/api.ts';
 import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
+import { OrderTrackStatusSummary, TRACK_ORDER_STAGES, resolveOrderStageIndex } from './OrderTrackStatusSummary.tsx';
 
 interface BuyerAccountModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   // Order search/filter in Order Tracking tab
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'delivered'>('all');
+  const [focusedTrackRef, setFocusedTrackRef] = useState<string | undefined>(undefined);
 
   // Contact & Delivery details edit state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -703,8 +705,21 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
               </div>
             </div>
 
-            {/* Orders List */}
+            {/* Orders List & Live Track Order Summary */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
+              <OrderTrackStatusSummary
+                orders={orders}
+                initialOrderRef={focusedTrackRef}
+                customerPhone={user.phone}
+                currentLang={currentLang}
+                currentCurrency={currentCurrency}
+                exchangeRates={exchangeRates}
+                onOpenFullTracking={(orderNum) => {
+                  onClose();
+                  onTrackOrder(orderNum);
+                }}
+              />
+
               {loadingOrders ? (
                 <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
                   <RefreshCw className="w-4 h-4 animate-spin text-[#FF6000]" />
@@ -731,12 +746,7 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                   const isPaid = ord.paymentStatus === 'Paid';
                   const isPendingPayment = ord.paymentStatus === 'Pending Payment' || ord.paymentStatus === 'Awaiting Payment';
 
-                  // Step tracker logic: 1. Placed, 2. Payment Verified, 3. Preparing, 4. Shipped/In Transit, 5. Delivered
-                  let currentStep = 1;
-                  if (isPaid) currentStep = 2;
-                  if (ord.status === 'Preparing' || ord.deliveryStatus === 'Processing' || ord.deliveryStatus === 'Awaiting Shipment') currentStep = 3;
-                  if (ord.status === 'Out for Delivery' || ord.deliveryStatus === 'In Transit' || ord.deliveryStatus === 'Shipped' || ord.deliveryStatus === 'Out for Delivery') currentStep = 4;
-                  if (isDelivered) currentStep = 5;
+                  const { stageIndex: currentStepIdx } = resolveOrderStageIndex(ord);
 
                   return (
                     <div
@@ -790,26 +800,23 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Visual Step Progress Tracker (only if not cancelled) */}
+                      {/* Visual 5-Stage Progress Tracker (only if not cancelled) */}
                       {!isCancelled && (
                         <div className="py-1">
-                          <div className="grid grid-cols-4 gap-1 relative text-[10px]">
-                            {[
-                              { label: 'Placed', step: 1 },
-                              { label: 'Payment', step: 2 },
-                              { label: 'In Transit', step: 4 },
-                              { label: 'Delivered', step: 5 }
-                            ].map((s, idx) => (
-                              <div key={s.label} className="flex flex-col items-center text-center">
+                          <div className="grid grid-cols-5 gap-1 relative text-[10px]">
+                            {TRACK_ORDER_STAGES.map((stage, idx) => (
+                              <div key={stage.key} className="flex flex-col items-center text-center">
                                 <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold mb-1 transition-colors ${
-                                  currentStep >= s.step
+                                  currentStepIdx > idx
+                                    ? 'bg-emerald-600 text-white'
+                                    : currentStepIdx === idx
                                     ? 'bg-[#FF6000] text-white'
                                     : 'bg-slate-200 text-slate-500'
                                 }`}>
-                                  {currentStep > s.step ? '✓' : s.step}
+                                  {currentStepIdx > idx ? '✓' : idx + 1}
                                 </div>
-                                <span className={`font-semibold ${currentStep >= s.step ? 'text-slate-800' : 'text-slate-400'}`}>
-                                  {s.label}
+                                <span className={`font-semibold truncate max-w-full ${currentStepIdx >= idx ? 'text-slate-800' : 'text-slate-400'}`}>
+                                  {stage.label}
                                 </span>
                               </div>
                             ))}
@@ -927,6 +934,14 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
                               {currentLang === 'en' ? 'Pay Now' : 'Ishyura'}
                             </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => setFocusedTrackRef(ord.orderNumber)}
+                            className="text-slate-700 hover:text-orange-700 font-bold text-[11px] cursor-pointer px-2.5 py-1 bg-slate-100 hover:bg-orange-50 border border-slate-200 rounded-lg transition-colors"
+                          >
+                            {currentLang === 'en' ? 'Live Status' : 'Aho igeze'}
+                          </button>
 
                           <button
                             type="button"
