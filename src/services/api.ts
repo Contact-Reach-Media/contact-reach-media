@@ -67,6 +67,8 @@ import {
   testSupabaseConnection,
   loginWithSupabasePassword,
   getSupabaseSession,
+  verifySupabaseAdminSessionDirect,
+  getAdminUsersFromSupabase,
   logoutSupabase,
   supabase,
   AUTHORIZED_ADMIN_EMAIL
@@ -1491,9 +1493,9 @@ export const api = {
     // 1. Verify credentials with Supabase Authentication & Supabase admin_users DB
     const sbAuth = await loginWithSupabasePassword(cleanEmail, rawPass);
 
-    // 2. Verify with backend session manager and Supabase database
+    // 2. Optionally exchange with backend Express session manager when /api/* is hosted
     const endpoints = ['/api/auth/login', '/api/admin/login'];
-    let lastError: Error | null = null;
+    let lastJsonError: Error | null = null;
 
     for (let attempt = 0; attempt < endpoints.length; attempt++) {
       try {
@@ -1523,43 +1525,46 @@ export const api = {
           return { token: parsed.json.token, admin: parsed.json.admin };
         }
 
-        if (res.status === 401 || res.status === 403) {
+        // Only reject on explicit JSON auth/security denial from Express backend
+        if ((res.status === 401 || res.status === 403) && parsed.isJson) {
           removeAdminToken();
           await logoutSupabase().catch(() => {});
           throw new Error(parsed.json?.error || 'Invalid administrator email or password.');
         }
 
-        if (parsed.isJson && parsed.json?.error) {
-          throw new Error(parsed.json.error);
+        if (parsed.isJson && parsed.json?.error && res.status >= 400 && res.status < 500 && res.status !== 404 && res.status !== 405) {
+          lastJsonError = new Error(parsed.json.error);
+          break;
         }
 
-        if ((!parsed.isJson || res.status >= 500) && attempt < endpoints.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 400));
+        // Empty body, HTML SPA fallback, 404/405 (static deployment), or 5xx: retry or use verified Supabase session
+        if (attempt < endpoints.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 250));
           continue;
         }
-
-        if (!parsed.isJson && parsed.errorMessage) {
-          throw new Error(parsed.errorMessage);
-        }
-
-        throw new Error('Invalid administrator credentials.');
       } catch (err: any) {
         const msg = String(err?.message || '');
-        const isTransientNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
-        if (isTransientNetwork && attempt < endpoints.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 400));
+        if (msg.includes('Access denied') || msg.includes('Invalid administrator')) {
+          throw err;
+        }
+        if (attempt < endpoints.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 250));
           continue;
         }
-        if (isTransientNetwork) {
-          lastError = new Error('Unable to reach authentication server. Please check your internet connection and try again.');
-        } else {
-          lastError = err instanceof Error ? err : new Error(msg || 'Authentication failed.');
-        }
-        break;
       }
     }
 
-    throw lastError || new Error('Authentication failed. Please try again.');
+    if (lastJsonError) {
+      throw lastJsonError;
+    }
+
+    // 3. Complete sign-in directly using the live Supabase Auth JWT & Supabase admin_users profile
+    if (sbAuth.token && sbAuth.adminProfile && isAuthorizedAdminUser(sbAuth.adminProfile)) {
+      setAdminToken(sbAuth.token, sbAuth.adminProfile);
+      return { token: sbAuth.token, admin: sbAuth.adminProfile };
+    }
+
+    throw new Error('Authentication failed. Please try again.');
   },
 
   async adminLoginWithSupabaseToken(_accessToken: string): Promise<{ token: string; admin: any }> {
@@ -1614,7 +1619,7 @@ export const api = {
         return true;
       }
 
-      if (res.status === 401 || res.status === 403) {
+      if ((res.status === 401 || res.status === 403) && parsed.isJson) {
         // Attempt Supabase session refresh once before invalidating if a Supabase refresh token exists
         if (sbSession?.refresh_token) {
           try {
@@ -1639,12 +1644,35 @@ export const api = {
         return false;
       }
 
-      // Preserve active session on transient 5xx or temporary network issue
-      return Boolean(
-        (storedUser && isAuthorizedAdminUser(storedUser) && storedUser.active !== false) ||
-        (sbSession?.user?.email && sbSession.user.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL)
-      );
+      // Decoupled static hosting (404 / empty / HTML) or 5xx: verify directly with Supabase Auth & admin_users
+      const direct = await verifySupabaseAdminSessionDirect();
+      if (direct.valid && direct.token && direct.admin && isAuthorizedAdminUser(direct.admin)) {
+        setAdminToken(direct.token, direct.admin);
+        return true;
+      }
+      if (direct.unauthorized) {
+        removeAdminToken();
+        await logoutSupabase().catch(() => {});
+        return false;
+      }
+      if (direct.transientError) {
+        return Boolean(
+          (storedUser && isAuthorizedAdminUser(storedUser) && storedUser.active !== false) ||
+          (sbSession?.user?.email && sbSession.user.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL)
+        );
+      }
+      return false;
     } catch {
+      const direct = await verifySupabaseAdminSessionDirect();
+      if (direct.valid && direct.token && direct.admin && isAuthorizedAdminUser(direct.admin)) {
+        setAdminToken(direct.token, direct.admin);
+        return true;
+      }
+      if (direct.unauthorized) {
+        removeAdminToken();
+        await logoutSupabase().catch(() => {});
+        return false;
+      }
       // Preserve active session on transient offline or fetch failure
       return Boolean(
         (storedUser && isAuthorizedAdminUser(storedUser) && storedUser.active !== false) ||
@@ -1740,28 +1768,40 @@ export const api = {
       }
     } catch {}
 
-    // Calculate fallback stats from products & Firestore
-    const prods = await api.getProducts();
-    const cats = await api.getCategories();
-    const shps = await api.getShops();
+    // Calculate live fallback stats directly from Supabase
+    const [prods, cats, shps, orders, payments, accounts, messages, problems] = await Promise.all([
+      api.getProducts().catch(() => []),
+      api.getCategories().catch(() => []),
+      api.getShops().catch(() => []),
+      getOrdersFromSupabase().catch(() => []),
+      getPaymentsFromSupabase().catch(() => []),
+      getAccountsFromSupabase().catch(() => []),
+      getMessagesFromSupabase().catch(() => []),
+      getCustomerProblemsFromSupabase().catch(() => [])
+    ]);
+
+    const confirmedOrdersList = orders.filter(o =>
+      o.paymentStatus === 'Paid' || o.paymentStatus === 'Approved' ||
+      o.status === 'Confirmed' || o.status === 'Processing' || o.status === 'Delivered' || o.status === 'Completed'
+    );
 
     return {
-      totalSalesFrw: 0,
-      totalOrders: 0,
-      pendingVerifications: 0,
-      awaitingPaymentOrders: 0,
-      confirmedOrders: 0,
-      preparingOrders: 0,
-      readyOrders: 0,
-      deliveredOrders: 0,
+      totalSalesFrw: confirmedOrdersList.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0),
+      totalOrders: orders.length,
+      pendingVerifications: payments.filter(p => p.verificationStatus === 'Pending Verification').length,
+      awaitingPaymentOrders: orders.filter(o => o.paymentStatus === 'Pending Payment' || o.paymentStatus === 'Payment Submitted' || o.paymentStatus === 'Awaiting Payment').length,
+      confirmedOrders: orders.filter(o => o.status === 'Confirmed').length,
+      preparingOrders: orders.filter(o => o.status === 'Preparing' || o.status === 'Processing').length,
+      readyOrders: orders.filter(o => o.status === 'Ready for Delivery' || o.status === 'Out for Delivery' || o.deliveryStatus === 'Shipped' || o.deliveryStatus === 'In Transit').length,
+      deliveredOrders: orders.filter(o => o.status === 'Delivered' || o.deliveryStatus === 'Delivered').length,
       totalProducts: prods.length,
       activeProducts: prods.filter(p => p.status === 'Available').length,
       lowStockCount: prods.filter(p => p.stock <= 5).length,
       totalCategories: cats.length,
       totalShops: shps.length,
-      totalCustomers: 1,
-      unreadMessagesCount: 0,
-      unresolvedProblemsCount: 0
+      totalCustomers: accounts.length,
+      unreadMessagesCount: messages.filter(m => m.status === 'unread').length,
+      unresolvedProblemsCount: problems.filter(p => p.status !== 'Resolved' && p.status !== 'Closed').length
     };
   },
 
@@ -4114,9 +4154,13 @@ export const api = {
         headers: getAuthHeaders()
       });
       const parsed = await safeParseResponse<{ user: AdminUser | null }>(res);
-      if (res.ok && parsed.isJson && parsed.json?.user) {
+      if (res.ok && parsed.isJson && parsed.json?.user && isAuthorizedAdminUser(parsed.json.user)) {
         return parsed.json.user;
       }
+    } catch {}
+    try {
+      const sbAdmins = await getAdminUsersFromSupabase();
+      if (sbAdmins.length > 0) return sbAdmins[0];
     } catch {}
     return getStoredAdminUser();
   },
@@ -4128,13 +4172,13 @@ export const api = {
       });
       const parsed = await safeParseResponse<AdminUser[]>(res);
       if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
-        return parsed.json;
+        return parsed.json.filter(isAuthorizedAdminUser);
       }
     } catch {}
 
     try {
-      const fsUsers = await getUsersFromFirestore();
-      if (fsUsers && fsUsers.length > 0) return fsUsers as AdminUser[];
+      const sbAdmins = await getAdminUsersFromSupabase();
+      if (sbAdmins.length > 0) return sbAdmins;
     } catch {}
 
     return fallbackAdminUsers;

@@ -44,9 +44,23 @@ export interface SupabaseAuthResult {
   user: any;
   session: any;
   token?: string;
+  adminProfile?: AdminUser;
 }
 
 export const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
+
+function buildAuthorizedAdminProfile(adminRow: any, user?: any, lastLoginIso?: string): AdminUser {
+  const nowIso = lastLoginIso || new Date().toISOString();
+  return {
+    id: String(adminRow?.id || 'adm-owner-crmedia'),
+    name: String(adminRow?.name || user?.user_metadata?.full_name || 'Administrator'),
+    email: AUTHORIZED_ADMIN_EMAIL,
+    phone: String(adminRow?.phone || '0780022600'),
+    role: 'owner',
+    active: adminRow?.active !== false,
+    lastLogin: nowIso
+  };
+}
 
 /**
  * Sign in with Supabase Authentication using email and password.
@@ -79,7 +93,7 @@ export async function loginWithSupabasePassword(email: string, password: string)
   // Verify against Supabase admin_users database table
   const { data: adminRow, error: adminDbError } = await supabase
     .from('admin_users')
-    .select('id, name, email, phone, role, active')
+    .select('id, name, email, phone, role, active, last_login, created_at')
     .ilike('email', AUTHORIZED_ADMIN_EMAIL)
     .maybeSingle();
 
@@ -88,11 +102,126 @@ export async function loginWithSupabasePassword(email: string, password: string)
     throw new Error('Access denied: Administrator account is deactivated.');
   }
 
+  const nowIso = new Date().toISOString();
+  const adminProfile = buildAuthorizedAdminProfile(adminRow, data.user, nowIso);
+
+  // Persist latest login timestamp & ensure record exists in Supabase admin_users
+  try {
+    await supabase.from('admin_users').upsert({
+      id: adminProfile.id,
+      name: adminProfile.name,
+      email: AUTHORIZED_ADMIN_EMAIL,
+      phone: adminProfile.phone || '0780022600',
+      role: 'owner',
+      active: true,
+      last_login: nowIso,
+      updated_at: nowIso
+    }, { onConflict: 'email' });
+  } catch {}
+
   return {
     user: data.user,
     session: data.session,
-    token: data.session.access_token
+    token: data.session.access_token,
+    adminProfile
   };
+}
+
+/**
+ * Verify an active administrator session directly against Supabase Authentication and public.admin_users.
+ * Used as authoritative fallback when backend /api/auth/me is unavailable (e.g. decoupled static deployment).
+ */
+export async function verifySupabaseAdminSessionDirect(): Promise<{
+  valid: boolean;
+  token?: string;
+  admin?: AdminUser;
+  unauthorized?: boolean;
+  transientError?: boolean;
+}> {
+  try {
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr) {
+      const msg = String(sessionErr.message || '').toLowerCase();
+      if (msg.includes('fetch') || msg.includes('network')) {
+        return { valid: false, transientError: true };
+      }
+    }
+
+    let activeSession = sessionData?.session || null;
+    if (!activeSession?.access_token) {
+      return { valid: false };
+    }
+
+    let activeUser = activeSession.user || null;
+    const { data: userData, error: userErr } = await supabase.auth.getUser(activeSession.access_token);
+    if (userErr || !userData?.user) {
+      const errMsg = String(userErr?.message || '').toLowerCase();
+      if (errMsg.includes('fetch') || errMsg.includes('network')) {
+        return { valid: false, transientError: true };
+      }
+      // Try refreshing expired Supabase session once
+      if (activeSession.refresh_token) {
+        const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+        if (refreshErr || !refreshed?.session?.access_token || !refreshed?.user) {
+          const refMsg = String(refreshErr?.message || '').toLowerCase();
+          if (refMsg.includes('fetch') || refMsg.includes('network')) {
+            return { valid: false, transientError: true };
+          }
+          return { valid: false, unauthorized: true };
+        }
+        activeSession = refreshed.session;
+        activeUser = refreshed.user;
+      } else {
+        return { valid: false, unauthorized: true };
+      }
+    } else {
+      activeUser = userData.user;
+    }
+
+    const email = String(activeUser?.email || '').trim().toLowerCase();
+    if (email !== AUTHORIZED_ADMIN_EMAIL) {
+      return { valid: false, unauthorized: true };
+    }
+
+    const { data: adminRow, error: adminDbError } = await supabase
+      .from('admin_users')
+      .select('id, name, email, phone, role, active, last_login, created_at')
+      .ilike('email', AUTHORIZED_ADMIN_EMAIL)
+      .maybeSingle();
+
+    if (!adminDbError && adminRow && adminRow.active === false) {
+      return { valid: false, unauthorized: true };
+    }
+
+    const admin = buildAuthorizedAdminProfile(adminRow, activeUser, adminRow?.last_login);
+    return {
+      valid: true,
+      token: activeSession.access_token,
+      admin
+    };
+  } catch (err: any) {
+    const msg = String(err?.message || '').toLowerCase();
+    if (msg.includes('fetch') || msg.includes('network') || err?.name === 'TypeError') {
+      return { valid: false, transientError: true };
+    }
+    return { valid: false };
+  }
+}
+
+export async function getAdminUsersFromSupabase(): Promise<AdminUser[]> {
+  try {
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('id, name, email, phone, role, active, last_login, created_at')
+      .ilike('email', AUTHORIZED_ADMIN_EMAIL);
+
+    if (error || !Array.isArray(data) || data.length === 0) return [];
+    return data
+      .filter((row: any) => String(row.email || '').trim().toLowerCase() === AUTHORIZED_ADMIN_EMAIL && row.active !== false)
+      .map((row: any) => buildAuthorizedAdminProfile(row, undefined, row.last_login));
+  } catch {
+    return [];
+  }
 }
 
 /**
