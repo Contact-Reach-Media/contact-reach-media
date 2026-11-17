@@ -102,8 +102,8 @@ export const Header: React.FC<HeaderProps> = ({
     return products
       .filter(p =>
         p.status !== 'Hidden' &&
-        (p.name.toLowerCase().includes(q) ||
-         p.category.toLowerCase().includes(q) ||
+        ((p.name || '').toLowerCase().includes(q) ||
+         (p.category || '').toLowerCase().includes(q) ||
          (p.sku && p.sku.toLowerCase().includes(q)) ||
          (p.brand && p.brand.toLowerCase().includes(q)) ||
          (p.shopName && p.shopName.toLowerCase().includes(q)))
@@ -498,7 +498,7 @@ export const Header: React.FC<HeaderProps> = ({
                           </p>
                           <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
                             <span className="text-[#FF6000] font-bold font-mono">
-                              {product.price.toLocaleString()} FRW
+                              {(Number(product.price) || 0).toLocaleString()} FRW
                             </span>
                             {product.shopName && (
                               <span>• {product.shopName}</span>
@@ -545,10 +545,10 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Customer Dashboard: Inbox & Order Tracking"
               >
                 <div className="w-6 h-6 rounded-full bg-orange-100 text-[#FF6000] flex items-center justify-center font-black text-xs">
-                  {buyerUser.name.charAt(0).toUpperCase()}
+                  {(buyerUser.name || 'B').trim().charAt(0).toUpperCase() || 'B'}
                 </div>
                 <span className="hidden sm:inline max-w-[100px] truncate">
-                  {buyerUser.name.split(' ')[0]}
+                  {(buyerUser.name || 'Account').trim().split(' ')[0]}
                 </span>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse hidden sm:inline-block" title="Account Active" />
               </button>
@@ -702,9 +702,9 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full text-start px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center gap-2 cursor-pointer transition-colors"
               >
                 <div className="w-5 h-5 rounded-full bg-orange-200 text-[#FF6000] flex items-center justify-center font-black text-[10px]">
-                  {buyerUser.name.charAt(0).toUpperCase()}
+                  {(buyerUser.name || 'B').trim().charAt(0).toUpperCase() || 'B'}
                 </div>
-                <span className="truncate">{buyerUser.name} (Konti Yanjye)</span>
+                <span className="truncate">{buyerUser.name || 'Account'} (Konti Yanjye)</span>
               </button>
             )}
 

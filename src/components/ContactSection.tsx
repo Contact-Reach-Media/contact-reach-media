@@ -14,7 +14,7 @@ interface ContactSectionProps {
 }
 
 export const ContactSection: React.FC<ContactSectionProps> = ({ settings, currentLang }) => {
-  const t = translations[currentLang];
+  const t = translations[currentLang] || translations.en;
   const [activeTab, setActiveTab] = useState<'message' | 'report' | 'track-case'>('message');
 
   // Contact Form State

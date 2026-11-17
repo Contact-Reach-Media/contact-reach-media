@@ -1,6 +1,6 @@
 // ContactReach Market Progressive Web App Service Worker
-const CACHE_NAME = 'crm-cache-v3';
-const API_CACHE_NAME = 'crm-api-cache-v3';
+const CACHE_NAME = 'crm-cache-v4';
+const API_CACHE_NAME = 'crm-api-cache-v4';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/site.webmanifest',
@@ -120,8 +120,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Bypass service worker for SSE real-time streams, version checks, auth, and dynamic translation API
+  // Bypass service worker for Vite dev endpoints, SSE real-time streams, version checks, auth, and dynamic translation API
   if (
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
     url.pathname.includes('/stream') ||
     url.pathname.includes('/realtime') ||
     url.pathname.startsWith('/api/auth') ||
@@ -162,8 +165,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname === '/' ||
     url.pathname.endsWith('.html') ||
     url.pathname.startsWith('/admin') ||
-    url.pathname.startsWith('/src/') ||
-    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.startsWith('/assets/') ||
     url.pathname.endsWith('.js') ||
     url.pathname.endsWith('.ts') ||
     url.pathname.endsWith('.tsx') ||
@@ -173,7 +175,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((networkResponse) => networkResponse)
-        .catch(() => caches.match(request))
+        .catch(() =>
+          caches.match(request).then(
+            (cached) => cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } })
+          )
+        )
     );
     return;
   }
@@ -191,7 +197,7 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => cachedResponse);
+        .catch(() => cachedResponse || Response.error());
 
       return cachedResponse || fetchPromise;
     })

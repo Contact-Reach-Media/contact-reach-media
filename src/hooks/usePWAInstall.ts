@@ -32,22 +32,31 @@ export function usePWAInstall() {
         }).catch(() => {});
       }
 
-      // 4. Purge legacy v1/v2 caches and register service worker for offline & PWA installability
+      // 4. Purge legacy caches; unregister SW during Vite dev to prevent stale module chunks, register SW in production
       if (typeof window !== 'undefined' && 'caches' in window) {
         caches.delete('crm-cache-v1').catch(() => {});
         caches.delete('crm-api-cache-v1').catch(() => {});
         caches.delete('crm-cache-v2').catch(() => {});
         caches.delete('crm-api-cache-v2').catch(() => {});
+        caches.delete('crm-cache-v3').catch(() => {});
+        caches.delete('crm-api-cache-v3').catch(() => {});
       }
       if ('serviceWorker' in navigator && process.env.NODE_ENV !== 'test') {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then((reg) => {
-            reg.update().catch(() => {});
-          })
-          .catch((err) => {
-            console.warn('[PWA] Service worker registration warning:', err);
-          });
+        const isProd = typeof import.meta !== 'undefined' && (import.meta as any).env?.PROD;
+        if (!isProd) {
+          navigator.serviceWorker.getRegistrations().then((regs) => {
+            regs.forEach((reg) => reg.unregister().catch(() => {}));
+          }).catch(() => {});
+        } else {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((reg) => {
+              reg.update().catch(() => {});
+            })
+            .catch((err) => {
+              console.warn('[PWA] Service worker registration warning:', err);
+            });
+        }
       }
 
       // 5. Listen for beforeinstallprompt event

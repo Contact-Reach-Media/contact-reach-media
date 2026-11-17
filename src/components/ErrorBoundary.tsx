@@ -55,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 {this.props.fallbackTitle || 'Admin Dashboard Recovery'}
               </h2>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                A non-fatal interface event occurred. Your database records, customer orders, and settings remain safe and synchronized.
+                A non-fatal interface event occurred. Your database records and settings remain safe and synchronized.
               </p>
             </div>
 
@@ -72,20 +72,24 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-[#FF6000] to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Recover Dashboard</span>
+                <span>Try Again</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
                   if (typeof window !== 'undefined') {
+                    try {
+                      localStorage.removeItem('crm_cart');
+                      localStorage.removeItem('crm_home_catalog_cache');
+                    } catch {}
                     window.location.href = '/';
                   }
                 }}
                 className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
               >
                 <Home className="w-3.5 h-3.5" />
-                <span>Storefront Home</span>
+                <span>Reload Storefront</span>
               </button>
             </div>
           </div>

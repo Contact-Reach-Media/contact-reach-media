@@ -20,9 +20,9 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenAdmin,
   onRequestProduct
 }) => {
-  const t = translations[currentLang];
+  const t = translations[currentLang] || translations.en;
 
-  const whatsappUrl = `https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
+  const whatsappUrl = `https://wa.me/${(settings?.whatsAppNumber || '+250780022600').replace(/\D/g, '')}?text=${encodeURIComponent(
     'Hello ContactReach Support, I would like assistance with an order or product.'
   )}`;
 

@@ -25,7 +25,7 @@ export const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> =
   onConfirmationSuccess,
   currentLang
 }) => {
-  const t = translations[currentLang];
+  const t = translations[currentLang] || translations.en;
 
   const [customerName, setCustomerName] = useState(order?.customerName || '');
   const [paymentPhone, setPaymentPhone] = useState(order?.customerPhone || '');

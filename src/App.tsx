@@ -150,13 +150,17 @@ function parseRouteFromLocation() {
   }
 
   // Persisted language preference
-  const storedLang = localStorage.getItem('crm_lang');
+  let storedLang: string | null = null;
+  let storedCurr: CurrencyCode | null = null;
+  try {
+    storedLang = localStorage.getItem('crm_lang');
+    storedCurr = localStorage.getItem('crm_currency') as CurrencyCode | null;
+  } catch {}
   const resolvedLang: Language = (langParam && langParam.trim().length >= 2)
     ? langParam.trim()
     : (storedLang && storedLang.trim().length >= 2 ? storedLang.trim() : 'en');
 
   // Persisted currency preference
-  const storedCurr = localStorage.getItem('crm_currency') as CurrencyCode | null;
   const resolvedCurr = (currParam && SUPPORTED_CURR_CODES.includes(currParam.toUpperCase() as CurrencyCode))
     ? (currParam.toUpperCase() as CurrencyCode)
     : (storedCurr && SUPPORTED_CURR_CODES.includes(storedCurr) ? storedCurr : 'RWF');
@@ -212,7 +216,8 @@ export default function App() {
         const list = JSON.parse(saved);
         if (Array.isArray(list)) {
           return list.filter((item: any) => {
-            const pId = item.productId || item.product?.id || item.id;
+            if (!item || !item.product || !item.product.id) return false;
+            const pId = item.productId || item.product.id || item.id;
             return !delSet.has(String(pId).toLowerCase().trim());
           });
         }
@@ -315,7 +320,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Dynamic Google-Powered Translations dictionary state
-  const [activeDictionary, setActiveDictionary] = useState<TranslationDictionary>(() => translations[currentLang]);
+  const [activeDictionary, setActiveDictionary] = useState<TranslationDictionary>(() => translations[currentLang] || translations.en);
 
   // One-time initialization of official Google Website Translation script
   useEffect(() => {
@@ -335,7 +340,7 @@ export default function App() {
 
   // Synchronize Google Translate Element & Continuous DOM Translation Observer on language change
   useEffect(() => {
-    setActiveDictionary(translations[currentLang]);
+    setActiveDictionary(translations[currentLang] || translations.en);
     loadLanguageTranslations(currentLang).then(dict => {
       setActiveDictionary(dict);
     }).catch(() => {});
@@ -359,7 +364,7 @@ export default function App() {
     loadLanguageTranslations(newLang).catch(() => {});
   };
 
-  const t = activeDictionary || translations[currentLang];
+  const t = activeDictionary || translations[currentLang] || translations.en;
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -547,18 +552,21 @@ export default function App() {
 
       // Reconcile and clamp existing cart items against fresh inventory
       setCart(currentCart => {
-        if (!currentCart || currentCart.length === 0) return currentCart;
-        return currentCart.map(item => {
-          const fresh = fetchedProducts.find(p => p.id === item.product.id);
-          if (!fresh) return item;
-          const freshStock = Math.max(0, fresh.stock || 0);
-          const clampedQty = Math.min(item.quantity, freshStock);
-          return {
-            ...item,
-            product: fresh,
-            quantity: clampedQty
-          };
-        }).filter(item => item.quantity > 0 && item.product.status !== 'Out of Stock');
+        if (!Array.isArray(currentCart) || currentCart.length === 0) return currentCart || [];
+        return currentCart
+          .filter(item => item && item.product && item.product.id)
+          .map(item => {
+            const fresh = fetchedProducts.find(p => p.id === item.product.id);
+            if (!fresh) return item;
+            const freshStock = Math.max(0, fresh.stock || 0);
+            const clampedQty = Math.min(item.quantity || 1, freshStock);
+            return {
+              ...item,
+              product: fresh,
+              quantity: clampedQty
+            };
+          })
+          .filter(item => item.quantity > 0 && item.product.status !== 'Out of Stock');
       });
     } catch (err) {
       console.warn('Backend sync in fallback mode:', err);
@@ -1036,9 +1044,9 @@ export default function App() {
     const q = searchQuery.toLowerCase().trim();
     const matchSearch =
       !q ||
-      p.name.toLowerCase().includes(q) ||
-      p.description.toLowerCase().includes(q) ||
-      p.category.toLowerCase().includes(q) ||
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q) ||
       (p.subCategoryName && p.subCategoryName.toLowerCase().includes(q)) ||
       (p.subcategory && p.subcategory.toLowerCase().includes(q)) ||
       (p.brand && p.brand.toLowerCase().includes(q)) ||
@@ -1170,7 +1178,7 @@ export default function App() {
               onCurrencyChange={setCurrentCurrency}
               activeView={activeView}
               onNavigate={(view) => handleNavigate(view)}
-              cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
+              cartCount={cart.reduce((total, item) => total + (item?.quantity || 0), 0)}
               onOpenCart={() => setIsCartOpen(true)}
               onOpenSearch={() => {
                 handleNavigate('shop');
@@ -1935,7 +1943,7 @@ export default function App() {
       {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && activeView !== 'admin-invite' && activeView !== '404' && (
         <div className="fixed bottom-6 right-0 z-40">
           <a
-            href={`https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
+            href={`https://wa.me/${(settings?.whatsAppNumber || '+250780022600').replace(/\D/g, '')}?text=${encodeURIComponent(
               'Hello ContactReach Support, I would like assistance with products on ContactReach Market.'
             )}`}
             target="_blank"
