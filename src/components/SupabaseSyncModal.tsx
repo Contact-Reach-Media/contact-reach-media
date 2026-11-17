@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Database, Check, Copy, ExternalLink, RefreshCw, AlertCircle,
   CheckCircle2, X, Shield, ArrowRight, Table, Server, Users,
-  ShoppingBag, Layers
+  ShoppingBag, Layers, Download
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import {
@@ -1153,6 +1153,7 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
   showToast,
 }) => {
   const [testing, setTesting] = useState(false);
+  const [pullingProducts, setPullingProducts] = useState(false);
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [syncingAccounts, setSyncingAccounts] = useState(false);
@@ -1209,6 +1210,23 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
       showToast(err.message || 'Connection test failed', 'error');
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handlePullProductsFromSupabase = async () => {
+    setPullingProducts(true);
+    try {
+      const res = await api.pullProductsFromSupabase();
+      if (res.count > 0) {
+        showToast(res.message);
+        if (onRefreshData) onRefreshData();
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to pull products from Supabase', 'error');
+    } finally {
+      setPullingProducts(false);
     }
   };
 
@@ -1436,6 +1454,16 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin text-orange-400' : 'text-slate-300'}`} />
                 <span>{testing ? 'Testing...' : 'Test Connection'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePullProductsFromSupabase}
+                disabled={pullingProducts}
+                className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+              >
+                <Download className={`w-3.5 h-3.5 ${pullingProducts ? 'animate-bounce text-teal-200' : 'text-teal-200'}`} />
+                <span>{pullingProducts ? 'Pulling...' : 'Pull Products from Supabase'}</span>
               </button>
 
               <button

@@ -36,6 +36,7 @@ import { getCategoryCoverImage, getCategoryImageSource } from '../utils/category
 import { getYouTubeVideoId, getYouTubeThumbnailUrl, isValidYouTubeUrl } from '../utils/youtube.ts';
 import { MaintenancePage } from './MaintenancePage.tsx';
 import { ProductSpreadsheetModal } from './ProductSpreadsheetModal.tsx';
+import { SupabaseSyncModal } from './SupabaseSyncModal.tsx';
 import {
   exportProductsToExcel,
   exportProductsToCsv,
@@ -734,6 +735,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Product Editor Modal
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [pullingFromSupabase, setPullingFromSupabase] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState<{
     name: string;
@@ -1928,6 +1931,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       showToast(err.message || 'Failed to make all products ready', 'error');
     } finally {
       setMakingAllReady(false);
+    }
+  };
+
+  const handlePullProductsFromSupabase = async () => {
+    setPullingFromSupabase(true);
+    try {
+      const res = await api.pullProductsFromSupabase();
+      if (res.count > 0) {
+        showToast(res.message);
+        await fetchAllData(true);
+        await fetchDbDiagnostics();
+        onRefreshPublicData();
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to pull products from Supabase', 'error');
+    } finally {
+      setPullingFromSupabase(false);
     }
   };
 
@@ -4265,11 +4287,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div>
                   <h1 className="text-xl font-black text-slate-900 tracking-tight">Products Management</h1>
                   <p className="text-xs text-slate-500">
-                    Authoritative Cloud Firestore storage & Google Drive sync · CJ Dropshipping integration · Custom Admin Cost controls
+                    Authoritative Supabase PostgreSQL storage & Google Drive sync · CJ Dropshipping integration · Custom Admin Cost controls
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
 
+
+                  <button
+                    onClick={handlePullProductsFromSupabase}
+                    disabled={pullingFromSupabase}
+                    className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                    title="Pull live products directly from Supabase (thierry8-cloud's Project)"
+                  >
+                    <Database className={`w-4 h-4 ${pullingFromSupabase ? 'animate-spin' : ''}`} />
+                    <span>{pullingFromSupabase ? 'Pulling...' : 'Pull from Supabase'}</span>
+                  </button>
 
                   <button
                     onClick={() => setIsSpreadsheetModalOpen(true)}
@@ -9084,6 +9116,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Supabase Cloud Database Status */}
+                  <div className="p-4 rounded-2xl bg-teal-50/50 border border-teal-200/80 space-y-2 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-teal-950 flex items-center gap-1.5 text-xs">
+                          <Database className="w-3.5 h-3.5 text-teal-600" />
+                          Supabase PostgreSQL
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-teal-100 text-teal-800">
+                          enmxlqdouiqnqfhmmzha
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-teal-900 space-y-1">
+                        <div>Project: <strong>thierry8-cloud&apos;s Project</strong></div>
+                        <div className="truncate font-mono text-[10px]">enmxlqdouiqnqfhmmzha.supabase.co</div>
+                        <div className="text-[10px] text-teal-700">Live Table: <strong>public.products</strong></div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={handlePullProductsFromSupabase}
+                        disabled={pullingFromSupabase}
+                        className="w-full py-2 px-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Download className={`w-3.5 h-3.5 ${pullingFromSupabase ? 'animate-bounce' : ''}`} />
+                        <span>{pullingFromSupabase ? 'Pulling Products...' : 'Pull Products from Supabase'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsSupabaseModalOpen(true)}
+                        className="w-full py-1.5 px-3 bg-white border border-teal-200 text-teal-800 hover:bg-teal-50 font-bold rounded-xl text-[11px] transition-colors cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <SlidersHorizontal className="w-3 h-3 text-teal-600" />
+                        <span>Open Supabase Sync Console</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -12535,6 +12607,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         categories={categories}
         shops={shops}
         onProductsUpdated={() => {
+          fetchAllData(true);
+          onRefreshPublicData();
+        }}
+        showToast={showToast}
+      />
+
+      {/* Supabase Database Integration Modal */}
+      <SupabaseSyncModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        settings={settings}
+        orders={orders}
+        products={products}
+        onRefreshData={() => {
           fetchAllData(true);
           onRefreshPublicData();
         }}

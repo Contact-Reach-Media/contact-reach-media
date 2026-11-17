@@ -764,20 +764,32 @@ function loadDbFromDisk() {
 
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
+      if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
+      if (parsed.categories && Array.isArray(parsed.categories)) {
+        const canonicalIds = new Set(initialCategories.map(c => c.id));
+        const customCategories = parsed.categories.filter((c: any) => !canonicalIds.has(c.id));
+        // Keep canonical 13 categories fresh with subcategories, plus any admin custom categories
+        db.categories = [...initialCategories, ...customCategories];
+      } else {
+        db.categories = [...initialCategories];
+      }
       if (parsed.products && Array.isArray(parsed.products)) {
+        const knownMainCatIds = new Set(db.categories.filter((c: any) => !c.parentId).map((c: any) => c.id));
         db.products = parsed.products.map((p: any) => {
-          const normCat = normalizeCategoryId(p.category, p.name);
+          const isCustomOrKnownMain = Boolean(p.mainCategoryId && knownMainCatIds.has(p.mainCategoryId));
+          const isCustomOnly = isCustomOrKnownMain && !MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId);
+          const normCat = isCustomOnly ? p.mainCategoryId : normalizeCategoryId(p.category, p.name);
           let mainCategoryId = p.mainCategoryId;
           let subCategoryId = p.subCategoryId;
           let categoryName = p.categoryName;
           let subCategoryName = p.subCategoryName;
 
-          if (!mainCategoryId || !subCategoryId || !categoryName) {
+          if (!mainCategoryId || (!isCustomOnly && (!subCategoryId || !categoryName))) {
             const mapped = mapProductToCategoryHierarchy(p);
-            mainCategoryId = mapped.mainCategoryId;
-            subCategoryId = mapped.subCategoryId;
-            categoryName = mapped.categoryName;
-            subCategoryName = mapped.subCategoryName;
+            if (!mainCategoryId) mainCategoryId = mapped.mainCategoryId;
+            if (!subCategoryId && !isCustomOnly) subCategoryId = mapped.subCategoryId;
+            if (!categoryName) categoryName = mapped.categoryName;
+            if (!subCategoryName && !isCustomOnly) subCategoryName = mapped.subCategoryName;
           }
 
           return {
@@ -791,15 +803,6 @@ function loadDbFromDisk() {
             receiverPhone: (!p.receiverPhone || p.receiverPhone === '078002260' || p.receiverPhone === '23283542600') ? '0780022600' : p.receiverPhone
           };
         });
-      }
-      if (parsed.cjPendingProducts && Array.isArray(parsed.cjPendingProducts)) db.cjPendingProducts = parsed.cjPendingProducts;
-      if (parsed.categories && Array.isArray(parsed.categories)) {
-        const canonicalIds = new Set(initialCategories.map(c => c.id));
-        const customCategories = parsed.categories.filter((c: any) => !canonicalIds.has(c.id));
-        // Keep canonical 13 categories fresh with subcategories, plus any admin custom categories
-        db.categories = [...initialCategories, ...customCategories];
-      } else {
-        db.categories = [...initialCategories];
       }
       if (parsed.shops && Array.isArray(parsed.shops)) db.shops = parsed.shops;
       if (parsed.orders && Array.isArray(parsed.orders)) {
@@ -1690,6 +1693,128 @@ async function deleteFromSupabaseAsync(entityType: string, id: string) {
   }
 }
 
+export function mapSupabaseRowToServerProduct(p: any): Product {
+  let parsedImages: string[] = [];
+  if (Array.isArray(p.images)) {
+    parsedImages = p.images.map((x: any) => String(x || '').trim()).filter(Boolean);
+  } else if (typeof p.images === 'string' && p.images.trim()) {
+    try {
+      const jsonArr = JSON.parse(p.images);
+      if (Array.isArray(jsonArr)) parsedImages = jsonArr.map((x: any) => String(x || '').trim()).filter(Boolean);
+    } catch {
+      parsedImages = p.images.split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+  }
+  const mainImage = (p.image_url && String(p.image_url).trim()) || parsedImages[0] || '';
+  if (mainImage && !parsedImages.includes(mainImage)) {
+    parsedImages = [mainImage, ...parsedImages];
+  }
+
+  const resolvedHierarchy = resolveProductCategoryFields(
+    {
+      name: p.name,
+      category: p.category,
+      subcategory: p.subcategory,
+      mainCategoryId: p.main_category_id,
+      subCategoryId: p.sub_category_id,
+      categoryName: p.category_name,
+      subCategoryName: p.sub_category_name
+    },
+    undefined,
+    p.name
+  );
+
+  const toBool = (v: any): boolean => {
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v === 1;
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      return s === 'true' || s === '1' || s === 'yes';
+    }
+    return false;
+  };
+  const parseJsonArr = (v: any): any[] => {
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string' && v.trim()) {
+      try {
+        const parsed = JSON.parse(v);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+  const toOptNum = (v: any): number | undefined => {
+    if (v === null || v === undefined || String(v).trim() === '') return undefined;
+    const n = Number(v);
+    return isNaN(n) ? undefined : n;
+  };
+
+  const stockNum = Math.max(0, Number(p.stock_quantity ?? p.stock ?? 0) || 0);
+  const rawStatus = p.status || (p.visible === false ? 'Hidden' : (stockNum <= 0 ? 'Out of Stock' : 'Available'));
+  const shippingOpt = toOptNum(p.shipping_cost);
+  const commissionOpt = toOptNum(p.commission_rate);
+  const parsedPaymentMethods = parseJsonArr(p.payment_methods);
+  const parsedHistory = parseJsonArr(p.history);
+
+  return {
+    id: String(p.id),
+    name: p.name || 'Product',
+    sku: p.sku || undefined,
+    description: p.description || '',
+    price: Math.max(0, Number(p.price_rwf ?? p.price) || 0),
+    costPrice: toOptNum(p.cost_price),
+    shippingCost: (shippingOpt !== undefined && shippingOpt > 0) ? shippingOpt : undefined,
+    costOverriddenByAdmin: toBool(p.cost_overridden_by_admin),
+    commissionRate: commissionOpt !== undefined ? commissionOpt : 10,
+    profitMargin: toOptNum(p.profit_margin),
+    discountPercent: Number(p.discount_pct ?? p.discount_percent) || 0,
+    discountPrice: toOptNum(p.discount_price),
+    promoStartDate: p.promo_start_date ? String(p.promo_start_date).trim() : undefined,
+    promoEndDate: p.promo_end_date ? String(p.promo_end_date).trim() : undefined,
+    category: resolvedHierarchy.category,
+    subcategory: resolvedHierarchy.subcategory,
+    mainCategoryId: resolvedHierarchy.mainCategoryId,
+    subCategoryId: resolvedHierarchy.subCategoryId,
+    categoryName: resolvedHierarchy.categoryName,
+    subCategoryName: resolvedHierarchy.subCategoryName,
+    stock: stockNum,
+    imageUrl: mainImage,
+    images: parsedImages,
+    videoUrl: p.video_url || undefined,
+    youtubeUrl: p.youtube_url || undefined,
+    shopName: p.shop_name || 'ContactReach Market',
+    shopId: p.shop_id || undefined,
+    receiverName: p.receiver_name || undefined,
+    receiverPhone: p.receiver_phone || undefined,
+    paymentMethods: parsedPaymentMethods.length > 0 ? parsedPaymentMethods : undefined,
+    merchantCode: p.merchant_code || undefined,
+    location: p.location || 'Kigali, Rwanda',
+    deliveryInfo: p.delivery_info || undefined,
+    status: rawStatus as ProductStatus,
+    reviewStatus: (p.review_status || 'Approved') as any,
+    isFeatured: toBool(p.featured ?? p.is_featured),
+    isNewArrival: toBool(p.is_new ?? p.is_new_arrival),
+    isBestSeller: toBool(p.is_best_seller),
+    brand: p.brand || undefined,
+    unit: p.unit || 'Piece',
+    specifications: p.specifications || undefined,
+    storage: p.storage || undefined,
+    packagingInfo: p.packaging_info || undefined,
+    attributes: parseJsonArr(p.attributes),
+    variations: parseJsonArr(p.variations),
+    rating: toOptNum(p.rating) ?? 5.0,
+    reviewsCount: toOptNum(p.reviews_count) ?? 0,
+    source: p.source || 'supabase',
+    alibabaProductId: p.alibaba_product_id || undefined,
+    cjProductId: p.cj_product_id || undefined,
+    createdAt: p.created_at || new Date().toISOString(),
+    updatedAt: p.updated_at || undefined,
+    ...(parsedHistory.length > 0 ? { history: parsedHistory } : {})
+  };
+}
+
 // Hydrate server in-memory database directly from Supabase for all modules
 export async function loadAllDataFromSupabase() {
   try {
@@ -1703,34 +1828,7 @@ export async function loadAllDataFromSupabase() {
 
     if (!prodErr && Array.isArray(prods)) {
       if (prods.length > 0) {
-        db.products = prods.map(p => ({
-          id: String(p.id),
-          name: p.name,
-          sku: p.sku || undefined,
-          description: p.description || '',
-          price: Number(p.price) || 0,
-          costPrice: p.cost_price !== null ? Number(p.cost_price) : undefined,
-          shippingCost: (p.shipping_cost !== null && p.shipping_cost !== undefined && Number(p.shipping_cost) > 0) ? Number(p.shipping_cost) : undefined,
-          costOverriddenByAdmin: Boolean(p.cost_overridden_by_admin),
-          commissionRate: p.commission_rate !== null ? Number(p.commission_rate) : 10,
-          discountPercent: Number(p.discount_percent) || 0,
-          discountPrice: p.discount_price !== null ? Number(p.discount_price) : undefined,
-          category: normalizeCategoryId(p.category, p.name),
-          subcategory: p.subcategory || undefined,
-          mainCategoryId: p.main_category_id || undefined,
-          subCategoryId: p.sub_category_id || undefined,
-          categoryName: p.category_name || undefined,
-          subCategoryName: p.sub_category_name || undefined,
-          stock: Number(p.stock_quantity ?? p.stock ?? 0),
-          imageUrl: p.image_url || '',
-          images: Array.isArray(p.images) ? p.images : (p.image_url ? [p.image_url] : []),
-          shopName: p.shop_name || 'ContactReach Market',
-          shopId: p.shop_id || undefined,
-          status: p.status || 'Available',
-          rating: Number(p.rating) || 5.0,
-          reviewsCount: Number(p.reviews_count) || 0,
-          createdAt: p.created_at || new Date().toISOString()
-        }));
+        db.products = prods.map(mapSupabaseRowToServerProduct);
       }
       console.log(`[Supabase] Loaded ${prods.length} products from Supabase (active: ${db.products.length}).`);
     }
@@ -3207,7 +3305,37 @@ app.get('/api/categories/tree', (req: Request, res: Response) => {
     };
   });
 
-  res.json(tree);
+  const customMains = db.categories
+    .filter(c => !c.parentId && c.isActive !== false && c.active !== false && !MAIN_CATEGORY_DEFINITIONS.some(m => m.id === c.id))
+    .map(c => {
+      const mainProductCount = db.products.filter(p =>
+        (p.mainCategoryId === c.id || p.category === c.id) && p.status !== 'Hidden'
+      ).length;
+      const mergedSubs = getSubcategoriesForDepartment(c.id, db.categories);
+      const subcategoriesWithCounts = mergedSubs.map(sub => ({
+        id: sub.id,
+        name: sub.name,
+        slug: sub.slug,
+        items: sub.items,
+        itemCount: db.products.filter(p =>
+          doesProductMatchSubCategory(p, sub.id, c.id, db.categories) && p.status !== 'Hidden'
+        ).length
+      }));
+      return {
+        id: c.id,
+        name: c.nameEn || c.id,
+        nameRw: c.nameRw || c.nameEn || c.id,
+        slug: c.slug || c.id,
+        icon: c.icon || 'Tag',
+        image: c.imageUrl,
+        description: c.description || '',
+        sortOrder: c.sortOrder || 99,
+        itemCount: mainProductCount,
+        subcategories: subcategoriesWithCounts
+      };
+    });
+
+  res.json([...tree, ...customMains]);
 });
 
 // -------------------------------------------------------------
@@ -3244,9 +3372,11 @@ app.get('/api/products', (req: Request, res: Response) => {
     ? (db.categories.some(c => !c.parentId && c.id === rawMainParam) ? rawMainParam : normalizeCategoryId(rawMainParam))
     : null;
   if (targetMain) {
+    const isCustomMain = db.categories.some(c => !c.parentId && c.id === targetMain && !MAIN_CATEGORY_DEFINITIONS.some(m => m.id === c.id));
     filtered = filtered.filter(p => {
       if (p.mainCategoryId && p.mainCategoryId === targetMain) return true;
-      const canonicalCat = (p.mainCategoryId && MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId))
+      if (isCustomMain && p.category === targetMain) return true;
+      const canonicalCat = (p.mainCategoryId && (MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId) || db.categories.some(c => !c.parentId && c.id === p.mainCategoryId)))
         ? p.mainCategoryId
         : normalizeCategoryId(p.category, p.name);
       return canonicalCat === targetMain;
@@ -3306,8 +3436,12 @@ app.get('/api/products', (req: Request, res: Response) => {
   }
 
   const sanitized = filtered.map(p => {
-    const canonicalCat = (p.mainCategoryId && MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId))
-      ? p.mainCategoryId
+    const isKnownMain = p.mainCategoryId && (
+      MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId) ||
+      db.categories.some(c => !c.parentId && c.id === p.mainCategoryId)
+    );
+    const canonicalCat = isKnownMain
+      ? p.mainCategoryId!
       : normalizeCategoryId(p.category, p.name);
     const effectiveMain = p.mainCategoryId || canonicalCat;
     const rawSub = p.subCategoryId || p.subCategoryName || p.subcategory;
@@ -7606,7 +7740,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
       || customMainMatch?.id
       || normalizeCategoryId(rawMainInput, nameStr);
 
-    const canonicalCat = MAIN_CATEGORY_DEFINITIONS.some(m => m.id === effectiveMainId)
+    const canonicalCat = (MAIN_CATEGORY_DEFINITIONS.some(m => m.id === effectiveMainId) || Boolean(customMainMatch))
       ? effectiveMainId
       : normalizeCategoryId(body?.category ?? existing?.category ?? rawMainInput, nameStr);
 
@@ -13211,6 +13345,127 @@ app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: 
   }
 });
 
+async function pullProductsFromSupabaseCore(
+  sbAccessToken?: string,
+  adminUser?: { name?: string; role?: string } | null
+) {
+  const client: SupabaseClient = sbAccessToken
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false },
+        global: { headers: { Authorization: `Bearer ${sbAccessToken}` } }
+      })
+    : supabase;
+
+  const { data: rows, error } = await client
+    .from('products')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return {
+      success: false,
+      count: 0,
+      importedCount: 0,
+      updatedCount: 0,
+      totalWebsiteProducts: db.products.length,
+      products: [] as Product[],
+      projectId: SUPABASE_PROJECT_ID,
+      projectName: SUPABASE_PROJECT_NAME,
+      projectUrl: SUPABASE_URL,
+      error: error.message,
+      message: `Failed to pull products from ${SUPABASE_PROJECT_NAME} (${SUPABASE_PROJECT_ID}): ${error.message}`
+    };
+  }
+
+  const fetchedRows = Array.isArray(rows) ? rows : [];
+  const pulledProducts = fetchedRows.map(mapSupabaseRowToServerProduct);
+
+  let importedCount = 0;
+  let updatedCount = 0;
+
+  for (const pulled of pulledProducts) {
+    // Clear tombstone if explicitly pulled from Supabase
+    if (Array.isArray(db.deletedRecordIds) && db.deletedRecordIds.includes(pulled.id)) {
+      db.deletedRecordIds = db.deletedRecordIds.filter(did => did !== pulled.id);
+    }
+
+    const existingIdx = db.products.findIndex(
+      p => p.id === pulled.id || (pulled.sku && p.sku && p.sku.trim().toLowerCase() === pulled.sku.trim().toLowerCase())
+    );
+
+    if (existingIdx >= 0) {
+      const existing = db.products[existingIdx];
+      db.products[existingIdx] = {
+        ...existing,
+        ...pulled,
+        id: existing.id,
+        history: existing.history || []
+      };
+      updatedCount++;
+    } else {
+      db.products.unshift({
+        ...pulled,
+        history: [{ timestamp: new Date().toISOString(), action: 'Pulled from Supabase', user: adminUser?.name || 'Administrator' }]
+      });
+      importedCount++;
+    }
+  }
+
+  if (pulledProducts.length > 0) {
+    logAudit(
+      adminUser || { name: 'Administrator', role: 'owner' },
+      'PRODUCTS_PULLED_FROM_SUPABASE',
+      `Pulled ${pulledProducts.length} product(s) from ${SUPABASE_PROJECT_NAME} (${importedCount} new, ${updatedCount} updated).`,
+      'product'
+    );
+    saveDbToDisk('product_pulled_from_supabase', {
+      count: pulledProducts.length,
+      importedCount,
+      updatedCount
+    });
+  }
+
+  const message = pulledProducts.length > 0
+    ? `Successfully pulled ${pulledProducts.length} product(s) from Supabase (${importedCount} imported, ${updatedCount} updated).`
+    : `Connected to ${SUPABASE_PROJECT_NAME} (${SUPABASE_PROJECT_ID}), and public.products returned 0 readable rows. Either the table is currently empty or Row Level Security (RLS) is blocking read access for the publishable key — verify public.products rows & RLS policies in Supabase SQL Editor.`;
+
+  return {
+    success: true,
+    count: pulledProducts.length,
+    importedCount,
+    updatedCount,
+    totalWebsiteProducts: db.products.length,
+    products: pulledProducts,
+    projectId: SUPABASE_PROJECT_ID,
+    projectName: SUPABASE_PROJECT_NAME,
+    projectUrl: SUPABASE_URL,
+    message
+  };
+}
+
+app.post('/api/supabase/pull-products', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const admin = (req as any).adminUser;
+    const headerToken = typeof req.headers['x-supabase-access-token'] === 'string'
+      ? req.headers['x-supabase-access-token'].trim()
+      : '';
+    const bodyToken = typeof req.body?.accessToken === 'string' ? req.body.accessToken.trim() : '';
+    const sbAccessToken = headerToken || bodyToken || undefined;
+
+    const result = await pullProductsFromSupabaseCore(sbAccessToken, admin);
+    if (!result.success) {
+      return res.status(502).json(result);
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err?.message || 'Failed to pull products from Supabase',
+      message: err?.message || 'Failed to pull products from Supabase'
+    });
+  }
+});
+
 // Backward-compatible routes for legacy frontend or tests
 app.get('/api/admin/firebase/status', requireAdminAuth, (_req: Request, res: Response) => {
   res.json({
@@ -13223,8 +13478,21 @@ app.get('/api/admin/firebase/status', requireAdminAuth, (_req: Request, res: Res
   });
 });
 
-app.post('/api/admin/firebase/pull-products', requireAdminAuth, (_req: Request, res: Response) => {
-  res.json({ success: true, message: 'Migrated to Supabase.', importedCount: 0, updatedCount: 0 });
+app.post('/api/admin/firebase/pull-products', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const admin = (req as any).adminUser;
+    const headerToken = typeof req.headers['x-supabase-access-token'] === 'string'
+      ? req.headers['x-supabase-access-token'].trim()
+      : '';
+    const bodyToken = typeof req.body?.accessToken === 'string' ? req.body.accessToken.trim() : '';
+    const result = await pullProductsFromSupabaseCore(headerToken || bodyToken || undefined, admin);
+    if (!result.success) {
+      return res.status(502).json(result);
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Failed to pull products from Supabase' });
+  }
 });
 
 app.get('/api/products/sync-firebase', (_req: Request, res: Response) => {

@@ -5358,9 +5358,43 @@ export const api = {
     }
   },
 
-  async pullProductsFromSupabase(): Promise<{ success: boolean; products: Product[]; message: string }> {
-    const products = await getProductsFromSupabase();
-    return { success: true, products, message: `Loaded ${products.length} products from Supabase.` };
+  async pullProductsFromSupabase(): Promise<{
+    success: boolean;
+    count: number;
+    importedCount: number;
+    updatedCount: number;
+    products: Product[];
+    message: string;
+  }> {
+    let sbAccessToken: string | undefined;
+    try {
+      const { data } = await supabase.auth.getSession();
+      sbAccessToken = data?.session?.access_token || undefined;
+    } catch {}
+
+    const res = await fetch('/api/supabase/pull-products', {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        ...(sbAccessToken ? { 'x-supabase-access-token': sbAccessToken } : {})
+      },
+      body: JSON.stringify(sbAccessToken ? { accessToken: sbAccessToken } : {})
+    });
+
+    const parsed = await safeParseResponse<any>(res);
+    if (res.ok && parsed.isJson && parsed.json) {
+      return {
+        success: Boolean(parsed.json.success),
+        count: Number(parsed.json.count ?? parsed.json.products?.length ?? 0),
+        importedCount: Number(parsed.json.importedCount ?? 0),
+        updatedCount: Number(parsed.json.updatedCount ?? 0),
+        products: Array.isArray(parsed.json.products) ? parsed.json.products : [],
+        message: parsed.json.message || 'Pulled products from Supabase.'
+      };
+    }
+
+    const errMsg = parsed.json?.message || parsed.json?.error || `Failed to pull products from Supabase (${res.status})`;
+    throw new Error(errMsg);
   },
 
   async pushProductsToSupabase(productsList?: Product[]): Promise<{ success: boolean; message: string }> {
@@ -5406,7 +5440,8 @@ export const api = {
   },
 
   async pullProductsFromFirebase(): Promise<{ success: boolean; message: string }> {
-    return { success: true, message: `Migrated to Supabase project thierry8-cloud's Project (${SUPABASE_PROJECT_ID}).` };
+    const res = await this.pullProductsFromSupabase();
+    return { success: res.success, message: res.message };
   },
 
   async pushProductsToFirebase(): Promise<{ success: boolean; message: string }> {
