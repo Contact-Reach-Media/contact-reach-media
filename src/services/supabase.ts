@@ -23,13 +23,13 @@ import { toCategorySlug } from '../data/categoryStructure.ts';
 
 // -------------------------------------------------------------
 // SUPABASE PROJECT CONFIGURATION
-// Project Name: contactreachmarket
-// Project ID: hfwfjbvwhkjfrdodqyyw
+// Project Name: thierry8-cloud's Project
+// Project ID: enmxlqdouiqnqfhmmzha
 // -------------------------------------------------------------
-export const SUPABASE_PROJECT_NAME = 'contactreachmarket';
-export const SUPABASE_PROJECT_ID = 'hfwfjbvwhkjfrdodqyyw';
-export const SUPABASE_URL = 'https://hfwfjbvwhkjfrdodqyyw.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_vBneCzN_L_4VDjE_mPwxHw_vib-ua-5';
+export const SUPABASE_PROJECT_NAME = "thierry8-cloud's Project";
+export const SUPABASE_PROJECT_ID = 'enmxlqdouiqnqfhmmzha';
+export const SUPABASE_URL = 'https://enmxlqdouiqnqfhmmzha.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9';
 
 // Initialize Supabase Client
 export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

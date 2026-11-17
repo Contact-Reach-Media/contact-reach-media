@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- ContactReach Market: Production Supabase Database Schema & Real-Time Security
--- Project: ContactReach Market
--- Database: Supabase PostgreSQL (hfwfjbvwhkjfrdodqyyw)
+-- Project: thierry8-cloud's Project
+-- Database: Supabase PostgreSQL (enmxlqdouiqnqfhmmzha)
 -- Includes: Complete Tables, Safe Migrations, Atomic RPCs, Strict RLS, Realtime
 -- ==============================================================================
 

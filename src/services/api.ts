@@ -71,7 +71,9 @@ import {
   getAdminUsersFromSupabase,
   logoutSupabase,
   supabase,
-  AUTHORIZED_ADMIN_EMAIL
+  AUTHORIZED_ADMIN_EMAIL,
+  SUPABASE_PROJECT_ID,
+  SUPABASE_URL
 } from './supabase.ts';
 import { logoutUser } from './googleDrive.ts';
 
@@ -5340,16 +5342,16 @@ export const api = {
       const diag = await testSupabaseConnection();
       return {
         configured: true,
-        projectId: 'hfwfjbvwhkjfrdodqyyw',
-        projectUrl: 'https://hfwfjbvwhkjfrdodqyyw.supabase.co',
+        projectId: SUPABASE_PROJECT_ID,
+        projectUrl: SUPABASE_URL,
         connected: diag.success,
         message: diag.message
       };
     } catch {
       return {
         configured: true,
-        projectId: 'hfwfjbvwhkjfrdodqyyw',
-        projectUrl: 'https://hfwfjbvwhkjfrdodqyyw.supabase.co',
+        projectId: SUPABASE_PROJECT_ID,
+        projectUrl: SUPABASE_URL,
         connected: false,
         message: 'Supabase client configured'
       };

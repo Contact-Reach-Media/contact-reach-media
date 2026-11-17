@@ -29,13 +29,13 @@ interface SupabaseSyncModalProps {
 
 export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
 -- ContactReach Market — Comprehensive Supabase Database Schema
--- Project Name: contactreachmarket
--- Project ID: hfwfjbvwhkjfrdodqyyw
--- Project URL: https://hfwfjbvwhkjfrdodqyyw.supabase.co
+-- Project Name: thierry8-cloud's Project
+-- Project ID: enmxlqdouiqnqfhmmzha
+-- Project URL: https://enmxlqdouiqnqfhmmzha.supabase.co
 -- ==============================================================================
 -- INSTRUCTIONS FOR SUPABASE SQL EDITOR:
 -- 1. Open your Supabase SQL Editor:
---    https://supabase.com/dashboard/project/hfwfjbvwhkjfrdodqyyw/sql/new
+--    https://supabase.com/dashboard/project/enmxlqdouiqnqfhmmzha/sql/new
 -- 2. Paste this entire script into the editor.
 -- 3. Click "Run" (or press Ctrl+Enter).
 -- This script is completely safe, idempotent, and non-destructive.
@@ -1130,7 +1130,7 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
   const cfg = settings?.supabaseConfig || {
     enabled: true,
     projectUrl: SUPABASE_URL,
-    anonKey: 'sb_publishable_vBneCzN_L_4VDjE_mPwxHw_vib-ua-5',
+    anonKey: 'sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9',
     projectId: SUPABASE_PROJECT_ID,
     projectName: SUPABASE_PROJECT_NAME,
     tableName: 'products',

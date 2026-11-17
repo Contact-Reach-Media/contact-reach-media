@@ -10,11 +10,16 @@ import crypto from 'crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase Database Engine Configuration
-const SUPABASE_PROJECT_NAME = 'contactreachmarket';
-const SUPABASE_PROJECT_ID = 'hfwfjbvwhkjfrdodqyyw';
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hfwfjbvwhkjfrdodqyyw.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_vBneCzN_L_4VDjE_mPwxHw_vib-ua-5';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+const SUPABASE_PROJECT_NAME = "thierry8-cloud's Project";
+const envSupabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/rest\/v1\/?$/, '');
+const isStaleOldSupabaseEnv =
+  envSupabaseUrl.includes('hfwfjbvwhkjfrdodqyyw') ||
+  process.env.SUPABASE_PROJECT_ID === 'hfwfjbvwhkjfrdodqyyw' ||
+  (process.env.SUPABASE_ANON_KEY || '').startsWith('sb_publishable_vBneCzN');
+const SUPABASE_PROJECT_ID = (!isStaleOldSupabaseEnv && process.env.SUPABASE_PROJECT_ID) || 'enmxlqdouiqnqfhmmzha';
+const SUPABASE_URL = (!isStaleOldSupabaseEnv && envSupabaseUrl) || 'https://enmxlqdouiqnqfhmmzha.supabase.co';
+const SUPABASE_ANON_KEY = (!isStaleOldSupabaseEnv && process.env.SUPABASE_ANON_KEY) || 'sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9';
+const SUPABASE_KEY = (!isStaleOldSupabaseEnv && process.env.SUPABASE_SERVICE_ROLE_KEY) || SUPABASE_ANON_KEY;
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false }
@@ -879,6 +884,14 @@ function loadDbFromDisk() {
           dsersConfig: {
             ...initialSettings.dsersConfig,
             ...(parsed.settings.dsersConfig || {})
+          },
+          supabaseConfig: {
+            ...initialSettings.supabaseConfig,
+            enabled: true,
+            projectUrl: SUPABASE_URL,
+            anonKey: SUPABASE_ANON_KEY,
+            projectId: SUPABASE_PROJECT_ID,
+            projectName: SUPABASE_PROJECT_NAME
           }
         };
       }
@@ -12960,7 +12973,7 @@ app.post('/api/admin/google-sheet/sync-push', requireAdminAuth, async (req: Requ
 
 // -------------------------------------------------------------
 // SUPABASE DATABASE STATUS & SYNCHRONIZATION ENDPOINTS
-// Project: contactreachmarket (hfwfjbvwhkjfrdodqyyw)
+// Project: thierry8-cloud's Project (enmxlqdouiqnqfhmmzha)
 // -------------------------------------------------------------
 
 app.get('/api/supabase/status', async (_req: Request, res: Response) => {

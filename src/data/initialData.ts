@@ -84,10 +84,10 @@ export const initialSettings: AppSettings = {
   },
   "supabaseConfig": {
     "enabled": true,
-    "projectUrl": "https://hfwfjbvwhkjfrdodqyyw.supabase.co",
-    "anonKey": "sb_publishable_vBneCzN_L_4VDjE_mPwxHw_vib-ua-5",
-    "projectId": "hfwfjbvwhkjfrdodqyyw",
-    "projectName": "contactreachmarket",
+    "projectUrl": "https://enmxlqdouiqnqfhmmzha.supabase.co",
+    "anonKey": "sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9",
+    "projectId": "enmxlqdouiqnqfhmmzha",
+    "projectName": "thierry8-cloud's Project",
     "tableName": "products",
     "autoSyncOrders": true
   },
