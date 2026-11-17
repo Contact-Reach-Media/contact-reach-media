@@ -39,6 +39,7 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
   const [loadingReports, setLoadingReports] = useState(false);
   const [newMsgText, setNewMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [msgError, setMsgError] = useState<string | null>(null);
 
   // Profile Edit fields
   const [editName, setEditName] = useState(user?.name || '');
@@ -145,12 +146,16 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
     e.preventDefault();
     if (!newMsgText.trim()) return;
     setSendingMsg(true);
+    setMsgError(null);
     try {
-      const res = await api.sendBuyerMessage(newMsgText.trim());
+      const res = await api.sendBuyerMessage({
+        message: newMsgText.trim(),
+        buyer: user || undefined
+      });
       setMessages(prev => [...prev, res]);
       setNewMsgText('');
-    } catch (err) {
-      console.error('Failed to send message:', err);
+    } catch (err: any) {
+      setMsgError(err?.message || 'Failed to send message. Please try again.');
     } finally {
       setSendingMsg(false);
     }
@@ -453,6 +458,13 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
                 ))
               )}
             </div>
+
+            {msgError && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{msgError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSendMessage} className="flex gap-2 pt-2 border-t border-slate-100 text-xs">
               <input

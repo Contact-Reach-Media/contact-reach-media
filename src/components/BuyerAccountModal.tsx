@@ -223,7 +223,8 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
       const created = await api.buyerSendMessage({
         message: text,
         orderNumber: selectedOrderRef || undefined,
-        subject: selectedOrderRef ? `Inquiry regarding Order #${selectedOrderRef}` : undefined
+        subject: selectedOrderRef ? `Inquiry regarding Order #${selectedOrderRef}` : undefined,
+        buyer: user
       });
       setMessages(prev => prev.map(m => m.id === tempId ? created : m));
       setTimeout(() => {

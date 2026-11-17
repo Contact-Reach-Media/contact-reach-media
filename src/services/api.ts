@@ -3887,38 +3887,91 @@ export const api = {
   },
 
   async buyerUpdateProfile(data: { name?: string; email?: string; phone?: string; deliveryAddress?: string }): Promise<CustomerUser> {
-    const res = await fetch('/api/buyers/profile', {
-      method: 'PUT',
-      headers: getBuyerAuthHeaders(),
-      body: JSON.stringify(data)
-    });
-    const parsed = await safeParseResponse<{ user: CustomerUser; error?: string }>(res);
-    if (res.ok && parsed.isJson && parsed.json?.user) {
-      setBuyerToken(getBuyerToken() || '', parsed.json.user);
-      return parsed.json.user;
+    const token = getBuyerToken();
+    const stored = getStoredBuyerUser();
+
+    if (!token?.startsWith('crm_sb_buyer_')) {
+      try {
+        const res = await fetch('/api/buyers/profile', {
+          method: 'PUT',
+          headers: getBuyerAuthHeaders(),
+          body: JSON.stringify(data)
+        });
+        const parsed = await safeParseResponse<{ user: CustomerUser; error?: string }>(res);
+        if (res.ok && parsed.isJson && parsed.json?.user) {
+          setBuyerToken(token || '', parsed.json.user);
+          return parsed.json.user;
+        }
+        if (parsed.isJson && (res.status === 400 || res.status === 403 || res.status === 409)) {
+          throw new Error(parsed.json?.error || 'Failed to update buyer profile');
+        }
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        const isNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
+        if (!isNetwork) throw err;
+      }
     }
-    throw new Error((parsed.isJson && parsed.json?.error) || 'Failed to update buyer profile');
+
+    if (stored) {
+      const updatedUser: CustomerUser = {
+        ...stored,
+        name: data.name !== undefined && data.name.trim() ? data.name.trim() : stored.name,
+        email: data.email !== undefined ? data.email.trim() : stored.email,
+        phone: data.phone !== undefined && data.phone.trim() ? formatBuyerPhoneForStorage(data.phone) : stored.phone,
+        deliveryAddress: data.deliveryAddress !== undefined ? data.deliveryAddress.trim() : stored.deliveryAddress
+      };
+      const saved = await saveAccountToSupabase(updatedUser);
+      if (!saved.success) {
+        throw new Error(saved.error || 'Failed to update buyer profile');
+      }
+      if (token) setBuyerToken(token, updatedUser);
+      return updatedUser;
+    }
+
+    throw new Error('Failed to update buyer profile');
   },
 
   async buyerGetOrders(): Promise<Order[]> {
-    try {
-      const res = await fetch('/api/buyers/orders', { headers: getBuyerAuthHeaders() });
-      const parsed = await safeParseResponse<Order[]>(res);
-      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
-        return parsed.json;
-      }
-    } catch {}
+    const token = getBuyerToken();
+    if (!token?.startsWith('crm_sb_buyer_')) {
+      try {
+        const res = await fetch('/api/buyers/orders', { headers: getBuyerAuthHeaders() });
+        const parsed = await safeParseResponse<Order[]>(res);
+        if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+          return parsed.json;
+        }
+      } catch {}
+    }
+
+    const buyer = getStoredBuyerUser();
+    if (buyer) {
+      try {
+        const sbOrders = await getOrdersFromSupabase();
+        const phoneDigits = String(buyer.phone || '').replace(/\D/g, '').slice(-9);
+        const emailLower = String(buyer.email || '').toLowerCase().trim();
+        return sbOrders
+          .filter(o =>
+            (o.userId && o.userId === buyer.id) ||
+            (phoneDigits && o.customerPhone && String(o.customerPhone).replace(/\D/g, '').endsWith(phoneDigits)) ||
+            (emailLower && o.customerEmail && o.customerEmail.toLowerCase().trim() === emailLower)
+          )
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      } catch {}
+    }
     return [];
   },
 
   async buyerGetMessages(): Promise<AdminMessage[]> {
-    try {
-      const res = await fetch('/api/buyers/messages', { headers: getBuyerAuthHeaders() });
-      const parsed = await safeParseResponse<AdminMessage[]>(res);
-      if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
-        return parsed.json;
-      }
-    } catch {}
+    const token = getBuyerToken();
+    if (!token?.startsWith('crm_sb_buyer_')) {
+      try {
+        const res = await fetch('/api/buyers/messages', { headers: getBuyerAuthHeaders() });
+        const parsed = await safeParseResponse<AdminMessage[]>(res);
+        if (res.ok && parsed.isJson && Array.isArray(parsed.json)) {
+          return parsed.json;
+        }
+      } catch {}
+    }
     const buyer = getStoredBuyerUser();
     if (buyer) {
       try {
@@ -3927,7 +3980,7 @@ export const api = {
         const emailLower = String(buyer.email || '').toLowerCase().trim();
         return sbMsgs
           .filter(m =>
-            (m.customerId && m.customerId === buyer.id) ||
+            (m.customerId && (m.customerId === buyer.id || (phoneDigits && m.customerId.endsWith(phoneDigits)))) ||
             (phoneDigits && m.phone && String(m.phone).replace(/\D/g, '').endsWith(phoneDigits)) ||
             (emailLower && m.email && m.email.toLowerCase().trim() === emailLower)
           )
@@ -3937,31 +3990,125 @@ export const api = {
     return [];
   },
 
-  async buyerSendMessage(payload: { message: string; subject?: string; orderNumber?: string }): Promise<AdminMessage> {
-    const res = await fetch('/api/buyers/messages', {
-      method: 'POST',
-      headers: getBuyerAuthHeaders(),
-      body: JSON.stringify(payload)
-    });
-    const parsed = await safeParseResponse<{ message: string; data: AdminMessage }>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json?.data) {
-      throw new Error(parsed.json?.message || 'Failed to send message');
+  async buyerSendMessage(payload: { message: string; subject?: string; orderNumber?: string; buyer?: CustomerUser }): Promise<AdminMessage> {
+    const text = String(payload.message || '').trim();
+    if (!text) {
+      throw new Error('Message text is required.');
     }
-    submitMessageToFirestore(parsed.json.data).catch(() => {});
-    return parsed.json.data;
+
+    const token = getBuyerToken();
+    const activeBuyer = getStoredBuyerUser() || payload.buyer;
+
+    if (!token?.startsWith('crm_sb_buyer_')) {
+      try {
+        const res = await fetch('/api/buyers/messages', {
+          method: 'POST',
+          headers: getBuyerAuthHeaders(),
+          body: JSON.stringify({
+            message: text,
+            subject: payload.subject,
+            orderNumber: payload.orderNumber
+          })
+        });
+        const parsed = await safeParseResponse<{ message?: string; error?: string; data?: AdminMessage }>(res);
+        if (res.ok && parsed.isJson && parsed.json?.data) {
+          submitMessageToFirestore(parsed.json.data).catch(() => {});
+          return parsed.json.data;
+        }
+        if (parsed.isJson && (res.status === 400 || res.status === 403)) {
+          throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to send message');
+        }
+        if (parsed.isJson && res.status === 401 && !activeBuyer?.phone) {
+          throw new Error(parsed.json?.error || 'Please sign in with your phone number and password.');
+        }
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        const isNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
+        if (!isNetwork && !msg.includes('Please sign in')) {
+          throw err;
+        }
+        if (msg.includes('Please sign in') && !activeBuyer?.phone) {
+          throw err;
+        }
+      }
+    }
+
+    if (!activeBuyer) {
+      throw new Error('Please sign in with your phone number and password to send a message.');
+    }
+
+    const cleanPhoneDigits = String(activeBuyer.phone || '').replace(/\D/g, '');
+    const fallbackEmail = activeBuyer.email || (cleanPhoneDigits ? `${cleanPhoneDigits}@contactreach.rw` : 'customer@contactreach.rw');
+    const newMessage: AdminMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+      conversationId: activeBuyer.id,
+      customerId: activeBuyer.id,
+      name: activeBuyer.name || 'Customer',
+      email: fallbackEmail,
+      phone: activeBuyer.phone || '',
+      subject: payload.subject?.trim() || (payload.orderNumber ? `Inquiry regarding Order #${payload.orderNumber}` : 'Customer Support Chat'),
+      message: text,
+      orderNumber: payload.orderNumber?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      status: 'unread',
+      sender: 'customer',
+      senderName: activeBuyer.name || 'Customer',
+      isReadByCustomer: true,
+      isReadByAdmin: false,
+      notificationType: 'chat'
+    };
+
+    const sbRes = await saveMessageToSupabase(newMessage);
+    if (!sbRes.success) {
+      throw new Error(sbRes.error || 'Failed to send message. Please try again.');
+    }
+
+    saveAdminNotificationToSupabase({
+      id: `notif-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+      category: 'message',
+      title: `Customer Chat from ${newMessage.name}`,
+      message: newMessage.message.slice(0, 180),
+      senderName: newMessage.name,
+      senderPhone: newMessage.phone,
+      senderEmail: newMessage.email,
+      orderNumber: newMessage.orderNumber,
+      customerId: newMessage.customerId,
+      actionTab: 'messages',
+      entityId: newMessage.id,
+      isRead: false,
+      createdAt: newMessage.createdAt,
+      metadata: { subject: newMessage.subject }
+    }).catch(() => {});
+
+    return newMessage;
   },
 
   async buyerMarkMessagesRead(): Promise<{ success: boolean; updatedCount: number }> {
-    try {
-      const res = await fetch('/api/buyers/messages/mark-read', {
-        method: 'PUT',
-        headers: getBuyerAuthHeaders()
-      });
-      const parsed = await safeParseResponse<{ success: boolean; updatedCount: number }>(res);
-      if (res.ok && parsed.isJson && parsed.json) {
-        return parsed.json;
-      }
-    } catch {}
+    const token = getBuyerToken();
+    if (!token?.startsWith('crm_sb_buyer_')) {
+      try {
+        const res = await fetch('/api/buyers/messages/mark-read', {
+          method: 'PUT',
+          headers: getBuyerAuthHeaders()
+        });
+        const parsed = await safeParseResponse<{ success: boolean; updatedCount: number }>(res);
+        if (res.ok && parsed.isJson && parsed.json) {
+          return parsed.json;
+        }
+      } catch {}
+    }
+
+    const buyer = getStoredBuyerUser();
+    if (buyer) {
+      try {
+        const msgs = await this.buyerGetMessages();
+        const unreadAdmin = msgs.filter(m => m.sender === 'admin' && m.isReadByCustomer === false);
+        for (const m of unreadAdmin) {
+          await saveMessageToSupabase({ ...m, isReadByCustomer: true });
+        }
+        return { success: true, updatedCount: unreadAdmin.length };
+      } catch {}
+    }
     return { success: false, updatedCount: 0 };
   },
 
@@ -4062,17 +4209,75 @@ export const api = {
   },
 
   async adminReplyToConversation(customerId: string, payload: { message: string; orderNumber?: string; subject?: string }): Promise<AdminMessage> {
-    const res = await fetch(`/api/admin/conversations/${encodeURIComponent(customerId)}/reply`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
-    });
-    const parsed = await safeParseResponse<{ message: string; data: AdminMessage }>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json?.data) {
-      throw new Error((parsed.json as any)?.error || 'Failed to send reply');
+    const text = String(payload.message || '').trim();
+    if (!text) {
+      throw new Error('Reply message text is required.');
     }
-    submitMessageToFirestore(parsed.json.data).catch(() => {});
-    return parsed.json.data;
+
+    try {
+      const res = await fetch(`/api/admin/conversations/${encodeURIComponent(customerId)}/reply`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ ...payload, message: text })
+      });
+      const parsed = await safeParseResponse<{ message?: string; error?: string; data?: AdminMessage }>(res);
+      if (res.ok && parsed.isJson && parsed.json?.data) {
+        submitMessageToFirestore(parsed.json.data).catch(() => {});
+        return parsed.json.data;
+      }
+      if (parsed.isJson && (res.status === 400 || res.status === 401 || res.status === 403)) {
+        throw new Error(parsed.json?.error || parsed.json?.message || 'Failed to send reply');
+      }
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      const isNetwork = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
+      if (!isNetwork) throw err;
+    }
+
+    // Direct Supabase fallback when backend endpoint is unavailable
+    const adminUser = getStoredAdminUser();
+    const thread = await this.adminGetConversationThread(customerId).catch(() => []);
+    const latestMsg = thread[thread.length - 1];
+
+    const replyMessage: AdminMessage = {
+      id: `msg-adm-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+      conversationId: latestMsg?.conversationId || customerId,
+      customerId: latestMsg?.customerId || customerId,
+      name: latestMsg?.name || 'Customer',
+      email: latestMsg?.email || '',
+      phone: latestMsg?.phone || (customerId.startsWith('cust-') ? customerId.replace(/^cust-/, '') : undefined),
+      subject: payload.subject?.trim() || latestMsg?.subject || 'Customer Support Chat',
+      message: text,
+      orderNumber: payload.orderNumber?.trim() || latestMsg?.orderNumber || undefined,
+      createdAt: new Date().toISOString(),
+      status: 'replied',
+      sender: 'admin',
+      senderName: adminUser?.name || 'ContactReach Support',
+      repliedAt: new Date().toISOString(),
+      repliedBy: adminUser?.name || 'ContactReach Support',
+      isReadByAdmin: true,
+      isReadByCustomer: false,
+      notificationType: 'chat'
+    };
+
+    const sbRes = await saveMessageToSupabase(replyMessage);
+    if (!sbRes.success) {
+      throw new Error(sbRes.error || 'Failed to save reply to database.');
+    }
+
+    // Mark customer messages in thread as replied/read by admin
+    for (const m of thread) {
+      if (m.sender !== 'admin' && (m.status === 'unread' || m.isReadByAdmin === false)) {
+        saveMessageToSupabase({
+          ...m,
+          status: 'replied',
+          isReadByAdmin: true,
+          repliedAt: replyMessage.createdAt
+        }).catch(() => {});
+      }
+    }
+
+    return replyMessage;
   },
 
   async adminMarkConversationRead(customerId: string): Promise<{ success: boolean; updatedCount: number }> {
@@ -4085,6 +4290,19 @@ export const api = {
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
+    } catch {}
+    try {
+      const thread = await this.adminGetConversationThread(customerId);
+      const unread = thread.filter(m => m.sender !== 'admin' && (m.status === 'unread' || m.isReadByAdmin === false));
+      for (const m of unread) {
+        await saveMessageToSupabase({
+          ...m,
+          status: m.status === 'unread' ? 'read' : m.status,
+          isReadByAdmin: true,
+          readAt: m.readAt || new Date().toISOString()
+        });
+      }
+      return { success: true, updatedCount: unread.length };
     } catch {}
     return { success: false, updatedCount: 0 };
   },
@@ -5722,7 +5940,7 @@ export const api = {
     return this.buyerUpdateProfile(data);
   },
 
-  async sendBuyerMessage(payloadOrMessage: string | { message: string; subject?: string; orderNumber?: string }): Promise<AdminMessage> {
+  async sendBuyerMessage(payloadOrMessage: string | { message: string; subject?: string; orderNumber?: string; buyer?: CustomerUser }): Promise<AdminMessage> {
     if (typeof payloadOrMessage === 'string') {
       return this.buyerSendMessage({ message: payloadOrMessage });
     }
