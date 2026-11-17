@@ -5401,12 +5401,12 @@ export const api = {
       configured: false,
       databaseExists: true,
       localProductsCount: 0,
-      message: 'Migrated to Supabase project contactreachmarket'
+      message: `Migrated to Supabase project thierry8-cloud's Project (${SUPABASE_PROJECT_ID})`
     };
   },
 
   async pullProductsFromFirebase(): Promise<{ success: boolean; message: string }> {
-    return { success: true, message: 'Migrated to Supabase project contactreachmarket.' };
+    return { success: true, message: `Migrated to Supabase project thierry8-cloud's Project (${SUPABASE_PROJECT_ID}).` };
   },
 
   async pushProductsToFirebase(): Promise<{ success: boolean; message: string }> {

@@ -1100,6 +1100,47 @@ CREATE TRIGGER trigger_orders_updated_at BEFORE UPDATE ON public.orders FOR EACH
 DROP TRIGGER IF EXISTS trigger_app_settings_updated_at ON public.app_settings;
 CREATE TRIGGER trigger_app_settings_updated_at BEFORE UPDATE ON public.app_settings FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
+-- ==============================================================================
+-- 20. INITIAL AUTHORIZED ADMIN, SETTINGS & COUPON SEEDS
+-- ==============================================================================
+INSERT INTO public.admin_users (id, name, email, phone, role, permissions, active)
+VALUES (
+    'adm-owner-crmedia',
+    'Administrator',
+    'contactreachmedialimited@gmail.com',
+    '0780022600',
+    'owner',
+    '["all"]'::jsonb,
+    true
+)
+ON CONFLICT (email) DO UPDATE SET
+    role = 'owner',
+    active = true,
+    updated_at = NOW();
+
+INSERT INTO public.app_settings (id, market_name, company_name, phone, email, receiver_name, payment_number, merchant_code, mtn_ussd_pattern, airtel_ussd_pattern, delivery_fee_kigali, delivery_fee_upcountry, free_delivery_threshold, is_maintenance_mode)
+VALUES (
+    'global',
+    'ContactReach Market',
+    'ContactReach Media Ltd',
+    '0780022600',
+    'contactreachmedialimited@gmail.com',
+    'Ruth',
+    '0780022600',
+    '2328354',
+    '*182*1*1*0780022600*{AMOUNT}#',
+    '*182*1*2*0780022600*{AMOUNT}#',
+    1500,
+    3500,
+    50000,
+    false
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, is_active, times_used)
+VALUES ('coup-welcome10', 'WELCOME10', 'percentage', 10, 10000, 20000, true, 0)
+ON CONFLICT (code) DO NOTHING;
+
 -- End of schema`;
 
 export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({

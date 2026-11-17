@@ -317,7 +317,7 @@ export async function testSupabaseConnection(): Promise<{
     } else {
       return {
         success: true,
-        message: 'Connected to Supabase project contactreachmarket. Tables ready for migration.',
+        message: `Connected to Supabase project ${SUPABASE_PROJECT_NAME} (${SUPABASE_PROJECT_ID}). Tables ready for migration.`,
         tableExists: false,
         tableStatus
       };

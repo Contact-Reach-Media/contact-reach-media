@@ -11,15 +11,16 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase Database Engine Configuration
 const SUPABASE_PROJECT_NAME = "thierry8-cloud's Project";
-const envSupabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/rest\/v1\/?$/, '');
-const isStaleOldSupabaseEnv =
-  envSupabaseUrl.includes('hfwfjbvwhkjfrdodqyyw') ||
-  process.env.SUPABASE_PROJECT_ID === 'hfwfjbvwhkjfrdodqyyw' ||
-  (process.env.SUPABASE_ANON_KEY || '').startsWith('sb_publishable_vBneCzN');
-const SUPABASE_PROJECT_ID = (!isStaleOldSupabaseEnv && process.env.SUPABASE_PROJECT_ID) || 'enmxlqdouiqnqfhmmzha';
-const SUPABASE_URL = (!isStaleOldSupabaseEnv && envSupabaseUrl) || 'https://enmxlqdouiqnqfhmmzha.supabase.co';
-const SUPABASE_ANON_KEY = (!isStaleOldSupabaseEnv && process.env.SUPABASE_ANON_KEY) || 'sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9';
-const SUPABASE_KEY = (!isStaleOldSupabaseEnv && process.env.SUPABASE_SERVICE_ROLE_KEY) || SUPABASE_ANON_KEY;
+const TARGET_SUPABASE_PROJECT_ID = 'enmxlqdouiqnqfhmmzha';
+const envProjectId = (process.env.SUPABASE_PROJECT_ID || '').trim();
+const envSupabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/rest\/v1\/?$/, '').trim();
+const isMatchingTargetEnv =
+  (!envProjectId || envProjectId === TARGET_SUPABASE_PROJECT_ID) &&
+  (!envSupabaseUrl || envSupabaseUrl.includes(TARGET_SUPABASE_PROJECT_ID));
+const SUPABASE_PROJECT_ID = (isMatchingTargetEnv && envProjectId) || TARGET_SUPABASE_PROJECT_ID;
+const SUPABASE_URL = (isMatchingTargetEnv && envSupabaseUrl) || 'https://enmxlqdouiqnqfhmmzha.supabase.co';
+const SUPABASE_ANON_KEY = (isMatchingTargetEnv && process.env.SUPABASE_ANON_KEY) || 'sb_publishable_IBIpdHCE84UOKNU1rYreyA_Vim4R_H9';
+const SUPABASE_KEY = (isMatchingTargetEnv && process.env.SUPABASE_SERVICE_ROLE_KEY) || SUPABASE_ANON_KEY;
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false }
@@ -1701,35 +1702,37 @@ export async function loadAllDataFromSupabase() {
       .order('created_at', { ascending: false });
 
     if (!prodErr && Array.isArray(prods)) {
-      db.products = prods.map(p => ({
-        id: String(p.id),
-        name: p.name,
-        sku: p.sku || undefined,
-        description: p.description || '',
-        price: Number(p.price) || 0,
-        costPrice: p.cost_price !== null ? Number(p.cost_price) : undefined,
-        shippingCost: (p.shipping_cost !== null && p.shipping_cost !== undefined && Number(p.shipping_cost) > 0) ? Number(p.shipping_cost) : undefined,
-        costOverriddenByAdmin: Boolean(p.cost_overridden_by_admin),
-        commissionRate: p.commission_rate !== null ? Number(p.commission_rate) : 10,
-        discountPercent: Number(p.discount_percent) || 0,
-        discountPrice: p.discount_price !== null ? Number(p.discount_price) : undefined,
-        category: normalizeCategoryId(p.category, p.name),
-        subcategory: p.subcategory || undefined,
-        mainCategoryId: p.main_category_id || undefined,
-        subCategoryId: p.sub_category_id || undefined,
-        categoryName: p.category_name || undefined,
-        subCategoryName: p.sub_category_name || undefined,
-        stock: Number(p.stock_quantity ?? p.stock ?? 0),
-        imageUrl: p.image_url || '',
-        images: Array.isArray(p.images) ? p.images : (p.image_url ? [p.image_url] : []),
-        shopName: p.shop_name || 'ContactReach Market',
-        shopId: p.shop_id || undefined,
-        status: p.status || 'Available',
-        rating: Number(p.rating) || 5.0,
-        reviewsCount: Number(p.reviews_count) || 0,
-        createdAt: p.created_at || new Date().toISOString()
-      }));
-      console.log(`[Supabase] Loaded ${db.products.length} products.`);
+      if (prods.length > 0) {
+        db.products = prods.map(p => ({
+          id: String(p.id),
+          name: p.name,
+          sku: p.sku || undefined,
+          description: p.description || '',
+          price: Number(p.price) || 0,
+          costPrice: p.cost_price !== null ? Number(p.cost_price) : undefined,
+          shippingCost: (p.shipping_cost !== null && p.shipping_cost !== undefined && Number(p.shipping_cost) > 0) ? Number(p.shipping_cost) : undefined,
+          costOverriddenByAdmin: Boolean(p.cost_overridden_by_admin),
+          commissionRate: p.commission_rate !== null ? Number(p.commission_rate) : 10,
+          discountPercent: Number(p.discount_percent) || 0,
+          discountPrice: p.discount_price !== null ? Number(p.discount_price) : undefined,
+          category: normalizeCategoryId(p.category, p.name),
+          subcategory: p.subcategory || undefined,
+          mainCategoryId: p.main_category_id || undefined,
+          subCategoryId: p.sub_category_id || undefined,
+          categoryName: p.category_name || undefined,
+          subCategoryName: p.sub_category_name || undefined,
+          stock: Number(p.stock_quantity ?? p.stock ?? 0),
+          imageUrl: p.image_url || '',
+          images: Array.isArray(p.images) ? p.images : (p.image_url ? [p.image_url] : []),
+          shopName: p.shop_name || 'ContactReach Market',
+          shopId: p.shop_id || undefined,
+          status: p.status || 'Available',
+          rating: Number(p.rating) || 5.0,
+          reviewsCount: Number(p.reviews_count) || 0,
+          createdAt: p.created_at || new Date().toISOString()
+        }));
+      }
+      console.log(`[Supabase] Loaded ${prods.length} products from Supabase (active: ${db.products.length}).`);
     }
 
     // 2. Categories
@@ -1755,25 +1758,27 @@ export async function loadAllDataFromSupabase() {
     // 3. Shops
     const { data: shps, error: shpErr } = await supabase.from('shops').select('*');
     if (!shpErr && Array.isArray(shps)) {
-      db.shops = shps.map(s => ({
-        id: s.id,
-        name: s.name,
-        category: s.category || 'all',
-        description: s.description || '',
-        location: s.location || 'Kigali, Rwanda',
-        address: s.address || undefined,
-        phone: s.phone || '',
-        email: s.email || undefined,
-        totalSales: Number(s.total_sales) || 0,
-        logo: s.logo || 'ShoppingBag',
-        bannerColor: s.banner_color || 'from-orange-500 to-amber-600',
-        isVerified: Boolean(s.is_verified),
-        isRecommended: Boolean(s.is_recommended),
-        followersCount: Number(s.followers_count) || 0,
-        isActive: s.is_active !== false && s.status !== 'Inactive',
-        createdAt: s.created_at || new Date().toISOString()
-      }));
-      console.log(`[Supabase] Loaded ${db.shops.length} registered shops.`);
+      if (shps.length > 0) {
+        db.shops = shps.map(s => ({
+          id: s.id,
+          name: s.name,
+          category: s.category || 'all',
+          description: s.description || '',
+          location: s.location || 'Kigali, Rwanda',
+          address: s.address || undefined,
+          phone: s.phone || '',
+          email: s.email || undefined,
+          totalSales: Number(s.total_sales) || 0,
+          logo: s.logo || 'ShoppingBag',
+          bannerColor: s.banner_color || 'from-orange-500 to-amber-600',
+          isVerified: Boolean(s.is_verified),
+          isRecommended: Boolean(s.is_recommended),
+          followersCount: Number(s.followers_count) || 0,
+          isActive: s.is_active !== false && s.status !== 'Inactive',
+          createdAt: s.created_at || new Date().toISOString()
+        }));
+      }
+      console.log(`[Supabase] Loaded ${shps.length} registered shops from Supabase (active: ${db.shops.length}).`);
     }
 
     // 4. Orders with items (non-destructive merge + throttled backfill of missing local orders)
@@ -12981,10 +12986,18 @@ app.get('/api/supabase/status', async (_req: Request, res: Response) => {
   let tableStatus: Record<string, boolean> = {};
 
   try {
-    const ordersRes = await supabase.from('orders').select('id').limit(1);
-    const prodRes = await supabase.from('products').select('id').limit(1);
+    const [ordersRes, prodRes, catRes, settRes, admRes] = await Promise.all([
+      supabase.from('orders').select('id').limit(1),
+      supabase.from('products').select('id').limit(1),
+      supabase.from('categories').select('id').limit(1),
+      supabase.from('app_settings').select('id').limit(1),
+      supabase.from('admin_users').select('id').limit(1)
+    ]);
     tableStatus.orders = !ordersRes.error;
     tableStatus.products = !prodRes.error;
+    tableStatus.categories = !catRes.error;
+    tableStatus.app_settings = !settRes.error;
+    tableStatus.admin_users = !admRes.error;
     connected = !ordersRes.error || !prodRes.error;
   } catch {
     connected = false;
@@ -13001,7 +13014,7 @@ app.get('/api/supabase/status', async (_req: Request, res: Response) => {
     localOrdersCount: db.orders.length,
     localCustomersCount: db.customers.length,
     message: connected
-      ? 'Supabase database is connected and active.'
+      ? `Supabase database (${SUPABASE_PROJECT_NAME}) is connected and active.`
       : 'Supabase project configured. Run the SQL migration script to initialize all tables.'
   });
 });
@@ -13009,8 +13022,95 @@ app.get('/api/supabase/status', async (_req: Request, res: Response) => {
 app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     let syncedProducts = 0;
+    let syncedCategories = 0;
+    let syncedShops = 0;
     let syncedOrders = 0;
     let syncedAccounts = 0;
+    const syncErrors: string[] = [];
+
+    // Sync categories
+    if (db.categories.length > 0) {
+      for (let i = 0; i < db.categories.length; i += 50) {
+        const chunk = db.categories.slice(i, i + 50).map(c => ({
+          id: c.id,
+          name: c.nameEn || '',
+          name_en: c.nameEn,
+          name_rw: c.nameRw || null,
+          icon: c.icon || 'Tag',
+          image_url: c.imageUrl || null,
+          description: c.description || null,
+          parent_id: c.parentId || null,
+          sort_order: c.sortOrder ?? 0,
+          is_active: c.isActive !== false,
+          subcategories: c.subcategories || [],
+          updated_at: new Date().toISOString()
+        }));
+        const { error } = await supabase.from('categories').upsert(chunk, { onConflict: 'id' });
+        if (!error) syncedCategories += chunk.length;
+        else syncErrors.push(`categories: ${error.message}`);
+      }
+    }
+
+    // Sync settings & authorized admin user
+    const { error: settErr } = await supabase.from('app_settings').upsert({
+      id: 'global',
+      market_name: db.settings.marketName || 'ContactReach Market',
+      company_name: db.settings.companyName || 'ContactReach Media Ltd',
+      phone: db.settings.phone || '+250780022600',
+      email: db.settings.email || 'contactreachmedialimited@gmail.com',
+      receiver_name: db.settings.receiverName || 'Ruth',
+      payment_number: db.settings.paymentNumber || '0780022600',
+      merchant_code: db.settings.merchantCode || '2328354',
+      mtn_ussd_pattern: db.settings.mtnUssdPattern || '*182*1*1*0780022600*{AMOUNT}#',
+      airtel_ussd_pattern: db.settings.airtelUssdPattern || '*182*1*2*0780022600*{AMOUNT}#',
+      delivery_fee_kigali: db.settings.deliveryFeeKigali || 1500,
+      delivery_fee_upcountry: db.settings.deliveryFeeUpcountry || 3500,
+      free_delivery_threshold: db.settings.freeDeliveryThreshold || 50000,
+      settings_data: db.settings,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (settErr) syncErrors.push(`app_settings: ${settErr.message}`);
+
+    for (const adm of db.adminUsers) {
+      const { error } = await supabase.from('admin_users').upsert({
+        id: adm.id,
+        name: adm.name || 'Administrator',
+        email: String(adm.email || '').toLowerCase().trim(),
+        phone: adm.phone || '0780022600',
+        role: adm.role || 'owner',
+        active: adm.active !== false,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+      if (!error) syncedAccounts++;
+      else syncErrors.push(`admin_users: ${error.message}`);
+    }
+
+    // Sync shops
+    if (db.shops.length > 0) {
+      for (const s of db.shops) {
+        const { error } = await supabase.from('shops').upsert({
+          id: s.id,
+          name: s.name,
+          category: s.category || 'all',
+          phone: s.phone || '',
+          email: s.email || null,
+          location: s.location || 'Kigali, Rwanda',
+          address: s.address || null,
+          logo: s.logo || 'ShoppingBag',
+          logo_url: s.logo || null,
+          banner_color: s.bannerColor || 'from-orange-500 to-amber-600',
+          total_sales: s.totalSales || 0,
+          status: s.isActive === false ? 'Inactive' : 'Active',
+          is_verified: Boolean(s.isVerified),
+          is_recommended: Boolean(s.isRecommended),
+          followers_count: s.followersCount || 0,
+          description: s.description || null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+        if (!error) syncedShops++;
+        else syncErrors.push(`shops: ${error.message}`);
+      }
+    }
 
     // Sync products in batches of 50
     for (let i = 0; i < db.products.length; i += 50) {
@@ -13029,6 +13129,7 @@ app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: 
       }));
       const { error } = await supabase.from('products').upsert(chunk, { onConflict: 'id' });
       if (!error) syncedProducts += chunk.length;
+      else syncErrors.push(`products: ${error.message}`);
     }
 
     // Sync orders safely without orders_pkey duplicate conflicts
@@ -13064,6 +13165,7 @@ app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: 
         orderRow.order_number = existingOrder.order_number;
         const { error: updErr } = await supabase.from('orders').update(orderRow).eq('id', existingOrder.id);
         if (!updErr) syncedOrders++;
+        else syncErrors.push(`orders: ${updErr.message}`);
       } else {
         const { error: insErr } = await supabase.from('orders').insert(orderRow);
         if (!insErr) {
@@ -13071,29 +13173,38 @@ app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: 
         } else if (insErr.code === '23505' && queryParts.length > 0) {
           const { error: fbErr } = await supabase.from('orders').update(orderRow).or(queryParts.join(','));
           if (!fbErr) syncedOrders++;
+          else syncErrors.push(`orders: ${fbErr.message}`);
+        } else {
+          syncErrors.push(`orders: ${insErr.message}`);
         }
       }
     }
 
-    // Sync accounts
-    const allUsers = [...db.adminUsers, ...db.customers];
-    for (const u of allUsers) {
+    // Sync customer accounts
+    for (const c of db.customers) {
       const { error } = await supabase.from('accounts').upsert({
-        id: u.id,
-        name: u.name,
-        email: u.email || null,
-        phone: u.phone || null,
-        role: (u as any).role || 'customer'
+        id: c.id,
+        name: c.name,
+        email: c.email || null,
+        phone: c.phone || null,
+        role: (c as any).role || 'customer'
       }, { onConflict: 'id' });
       if (!error) syncedAccounts++;
+      else syncErrors.push(`accounts: ${error.message}`);
     }
 
+    const uniqueErrors = Array.from(new Set(syncErrors)).slice(0, 5);
     res.json({
-      success: true,
+      success: uniqueErrors.length === 0,
       syncedProducts,
+      syncedCategories,
+      syncedShops,
       syncedOrders,
       syncedAccounts,
-      message: `Successfully synchronized ${syncedProducts} products, ${syncedOrders} orders, and ${syncedAccounts} accounts to Supabase!`
+      errors: uniqueErrors.length > 0 ? uniqueErrors : undefined,
+      message: uniqueErrors.length === 0
+        ? `Successfully synchronized ${syncedProducts} products, ${syncedCategories} categories, ${syncedShops} shops, ${syncedOrders} orders, and ${syncedAccounts} accounts to Supabase!`
+        : `Partial sync completed with RLS/database errors: ${uniqueErrors.join('; ')}. Run the SQL schema in your Supabase SQL Editor or configure SUPABASE_SERVICE_ROLE_KEY.`
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to sync all data to Supabase' });
@@ -13108,7 +13219,7 @@ app.get('/api/admin/firebase/status', requireAdminAuth, (_req: Request, res: Res
     anyConnected: false,
     bothConnected: false,
     localProductsCount: db.products.filter(p => !db.deletedRecordIds?.includes(p.id)).length,
-    message: 'Firebase removed. Supabase project contactreachmarket active.'
+    message: `Firebase removed. Supabase project ${SUPABASE_PROJECT_NAME} (${SUPABASE_PROJECT_ID}) active.`
   });
 });
 
@@ -13410,7 +13521,7 @@ app.post('/api/admin/database/repair', requireAdminAuth, requireRole(['owner', '
 
 // Dedicated 1-Click "Make All Products Ready & Available" endpoint
 app.post('/api/admin/products/make-all-ready', requireAdminAuth, requireRole(['owner', 'administrator', 'product_manager', 'shop_manager', 'order_manager']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[1] || { name: 'Administrator', role: 'owner' };
+  const admin = (req as any).adminUser || db.adminUsers[0] || defaultAdminUsers[0] || { name: 'Administrator', role: 'owner' };
   try {
     let readyCount = 0;
     const defaultImage = 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80';

@@ -625,12 +625,28 @@ create table if not exists audit_logs (
   created_at timestamptz default now()
 );
 
+create table if not exists accounts (
+  id text primary key,
+  name text not null,
+  email text unique,
+  phone text,
+  role text not null default 'buyer',
+  status text not null default 'Active',
+  active boolean default true,
+  delivery_address text,
+  total_orders integer default 0,
+  total_spent numeric default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- ---------- Row Level Security (RLS) Enablement ----------
 alter table admin_users enable row level security;
 alter table staff_accounts enable row level security;
 alter table profiles enable row level security;
 alter table users enable row level security;
 alter table customers enable row level security;
+alter table accounts enable row level security;
 alter table categories enable row level security;
 alter table shops enable row level security;
 alter table products enable row level security;
@@ -653,251 +669,165 @@ alter table reviews enable row level security;
 alter table deleted_tombstones enable row level security;
 alter table audit_logs enable row level security;
 
--- ---------- Strict Owner & Scoped RLS Policies ----------
--- 1. System Owner & Staff Tables: Locked exclusively to contactreachmedialimited@gmail.com
+-- ---------- RLS Policies (Compatible with sb_publishable_* API Keys & Supabase Auth) ----------
+-- 1. System Owner & Staff Tables: Locked exclusively to contactreachmedialimited@gmail.com via trigger_enforce_admin_email
 drop policy if exists "only owner can read admin_users" on admin_users;
 create policy "only owner can read admin_users" on admin_users for select
+  to anon, authenticated
   using (is_staff(array['owner']) or lower(trim(email)) = 'contactreachmedialimited@gmail.com');
 
 drop policy if exists "only owner can manage admin_users" on admin_users;
 create policy "only owner can manage admin_users" on admin_users for all
-  using (is_staff(array['owner']))
-  with check (is_staff(array['owner']) and lower(trim(email)) = 'contactreachmedialimited@gmail.com');
+  to anon, authenticated
+  using (is_staff(array['owner']) or lower(trim(email)) = 'contactreachmedialimited@gmail.com')
+  with check (lower(trim(email)) = 'contactreachmedialimited@gmail.com');
 
 drop policy if exists "staff read staff" on staff_accounts;
-create policy "staff read staff" on staff_accounts for select using (is_staff());
+create policy "staff read staff" on staff_accounts for select to authenticated using (is_staff());
 
 drop policy if exists "owner manages staff" on staff_accounts;
-create policy "owner manages staff" on staff_accounts for all using (is_staff(array['owner'])) with check (is_staff(array['owner']));
+create policy "owner manages staff" on staff_accounts for all to authenticated using (is_staff(array['owner'])) with check (is_staff(array['owner']));
 
--- 2. Profiles & Buyer Accounts (Authenticated owner/buyer or active storefront session)
+-- 2. Profiles & Buyer Accounts
 drop policy if exists "own profile" on profiles;
-create policy "own profile" on profiles for all using (id = auth.uid()) with check (id = auth.uid());
+create policy "own profile" on profiles for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
 drop policy if exists "staff read profiles" on profiles;
-create policy "staff read profiles" on profiles for select using (is_staff());
+create policy "staff read profiles" on profiles for select to authenticated using (is_staff());
 
 drop policy if exists "buyer accounts read policy" on users;
-create policy "buyer accounts read policy" on users for select
-  using (is_staff() or id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "buyer accounts upsert policy" on users;
-create policy "buyer accounts upsert policy" on users for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "buyer accounts update policy" on users;
-create policy "buyer accounts update policy" on users for update
-  using (is_staff() or id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "staff delete users" on users;
-create policy "staff delete users" on users for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all users" on users;
+create policy "Allow public all users" on users for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "customers read policy" on customers;
-create policy "customers read policy" on customers for select
-  using (is_staff() or id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "customers insert policy" on customers;
-create policy "customers insert policy" on customers for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "customers update policy" on customers;
-create policy "customers update policy" on customers for update
-  using (is_staff() or id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "staff delete customers" on customers;
-create policy "staff delete customers" on customers for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all customers" on customers;
+create policy "Allow public all customers" on customers for all to anon, authenticated using (true) with check (true);
 
--- 3. Catalog Tables (Public read, authenticated sync/staff write)
+drop policy if exists "Allow public all accounts" on accounts;
+create policy "Allow public all accounts" on accounts for all to anon, authenticated using (true) with check (true);
+
+-- 3. Catalog Tables
 drop policy if exists "public read categories" on categories;
-create policy "public read categories" on categories for select using (true);
 drop policy if exists "manage categories" on categories;
-create policy "manage categories" on categories for all using (is_staff() or auth.role() in ('anon','authenticated','service_role')) with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all categories" on categories;
+create policy "Allow public all categories" on categories for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "public read shops" on shops;
-create policy "public read shops" on shops for select using (true);
 drop policy if exists "manage shops" on shops;
-create policy "manage shops" on shops for all using (is_staff() or auth.role() in ('anon','authenticated','service_role')) with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all shops" on shops;
+create policy "Allow public all shops" on shops for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "public read products" on products;
-create policy "public read products" on products for select using (true);
 drop policy if exists "manage products" on products;
-create policy "manage products" on products for all using (is_staff() or auth.role() in ('anon','authenticated','service_role')) with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all products" on products;
+create policy "Allow public all products" on products for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "manage inventory_logs" on inventory_logs;
-create policy "manage inventory_logs" on inventory_logs for all using (is_staff() or auth.role() in ('anon','authenticated','service_role')) with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all inventory_logs" on inventory_logs;
+create policy "Allow public all inventory_logs" on inventory_logs for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "public read coupons" on coupons;
-create policy "public read coupons" on coupons for select using (is_active or is_staff());
 drop policy if exists "manage coupons" on coupons;
-create policy "manage coupons" on coupons for all using (is_staff() or auth.role() in ('anon','authenticated','service_role')) with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all coupons" on coupons;
+create policy "Allow public all coupons" on coupons for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "public zones" on delivery_zones;
-create policy "public zones" on delivery_zones for select using (true);
+create policy "public zones" on delivery_zones for select to anon, authenticated using (true);
 drop policy if exists "staff zones" on delivery_zones;
-create policy "staff zones" on delivery_zones for all using (is_staff()) with check (is_staff());
+create policy "staff zones" on delivery_zones for all to anon, authenticated using (true) with check (true);
 
 -- 4. Orders, Payments, Payment Transactions & SMS Notifications
 drop policy if exists "orders select policy" on orders;
-create policy "orders select policy" on orders for select
-  using (is_staff() or user_id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "orders insert policy" on orders;
-create policy "orders insert policy" on orders for insert
-  with check (user_id is not null or is_staff() or auth.role() = 'service_role');
-
 drop policy if exists "orders update policy" on orders;
-create policy "orders update policy" on orders for update
-  using (is_staff() or user_id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or user_id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "orders delete staff only" on orders;
-create policy "orders delete staff only" on orders for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all orders" on orders;
+create policy "Allow public all orders" on orders for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "order_items policy" on order_items;
-create policy "order_items policy" on order_items for all
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all order_items" on order_items;
+create policy "Allow public all order_items" on order_items for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "payments select policy" on payments;
-create policy "payments select policy" on payments for select
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "payments insert policy" on payments;
-create policy "payments insert policy" on payments for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "payments update policy" on payments;
-create policy "payments update policy" on payments for update
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "payments delete staff only" on payments;
-create policy "payments delete staff only" on payments for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all payments" on payments;
+create policy "Allow public all payments" on payments for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "payment_transactions select policy" on payment_transactions;
-create policy "payment_transactions select policy" on payment_transactions for select
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "payment_transactions write policy" on payment_transactions;
-create policy "payment_transactions write policy" on payment_transactions for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "payment_transactions update policy" on payment_transactions;
-create policy "payment_transactions update policy" on payment_transactions for update
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "payment_transactions delete staff only" on payment_transactions;
-create policy "payment_transactions delete staff only" on payment_transactions for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all payment_transactions" on payment_transactions;
+create policy "Allow public all payment_transactions" on payment_transactions for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "sms_notifications select policy" on sms_notifications;
-create policy "sms_notifications select policy" on sms_notifications for select
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "sms_notifications insert policy" on sms_notifications;
-create policy "sms_notifications insert policy" on sms_notifications for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "sms_notifications update policy" on sms_notifications;
-create policy "sms_notifications update policy" on sms_notifications for update
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "sms_notifications delete staff only" on sms_notifications;
-create policy "sms_notifications delete staff only" on sms_notifications for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all sms_notifications" on sms_notifications;
+create policy "Allow public all sms_notifications" on sms_notifications for all to anon, authenticated using (true) with check (true);
 
 -- 5. Customer Chat, Send Us a Message & Admin Notifications
 drop policy if exists "messages select policy" on messages;
-create policy "messages select policy" on messages for select
-  using (is_staff() or customer_id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "messages insert policy" on messages;
-create policy "messages insert policy" on messages for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "messages update policy" on messages;
-create policy "messages update policy" on messages for update
-  using (is_staff() or customer_id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or customer_id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "messages delete staff only" on messages;
-create policy "messages delete staff only" on messages for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all messages" on messages;
+create policy "Allow public all messages" on messages for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "admin_notifications policy" on admin_notifications;
-create policy "admin_notifications policy" on admin_notifications for all
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all admin_notifications" on admin_notifications;
+create policy "Allow public all admin_notifications" on admin_notifications for all to anon, authenticated using (true) with check (true);
 
 -- 6. Customer Problems & Complaints
 drop policy if exists "customer_problems select policy" on customer_problems;
-create policy "customer_problems select policy" on customer_problems for select
-  using (is_staff() or customer_id = auth.uid()::text or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "customer_problems insert policy" on customer_problems;
-create policy "customer_problems insert policy" on customer_problems for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "customer_problems update policy" on customer_problems;
-create policy "customer_problems update policy" on customer_problems for update
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
-
 drop policy if exists "customer_problems delete staff only" on customer_problems;
-create policy "customer_problems delete staff only" on customer_problems for delete
-  using (is_staff() or auth.role() = 'service_role');
+drop policy if exists "Allow public all customer_problems" on customer_problems;
+create policy "Allow public all customer_problems" on customer_problems for all to anon, authenticated using (true) with check (true);
 
 -- 7. Settings, Suppliers, Reviews, Audit Logs & Tombstones
 drop policy if exists "app_settings read policy" on app_settings;
-create policy "app_settings read policy" on app_settings for select
-  using (id not in ('admin_credentials') or is_staff() or auth.role() = 'service_role');
-
 drop policy if exists "app_settings write policy" on app_settings;
-create policy "app_settings write policy" on app_settings for all
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all app_settings" on app_settings;
+create policy "Allow public all app_settings" on app_settings for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "public settings" on website_settings;
-create policy "public settings" on website_settings for select using (key not like 'private.%');
+create policy "public settings" on website_settings for select to anon, authenticated using (key not like 'private.%');
 drop policy if exists "staff settings" on website_settings;
-create policy "staff settings" on website_settings for all using (is_staff()) with check (is_staff());
+create policy "staff settings" on website_settings for all to authenticated using (is_staff()) with check (is_staff());
 
 drop policy if exists "reviews read policy" on reviews;
-create policy "reviews read policy" on reviews for select using (status = 'approved' or is_staff());
 drop policy if exists "reviews write policy" on reviews;
-create policy "reviews write policy" on reviews for insert with check (true);
 drop policy if exists "reviews admin policy" on reviews;
-create policy "reviews admin policy" on reviews for update using (is_staff()) with check (is_staff());
+drop policy if exists "Allow public all reviews" on reviews;
+create policy "Allow public all reviews" on reviews for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "supplier_applications policy" on supplier_applications;
-create policy "supplier_applications policy" on supplier_applications for all
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all supplier_applications" on supplier_applications;
+create policy "Allow public all supplier_applications" on supplier_applications for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "supplier_payouts policy" on supplier_payouts;
-create policy "supplier_payouts policy" on supplier_payouts for all
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all supplier_payouts" on supplier_payouts;
+create policy "Allow public all supplier_payouts" on supplier_payouts for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "deleted_tombstones policy" on deleted_tombstones;
-create policy "deleted_tombstones policy" on deleted_tombstones for all
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'))
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all deleted_tombstones" on deleted_tombstones;
+create policy "Allow public all deleted_tombstones" on deleted_tombstones for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "staff audit read" on audit_logs;
-create policy "staff audit read" on audit_logs for select
-  using (is_staff() or auth.role() in ('anon','authenticated','service_role'));
 drop policy if exists "staff audit insert" on audit_logs;
-create policy "staff audit insert" on audit_logs for insert
-  with check (is_staff() or auth.role() in ('anon','authenticated','service_role'));
+drop policy if exists "Allow public all audit_logs" on audit_logs;
+create policy "Allow public all audit_logs" on audit_logs for all to anon, authenticated using (true) with check (true);
 
 -- Automatic updated_at triggers
 drop trigger if exists trigger_products_updated_at on public.products;
@@ -908,6 +838,45 @@ create trigger trigger_orders_updated_at before update on public.orders for each
 
 drop trigger if exists trigger_customer_problems_updated_at on public.customer_problems;
 create trigger trigger_customer_problems_updated_at before update on public.customer_problems for each row execute function public.handle_updated_at();
+
+-- ---------- Initial Seed Data (Admin Owner, Store Settings, Welcome Coupon) ----------
+insert into public.admin_users (id, name, email, phone, role, permissions, active)
+values (
+  'adm-owner-crmedia',
+  'Administrator',
+  'contactreachmedialimited@gmail.com',
+  '0780022600',
+  'owner',
+  array['all'],
+  true
+)
+on conflict (email) do update set
+  role = 'owner',
+  active = true,
+  updated_at = now();
+
+insert into public.app_settings (id, market_name, company_name, phone, email, receiver_name, payment_number, merchant_code, mtn_ussd_pattern, airtel_ussd_pattern, delivery_fee_kigali, delivery_fee_upcountry, free_delivery_threshold, is_maintenance_mode)
+values (
+  'global',
+  'ContactReach Market',
+  'ContactReach Media Ltd',
+  '0780022600',
+  'contactreachmedialimited@gmail.com',
+  'Ruth',
+  '0780022600',
+  '2328354',
+  '*182*1*1*0780022600*{AMOUNT}#',
+  '*182*1*2*0780022600*{AMOUNT}#',
+  1500,
+  3500,
+  50000,
+  false
+)
+on conflict (id) do nothing;
+
+insert into public.coupons (id, code, discount_type, discount_value, min_order_amount, max_discount, is_active, times_used)
+values ('coup-welcome10', 'WELCOME10', 'percentage', 10, 10000, 20000, true, 0)
+on conflict (code) do nothing;
 
 -- ---------- Enable Supabase Realtime Across All Operational Tables ----------
 do $$
