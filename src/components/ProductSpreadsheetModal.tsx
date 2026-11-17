@@ -71,6 +71,13 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
   const [previewSearch, setPreviewSearch] = useState('');
   const [isCommittingImport, setIsCommittingImport] = useState(false);
   const [importResult, setImportResult] = useState<{ createdCount: number; updatedCount: number; skippedCount: number; message: string } | null>(null);
+  const [confirmSheetExport, setConfirmSheetExport] = useState<{
+    createNew: boolean;
+    sheetId: string;
+    targetTab: string;
+    token: string;
+    message: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -282,13 +289,17 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
 
     const sheetId = extractGoogleSheetId(googleSheetInput) || LINKED_GOOGLE_SHEET_ID;
     const targetTab = selectedSheetTab || 'Sheet1';
+    const message = createNew
+      ? `Create a new Google Sheet with all ${products.length} current marketplace products?`
+      : `Save and update all ${products.length} store products in Google Sheet (${sheetId})? This will update the rows in "${targetTab}".`;
 
-    const confirmed = window.confirm(
-      createNew
-        ? `Create a new Google Sheet with all ${products.length} current marketplace products?`
-        : `Save and update all ${products.length} store products in Google Sheet (${sheetId})? This will update the rows in "${targetTab}".`
-    );
-    if (!confirmed) return;
+    setConfirmSheetExport({ createNew, sheetId, targetTab, token, message });
+  };
+
+  const executeExportToGoogleSheet = async () => {
+    if (!confirmSheetExport) return;
+    const { createNew, sheetId, targetTab, token } = confirmSheetExport;
+    setConfirmSheetExport(null);
 
     setIsExportingToSheet(true);
     try {
@@ -1138,6 +1149,39 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
             </div>
           )}
         </div>
+
+        {/* In-App Confirmation Dialog for Google Sheet Export */}
+        {confirmSheetExport && (
+          <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-[#FF6000] flex items-center justify-center shrink-0">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <h4 className="font-black text-base text-slate-900">
+                  {confirmSheetExport.createNew ? 'Create New Google Sheet' : 'Confirm Google Sheet Export'}
+                </h4>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">{confirmSheetExport.message}</p>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmSheetExport(null)}
+                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executeExportToGoogleSheet}
+                  className="flex-1 py-2.5 px-4 bg-[#FF6000] hover:bg-orange-600 text-white font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Confirm Export
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

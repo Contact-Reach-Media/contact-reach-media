@@ -16,6 +16,7 @@ interface CustomerAccountPageProps {
   user: CustomerUser | null;
   onLogout: () => void;
   onNavigate: (view: string, params?: any) => void;
+  onUserUpdated?: (updatedUser: CustomerUser) => void;
   currentLang: Language;
   currentCurrency?: CurrencyCode;
   exchangeRates?: Record<string, number>;
@@ -25,6 +26,7 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
   user,
   onLogout,
   onNavigate,
+  onUserUpdated,
   currentLang,
   currentCurrency = 'RWF',
   exchangeRates
@@ -49,6 +51,7 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
   const [editAddress, setEditAddress] = useState(user?.deliveryAddress || '');
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const syncAccountData = async (silent = false) => {
     if (!user) return;
@@ -129,16 +132,21 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProfile(true);
+    setProfileError(null);
     try {
-      await api.updateBuyerProfile({
+      const updated = await api.updateBuyerProfile({
         name: editName.trim(),
         phone: editPhone.trim(),
         deliveryAddress: editAddress.trim()
       });
+      if (updated && onUserUpdated) {
+        onUserUpdated(updated);
+      }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update profile:', err);
+      setProfileError(err?.message || 'Failed to update profile. Please try again.');
     } finally {
       setSavingProfile(false);
     }
@@ -449,6 +457,12 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
                   </span>
                 )}
               </div>
+              {profileError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{profileError}</span>
+                </div>
+              )}
             </form>
           </div>
         )}

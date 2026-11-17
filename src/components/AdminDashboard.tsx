@@ -60,6 +60,7 @@ import {
   LEGACY_CATEGORY_ALIAS_IDS,
   MAIN_CATEGORY_DEFINITIONS
 } from '../data/categoryStructure.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -700,6 +701,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState(false);
+  const [adminConfirmModal, setAdminConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    isDanger?: boolean;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+  const [adminConfirmBusy, setAdminConfirmBusy] = useState(false);
+  const [adminPromptModal, setAdminPromptModal] = useState<{
+    title: string;
+    subtitle?: string;
+    placeholder?: string;
+    allowBlank?: boolean;
+    confirmLabel?: string;
+    onConfirm: (value: string) => Promise<void> | void;
+  } | null>(null);
+  const [adminPromptValue, setAdminPromptValue] = useState('');
+  const [adminPromptError, setAdminPromptError] = useState<string | null>(null);
 
   // Modals & Selected items
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -3205,22 +3224,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
 
-    const confirmed = window.confirm(
-      `Save all ${products.length} store products to your linked Google Sheet (1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk)? This will update the rows in the spreadsheet.`
-    );
-    if (!confirmed) return;
-
-    setSyncingToSheet(true);
-    try {
-      const res = await api.syncPushToGoogleSheet(token);
-      showToast(res.message, 'success');
-      fetchAllData();
-      onRefreshPublicData();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to save products to Google Sheet', 'error');
-    } finally {
-      setSyncingToSheet(false);
-    }
+    const sheetToken = token;
+    setAdminConfirmModal({
+      title: 'Push Products to Google Sheet',
+      message: `Save all ${products.length} store products to your linked Google Sheet (1kaLUCemqV6-KJ_G6nqYhyrf2bPpDg6HxyaSj6uDsoHk)? This will update the rows in the spreadsheet.`,
+      confirmLabel: 'Save to Google Sheet',
+      onConfirm: async () => {
+        setSyncingToSheet(true);
+        try {
+          const res = await api.syncPushToGoogleSheet(sheetToken);
+          showToast(res.message, 'success');
+          fetchAllData();
+          onRefreshPublicData();
+        } catch (err: any) {
+          showToast(err.message || 'Failed to save products to Google Sheet', 'error');
+        } finally {
+          setSyncingToSheet(false);
+        }
+      }
+    });
   };
 
   // Stock Adjustment
@@ -4711,10 +4733,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const val = window.prompt(`Update product cost for "${p.name}" (FRW):`, String(p.costPrice ?? ''));
-                                        if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
-                                          handleQuickUpdateProductCost(p.id, Number(val));
-                                        }
+                                        setAdminPromptValue(String(p.costPrice ?? ''));
+                                        setAdminPromptError(null);
+                                        setAdminPromptModal({
+                                          title: `Update Cost Price (FRW)`,
+                                          subtitle: `Enter unit cost price for "${p.name}".`,
+                                          placeholder: 'e.g. 12000',
+                                          confirmLabel: 'Update Cost',
+                                          onConfirm: (val) => {
+                                            const parsed = Number(val.trim());
+                                            if (!val.trim() || isNaN(parsed) || parsed < 0) {
+                                              setAdminPromptError('Please enter a valid non-negative number.');
+                                              return;
+                                            }
+                                            handleQuickUpdateProductCost(p.id, parsed);
+                                            setAdminPromptModal(null);
+                                          }
+                                        });
                                       }}
                                       className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
                                     >
@@ -4727,10 +4762,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const val = window.prompt(`Set cost price for "${p.name}" (FRW):`, '');
-                                        if (val !== null && !isNaN(Number(val)) && Number(val) >= 0) {
-                                          handleQuickUpdateProductCost(p.id, Number(val));
-                                        }
+                                        setAdminPromptValue('');
+                                        setAdminPromptError(null);
+                                        setAdminPromptModal({
+                                          title: `Set Cost Price (FRW)`,
+                                          subtitle: `Enter unit cost price for "${p.name}".`,
+                                          placeholder: 'e.g. 12000',
+                                          confirmLabel: 'Save Cost',
+                                          onConfirm: (val) => {
+                                            const parsed = Number(val.trim());
+                                            if (!val.trim() || isNaN(parsed) || parsed < 0) {
+                                              setAdminPromptError('Please enter a valid non-negative number.');
+                                              return;
+                                            }
+                                            handleQuickUpdateProductCost(p.id, parsed);
+                                            setAdminPromptModal(null);
+                                          }
+                                        });
                                       }}
                                       className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
                                     >
@@ -4771,11 +4819,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     const currentShip = p.shippingCost !== undefined ? String(p.shippingCost) : '';
-                                    const val = window.prompt(`Set custom shipping cost for "${p.name}" in FRW:\n(Leave blank to restore automatic 1,500 + 10%)`, currentShip);
-                                    if (val !== null) {
-                                      const trimmed = val.trim();
-                                      handleQuickUpdateProductShipping(p.id, trimmed === '' ? undefined : Math.max(0, Number(trimmed)));
-                                    }
+                                    setAdminPromptValue(currentShip);
+                                    setAdminPromptError(null);
+                                    setAdminPromptModal({
+                                      title: `Custom Shipping Cost (FRW)`,
+                                      subtitle: `Set custom shipping cost for "${p.name}". Leave blank to restore automatic 1,500 + 10%.`,
+                                      placeholder: 'Leave blank for auto (1,500 + 10%)',
+                                      allowBlank: true,
+                                      confirmLabel: 'Save Shipping',
+                                      onConfirm: (val) => {
+                                        const trimmed = val.trim();
+                                        if (trimmed !== '' && (isNaN(Number(trimmed)) || Number(trimmed) < 0)) {
+                                          setAdminPromptError('Please enter a valid non-negative number or leave blank.');
+                                          return;
+                                        }
+                                        handleQuickUpdateProductShipping(p.id, trimmed === '' ? undefined : Math.max(0, Number(trimmed)));
+                                        setAdminPromptModal(null);
+                                      }
+                                    });
                                   }}
                                   className="text-[9px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
                                 >
@@ -5840,8 +5901,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      navigator.clipboard.writeText(ord.orderNumber);
-                                      showToast(`Copied ${ord.orderNumber}`);
+                                      copyTextToClipboard(ord.orderNumber).then((ok) => {
+                                        if (ok) showToast(`Copied ${ord.orderNumber}`);
+                                      });
                                     }}
                                     className="text-slate-400 hover:text-slate-700"
                                     title="Copy Order ID"
@@ -5960,8 +6022,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        navigator.clipboard.writeText(ord.trackingNumber || '');
-                                        showToast(`Copied tracking #${ord.trackingNumber}`);
+                                        copyTextToClipboard(ord.trackingNumber || '').then((ok) => {
+                                          if (ok) showToast(`Copied tracking #${ord.trackingNumber}`);
+                                        });
                                       }}
                                       className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 cursor-pointer"
                                       title="Copy tracking code"
@@ -8327,16 +8390,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   {u.active !== false ? 'Deactivate' : 'Activate'}
                                 </button>
                                 <button
-                                  onClick={async () => {
-                                    if (window.confirm(`Are you sure you want to remove administrator ${u.name || 'Administrator'}?`)) {
-                                      try {
-                                        await api.adminDeleteUser(u.id);
-                                        showToast(`Removed administrator ${u.name || 'Administrator'}`);
-                                        fetchAllData();
-                                      } catch (err: any) {
-                                        showToast(err.message || 'Failed to remove user', 'error');
+                                  onClick={() => {
+                                    setAdminConfirmModal({
+                                      title: 'Remove Administrator',
+                                      message: `Are you sure you want to remove administrator ${u.name || 'Administrator'}?`,
+                                      confirmLabel: 'Remove Admin',
+                                      isDanger: true,
+                                      onConfirm: async () => {
+                                        try {
+                                          await api.adminDeleteUser(u.id);
+                                          showToast(`Removed administrator ${u.name || 'Administrator'}`);
+                                          fetchAllData();
+                                        } catch (err: any) {
+                                          showToast(err.message || 'Failed to remove user', 'error');
+                                        }
                                       }
-                                    }
+                                    });
                                   }}
                                   className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 cursor-pointer transition-all"
                                 >
@@ -11260,8 +11329,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(verifyModalPayment.transactionId);
-                    showToast('Transaction ID copied to clipboard');
+                    copyTextToClipboard(verifyModalPayment.transactionId).then((ok) => {
+                      if (ok) showToast('Transaction ID copied to clipboard');
+                    });
                   }}
                   className="px-2.5 py-1 bg-white border border-blue-300 text-blue-800 font-bold rounded-lg hover:bg-blue-50 text-[11px] cursor-pointer flex items-center gap-1 shadow-2xs"
                 >
@@ -11281,8 +11351,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText(verifyModalPayment.confirmationMessage!);
-                        showToast('SMS confirmation copied to clipboard');
+                        copyTextToClipboard(verifyModalPayment.confirmationMessage!).then((ok) => {
+                          if (ok) showToast('SMS confirmation copied to clipboard');
+                        });
                       }}
                       className="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
                     >
@@ -12674,6 +12745,106 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Generic In-App Admin Action Confirm Modal */}
+      {adminConfirmModal && (
+        <div className="fixed inset-0 z-[125] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
+            <h3 className="text-lg font-black text-slate-900 tracking-tight">
+              {adminConfirmModal.title}
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {adminConfirmModal.message}
+            </p>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={adminConfirmBusy}
+                onClick={() => setAdminConfirmModal(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={adminConfirmBusy}
+                onClick={async () => {
+                  setAdminConfirmBusy(true);
+                  try {
+                    await adminConfirmModal.onConfirm();
+                  } finally {
+                    setAdminConfirmBusy(false);
+                    setAdminConfirmModal(null);
+                  }
+                }}
+                className={`flex-1 py-2.5 px-4 text-white font-bold rounded-xl text-xs cursor-pointer disabled:opacity-50 ${
+                  adminConfirmModal.isDanger
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-[#FF6000] hover:bg-[#e05500]'
+                }`}
+              >
+                {adminConfirmBusy ? 'Processing...' : (adminConfirmModal.confirmLabel || 'Confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generic In-App Admin Value Input Modal (Cost & Custom Shipping) */}
+      {adminPromptModal && (
+        <div className="fixed inset-0 z-[125] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await adminPromptModal.onConfirm(adminPromptValue);
+            }}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-4"
+          >
+            <div>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                {adminPromptModal.title}
+              </h3>
+              {adminPromptModal.subtitle && (
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  {adminPromptModal.subtitle}
+                </p>
+              )}
+            </div>
+            <input
+              type="text"
+              autoFocus
+              value={adminPromptValue}
+              onChange={(e) => {
+                setAdminPromptValue(e.target.value);
+                setAdminPromptError(null);
+              }}
+              placeholder={adminPromptModal.placeholder || ''}
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-orange-500"
+            />
+            {adminPromptError && (
+              <p className="text-xs text-rose-600 font-semibold">{adminPromptError}</p>
+            )}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminPromptModal(null);
+                  setAdminPromptError(null);
+                }}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 px-4 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold rounded-xl text-xs cursor-pointer"
+              >
+                {adminPromptModal.confirmLabel || 'Save'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

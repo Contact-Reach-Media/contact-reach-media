@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight, Copy, Check, Sparkles, Truck, ShieldCheck, Zap } from 'lucide-react';
 import { Language } from '../translations.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface HeroBannerProps {
   currentLang: Language;
@@ -93,10 +94,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   }, [isPaused]);
 
   const handleCopyCode = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setIsCopied(true);
-    onCopyNotice?.(text);
-    setTimeout(() => setIsCopied(false), 2500);
+    copyTextToClipboard(text).then((ok) => {
+      if (ok) {
+        setIsCopied(true);
+        onCopyNotice?.(text);
+        setTimeout(() => setIsCopied(false), 2500);
+      }
+    });
   };
 
   const currentSlide = slides[currentSlideIndex];

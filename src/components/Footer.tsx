@@ -169,7 +169,7 @@ export const Footer: React.FC<FooterProps> = ({
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('shop')} className="hover:text-white transition-colors cursor-pointer">
+                <button onClick={() => onNavigate('cart')} className="hover:text-white transition-colors cursor-pointer">
                   {t.cart}
                 </button>
               </li>

@@ -29,7 +29,7 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
     () => resolveDepartmentDefinitions(categories, true),
     [categories]
   );
-  const [activeMainId, setActiveMainId] = useState<string>(MAIN_CATEGORY_DEFINITIONS[0].id);
+  const [activeMainId, setActiveMainId] = useState<string>(departments[0]?.id || MAIN_CATEGORY_DEFINITIONS[0].id);
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredCategories = departments.filter(cat => {
@@ -42,7 +42,10 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
     );
   });
 
-  const activeCategory = departments.find(c => c.id === activeMainId) || departments[0];
+  const activeCategory =
+    (filteredCategories.find(c => c.id === activeMainId) || filteredCategories[0]) ||
+    departments.find(c => c.id === activeMainId) ||
+    departments[0];
 
   return (
     <div className="bg-slate-50 min-h-screen py-6 sm:py-10">
@@ -64,7 +67,7 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
             Shop
           </button>
           <span>/</span>
-          <span className="font-semibold text-slate-900">All 13 Product Categories</span>
+          <span className="font-semibold text-slate-900">All {departments.length} Product Categories</span>
         </nav>
 
         {/* Page Title & Search */}
@@ -75,7 +78,7 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                All 13 Product Categories
+                All {departments.length} Product Categories
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
                 Browse complete ContactReach Market department directory across all categories and subcategories.
@@ -101,37 +104,50 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
           {/* Left Column: 13 Main Category Tabs (4 cols) */}
           <div className="md:col-span-4 bg-white rounded-3xl border border-slate-200/90 p-3 shadow-xs space-y-1">
             <div className="px-3 py-2 text-[10px] uppercase font-bold tracking-wider text-slate-400 border-b border-slate-100 mb-1">
-              Main Departments (13)
+              Main Departments ({filteredCategories.length})
             </div>
 
             <div className="space-y-1 max-h-[600px] overflow-y-auto pr-1">
-              {filteredCategories.map(cat => {
-                const isSelected = cat.id === activeMainId;
-                return (
+              {filteredCategories.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-500 space-y-2">
+                  <p>No categories matched &quot;{searchQuery}&quot;.</p>
                   <button
-                    key={cat.id}
                     type="button"
-                    onClick={() => setActiveMainId(cat.id)}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left cursor-pointer ${
-                      isSelected
-                        ? 'bg-orange-600 text-white shadow-xs'
-                        : 'text-slate-700 hover:bg-slate-100'
-                    }`}
+                    onClick={() => setSearchQuery('')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="truncate">
-                        <CategoryTitle text={cat.name} lang={currentLang} />
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                        isSelected ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {cat.subcategories.length}
-                      </span>
-                    </div>
-                    <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                    Reset search
                   </button>
-                );
-              })}
+                </div>
+              ) : (
+                filteredCategories.map(cat => {
+                  const isSelected = activeCategory && cat.id === activeCategory.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveMainId(cat.id)}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-left cursor-pointer ${
+                        isSelected
+                          ? 'bg-orange-600 text-white shadow-xs'
+                          : 'text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="truncate">
+                          <CategoryTitle text={cat.name} lang={currentLang} />
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                          isSelected ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {cat.subcategories.length}
+                        </span>
+                      </div>
+                      <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 

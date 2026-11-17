@@ -11,6 +11,7 @@ import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface OrderTrackingModalProps {
   isOpen: boolean;
@@ -354,9 +355,12 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(trackedOrder.trackingNumber || '');
-                            setCopiedTracking(true);
-                            setTimeout(() => setCopiedTracking(false), 2000);
+                            copyTextToClipboard(trackedOrder.trackingNumber || '').then((ok) => {
+                              if (ok) {
+                                setCopiedTracking(true);
+                                setTimeout(() => setCopiedTracking(false), 2000);
+                              }
+                            });
                           }}
                           className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px]"
                           title="Copy tracking"
@@ -528,9 +532,12 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(ussdCode);
-                            setCopiedUssd(true);
-                            setTimeout(() => setCopiedUssd(false), 2000);
+                            copyTextToClipboard(ussdCode).then((ok) => {
+                              if (ok) {
+                                setCopiedUssd(true);
+                                setTimeout(() => setCopiedUssd(false), 2000);
+                              }
+                            });
                           }}
                           className="ml-2 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-sans font-medium flex items-center gap-1 cursor-pointer"
                         >

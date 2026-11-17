@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Phone, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2,
   AlertCircle, Calendar, ChevronRight, ShoppingBag, User, ShieldCheck, MessageCircle
@@ -41,6 +41,14 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const [logoError, setLogoError] = useState(false);
+
+  useEffect(() => {
+    setMode(initialMode);
+    setError(null);
+    setSuccessMsg(null);
+  }, [initialMode]);
 
   const switchMode = (nextMode: 'signin' | 'register' | 'forgot') => {
     setMode(nextMode);
@@ -128,7 +136,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
           }
         } catch {}
         onSuccess(res.user);
-        onNavigateHome();
       } else {
         const res = await api.buyerRegister({
           name: name.trim(),
@@ -139,7 +146,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
           localStorage.setItem('crm_remember_buyer', phone.trim());
         } catch {}
         onSuccess(res.user);
-        onNavigateHome();
       }
     } catch (err: any) {
       setError(err.message || (isEn ? 'Authentication failed. Please try again.' : 'Habaye ikosa. Ongera ugerageze.'));
@@ -170,15 +176,16 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#f95700] to-amber-500 p-0.5 flex items-center justify-center shadow-md shadow-orange-500/20">
                 <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center p-1.5">
-                  <img
-                    src="/logo.png"
-                    alt="ContactReach Market"
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                  <ShoppingBag className="w-5 h-5 text-[#f95700]" />
+                  {!logoError ? (
+                    <img
+                      src="/logo.png"
+                      alt="ContactReach Market"
+                      className="w-full h-full object-contain"
+                      onError={() => setLogoError(true)}
+                    />
+                  ) : (
+                    <ShoppingBag className="w-5 h-5 text-[#f95700]" />
+                  )}
                 </div>
               </div>
               <div className="flex flex-col">

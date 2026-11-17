@@ -19,17 +19,30 @@ export const ShopsSection: React.FC<ShopsSectionProps> = ({
   onOpenSellerModal
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'followed' | 'verified'>('newest');
   const [followedShops, setFollowedShops] = useState<Record<string, boolean>>({});
 
   const toggleFollow = (id: string) => {
     setFollowedShops(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const filteredShops = shops.filter(s =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredShops = shops
+    .filter(s =>
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.location.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === 'followed') {
+        const countA = (a.followersCount || 0) + (followedShops[a.id] ? 1 : 0);
+        const countB = (b.followersCount || 0) + (followedShops[b.id] ? 1 : 0);
+        return countB - countA;
+      }
+      if (sortBy === 'verified') {
+        return (b.isVerified ? 1 : 0) - (a.isVerified ? 1 : 0);
+      }
+      return 0;
+    });
 
   return (
     <section className="py-10 bg-[#F8F9FA] min-h-[70vh]">
@@ -62,37 +75,67 @@ export const ShopsSection: React.FC<ShopsSectionProps> = ({
           </div>
 
           <div className="w-full sm:w-auto flex items-center justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-            <select className="text-xs font-semibold text-slate-700 bg-transparent py-1 px-2 focus:outline-none cursor-pointer">
-              <option>Newest</option>
-              <option>Most Followed</option>
-              <option>Verified First</option>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'newest' | 'followed' | 'verified')}
+              aria-label="Sort shops"
+              className="text-xs font-semibold text-slate-700 bg-transparent py-1 px-2 focus:outline-none cursor-pointer"
+            >
+              <option value="newest">Newest</option>
+              <option value="followed">Most Followed</option>
+              <option value="verified">Verified First</option>
             </select>
           </div>
         </div>
 
         {/* 3-Column Grid of Shop Cards or Clean Empty State */}
         {filteredShops.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-xl mx-auto shadow-2xs space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-[#FF6000] flex items-center justify-center mx-auto">
-              <Store className="w-8 h-8" />
+          shops.length > 0 && searchTerm.trim() ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-xl mx-auto shadow-2xs space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center mx-auto">
+                <Search className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900">
+                  {currentLang === 'en' ? 'No Shops Match Your Search' : 'Nta Duka Ryabonetse'}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+                  {currentLang === 'en'
+                    ? `No verified shops matched "${searchTerm.trim()}". Try a different store name, category, or district.`
+                    : `Nta duka rihwanye na "${searchTerm.trim()}". Gerageza irindi zina cyangwa icyiciro.`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="py-2.5 px-6 rounded-full bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+              >
+                {currentLang === 'en' ? 'Show All Shops' : 'Erekana Amaduka Yose'}
+              </button>
             </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900">
-                {currentLang === 'en' ? 'Supplier Stores Onboarding' : "Amaduka n'Abacuruzi Bari Gutegurwa"}
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-                {currentLang === 'en'
-                  ? 'ContactReach Market partners directly with verified retail suppliers, wholesalers, and brand distributors across Kigali. No fake shops or invented follower counts are listed.'
-                  : "ContactReach Market ikorana n'abacuruzi nyabo bafite amaduka azwi i Kigali no mu Rwanda hose. Nta maduka y'igihimbano agomba kugaragara hano."}
-              </p>
+          ) : (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-xl mx-auto shadow-2xs space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 text-[#FF6000] flex items-center justify-center mx-auto">
+                <Store className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900">
+                  {currentLang === 'en' ? 'Supplier Stores Onboarding' : "Amaduka n'Abacuruzi Bari Gutegurwa"}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+                  {currentLang === 'en'
+                    ? 'ContactReach Market partners directly with verified retail suppliers, wholesalers, and brand distributors across Kigali. No fake shops or invented follower counts are listed.'
+                    : "ContactReach Market ikorana n'abacuruzi nyabo bafite amaduka azwi i Kigali no mu Rwanda hose. Nta maduka y'igihimbano agomba kugaragara hano."}
+                </p>
+              </div>
+              <button
+                onClick={onOpenSellerModal}
+                className="py-2.5 px-6 rounded-full bg-[#FF6000] hover:bg-[#E54D00] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+              >
+                {currentLang === 'en' ? 'Apply to Sell as Supplier →' : 'Saba Kwandikisha Idani ryawe →'}
+              </button>
             </div>
-            <button
-              onClick={onOpenSellerModal}
-              className="py-2.5 px-6 rounded-full bg-[#FF6000] hover:bg-[#E54D00] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
-            >
-              {currentLang === 'en' ? 'Apply to Sell as Supplier →' : 'Saba Kwandikisha Idani ryawe →'}
-            </button>
-          </div>
+          )
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredShops.map((shop) => {

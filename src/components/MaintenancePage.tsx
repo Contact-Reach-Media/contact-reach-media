@@ -60,7 +60,11 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
               alt="ContactReach Market"
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-orange-500/30 shadow-md bg-white p-0.5 object-cover"
               onError={(e) => {
-                (e.target as HTMLElement).setAttribute('src', '/public/logo-circle.png');
+                const img = e.currentTarget;
+                if (!img.dataset.fallbackApplied) {
+                  img.dataset.fallbackApplied = '1';
+                  img.src = '/logo-circle.png';
+                }
               }}
             />
             <div>

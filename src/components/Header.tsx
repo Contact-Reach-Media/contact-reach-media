@@ -80,6 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const langDropdownRef = useRef<HTMLDivElement>(null);
   const currDropdownRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const t = translations[currentLang] || translations.en;
 
@@ -122,6 +123,9 @@ export const Header: React.FC<HeaderProps> = ({
       }
       if (currDropdownRef.current && !currDropdownRef.current.contains(target)) {
         setCurrDropdownOpen(false);
+      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(target)) {
+        setMoreMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -577,7 +581,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* 3-Dots More Options Menu */}
-            <div className="relative">
+            <div className="relative" ref={moreMenuRef}>
               <button
                 onClick={() => setMoreMenuOpen(!moreMenuOpen)}
                 className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
@@ -786,7 +790,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <div className="flex items-center gap-2">
                 <Grid className="w-4 h-4" />
-                <span>{currentLang === 'en' ? 'Browse All 13 Categories' : 'Reba Ibyiciro Byose (13)'}</span>
+                <span>{currentLang === 'en' ? `Browse All ${departments.length} Categories` : `Reba Ibyiciro Byose (${departments.length})`}</span>
               </div>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
@@ -818,11 +822,11 @@ export const Header: React.FC<HeaderProps> = ({
               if (onOpenCategoriesMenu) onOpenCategoriesMenu();
             }}
             className="flex items-center gap-2 bg-[#FF6000] hover:bg-[#E54D00] text-white px-3 py-1.5 rounded-xl font-black text-xs shadow-xs transition-transform active:scale-95 cursor-pointer shrink-0"
-            title="Open Complete 13 Categories Directory"
+            title={`Open Complete ${departments.length} Categories Directory`}
           >
             <Grid className="w-4 h-4" />
             <span className="whitespace-nowrap">{currentLang === 'en' ? 'All Categories' : 'Ibyiciro Byose'}</span>
-            <span className="bg-black/20 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">13</span>
+            <span className="bg-black/20 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">{departments.length}</span>
             <ChevronDown className="w-3 h-3 text-white/80" />
           </button>
 

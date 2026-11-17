@@ -11,6 +11,7 @@ import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface OrderTrackingPageProps {
   initialOrderNumber?: string;
@@ -401,9 +402,12 @@ export const OrderTrackingPage: React.FC<OrderTrackingPageProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(trackedOrder.trackingNumber || '');
-                          setCopiedTracking(true);
-                          setTimeout(() => setCopiedTracking(false), 2000);
+                          copyTextToClipboard(trackedOrder.trackingNumber || '').then((ok) => {
+                            if (ok) {
+                              setCopiedTracking(true);
+                              setTimeout(() => setCopiedTracking(false), 2000);
+                            }
+                          });
                         }}
                         className="p-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-600 text-[10px]"
                       >

@@ -11,6 +11,7 @@ import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { OrderTrackStatusSummary, TRACK_ORDER_STAGES, resolveOrderStageIndex } from './OrderTrackStatusSummary.tsx';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface BuyerAccountModalProps {
   isOpen: boolean;
@@ -295,9 +296,12 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedOrder(text);
-    setTimeout(() => setCopiedOrder(null), 2000);
+    copyTextToClipboard(text).then((ok) => {
+      if (ok) {
+        setCopiedOrder(text);
+        setTimeout(() => setCopiedOrder(null), 2000);
+      }
+    });
   };
 
   const openChatForOrder = (orderNumber: string) => {

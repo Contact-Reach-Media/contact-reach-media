@@ -333,21 +333,6 @@ export function NotFoundPage({
         <span>·</span>
         <span>© {currentYear} ContactReach Media. All rights reserved.</span>
       </footer>
-
-      {/* Embedded Animations */}
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) rotate(-3deg); }
-          50% { transform: translateY(-13px) rotate(3deg); }
-        }
-        @keyframes floatReverse {
-          0%, 100% { transform: translateY(0) rotate(3deg); }
-          50% { transform: translateY(12px) rotate(-5deg); }
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

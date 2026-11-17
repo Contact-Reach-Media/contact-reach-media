@@ -12,6 +12,7 @@ import { buildUssdCode, formatUssdTelUri, autoTriggerUssd } from '../utils/ussd.
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface PaymentPageProps {
   order: Order | null;
@@ -390,9 +391,12 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(activeOrder.trackingNumber || '');
-                      setCopiedTracking(true);
-                      setTimeout(() => setCopiedTracking(false), 2000);
+                      copyTextToClipboard(activeOrder.trackingNumber || '').then((ok) => {
+                        if (ok) {
+                          setCopiedTracking(true);
+                          setTimeout(() => setCopiedTracking(false), 2000);
+                        }
+                      });
                     }}
                     className="p-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-600 text-[10px]"
                   >
@@ -460,9 +464,12 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(ussdCode);
-                    setCopiedUssd(true);
-                    setTimeout(() => setCopiedUssd(false), 2000);
+                    copyTextToClipboard(ussdCode).then((ok) => {
+                      if (ok) {
+                        setCopiedUssd(true);
+                        setTimeout(() => setCopiedUssd(false), 2000);
+                      }
+                    });
                   }}
                   className="ml-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-sans font-medium flex items-center gap-1 cursor-pointer transition-colors"
                 >

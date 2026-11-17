@@ -5,6 +5,7 @@ import {
   Home, CreditCard, User, Layers
 } from 'lucide-react';
 import { Language, translations } from '../translations.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface HeroCarouselProps {
   currentLang: Language;
@@ -113,8 +114,11 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
 
   const copyTrackingRef = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard?.writeText('MT123456789');
-    onShowToast('Reference copied: MT123456789');
+    copyTextToClipboard('MT123456789').then((ok) => {
+      if (ok) {
+        onShowToast('Reference copied: MT123456789');
+      }
+    });
   };
 
   return (

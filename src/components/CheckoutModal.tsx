@@ -13,6 +13,7 @@ import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '.
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
 import { calculateCartBreakdown, getEffectiveUnitPrice } from '../utils/shippingCalculator.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -415,9 +416,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(activeUssdCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2500);
+    copyTextToClipboard(activeUssdCode).then((ok) => {
+      if (ok) {
+        setCopiedCode(true);
+        setTimeout(() => setCopiedCode(false), 2500);
+      }
+    });
   };
 
   // Step 3: Payment Proof File Handling (Optimized client-side compression)

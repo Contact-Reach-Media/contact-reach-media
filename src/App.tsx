@@ -61,6 +61,9 @@ import {
   doesProductMatchSubCategory,
   toCategorySlug
 } from './data/categoryStructure.ts';
+import hairCurlCreamImg from './assets/images/product_hair_curl_cream_1791966366308.jpg';
+import streetSneakersImg from './assets/images/product_street_sneakers_1791966366958.jpg';
+import smartTvAudioImg from './assets/images/product_smart_tv_audio_1791966367526.jpg';
 
 
 const SUPPORTED_LANG_CODES: Language[] = ['en', 'fr', 'rw', 'sw', 'es', 'pt', 'ar', 'zh', 'de', 'hi'];
@@ -295,6 +298,16 @@ export default function App() {
   const [pendingBuyAction, setPendingBuyAction] = useState<(() => void) | null>(null);
   const [isBuyerAccountOpen, setIsBuyerAccountOpen] = useState(false);
 
+  // SABA Request Product & Quick Seller Application Modal Form States
+  const [sabaName, setSabaName] = useState('');
+  const [sabaPhone, setSabaPhone] = useState('');
+  const [sabaDetails, setSabaDetails] = useState('');
+  const [sabaSubmitting, setSabaSubmitting] = useState(false);
+  const [sellerStoreName, setSellerStoreName] = useState('');
+  const [sellerLocation, setSellerLocation] = useState('');
+  const [sellerPhone, setSellerPhone] = useState('');
+  const [sellerSubmitting, setSellerSubmitting] = useState(false);
+
   // Product quantity display limit for "Reba ibindi"
   const [visibleRecommendedCount, setVisibleRecommendedCount] = useState(20);
 
@@ -486,26 +499,6 @@ export default function App() {
       handleNavigate('shop');
     }
   };
-
-  // Browser back/forward popstate listener
-  useEffect(() => {
-    const handlePopState = () => {
-      const route = parseRouteFromLocation();
-      setActiveView(route.view);
-      if (route.productId) {
-        const found = products.find(p => p.id === route.productId);
-        if (found) setSelectedProduct(found);
-      }
-      if (route.orderRef) {
-        setTrackingOrderNumber(route.orderRef);
-      }
-      if (route.category) {
-        setSelectedCategory(route.category);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [products]);
 
   // Initial Data Fetch
   const refreshAllData = async () => {
@@ -886,10 +879,16 @@ export default function App() {
     }
   }, [currentCurrency]);
 
-  // Listen to browser Back/Forward (popstate)
+  // Consolidated browser Back/Forward (popstate) listener
   useEffect(() => {
     const handlePopState = () => {
       const route = parseRouteFromLocation();
+      // Close transient overlay drawers when navigating history
+      setIsCartOpen(false);
+      setIsTrackingOpen(false);
+      setIsSellerModalOpen(false);
+      setIsCategoryMegaMenuOpen(false);
+
       if (route.view === 'admin') {
         const token = api.getAdminToken();
         const stored = api.getStoredAdminUser();
@@ -900,19 +899,13 @@ export default function App() {
           setIsAdminLoggedIn(true);
           setActiveView('admin');
         }
-      } else if (route.view === 'track-order') {
-        setIsTrackingOpen(true);
-        if (route.orderRef) setTrackingOrderNumber(route.orderRef);
-      } else if (route.view === 'cart') {
-        setIsCartOpen(true);
-      } else if (route.view === 'vendor') {
-        setIsSellerModalOpen(true);
       } else {
         setActiveView(route.view);
       }
 
+      if (route.orderRef) setTrackingOrderNumber(route.orderRef);
       if (route.category) setSelectedCategory(route.category);
-      if (route.search) setSearchQuery(route.search);
+      setSearchQuery(route.search || '');
       if (route.productId) {
         const found = products.find(p => p.id === route.productId);
         if (found) setSelectedProduct(found);
@@ -1069,9 +1062,9 @@ export default function App() {
     books: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=300&q=80',
     ibikapu: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=300&q=80',
     impano: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=300&q=80',
-    'hair-beauty': '/src/assets/images/product_hair_curl_cream_1791966366308.jpg',
-    fashion: '/src/assets/images/product_street_sneakers_1791966366958.jpg',
-    electronics: '/src/assets/images/product_smart_tv_audio_1791966367526.jpg',
+    'hair-beauty': hairCurlCreamImg,
+    fashion: streetSneakersImg,
+    electronics: smartTvAudioImg,
     sports: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=300&q=80'
   };
 
@@ -1161,15 +1154,15 @@ export default function App() {
           )}
 
           {/* In-App PWA Install Banner (Only on customer-facing storefront) */}
-          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-invite' && (
+          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-invite' && activeView !== '404' && (
             <PWAInstallBanner
               onOpenModal={() => setIsAppDownloadOpen(true)}
               currentLang={currentLang}
             />
           )}
 
-          {/* Main Storefront Header (Hidden when inside Admin Portal) */}
-          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && activeView !== 'admin-invite' && (
+          {/* Main Storefront Header (Hidden when inside Admin Portal or 404 standalone page) */}
+          {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && activeView !== 'admin-invite' && activeView !== '404' && (
             <Header
               currentLang={currentLang}
               onLanguageChange={handleLanguageChange}
@@ -1251,7 +1244,6 @@ export default function App() {
                 const action = pendingBuyAction;
                 setPendingBuyAction(null);
                 setBuyerAuthPrompt(null);
-                handleNavigate('home');
                 action();
               } else {
                 handleNavigate('home');
@@ -1302,22 +1294,44 @@ export default function App() {
         <ContactSection settings={settings} currentLang={currentLang} />
       ) : activeView === 'track-order' ? (
         /* VIEW: TRACK ORDER DIRECT PAGE */
-        <div className="py-12 px-4 max-w-4xl mx-auto flex-1 w-full">
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm text-center space-y-4">
-            <h2 className="text-2xl font-black text-slate-900">{t.trackOrder || 'Track Your Order Status'}</h2>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              {currentLang === 'en'
-                ? 'Enter your unique ContactReach order reference (e.g. CRM-78291) to check payment verification and delivery courier updates.'
-                : 'Shyiramo nimero ya komande yawe (urugero CRM-78291) kugira ngo urebe aho igeze n\'itangizwa ry\'ubwishyu.'}
-            </p>
-            <button
-              onClick={() => setIsTrackingOpen(true)}
-              className="py-3 px-6 bg-[#FF6000] text-white font-bold text-xs rounded-xl shadow-sm hover:bg-orange-600 transition-all cursor-pointer"
-            >
-              {t.trackOrder || 'Open Order Tracking Search'}
-            </button>
-          </div>
-        </div>
+        <OrderTrackingPage
+          initialOrderNumber={trackingOrderNumber}
+          onNavigate={handleNavigate}
+          currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
+        />
+      ) : activeView === 'vendor' ? (
+        /* VIEW: VENDOR / SUPPLIER APPLICATION PAGE */
+        <VendorApplicationPage
+          onNavigate={handleNavigate}
+          currentLang={currentLang}
+        />
+      ) : activeView === 'download' ? (
+        /* VIEW: APP DOWNLOAD / PWA INSTALL PAGE */
+        <AppDownloadPage
+          onNavigate={handleNavigate}
+          currentLang={currentLang}
+        />
+      ) : activeView === 'product' ? (
+        /* VIEW: FULL PRODUCT DETAIL PAGE */
+        <ProductDetailPage
+          product={selectedProduct || (initialRoute.productId ? products.find(p => p.id === initialRoute.productId) || null : null)}
+          allProducts={products}
+          settings={settings}
+          onAddToCart={handleAddToCart}
+          onBuyNow={handleQuickBuy}
+          onSelectProduct={(p) => handleSelectProduct(p)}
+          onNavigate={handleNavigate}
+          currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          exchangeRates={exchangeRates}
+          wishlist={wishlist}
+          onToggleWishlist={(productId) => {
+            const target = products.find(p => p.id === productId);
+            if (target) handleToggleWishlist(target);
+          }}
+        />
       ) : activeView === 'cart' ? (
         <CartPage
           cart={cart}
@@ -1346,6 +1360,9 @@ export default function App() {
           buyerUser={buyerUser}
           onOpenBuyerAuth={() => openBuyerAuthForPurchase(() => {
             setActiveView('checkout');
+            if (typeof window !== 'undefined') {
+              window.history.pushState({ view: 'checkout' }, '', '/checkout');
+            }
           })}
         />
       ) : activeView === 'payment' ? (
@@ -1367,6 +1384,7 @@ export default function App() {
             showToast(currentLang === 'en' ? 'Signed out of buyer account' : 'Mwasohotse muri konti');
           }}
           onNavigate={handleNavigate}
+          onUserUpdated={(updatedUser) => setBuyerUser(updatedUser)}
           currentLang={currentLang}
           currentCurrency={currentCurrency}
           exchangeRates={exchangeRates}
@@ -1667,14 +1685,14 @@ export default function App() {
                   {t.categories || (currentLang === 'en' ? 'Categories' : 'Ibyiciro bihari')}
                 </h2>
                 <span className="text-xs text-slate-500 font-medium">
-                  {currentLang === 'en' ? 'Explore all 13 product departments' : 'Reba ibyiciro byose uko ari 13'}
+                  {currentLang === 'en' ? `Explore all ${departmentTree.length} product departments` : `Reba ibyiciro byose uko ari ${departmentTree.length}`}
                 </span>
               </div>
               <button
                 onClick={() => setIsCategoryMegaMenuOpen(true)}
                 className="text-xs font-bold text-[#FF6000] hover:text-[#e05500] hover:underline flex items-center gap-1 cursor-pointer"
               >
-                <span>{currentLang === 'en' ? 'All 13 Departments' : 'Ibyiciro Byose (13)'}</span>
+                <span>{currentLang === 'en' ? `All ${departmentTree.length} Departments` : `Ibyiciro Byose (${departmentTree.length})`}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -1914,7 +1932,7 @@ export default function App() {
       )}
 
       {/* FLOATING WHATSAPP SUPPORT TAB (Only for public storefront customers) */}
-      {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && (
+      {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && activeView !== 'admin-invite' && activeView !== '404' && (
         <div className="fixed bottom-6 right-0 z-40">
           <a
             href={`https://wa.me/${settings.whatsAppNumber.replace(/\D/g, '')}?text=${encodeURIComponent(
@@ -1936,7 +1954,7 @@ export default function App() {
       )}
 
       {/* Footer (Only on public storefront) */}
-      {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && (
+      {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && activeView !== 'admin-invite' && activeView !== '404' && (
         <Footer
           settings={settings}
           currentLang={currentLang}
@@ -1949,8 +1967,8 @@ export default function App() {
       )}
 
       {/* MODALS */}
-      {/* 1. Product Details Modal (PDP) */}
-      {selectedProduct && (
+      {/* 1. Product Details Modal (only shown when inspecting a product outside the full PDP route) */}
+      {selectedProduct && activeView !== 'product' && (
         <ProductModal
           product={selectedProduct}
           onClose={() => handleSelectProduct(null)}
@@ -2095,36 +2113,61 @@ export default function App() {
             </p>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                showToast('Ubusabe bwawe bwakiriwe! Tugiye kugushakira igicuruzwa.');
-                setIsRequestProductOpen(false);
+                if (sabaSubmitting) return;
+                setSabaSubmitting(true);
+                try {
+                  await api.sendContactMessage({
+                    name: sabaName.trim(),
+                    email: buyerUser?.email || '',
+                    phone: sabaPhone.trim(),
+                    subject: 'SABA Product Request',
+                    message: sabaDetails.trim()
+                  });
+                  showToast('Ubusabe bwawe bwakiriwe! Tugiye kugushakira igicuruzwa.');
+                  setSabaName('');
+                  setSabaPhone('');
+                  setSabaDetails('');
+                  setIsRequestProductOpen(false);
+                } catch (err: any) {
+                  showToast(err?.message || 'Ntibyashobotse kohereza ubusabe. Ongera ugerageze.');
+                } finally {
+                  setSabaSubmitting(false);
+                }
               }}
               className="space-y-3"
             >
               <input
                 type="text"
                 required
+                value={sabaName}
+                onChange={(e) => setSabaName(e.target.value)}
                 placeholder="Amazina yawe..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
               />
               <input
                 type="tel"
                 required
+                value={sabaPhone}
+                onChange={(e) => setSabaPhone(e.target.value)}
                 placeholder="Nimero ya telefoni (WhatsApp)..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
               />
               <textarea
                 rows={3}
                 required
+                value={sabaDetails}
+                onChange={(e) => setSabaDetails(e.target.value)}
                 placeholder="Sobanura igicuruzwa ushaka..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
               />
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-[#FF6000] hover:bg-orange-600 text-white font-bold text-xs shadow-xs"
+                disabled={sabaSubmitting}
+                className="w-full py-3 rounded-xl bg-[#FF6000] hover:bg-orange-600 text-white font-bold text-xs shadow-xs disabled:opacity-50 cursor-pointer"
               >
-                Ohereza Ubusabe (Submit Request)
+                {sabaSubmitting ? 'Kohereza...' : 'Ohereza Ubusabe (Submit Request)'}
               </button>
             </form>
           </div>
@@ -2142,7 +2185,7 @@ export default function App() {
                   window.history.replaceState({ view: activeView }, '', activeView === 'home' ? '/' : `/${activeView}`);
                 }
               }}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-full"
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-full cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -2158,40 +2201,77 @@ export default function App() {
               </h3>
             </div>
             <p className="text-xs text-slate-500">
-              Uzuza amakuru y'iduka cyangwa ibicuruzwa byawe maze utangire kugurisha ku baguzi benshi bo mu Rwanda.
+              Uzuza amakuru y&apos;iduka cyangwa ibicuruzwa byawe maze utangire kugurisha ku baguzi benshi bo mu Rwanda.
             </p>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                showToast('Amakuru y\'ubucuruzi bwawe yakiriwe! Ikipe yacu irakuvugisha kuri WhatsApp.');
-                setIsSellerModalOpen(false);
+                if (sellerSubmitting) return;
+                setSellerSubmitting(true);
+                try {
+                  await api.applyAsSupplier({
+                    shopName: sellerStoreName.trim(),
+                    ownerName: buyerUser?.name || sellerStoreName.trim(),
+                    phone: sellerPhone.trim(),
+                    email: buyerUser?.email || undefined,
+                    location: sellerLocation.trim(),
+                    category: 'General Retail',
+                    description: 'Quick seller application submitted from storefront modal.'
+                  });
+                  showToast('Amakuru y\'ubucuruzi bwawe yakiriwe! Ikipe yacu irakuvugisha kuri WhatsApp.');
+                  setSellerStoreName('');
+                  setSellerLocation('');
+                  setSellerPhone('');
+                  setIsSellerModalOpen(false);
+                } catch (err: any) {
+                  showToast(err?.message || 'Habaye ikosa mu kwiyandikisha. Ongera ugerageze.');
+                } finally {
+                  setSellerSubmitting(false);
+                }
               }}
               className="space-y-3"
             >
               <input
                 type="text"
                 required
+                value={sellerStoreName}
+                onChange={(e) => setSellerStoreName(e.target.value)}
                 placeholder="Izina ry'Iduka cyangwa Ubucuruzi..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
               />
               <input
                 type="text"
                 required
+                value={sellerLocation}
+                onChange={(e) => setSellerLocation(e.target.value)}
                 placeholder="Aho mukorera (e.g. Nyarugenge, Kigali)..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
               />
               <input
                 type="tel"
                 required
+                value={sellerPhone}
+                onChange={(e) => setSellerPhone(e.target.value)}
                 placeholder="Telefoni ikora..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
               />
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-[#FF6000] hover:bg-orange-600 text-white font-bold text-xs shadow-xs"
+                disabled={sellerSubmitting}
+                className="w-full py-3 rounded-xl bg-[#FF6000] hover:bg-orange-600 text-white font-bold text-xs shadow-xs disabled:opacity-50 cursor-pointer"
               >
-                Iyandikishe nk'Umucuruzi
+                {sellerSubmitting ? 'Kohereza...' : 'Iyandikishe nk\'Umucuruzi'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSellerModalOpen(false);
+                  handleNavigate('vendor');
+                }}
+                className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] cursor-pointer transition-colors"
+              >
+                {currentLang === 'en' ? 'Open Full Supplier Application Page →' : 'Fungura Ifishi Yuzuye y\'Abacuruzi →'}
               </button>
             </form>
           </div>

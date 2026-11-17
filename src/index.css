@@ -357,6 +357,21 @@ footer {
 }
 
 /* 404 & Product showcase dynamic floating animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-13px) rotate(3deg);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes floatSlow {
   0%, 100% {
     transform: translateY(0px) rotate(0deg);
@@ -368,10 +383,10 @@ footer {
 
 @keyframes floatReverse {
   0%, 100% {
-    transform: translateY(0px) rotate(0deg);
+    transform: translateY(0px) rotate(3deg);
   }
   50% {
-    transform: translateY(12px) rotate(-2deg);
+    transform: translateY(12px) rotate(-5deg);
   }
 }
 

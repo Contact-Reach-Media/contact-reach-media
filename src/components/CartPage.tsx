@@ -42,7 +42,9 @@ export const CartPage: React.FC<CartPageProps> = ({
   const totalFormatted = formatCurrencyPrice(estimatedTotal, currentCurrency, exchangeRates, { showBaseSecondary: true });
 
   const freeDeliveryThreshold = settings?.freeDeliveryThreshold ?? 50000;
-  const progressToFreeDelivery = Math.min(100, Math.round((breakdown.subtotal / freeDeliveryThreshold) * 100));
+  const progressToFreeDelivery = freeDeliveryThreshold > 0
+    ? Math.min(100, Math.round((breakdown.subtotal / freeDeliveryThreshold) * 100))
+    : 100;
   const remainingForFreeDelivery = Math.max(0, freeDeliveryThreshold - breakdown.subtotal);
 
   return (
@@ -160,6 +162,13 @@ export const CartPage: React.FC<CartPageProps> = ({
                           alt={bItem.product.name}
                           className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover bg-white border border-slate-200 shrink-0 shadow-2xs cursor-pointer"
                           referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const img = e.currentTarget;
+                            if (!img.dataset.fallbackApplied) {
+                              img.dataset.fallbackApplied = '1';
+                              img.src = '/logo.png';
+                            }
+                          }}
                           onClick={() => {
                             onSelectProduct(bItem.product);
                             onNavigate('product', { productId: bItem.product.id });
@@ -183,11 +192,16 @@ export const CartPage: React.FC<CartPageProps> = ({
                             {bItem.product.shopName && (
                               <span>&bull; {bItem.product.shopName}</span>
                             )}
-                            {item?.variation && Object.entries(item.variation).map(([k, v]) => (
-                              <span key={k} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">
-                                {k}: {v}
-                              </span>
-                            ))}
+                            {(() => {
+                              const activeVariation = item?.selectedVariation || item?.variation;
+                              return activeVariation
+                                ? Object.entries(activeVariation).map(([k, v]) => (
+                                    <span key={k} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">
+                                      {k}: {v}
+                                    </span>
+                                  ))
+                                : null;
+                            })()}
                           </div>
 
                           <div className="flex items-center gap-2 flex-wrap text-xs font-mono">

@@ -19,6 +19,7 @@ import {
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { FormattedProductDescription } from './FormattedProductDescription.tsx';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface ProductModalProps {
   product: Product | null;
@@ -164,11 +165,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     : `https://www.contactreachmarket.com/product/${product.id}`;
 
   const handleCopyLink = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(productShareUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    }
+    copyTextToClipboard(productShareUrl).then((ok) => {
+      if (ok) {
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2500);
+      }
+    });
   };
 
   const openExternalUrl = (url: string) => {

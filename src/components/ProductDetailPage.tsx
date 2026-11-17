@@ -20,6 +20,7 @@ import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { FormattedProductDescription } from './FormattedProductDescription.tsx';
 import { ProductImageViewerModal } from './ProductImageViewerModal.tsx';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface ProductDetailPageProps {
   product: Product | null;
@@ -146,9 +147,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const handleCopyLink = () => {
     if (typeof window === 'undefined') return;
     const url = `${window.location.origin}/product/${product.id}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
+    copyTextToClipboard(url).then((ok) => {
+      if (ok) {
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2500);
+      }
     });
   };
 
@@ -386,8 +389,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   )}
                   <span className="flex items-center gap-1 text-amber-500 font-bold">
                     <Star className="w-3.5 h-3.5 fill-amber-400" />
-                    <span>{product.rating || '4.8'}</span>
-                    <span className="text-slate-400 font-normal">({reviews.length || 12} reviews)</span>
+                    <span>{product.rating || '5.0'}</span>
+                    <span className="text-slate-400 font-normal">({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})</span>
                   </span>
                 </div>
               </div>
@@ -626,7 +629,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 Reviews ({reviews.length})
               </button>
 
-              {isValidYouTubeUrl(product.youtubeUrl || '') && (
+              {isValidYouTubeUrl(product.youtubeUrl || product.videoUrl || '') && (
                 <button
                   type="button"
                   onClick={() => setActiveTab('video')}
@@ -667,6 +670,27 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     {isOutOfStock ? 'Direct Supplier Order' : `${product.stock} units ready`}
                   </span>
                 </div>
+                {product.attributes && Array.isArray(product.attributes) && product.attributes.map((attr: any, idx: number) => {
+                  const label = attr?.name || attr?.label;
+                  const val = attr?.value;
+                  if (!label || !val) return null;
+                  return (
+                    <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">{String(label)}</span>
+                      <span className="font-bold text-slate-800">{String(val)}</span>
+                    </div>
+                  );
+                })}
+                {product.attributes && !Array.isArray(product.attributes) && typeof product.attributes === 'object' &&
+                  Object.entries(product.attributes as Record<string, any>).map(([key, val]) => (
+                    val ? (
+                      <div key={key} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">{key}</span>
+                        <span className="font-bold text-slate-800">{String(val)}</span>
+                      </div>
+                    ) : null
+                  ))
+                }
                 {product.specifications && (
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 sm:col-span-2 md:col-span-3">
                     <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Detailed Specifications</span>
@@ -782,17 +806,22 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             )}
 
             {/* Tab 5: Video */}
-            {activeTab === 'video' && isValidYouTubeUrl(product.youtubeUrl || '') && (
-              <div className="aspect-video w-full rounded-2xl overflow-hidden border border-slate-200 shadow-md">
-                <iframe
-                  src={getYouTubeEmbedUrl(product.youtubeUrl!) || undefined}
-                  title={`${product.name} Video`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="w-full h-full"
-                />
-              </div>
-            )}
+            {activeTab === 'video' && (() => {
+              const videoSrc = product.youtubeUrl || product.videoUrl || '';
+              const embedUrl = isValidYouTubeUrl(videoSrc) ? getYouTubeEmbedUrl(videoSrc) : null;
+              if (!embedUrl) return null;
+              return (
+                <div className="aspect-video w-full rounded-2xl overflow-hidden border border-slate-200 shadow-md">
+                  <iframe
+                    src={embedUrl}
+                    title={`${product.name} Video`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="w-full h-full"
+                  />
+                </div>
+              );
+            })()}
 
           </div>
         </div>
@@ -828,6 +857,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                       alt={sim.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (!img.dataset.fallbackApplied) {
+                          img.dataset.fallbackApplied = '1';
+                          img.src = '/logo.png';
+                        }
+                      }}
                     />
                   </div>
                   <div>

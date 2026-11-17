@@ -17,6 +17,7 @@ import {
   syncAllDataToSupabase
 } from '../services/supabase.ts';
 import { AppSettings, Order, Product } from '../types.ts';
+import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface SupabaseSyncModalProps {
   isOpen: boolean;
@@ -1672,14 +1673,15 @@ export const SupabaseSyncModal: React.FC<SupabaseSyncModalProps> = ({
   };
 
   const handleCopySql = () => {
-    try {
-      navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
-      setCopiedSql(true);
-      showToast('Complete Supabase SQL Schema copied to clipboard!');
-      setTimeout(() => setCopiedSql(false), 2500);
-    } catch {
-      showToast('Please copy the SQL text manually from below.', 'error');
-    }
+    copyTextToClipboard(SUPABASE_SQL_SCHEMA).then((ok) => {
+      if (ok) {
+        setCopiedSql(true);
+        showToast('Complete Supabase SQL Schema copied to clipboard!');
+        setTimeout(() => setCopiedSql(false), 2500);
+      } else {
+        showToast('Please copy the SQL text manually from below.', 'error');
+      }
+    });
   };
 
   const handleTestConnection = async () => {
