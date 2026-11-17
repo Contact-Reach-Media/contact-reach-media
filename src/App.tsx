@@ -31,7 +31,6 @@ import { PaymentPage } from './components/PaymentPage.tsx';
 import { OrderTrackingPage } from './components/OrderTrackingPage.tsx';
 import { CustomerAccountPage } from './components/CustomerAccountPage.tsx';
 import { AdminLoginPage } from './components/AdminLoginPage.tsx';
-import { AdminInviteAcceptPage } from './components/AdminInviteAcceptPage.tsx';
 import { VendorApplicationPage } from './components/VendorApplicationPage.tsx';
 import { AppDownloadPage } from './components/AppDownloadPage.tsx';
 import { CategoriesPage } from './components/CategoriesPage.tsx';
@@ -98,13 +97,11 @@ function parseRouteFromLocation() {
 
   if (viewParam === 'admin' || rawPath === '/admin' || rawPath === '/dashboard') {
     view = 'admin';
-  } else if (viewParam === 'admin-invite' || rawPath === '/admin/invite') {
-    view = 'admin-invite';
   } else if (
     viewParam === 'admin-login' ||
+    viewParam === 'admin-invite' ||
     rawPath === '/admin/login' ||
-    sessionStorage.getItem('crm_admin_google_oauth_pending') === '1' ||
-    searchParams.get('oauth') === '1'
+    rawPath === '/admin/invite'
   ) {
     view = 'admin-login';
   } else if (viewParam === 'shop' || rawPath === '/shop' || rawPath === '/products' || rawPath === '/catalog') {
@@ -179,7 +176,6 @@ export default function App() {
   const [currentCurrency, setCurrentCurrency] = useState<CurrencyCode>(initialRoute.currency);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
-  const [inviteToken, setInviteToken] = useState<string>(initialRoute.inviteToken || '');
 
   // Core Data loaded dynamically from Supabase
   const [products, setProducts] = useState<Product[]>([]);
@@ -502,9 +498,6 @@ export default function App() {
       }
       if (route.orderRef) {
         setTrackingOrderNumber(route.orderRef);
-      }
-      if (route.inviteToken) {
-        setInviteToken(route.inviteToken);
       }
       if (route.category) {
         setSelectedCategory(route.category);
@@ -1216,22 +1209,8 @@ export default function App() {
             />
           )}
 
-      {/* VIEW: ADMIN INVITATION ACCEPTANCE */}
-      {activeView === 'admin-invite' ? (
-        <AdminInviteAcceptPage
-          token={inviteToken}
-          onAcceptSuccess={(user) => {
-            setIsAdminLoggedIn(true);
-            setActiveView('admin');
-            if (typeof window !== 'undefined') {
-              window.history.pushState({ view: 'admin' }, '', '/admin');
-            }
-            showToast(`Account verified! Welcome ${user?.name || ''}`);
-          }}
-          onNavigateHome={() => handleNavigate('home')}
-          onNavigateAdminLogin={() => handleNavigate('admin-login')}
-        />
-      ) : activeView === 'admin' || activeView === 'admin-login' ? (
+      {/* VIEW: ADMIN PORTAL / LOGIN */}
+      {activeView === 'admin' || activeView === 'admin-login' ? (
         isAdminLoggedIn ? (
           <ErrorBoundary fallbackTitle="ContactReach Admin Dashboard">
             <AdminDashboard
@@ -1262,32 +1241,22 @@ export default function App() {
           />
         )
       ) : activeView === 'login' || activeView === 'register' ? (
-        /* VIEW: BUYER SIGN IN / REGISTER FULL SCREEN (Exact match to image_027b1349.png) */
+        /* VIEW: BUYER SIGN IN / REGISTER FULL SCREEN */
         <div className="py-6 sm:py-10 px-4 max-w-6xl mx-auto flex-1 w-full flex items-center justify-center">
           <SignInPage
             initialMode={activeView === 'register' ? 'register' : 'signin'}
             onSuccess={(user) => {
-              const isAdmin = isAuthorizedAdminUser(user);
-              if (isAdmin) {
-                setIsAdminLoggedIn(true);
-                setActiveView('admin');
-                if (typeof window !== 'undefined') {
-                  window.history.pushState({ view: 'admin' }, '', '/admin');
-                }
-                showToast(`Welcome Administrator ${user.name}`);
+              setBuyerUser(user);
+              if (pendingBuyAction) {
+                const action = pendingBuyAction;
+                setPendingBuyAction(null);
+                setBuyerAuthPrompt(null);
+                handleNavigate('home');
+                action();
               } else {
-                setBuyerUser(user);
-                if (pendingBuyAction) {
-                  const action = pendingBuyAction;
-                  setPendingBuyAction(null);
-                  setBuyerAuthPrompt(null);
-                  handleNavigate('home');
-                  action();
-                } else {
-                  handleNavigate('home');
-                }
-                showToast(currentLang === 'en' ? `Welcome, ${user.name}!` : `Murakaza neza, ${user.name}!`);
+                handleNavigate('home');
               }
+              showToast(currentLang === 'en' ? `Welcome, ${user.name}!` : `Murakaza neza, ${user.name}!`);
             }}
             onNavigateHome={() => handleNavigate('home')}
             onOpenVendorApplication={() => setIsSellerModalOpen(true)}

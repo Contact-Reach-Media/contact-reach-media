@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Lock, User, ArrowRight, ShieldCheck, AlertCircle, ArrowLeft,
+  Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, ArrowLeft,
   Shield, Eye, EyeOff
 } from 'lucide-react';
 import { api } from '../services/api.ts';
+import { AUTHORIZED_ADMIN_EMAIL, getSupabaseSession } from '../services/supabase.ts';
 import { AdminUser } from '../types.ts';
 
 interface AdminLoginPageProps {
@@ -15,14 +16,11 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   onLoginSuccess,
   onNavigateHome
 }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return Boolean(api.getAdminToken());
-  });
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const onLoginSuccessRef = useRef(onLoginSuccess);
@@ -30,27 +28,33 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
     onLoginSuccessRef.current = onLoginSuccess;
   }, [onLoginSuccess]);
 
-  // Restore saved admin session
+  // Restore active administrator session on mount/refresh
   useEffect(() => {
     let active = true;
 
     const initialize = async () => {
       const token = api.getAdminToken();
+      const sbSession = await getSupabaseSession();
       const user = api.getStoredAdminUser();
 
-      if (token) {
-        setCheckingSession(true);
+      if (token || sbSession?.access_token) {
         try {
           const isValid = await api.adminCheckAuth();
           if (!active) return;
-          const verifiedToken = api.getAdminToken();
+          const verifiedToken = api.getAdminToken() || sbSession?.access_token || '';
           const verifiedUser = api.getStoredAdminUser() || user;
-          if (isValid && verifiedToken && verifiedUser && verifiedUser.active !== false) {
+          if (
+            isValid &&
+            verifiedToken &&
+            verifiedUser &&
+            verifiedUser.active !== false &&
+            verifiedUser.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL
+          ) {
             onLoginSuccessRef.current(verifiedUser, verifiedToken);
             return;
           }
         } catch {
-          // Fall through to standard credential login
+          // Fall through to Email & Password form
         }
       }
 
@@ -68,8 +72,20 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password) {
-      setError('Please enter your administrator username and password.');
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
+      setError('Please enter your administrator email address and password.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    if (cleanEmail !== AUTHORIZED_ADMIN_EMAIL) {
+      setError('Access denied: This account is not authorized to access the admin dashboard.');
       return;
     }
 
@@ -77,7 +93,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
     setError(null);
 
     try {
-      const res = await api.adminLogin(username.trim(), password);
+      const res = await api.adminLogin(cleanEmail, password);
       if (res && res.token && res.admin) {
         onLoginSuccessRef.current(res.admin, res.token);
       } else {
@@ -86,7 +102,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
     } catch (err: any) {
       const msg = String(err?.message || '').trim();
       if (!msg || msg.includes('api-key-not-valid') || msg.includes('auth/')) {
-        setError('Invalid administrator credentials. Please check your username and password.');
+        setError('Invalid administrator email or password.');
       } else {
         setError(msg);
       }
@@ -122,7 +138,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
             <p className="text-xs text-slate-500">
               {checkingSession
                 ? 'Verifying your administrator session...'
-                : 'Enter your administrator credentials to sign in.'}
+                : 'Sign in with your authorized administrator email and password.'}
             </p>
           </div>
 
@@ -140,25 +156,25 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                 </div>
               )}
 
-              {/* Username & Password Form */}
+              {/* Email & Password Form */}
               <form onSubmit={handleSubmit} className="space-y-4 text-xs">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Username
+                    Email Address
                   </label>
                   <div className="relative">
                     <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Enter username"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter administrator email"
                       required
-                      autoComplete="username"
+                      autoComplete="email"
                       autoCapitalize="none"
                       autoCorrect="off"
                       className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-500 text-xs text-slate-900 outline-none"
                     />
-                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   </div>
                 </div>
 
@@ -200,7 +216,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
 
               <div className="p-3 bg-slate-50 rounded-xl text-[11px] text-slate-500 text-center flex items-center justify-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Secured administrator authentication</span>
+                <span>Protected by Supabase Authentication</span>
               </div>
             </>
           )}

@@ -244,12 +244,11 @@ const defaultCoupons: Coupon[] = [
   }
 ];
 
-// Default Initial Admin Users (Only System Owner; other staff loaded from Supabase admin_users)
+// Default Initial Admin User (Strictly single authorized administrator account)
 const defaultAdminUsers: AdminUser[] = [
   {
     id: 'adm-owner-crmedia',
     name: 'Administrator',
-    username: 'crmedia',
     email: 'contactreachmedialimited@gmail.com',
     role: 'owner',
     active: true,
@@ -837,26 +836,15 @@ function loadDbFromDisk() {
       if (parsed.inventoryLogs && Array.isArray(parsed.inventoryLogs)) db.inventoryLogs = parsed.inventoryLogs;
       if (parsed.auditLogs && Array.isArray(parsed.auditLogs)) db.auditLogs = parsed.auditLogs;
       if (parsed.customers && Array.isArray(parsed.customers)) db.customers = parsed.customers;
-      if (parsed.adminCredentials && typeof parsed.adminCredentials === 'object' && !Array.isArray(parsed.adminCredentials)) {
-        db.adminCredentials = parsed.adminCredentials;
-      } else {
-        db.adminCredentials = {};
-      }
-      if (parsed.adminInvitations && Array.isArray(parsed.adminInvitations)) {
-        db.adminInvitations = parsed.adminInvitations;
-      } else {
-        db.adminInvitations = [];
-      }
+      db.adminCredentials = {};
+      db.adminInvitations = [];
       if (parsed.adminUsers && Array.isArray(parsed.adminUsers)) {
-        // Keep the system owner AND verified invited admins (with valid credentials)
-        const validAdmins = parsed.adminUsers.filter((a: any) => {
-          if (!a || !a.email) return false;
-          const em = String(a.email).toLowerCase().trim();
-          if (em === 'contactreachmedialimited@gmail.com') return true;
-          return Boolean(a.verified && a.invitationId && db.adminCredentials[String(a.id)]);
-        });
-        const hasOwner = validAdmins.some((a: any) => String(a.email).toLowerCase().trim() === 'contactreachmedialimited@gmail.com');
-        db.adminUsers = hasOwner ? validAdmins : [...defaultAdminUsers, ...validAdmins];
+        const ownerRecord = parsed.adminUsers.find(
+          (a: any) => a && String(a.email || '').toLowerCase().trim() === 'contactreachmedialimited@gmail.com'
+        );
+        db.adminUsers = ownerRecord
+          ? [{ ...ownerRecord, email: 'contactreachmedialimited@gmail.com', role: 'owner' as AdminRole }]
+          : [...defaultAdminUsers];
       } else {
         db.adminUsers = [...defaultAdminUsers];
       }
@@ -902,15 +890,11 @@ function loadDbFromDisk() {
       }
       if (parsed.adminTokens && Array.isArray(parsed.adminTokens)) {
         const now = Date.now();
-        // Purge tokens for revoked, expired, deactivated, or unverified accounts
+        // Purge tokens for revoked, expired, deactivated, or non-authorized accounts
         const validTokens = parsed.adminTokens.filter(([token, session]: any) => {
           if (!token || revokedTokens.has(token) || !session || session.expiresAt <= now || !session.user) return false;
           const em = String(session.user.email || '').toLowerCase().trim();
-          if (em === 'contactreachmedialimited@gmail.com') return true;
-          const matchedAdmin = db.adminUsers.find(
-            (u: any) => (u.id === session.user.id || u.email.toLowerCase().trim() === em) && u.active !== false && u.verified && db.adminCredentials[u.id]
-          );
-          return Boolean(matchedAdmin);
+          return em === 'contactreachmedialimited@gmail.com' && session.user.active !== false;
         });
         db.adminTokens = new Map(validTokens);
       }
@@ -2318,57 +2302,30 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.adminInvitations.length} admin invitations.`);
     }
 
-    const { data: credSettData, error: credSettErr } = await supabase
-      .from('app_settings')
-      .select('settings_data')
-      .eq('id', 'admin_credentials')
-      .maybeSingle();
-    if (!credSettErr && credSettData?.settings_data && typeof credSettData.settings_data === 'object') {
-      db.adminCredentials = credSettData.settings_data as Record<string, AdminCredentialRecord>;
-      console.log(`[Supabase] Loaded ${Object.keys(db.adminCredentials).length} verified admin credentials.`);
-    }
+    db.adminCredentials = {};
 
-    // 17. Admin Users (System owner + verified invited administrators backed by adminCredentials)
-    const { data: suAdminData, error: suAdminErr } = await supabase.from('admin_users').select('*');
-    if (!suAdminErr && Array.isArray(suAdminData)) {
-      const authorizedAdmins: AdminUser[] = [];
-      for (const a of suAdminData) {
-        if (!a || !a.email) continue;
-        const em = String(a.email).toLowerCase().trim();
-        const idStr = String(a.id);
-        if (em === 'contactreachmedialimited@gmail.com') {
-          authorizedAdmins.push({
-            id: idStr,
-            name: a.name || 'Administrator',
-            username: 'crmedia',
-            email: 'contactreachmedialimited@gmail.com',
-            phone: a.phone || '0780022600',
-            role: 'owner' as AdminRole,
-            active: a.active !== false,
-            verified: true,
-            lastLogin: a.last_login || undefined
-          });
-        } else {
-          const cred = db.adminCredentials?.[idStr] || Object.values(db.adminCredentials || {}).find(c => c.email.toLowerCase() === em);
-          if (cred && cred.passwordHash) {
-            authorizedAdmins.push({
-              id: idStr,
-              name: a.name || 'Invited Administrator',
-              username: cred.username,
-              email: em,
-              phone: a.phone || undefined,
-              role: (a.role || 'administrator') as AdminRole,
-              active: a.active !== false,
-              verified: true,
-              invitationId: cred.invitationId,
-              lastLogin: a.last_login || undefined
-            });
-          }
+    // 17. Admin Users (Strictly single authorized administrator: contactreachmedialimited@gmail.com)
+    const { data: suAdminData, error: suAdminErr } = await supabase
+      .from('admin_users')
+      .select('*')
+      .ilike('email', 'contactreachmedialimited@gmail.com');
+    if (!suAdminErr && Array.isArray(suAdminData) && suAdminData.length > 0) {
+      const a = suAdminData[0];
+      db.adminUsers = [
+        {
+          id: String(a.id || 'adm-owner-crmedia'),
+          name: a.name || 'Administrator',
+          email: 'contactreachmedialimited@gmail.com',
+          phone: a.phone || '0780022600',
+          role: 'owner' as AdminRole,
+          active: a.active !== false,
+          verified: true,
+          lastLogin: a.last_login || undefined
         }
-      }
-      const hasOwner = authorizedAdmins.some(u => u.email === 'contactreachmedialimited@gmail.com');
-      db.adminUsers = hasOwner ? authorizedAdmins : [...defaultAdminUsers, ...authorizedAdmins];
-      console.log(`[Supabase] Verified ${db.adminUsers.length} authorized admin account(s).`);
+      ];
+      console.log(`[Supabase] Verified authorized admin account: contactreachmedialimited@gmail.com (active=${a.active !== false}).`);
+    } else {
+      db.adminUsers = [...defaultAdminUsers];
     }
 
     // Sequentially backfill missing local records in small batches after startup hydration completes
@@ -2481,22 +2438,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 app.use(express.json({ limit: '20mb' }));
 
-// Auth & Permissions Config - Strict username & password admin authorization
-const ADMIN_USERNAME = 'crmedia';
-const ADMIN_PASSWORD = 'crm@admin!';
+// Auth & Permissions Config - Strictly single authorized admin email & Supabase Authentication
 const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || AUTHORIZED_ADMIN_EMAIL;
-
-// Constant-time password comparison to prevent timing attacks
-function timingSafeEqualStr(a: string, b: string): boolean {
-  try {
-    const hashA = crypto.createHash('sha256').update(String(a)).digest();
-    const hashB = crypto.createHash('sha256').update(String(b)).digest();
-    return crypto.timingSafeEqual(hashA, hashB);
-  } catch {
-    return false;
-  }
-}
 
 const ADMIN_SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180-day persistent device session
 const ADMIN_SESSION_SLIDING_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
@@ -2510,9 +2453,15 @@ function getAdminTokenSecret(): string {
   if (process.env.ADMIN_SESSION_SECRET && process.env.ADMIN_SESSION_SECRET.trim().length >= 16) {
     return process.env.ADMIN_SESSION_SECRET.trim();
   }
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY.trim().length >= 16) {
+    return crypto
+      .createHash('sha256')
+      .update(`${process.env.SUPABASE_SERVICE_ROLE_KEY}:${AUTHORIZED_ADMIN_EMAIL}:crm_admin_session_hmac_v3`)
+      .digest('hex');
+  }
   return crypto
     .createHash('sha256')
-    .update(`${process.env.ADMIN_PASSWORD || ADMIN_PASSWORD}:${AUTHORIZED_ADMIN_EMAIL}:crm_admin_session_hmac_v2`)
+    .update(`${SUPABASE_PROJECT_ID}:${AUTHORIZED_ADMIN_EMAIL}:crm_admin_session_hmac_v3`)
     .digest('hex');
 }
 
@@ -2521,9 +2470,8 @@ function createSignedAdminToken(admin: AdminUser, ttlMs: number = ADMIN_SESSION_
   const expiresAt = now + ttlMs;
   const payload = {
     sub: admin.id,
-    username: admin.username || ADMIN_USERNAME,
-    email: admin.email,
-    role: admin.role,
+    email: AUTHORIZED_ADMIN_EMAIL,
+    role: 'owner' as AdminRole,
     jti: crypto.randomBytes(16).toString('hex'),
     iat: now,
     exp: expiresAt
@@ -2541,15 +2489,11 @@ function createSignedAdminToken(admin: AdminUser, ttlMs: number = ADMIN_SESSION_
 
 function isVerifiedAuthorizedAdminRecord(admin?: AdminUser | null): boolean {
   if (!admin || admin.active === false) return false;
-  const em = String(admin.email || '').toLowerCase().trim();
-  if (em === AUTHORIZED_ADMIN_EMAIL) return true;
-  const cred = db.adminCredentials?.[admin.id];
-  return Boolean(admin.verified && admin.invitationId && cred && cred.passwordHash);
+  return String(admin.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL;
 }
 
 function verifySignedAdminToken(token: string): {
   sub: string;
-  username: string;
   email: string;
   role: AdminRole;
   jti: string;
@@ -2584,10 +2528,7 @@ function verifySignedAdminToken(token: string): {
 
     const payloadEmail = String(payload.email || '').toLowerCase().trim();
     if (payloadEmail !== AUTHORIZED_ADMIN_EMAIL) {
-      const matched = db.adminUsers.find(
-        u => (u.id === payload.sub || u.email.toLowerCase().trim() === payloadEmail) && isVerifiedAuthorizedAdminRecord(u)
-      );
-      if (!matched) return null;
+      return null;
     }
 
     return payload;
@@ -2596,10 +2537,14 @@ function verifySignedAdminToken(token: string): {
   }
 }
 
+const supabaseJwtCache = new Map<string, { user: AdminUser; expiresAt: number }>();
+
 function revokeAdminToken(token: string) {
   if (!token) return;
   db.adminTokens.delete(token);
   revokedTokens.add(token);
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  supabaseJwtCache.delete(tokenHash);
   const parsed = verifySignedAdminTokenRaw(token);
   if (parsed?.jti) {
     revokedTokens.add(`jti:${parsed.jti}`);
@@ -2627,14 +2572,12 @@ function resolveAdminSession(token: string): { user: AdminUser; expiresAt: numbe
   if (!session) {
     const signedPayload = verifySignedAdminToken(token);
     if (signedPayload) {
-      const payloadEmail = String(signedPayload.email || '').toLowerCase().trim();
-      const liveUser =
-        payloadEmail === AUTHORIZED_ADMIN_EMAIL
-          ? ((db.adminUsers || []).find(u => (u?.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) || defaultAdminUsers[0])
-          : (db.adminUsers || []).find(u => u && (u.id === signedPayload.sub || (u.email || '').toLowerCase().trim() === payloadEmail) && isVerifiedAuthorizedAdminRecord(u));
-      if (liveUser && liveUser.active !== false) {
+      const liveOwner =
+        (db.adminUsers || []).find(u => (u?.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) ||
+        defaultAdminUsers[0];
+      if (liveOwner && liveOwner.active !== false) {
         session = {
-          user: { ...liveUser },
+          user: { ...liveOwner, email: AUTHORIZED_ADMIN_EMAIL, role: 'owner' },
           expiresAt: signedPayload.exp
         };
         db.adminTokens.set(token, session);
@@ -2657,45 +2600,29 @@ function resolveAdminSession(token: string): { user: AdminUser; expiresAt: numbe
     return null;
   }
 
-  const sessionUser = session.user;
-  const sessionEmail = String(sessionUser?.email || '').toLowerCase().trim();
-  const isOwnerSession = Boolean(
-    sessionUser && (
-      sessionEmail === AUTHORIZED_ADMIN_EMAIL ||
-      sessionUser.username?.toLowerCase() === ADMIN_USERNAME.toLowerCase()
-    )
+  const sessionEmail = String(session.user?.email || '').toLowerCase().trim();
+  if (sessionEmail !== AUTHORIZED_ADMIN_EMAIL) {
+    revokeAdminToken(token);
+    saveDbToDisk();
+    return null;
+  }
+
+  const liveOwner = (db.adminUsers || []).find(
+    u => (u?.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL
   );
-
-  const liveAdmin = isOwnerSession
-    ? (db.adminUsers || []).find(u => (u?.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL)
-    : (db.adminUsers || []).find(u => u && (u.id === sessionUser?.id || (sessionEmail && (u.email || '').toLowerCase().trim() === sessionEmail)));
-
-  if (isOwnerSession) {
-    if (liveAdmin) {
-      if (!liveAdmin.active) {
-        revokeAdminToken(token);
-        saveDbToDisk();
-        return null;
-      }
-      session.user.role = liveAdmin.role;
-      session.user.name = liveAdmin.name;
-      session.user.active = liveAdmin.active;
-    } else if (session.user && session.user.active === false) {
+  if (liveOwner) {
+    if (liveOwner.active === false) {
       revokeAdminToken(token);
       saveDbToDisk();
       return null;
     }
-  } else {
-    // Invited admin must still exist in db.adminUsers, be active, and hold valid verified credentials
-    if (!liveAdmin || !isVerifiedAuthorizedAdminRecord(liveAdmin)) {
-      revokeAdminToken(token);
-      saveDbToDisk();
-      return null;
-    }
-    session.user.role = liveAdmin.role;
-    session.user.name = liveAdmin.name;
-    session.user.username = liveAdmin.username;
-    session.user.active = liveAdmin.active;
+    session.user.role = 'owner';
+    session.user.name = liveOwner.name || 'Administrator';
+    session.user.active = true;
+  } else if (session.user.active === false) {
+    revokeAdminToken(token);
+    saveDbToDisk();
+    return null;
   }
 
   // Sliding session renewal: automatically extend active sessions on the device
@@ -2707,8 +2634,56 @@ function resolveAdminSession(token: string): { user: AdminUser; expiresAt: numbe
   return session;
 }
 
-// Middleware to authenticate admin token - strictly enforces verified administrator sessions only
-function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+async function verifySupabaseAdminJwt(accessToken: string): Promise<{ user: AdminUser; expiresAt: number } | null> {
+  try {
+    if (!accessToken || revokedTokens.has(accessToken)) return null;
+    const tokenHash = crypto.createHash('sha256').update(accessToken).digest('hex');
+    const cached = supabaseJwtCache.get(tokenHash);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { user: cached.user, expiresAt: cached.expiresAt };
+    }
+
+    const ephemClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    const { data, error } = await ephemClient.auth.getUser(accessToken);
+    if (error || !data?.user) return null;
+
+    const email = String(data.user.email || '').toLowerCase().trim();
+    if (email !== AUTHORIZED_ADMIN_EMAIL) return null;
+
+    // Verify administrator record status in Supabase admin_users table
+    const { data: sbAdminRow, error: sbDbErr } = await supabase
+      .from('admin_users')
+      .select('id, name, email, phone, role, active, last_login')
+      .ilike('email', AUTHORIZED_ADMIN_EMAIL)
+      .maybeSingle();
+
+    if (!sbDbErr && sbAdminRow && sbAdminRow.active === false) {
+      return null;
+    }
+
+    const adminUser: AdminUser = {
+      id: String(sbAdminRow?.id || 'adm-owner-crmedia'),
+      name: sbAdminRow?.name || 'Administrator',
+      email: AUTHORIZED_ADMIN_EMAIL,
+      phone: sbAdminRow?.phone || '0780022600',
+      role: 'owner',
+      active: true,
+      verified: true,
+      lastLogin: sbAdminRow?.last_login || new Date().toISOString()
+    };
+
+    const cacheExpires = Date.now() + 60 * 1000; // 60s short verification cache
+    supabaseJwtCache.set(tokenHash, { user: adminUser, expiresAt: cacheExpires });
+    return { user: adminUser, expiresAt: Date.now() + ADMIN_SESSION_TTL_MS };
+  } catch {
+    return null;
+  }
+}
+
+// Middleware to authenticate admin token - strictly enforces Supabase-verified contactreachmedialimited@gmail.com sessions only
+async function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized. Admin credentials required.' });
@@ -2718,9 +2693,13 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ error: 'Administrator account has been deactivated or session was revoked. Access denied.' });
   }
 
-  const session = resolveAdminSession(token);
-  if (!session) {
-    return res.status(403).json({ error: 'Invalid or expired session token. Please sign in again.' });
+  let session = resolveAdminSession(token);
+  if (!session && !token.startsWith('crm_admin_')) {
+    session = await verifySupabaseAdminJwt(token);
+  }
+
+  if (!session || String(session.user?.email || '').toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+    return res.status(403).json({ error: 'Invalid, unauthorized, or expired session token. Please sign in again.' });
   }
 
   (req as any).adminUser = session.user;
@@ -5725,9 +5704,15 @@ function getBuyerTokenSecret(): string {
   if (process.env.BUYER_SESSION_SECRET && process.env.BUYER_SESSION_SECRET.trim().length >= 16) {
     return process.env.BUYER_SESSION_SECRET.trim();
   }
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY.trim().length >= 16) {
+    return crypto
+      .createHash('sha256')
+      .update(`${process.env.SUPABASE_SERVICE_ROLE_KEY}:crm_buyer_session_hmac_v2`)
+      .digest('hex');
+  }
   return crypto
     .createHash('sha256')
-    .update(`${process.env.ADMIN_PASSWORD || ADMIN_PASSWORD}:crm_buyer_session_hmac_v2`)
+    .update(`${SUPABASE_PROJECT_ID}:crm_buyer_session_hmac_v2`)
     .digest('hex');
 }
 
@@ -6034,7 +6019,10 @@ app.post('/api/buyers/phone-login', (_req: Request, res: Response) => {
 
 // 1. Register New Buyer Account (Phone Number + Custom Password)
 app.post('/api/buyers/register', async (req: Request, res: Response) => {
-  const { name, phone, identifier, emailOrPhone, password, deliveryAddress } = req.body;
+  const { name, phone, identifier, emailOrPhone, password, deliveryAddress, email } = req.body;
+  if (typeof email === 'string' && email.trim().toLowerCase() === AUTHORIZED_ADMIN_EMAIL) {
+    return res.status(403).json({ error: 'This email address is reserved for administrator access.' });
+  }
   const rawPhoneInput = phone || identifier || emailOrPhone;
   const phoneCheck = validateBuyerPhone(rawPhoneInput);
   if (!phoneCheck.valid || !phoneCheck.phone || !phoneCheck.key) {
@@ -6559,91 +6547,103 @@ let initialSupabaseHydrationPromise: Promise<void> | null = null;
 
 app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body || {};
-    const rawIdentifier = String(username || email || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const { email, password, accessToken } = req.body || {};
+    const rawEmail = String(email || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const cleanEmail = rawEmail.toLowerCase();
     const rawPassword = (typeof password === 'string' ? password : String(password || '')).replace(/[\u200B-\u200D\uFEFF]/g, '');
 
-    if (!rawIdentifier || !rawPassword) {
-      return res.status(400).json({ error: 'Username and password are required.' });
+    // Reject non-email / username-only login attempts or missing credentials
+    if (!cleanEmail || !cleanEmail.includes('@') || (!rawPassword && !accessToken)) {
+      if (req.body?.username && !cleanEmail.includes('@')) {
+        return res.status(403).json({
+          error: 'Only authorized administrator email and password sign-in is allowed.'
+        });
+      }
+      return res.status(400).json({ error: 'Administrator email address and password are required.' });
     }
 
-  const cleanUser = rawIdentifier.toLowerCase().replace(/^@/, '');
-  const trimmedPass = rawPassword.trim();
-
-  // Check rate-limit lockout before checking credentials
-  const attemptInfo = loginAttempts.get(cleanUser);
-  if (attemptInfo && attemptInfo.lockoutUntil && Date.now() < attemptInfo.lockoutUntil) {
-    const remainingMins = Math.ceil((attemptInfo.lockoutUntil - Date.now()) / 60000);
-    return res.status(429).json({
-      error: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${remainingMins} minutes.`
-    });
-  }
-
-  // 1. Check main system owner credentials (strictly contactreachmedialimited@gmail.com)
-  const isOwnerUsername =
-    cleanUser === 'crmedia' ||
-    cleanUser === 'crm' ||
-    cleanUser === 'admin' ||
-    cleanUser === AUTHORIZED_ADMIN_EMAIL ||
-    cleanUser === (process.env.ADMIN_USERNAME || 'crmedia').toLowerCase() ||
-    (process.env.ADMIN_EMAIL ? cleanUser === process.env.ADMIN_EMAIL.toLowerCase().trim() : false);
-
-  let isOwnerPasswordValid = isOwnerUsername && (
-    timingSafeEqualStr(rawPassword, 'crm@admin!') ||
-    timingSafeEqualStr(trimmedPass, 'crm@admin!') ||
-    (process.env.ADMIN_PASSWORD ? timingSafeEqualStr(rawPassword, process.env.ADMIN_PASSWORD) : false) ||
-    (process.env.ADMIN_PASSWORD ? timingSafeEqualStr(trimmedPass, process.env.ADMIN_PASSWORD) : false)
-  );
-
-  let supabaseOwnerUserId: string | undefined;
-  if (isOwnerUsername && !isOwnerPasswordValid) {
-    try {
-      const ephemClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false }
+    // Check rate-limit lockout before checking credentials
+    const attemptInfo = loginAttempts.get(cleanEmail);
+    if (attemptInfo && attemptInfo.lockoutUntil && Date.now() < attemptInfo.lockoutUntil) {
+      const remainingMins = Math.ceil((attemptInfo.lockoutUntil - Date.now()) / 60000);
+      return res.status(429).json({
+        error: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${remainingMins} minutes.`
       });
-      let sbRes = await ephemClient.auth.signInWithPassword({
+    }
+
+    // Strictly restrict administrator access to contactreachmedialimited@gmail.com only
+    if (cleanEmail !== AUTHORIZED_ADMIN_EMAIL) {
+      logAudit({ name: 'Security', role: 'security' }, 'ADMIN_LOGIN_DENIED', `Rejected unauthorized admin email attempt: ${cleanEmail}`);
+      return res.status(403).json({
+        error: 'Access denied: This account is not authorized to access the admin dashboard.'
+      });
+    }
+
+    // Authenticate strictly via Supabase Auth (either fresh accessToken from client or signInWithPassword)
+    const ephemClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+
+    let sbVerifiedUser: any = null;
+    if (accessToken && typeof accessToken === 'string') {
+      const userRes = await ephemClient.auth.getUser(accessToken.trim());
+      if (!userRes.error && userRes.data?.user) {
+        sbVerifiedUser = userRes.data.user;
+      }
+    }
+
+    if (!sbVerifiedUser && rawPassword) {
+      const sbRes = await ephemClient.auth.signInWithPassword({
         email: AUTHORIZED_ADMIN_EMAIL,
         password: rawPassword
       });
-      if ((sbRes.error || !sbRes.data?.user) && trimmedPass && trimmedPass !== rawPassword) {
-        sbRes = await ephemClient.auth.signInWithPassword({
-          email: AUTHORIZED_ADMIN_EMAIL,
-          password: trimmedPass
-        });
+      if (!sbRes.error && sbRes.data?.user) {
+        sbVerifiedUser = sbRes.data.user;
       }
-      if (!sbRes.error && sbRes.data?.user && String(sbRes.data.user.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) {
-        isOwnerPasswordValid = true;
-        supabaseOwnerUserId = sbRes.data.user.id;
+    }
+
+    const sbUserEmail = String(sbVerifiedUser?.email || '').toLowerCase().trim();
+    if (!sbVerifiedUser || sbUserEmail !== AUTHORIZED_ADMIN_EMAIL) {
+      const currentAttempts = (attemptInfo?.attempts || 0) + 1;
+      if (currentAttempts >= 5) {
+        loginAttempts.set(cleanEmail, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
+        return res.status(429).json({ error: 'Too many failed login attempts. Locked for 15 minutes.' });
+      } else {
+        loginAttempts.set(cleanEmail, { attempts: currentAttempts });
       }
-    } catch {}
-  }
+      return res.status(401).json({ error: 'Invalid administrator email or password.' });
+    }
 
-  if (isOwnerUsername && isOwnerPasswordValid) {
-    loginAttempts.delete(cleanUser);
-    loginAttempts.delete('crmedia');
-    loginAttempts.delete(AUTHORIZED_ADMIN_EMAIL);
-    loginAttempts.delete(rawIdentifier.toLowerCase());
+    // Verify against Supabase admin_users table
+    const { data: sbAdminRow, error: sbAdminErr } = await supabase
+      .from('admin_users')
+      .select('id, name, email, phone, role, active, last_login')
+      .ilike('email', AUTHORIZED_ADMIN_EMAIL)
+      .maybeSingle();
 
+    if (!sbAdminErr && sbAdminRow && sbAdminRow.active === false) {
+      return res.status(403).json({
+        error: 'Access denied: Your administrator account has been deactivated in Supabase.'
+      });
+    }
+
+    loginAttempts.delete(cleanEmail);
+
+    const nowIso = new Date().toISOString();
     const authorizedAdmin: AdminUser = {
-      id: 'adm-owner-crmedia',
-      name: 'Administrator',
-      username: ADMIN_USERNAME,
+      id: String(sbAdminRow?.id || 'adm-owner-crmedia'),
+      name: sbAdminRow?.name || 'Administrator',
       email: AUTHORIZED_ADMIN_EMAIL,
       role: 'owner',
       active: true,
       verified: true,
-      phone: '0780022600',
-      lastLogin: new Date().toISOString()
+      phone: sbAdminRow?.phone || '0780022600',
+      lastLogin: nowIso
     };
 
     const { token, expiresAt } = createSignedAdminToken(authorizedAdmin);
 
-    // Upsert owner in db.adminUsers while preserving verified invited administrators
-    const otherVerifiedAdmins = (db.adminUsers || []).filter(
-      u => u && (u.email || '').toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL && isVerifiedAuthorizedAdminRecord(u)
-    );
-    db.adminUsers = [authorizedAdmin, ...otherVerifiedAdmins];
-
+    db.adminUsers = [authorizedAdmin];
     db.adminTokens.set(token, {
       user: authorizedAdmin,
       expiresAt
@@ -6653,18 +6653,17 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
     try {
       await supabase.from('admin_users').upsert({
         id: authorizedAdmin.id,
-        ...(supabaseOwnerUserId ? { user_id: supabaseOwnerUserId } : {}),
         email: AUTHORIZED_ADMIN_EMAIL,
         name: authorizedAdmin.name,
         phone: authorizedAdmin.phone || '0780022600',
         role: 'owner',
         active: true,
-        last_login: authorizedAdmin.lastLogin,
-        updated_at: new Date().toISOString()
+        last_login: nowIso,
+        updated_at: nowIso
       }, { onConflict: 'email' });
     } catch {}
 
-    logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Admin signed in successfully from ${req.ip || 'remote'}`);
+    logAudit({ name: authorizedAdmin.name, role: authorizedAdmin.role }, 'ADMIN_LOGIN', `Admin signed in via Supabase Auth from ${req.ip || 'remote'}`);
 
     return res.json({
       token,
@@ -6672,90 +6671,6 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
       expiresAt,
       redirectTo: '/admin'
     });
-  }
-
-  // Wait briefly for initial Supabase hydration if an invited admin signs in right at startup
-  if (initialSupabaseHydrationPromise) {
-    try {
-      await Promise.race([
-        initialSupabaseHydrationPromise,
-        new Promise(resolve => setTimeout(resolve, 2500))
-      ]);
-    } catch {}
-  }
-
-  // 2. Check verified invited administrators
-  const invitedAdmin = (db.adminUsers || []).find(u => {
-    if (!u) return false;
-    const uEmail = String(u.email || '').toLowerCase().trim();
-    const uName = String(u.username || '').toLowerCase().trim().replace(/^@/, '');
-    if (uEmail === AUTHORIZED_ADMIN_EMAIL) return false;
-    return (uEmail === cleanUser || (uName && uName === cleanUser));
-  });
-
-  if (invitedAdmin) {
-    const cred = db.adminCredentials?.[invitedAdmin.id];
-    const passwordMatches = Boolean(
-      cred?.passwordHash &&
-      (verifyBuyerPassword(rawPassword, cred.passwordHash) || verifyBuyerPassword(trimmedPass, cred.passwordHash))
-    );
-
-    if (passwordMatches) {
-      if (!invitedAdmin.verified || !invitedAdmin.invitationId) {
-        return res.status(403).json({ error: 'Administrator account has not completed invitation verification.' });
-      }
-      if (invitedAdmin.active === false) {
-        return res.status(403).json({ error: 'Your administrator account has been deactivated by the main administrator.' });
-      }
-
-      loginAttempts.delete(cleanUser);
-      if (invitedAdmin.email) {
-        loginAttempts.delete(invitedAdmin.email.toLowerCase());
-      }
-      invitedAdmin.lastLogin = new Date().toISOString();
-
-      const { token, expiresAt } = createSignedAdminToken(invitedAdmin);
-      db.adminTokens.set(token, {
-        user: { ...invitedAdmin },
-        expiresAt
-      });
-      saveDbToDisk('admin_user_updated', { user: invitedAdmin });
-
-      try {
-        await supabase.from('admin_users').update({
-          last_login: invitedAdmin.lastLogin,
-          updated_at: new Date().toISOString()
-        }).eq('id', invitedAdmin.id);
-      } catch {}
-
-      logAudit({ name: invitedAdmin.name, role: invitedAdmin.role }, 'ADMIN_LOGIN', `Invited administrator ${invitedAdmin.email || invitedAdmin.username} signed in from ${req.ip || 'remote'}`);
-
-      return res.json({
-        token,
-        admin: invitedAdmin,
-        expiresAt,
-        redirectTo: '/admin'
-      });
-    }
-  }
-
-  // Reject any unauthorized email address explicitly with 403
-  if (cleanUser.includes('@') && !isOwnerUsername && !invitedAdmin) {
-    logAudit({ name: 'Security', role: 'security' }, 'ADMIN_LOGIN_DENIED', `Rejected unauthorized admin email attempt: ${cleanUser}`);
-    return res.status(403).json({
-      error: 'Access denied: This account is not authorized to access the admin dashboard.'
-    });
-  }
-
-  // Failed authentication attempt
-  const currentAttempts = (attemptInfo?.attempts || 0) + 1;
-  if (currentAttempts >= 5) {
-    loginAttempts.set(cleanUser, { attempts: currentAttempts, lockoutUntil: Date.now() + 15 * 60 * 1000 });
-    return res.status(429).json({ error: 'Too many failed login attempts. Locked for 15 minutes.' });
-  } else {
-    loginAttempts.set(cleanUser, { attempts: currentAttempts });
-  }
-  return res.status(401).json({ error: 'Invalid administrator credentials.' });
   } catch (err: any) {
     console.error('[Admin Login] Error:', err?.message || err);
     return res.status(500).json({ error: 'Authentication service encountered a temporary error. Please try again.' });
@@ -6765,7 +6680,7 @@ app.post(['/api/auth/login', '/api/admin/login'], async (req: Request, res: Resp
 function handleDisabledGoogleAdminLogin(_req: Request, res: Response) {
   return res.status(403).json({
     unauthorized: true,
-    error: 'Google Sign-In is disabled for administrators. Please sign in using authorized administrator username and password credentials.'
+    error: 'Alternative admin sign-in methods and Google Sign-In are disabled. Only contactreachmedialimited@gmail.com may sign in using email and password.'
   });
 }
 
@@ -6773,16 +6688,43 @@ app.post('/api/auth/supabase-login', handleDisabledGoogleAdminLogin);
 app.post('/api/auth/google-login', handleDisabledGoogleAdminLogin);
 app.post('/api/auth/firebase-login', handleDisabledGoogleAdminLogin);
 
-app.get('/api/auth/me', requireAdminAuth, (req: Request, res: Response) => {
-  const user = (req as any).adminUser;
-  if (!user) {
-    const token = req.headers.authorization?.split(' ')[1];
+app.get('/api/auth/me', requireAdminAuth, async (req: Request, res: Response) => {
+  const user = (req as any).adminUser as AdminUser | undefined;
+  const token = req.headers.authorization?.split(' ')[1]?.trim();
+
+  if (!user || String(user.email || '').toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
     if (token) {
       revokeAdminToken(token);
       saveDbToDisk();
     }
     return res.status(403).json({ error: 'Access denied: Unauthorized administrator session.' });
   }
+
+  try {
+    const { data: sbAdminRow, error: sbErr } = await supabase
+      .from('admin_users')
+      .select('id, name, email, phone, role, active, last_login')
+      .ilike('email', AUTHORIZED_ADMIN_EMAIL)
+      .maybeSingle();
+
+    if (!sbErr && sbAdminRow && sbAdminRow.active === false) {
+      if (token) {
+        revokeAdminToken(token);
+        saveDbToDisk();
+      }
+      return res.status(403).json({ error: 'Administrator account deactivated in Supabase.' });
+    }
+
+    if (!sbErr && sbAdminRow) {
+      user.id = String(sbAdminRow.id || user.id);
+      user.name = sbAdminRow.name || user.name;
+      user.phone = sbAdminRow.phone || user.phone;
+      user.role = 'owner';
+      user.active = true;
+      user.lastLogin = sbAdminRow.last_login || user.lastLogin;
+    }
+  } catch {}
+
   res.json({
     ...user,
     sessionExpiresAt: (req as any).adminSessionExpiresAt
@@ -11322,720 +11264,67 @@ app.get('/api/admin/me', requireAdminAuth, (req: Request, res: Response) => {
   res.json({ user: (req as any).adminUser || null });
 });
 
-app.get('/api/admin/users', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
-  res.json(db.adminUsers);
+app.get('/api/admin/users', requireAdminAuth, requireRole(['owner']), (_req: Request, res: Response) => {
+  const authorizedOnly = (db.adminUsers || []).filter(
+    u => u && String(u.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL
+  );
+  res.json(authorizedOnly);
 });
 
-app.post('/api/admin/users', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
-  const { email } = req.body;
-  const normalizedEmail = (email || '').trim().toLowerCase();
-  if (normalizedEmail !== AUTHORIZED_ADMIN_EMAIL) {
-    return res.status(403).json({
-      error: 'Security restriction: Only contactreachmedialimited@gmail.com is authorized to access or hold an administrator account.'
-    });
-  }
-  return res.status(400).json({ error: 'Administrator account for contactreachmedialimited@gmail.com already exists.' });
+app.post('/api/admin/users', requireAdminAuth, requireRole(['owner']), (_req: Request, res: Response) => {
+  return res.status(403).json({
+    error: 'Security restriction: Only contactreachmedialimited@gmail.com is authorized to access the admin dashboard.'
+  });
 });
 
 app.patch('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const user = db.adminUsers.find(u => u.id === req.params.id);
-  if (!user) return res.status(404).json({ error: 'Administrator user not found' });
+  const user = db.adminUsers.find(
+    u => u.id === req.params.id && String(u.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL
+  );
+  if (!user) return res.status(404).json({ error: 'Authorized administrator user not found' });
 
-  const { role, active, phone, name } = req.body;
+  const { active, phone, name } = req.body;
+  if (active === false || (admin.id === user.id && active === false)) {
+    return res.status(400).json({ error: 'You cannot deactivate your own administrative account.' });
+  }
 
   if (name && typeof name === 'string') user.name = name.trim();
   if (phone !== undefined) user.phone = phone ? phone.trim() : undefined;
 
-  if (role) {
-    const validRoles: AdminRole[] = ['owner', 'administrator', 'product_manager', 'order_manager', 'customer_support', 'shop_manager'];
-    if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid administrative role' });
-    user.role = role;
-  }
-
-  if (active !== undefined) {
-    if (admin.id === user.id && !active) {
-      return res.status(400).json({ error: 'You cannot deactivate your own administrative account.' });
-    }
-    user.active = Boolean(active);
-    if (!user.active) {
-      // Immediate revocation: clear all active session tokens for this user
-      for (const [token, session] of db.adminTokens.entries()) {
-        if (session.user.id === user.id || session.user.email.toLowerCase() === user.email.toLowerCase()) {
-          revokeAdminToken(token);
-        }
-      }
-    }
-  }
-
-  logAudit(admin, 'ADMIN_USER_UPDATED', `Updated administrator account ${user.name} (${user.email}): role=${user.role}, active=${user.active}`, 'admin_user', user.id);
+  logAudit(admin, 'ADMIN_USER_UPDATED', `Updated administrator profile ${user.name} (${user.email})`, 'admin_user', user.id);
   saveDbToDisk();
   saveToFirestoreAsync('adminUsers', user.id, user);
-  if (user.active) {
-    saveToFirestoreAsync('admins', user.id, user);
-  } else {
-    deleteFromFirestoreAsync('admins', user.id);
-  }
 
-  res.json({ message: 'Administrator account updated', user });
+  res.json({ message: 'Administrator profile updated', user });
 });
 
-app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
-  const admin = (req as any).adminUser;
-  const index = db.adminUsers.findIndex(u => u.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: 'Administrator user not found' });
-
-  const target = db.adminUsers[index];
-  if (target.email.toLowerCase() === 'contactreachmedialimited@gmail.com') {
-    return res.status(400).json({ error: 'System owner account (contactreachmedialimited@gmail.com) cannot be deleted.' });
-  }
-  if (target.id === admin.id || target.email.toLowerCase() === admin.email.toLowerCase()) {
-    return res.status(400).json({ error: 'You cannot delete your own administrative account.' });
-  }
-
-  const removed = db.adminUsers.splice(index, 1)[0];
-  // Immediate revocation: clear all active session tokens & credentials
-  for (const [token, session] of db.adminTokens.entries()) {
-    if (session.user.id === removed.id || session.user.email.toLowerCase() === removed.email.toLowerCase()) {
-      revokeAdminToken(token);
-    }
-  }
-  if (db.adminCredentials && db.adminCredentials[removed.id]) {
-    delete db.adminCredentials[removed.id];
-    saveToSupabaseAsync('adminCredentials', 'admin_credentials', db.adminCredentials);
-  }
-
-  db.deletedRecordIds = db.deletedRecordIds || [];
-  if (!db.deletedRecordIds.includes(removed.id)) {
-    db.deletedRecordIds.push(removed.id);
-  }
-
-  logAudit(admin, 'ADMIN_USER_DELETED', `Deleted administrator account for ${removed.name} (${removed.email})`, 'admin_user', removed.id);
-  saveDbToDisk();
-  deleteFromFirestoreAsync('adminUsers', removed.id);
-  deleteFromFirestoreAsync('admins', removed.id);
-  deleteFromSupabaseAsync('admin_users', removed.id);
-
-  res.json({ message: 'Administrator account removed successfully', removed });
+app.delete('/api/admin/users/:id', requireAdminAuth, requireRole(['owner']), (_req: Request, res: Response) => {
+  return res.status(400).json({ error: 'System owner account (contactreachmedialimited@gmail.com) cannot be deleted.' });
 });
 
-app.post('/api/admin/users/bulk-delete', requireAdminAuth, requireRole(['owner']), (req: Request, res: Response) => {
-  const admin = (req as any).adminUser;
-  const userIds: string[] = req.body.userIds || [];
-  if (!Array.isArray(userIds) || userIds.length === 0) {
-    return res.status(400).json({ error: 'No user IDs provided for deletion.' });
-  }
-
-  const deletedIds: string[] = [];
-  db.deletedRecordIds = db.deletedRecordIds || [];
-
-  for (const id of userIds) {
-    const idx = db.adminUsers.findIndex(u => u.id === id);
-    if (idx !== -1) {
-      const target = db.adminUsers[idx];
-      if (target.email.toLowerCase() === 'contactreachmedialimited@gmail.com') {
-        continue; // Cannot delete master owner
-      }
-      if (target.id === admin?.id || target.email.toLowerCase() === admin?.email?.toLowerCase()) {
-        continue; // Cannot delete self
-      }
-      const removed = db.adminUsers.splice(idx, 1)[0];
-      deletedIds.push(removed.id);
-      if (!db.deletedRecordIds.includes(removed.id)) {
-        db.deletedRecordIds.push(removed.id);
-      }
-      for (const [token, session] of db.adminTokens.entries()) {
-        if (session.user.id === removed.id || session.user.email.toLowerCase() === removed.email.toLowerCase()) {
-          revokeAdminToken(token);
-        }
-      }
-      if (db.adminCredentials && db.adminCredentials[removed.id]) {
-        delete db.adminCredentials[removed.id];
-      }
-      deleteFromSupabaseAsync('admin_users', removed.id);
-    }
-  }
-
-  saveToSupabaseAsync('adminCredentials', 'admin_credentials', db.adminCredentials);
-  logAudit(admin, 'ADMIN_USERS_BULK_DELETED', `Bulk deleted ${deletedIds.length} administrative user account(s)`, 'admin_user');
-  saveDbToDisk();
-
-  res.json({ success: true, count: deletedIds.length, deletedIds });
+app.post('/api/admin/users/bulk-delete', requireAdminAuth, requireRole(['owner']), (_req: Request, res: Response) => {
+  return res.status(400).json({ error: 'System owner account (contactreachmedialimited@gmail.com) cannot be deleted.' });
 });
 
 // -------------------------------------------------------------
-// ADMIN INVITATION SYSTEM (SINGLE-USE, EXPIRING, VERIFIED)
+// DISABLED ADMIN INVITATION ENDPOINTS (Single Admin Policy)
 // -------------------------------------------------------------
 
-const inviteVerificationAttempts = new Map<string, { attempts: number; lockedUntil?: number }>();
-
-function hashInviteToken(rawToken: string): string {
-  return crypto.createHash('sha256').update(String(rawToken || '').trim()).digest('hex');
-}
-
-function hashVerificationCode(code: string): string {
-  return crypto.createHash('sha256').update(String(code || '').trim()).digest('hex');
-}
-
-function maskEmailForVerification(email: string): string {
-  const parts = String(email || '').split('@');
-  if (parts.length !== 2) return '***';
-  const [local, domain] = parts;
-  const visible = local.slice(0, Math.min(2, local.length));
-  return `${visible}${'*'.repeat(Math.max(2, local.length - visible.length))}@${domain}`;
-}
-
-function sanitizeInvitationForOwner(inv: StoredAdminInvitation): AdminInvitation {
-  const { tokenHash: _th, verificationCodeHash: _vh, ...rest } = inv;
-  return {
-    ...rest,
-    inviteUrl: inv.status === 'Pending' ? inv.inviteUrl : undefined,
-    verificationCode: inv.status === 'Pending' ? inv.verificationCode : undefined
-  };
-}
-
-function syncExpiredInvitations(): boolean {
-  let changed = false;
-  const now = Date.now();
-  db.adminInvitations = db.adminInvitations || [];
-  for (const inv of db.adminInvitations) {
-    if (inv.status === 'Pending') {
-      const expMs = new Date(inv.expiresAt).getTime();
-      if (!Number.isFinite(expMs) || now >= expMs) {
-        inv.status = 'Expired';
-        inv.inviteUrl = undefined;
-        inv.verificationCode = undefined;
-        changed = true;
-      }
-    }
-  }
-  if (changed) {
-    saveDbToDisk('admin_invitations_updated');
-    saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations);
-  }
-  return changed;
-}
-
-function findInvitationByRawToken(rawToken: string): StoredAdminInvitation | undefined {
-  const candidateHash = hashInviteToken(rawToken);
-  const candidateBuf = Buffer.from(candidateHash, 'hex');
-  return (db.adminInvitations || []).find(inv => {
-    if (!inv.tokenHash) return false;
-    try {
-      const invBuf = Buffer.from(inv.tokenHash, 'hex');
-      return invBuf.length === candidateBuf.length && crypto.timingSafeEqual(invBuf, candidateBuf);
-    } catch {
-      return false;
-    }
+function handleDisabledInvitations(_req: Request, res: Response) {
+  return res.status(403).json({
+    valid: false,
+    status: 'Disabled',
+    error: 'Administrator invitations are disabled. Only contactreachmedialimited@gmail.com may access the admin dashboard using email and password.'
   });
 }
 
-// 1. Authorized admins list & track invitations
-app.get('/api/admin/invitations', requireAdminAuth, requireRole(['owner', 'administrator']), (req: Request, res: Response) => {
-  syncExpiredInvitations();
-  const sorted = [...(db.adminInvitations || [])]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .map(sanitizeInvitationForOwner);
-  res.json(sorted);
-});
-
-// 2. Authorized admins generate a secure, unique, single-use invitation link (supports 1-click generation with zero extra info)
-app.post(['/api/admin/invitations', '/api/admin/invitations/generate'], requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
-  try {
-    const admin = ((req as any).adminUser || {}) as AdminUser;
-    syncExpiredInvitations();
-
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const hasStructuredInput = Boolean(
-      (typeof body.inviteeEmail === 'string' && body.inviteeEmail.trim()) ||
-      (typeof body.inviteeName === 'string' && body.inviteeName.trim())
-    );
-    const isOneClick = body.oneClick === true || !hasStructuredInput;
-
-    const allowedInviteRoles: AdminRole[] = [
-      'administrator',
-      'product_manager',
-      'shop_manager',
-      'order_manager',
-      'customer_support'
-    ];
-    const requestedRole = String(body.role || 'administrator').trim() as AdminRole;
-    if (!allowedInviteRoles.includes(requestedRole)) {
-      return res.status(400).json({ error: 'Invalid administrative role selected for invitation.' });
-    }
-
-    let inviteeName = 'Invited Administrator';
-    let inviteeEmail = '';
-    let inviteePhone: string | undefined = undefined;
-    let notes: string | undefined = undefined;
-
-    if (!isOneClick) {
-      inviteeName = String(body.inviteeName || '').trim();
-      inviteeEmail = String(body.inviteeEmail || '').trim().toLowerCase();
-      inviteePhone = body.inviteePhone ? String(body.inviteePhone).trim() : undefined;
-      notes = body.notes ? String(body.notes).trim().slice(0, 300) : undefined;
-
-      if (inviteeName.length < 2) {
-        return res.status(400).json({ error: 'Invitee full name must be at least 2 characters.' });
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeEmail)) {
-        return res.status(400).json({ error: 'Please provide a valid invitee email address.' });
-      }
-      if (inviteeEmail === AUTHORIZED_ADMIN_EMAIL) {
-        return res.status(400).json({ error: 'Cannot create an invitation for the main system owner email.' });
-      }
-
-      const existingActiveAdmin = (db.adminUsers || []).find(
-        u => u && (u.email || '').toLowerCase().trim() === inviteeEmail && u.active !== false
-      );
-      if (existingActiveAdmin) {
-        return res.status(409).json({ error: 'An active administrator account already exists for this email address.' });
-      }
-    }
-
-    // Resolve and validate expiration date & time (default 7 days for one-click, 24h for structured)
-    const rawExpiresAt = body.expiresAt;
-    const expiresInHours = body.expiresInHours !== undefined ? Number(body.expiresInHours) : undefined;
-    let expiresAtDate: Date;
-    if (rawExpiresAt) {
-      expiresAtDate = new Date(String(rawExpiresAt));
-    } else if (expiresInHours !== undefined && Number.isFinite(expiresInHours)) {
-      expiresAtDate = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
-    } else {
-      expiresAtDate = new Date(Date.now() + (isOneClick ? 7 * 24 : 24) * 60 * 60 * 1000);
-    }
-
-    const nowMs = Date.now();
-    const expMs = expiresAtDate.getTime();
-    if (!Number.isFinite(expMs)) {
-      return res.status(400).json({ error: 'Invalid expiration date and time.' });
-    }
-    if (expMs <= nowMs + 60 * 1000) {
-      return res.status(400).json({ error: 'Expiration date and time must be at least 1 minute in the future.' });
-    }
-    if (expMs > nowMs + 90 * 24 * 60 * 60 * 1000) {
-      return res.status(400).json({ error: 'Invitation expiration cannot exceed 90 days.' });
-    }
-
-    // Generate cryptographically random 256-bit single-use token
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = hashInviteToken(rawToken);
-    const verificationCode = isOneClick ? undefined : String(crypto.randomInt(100000, 999999));
-    const verificationCodeHash = verificationCode ? hashVerificationCode(verificationCode) : undefined;
-    const inviteId = `inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-
-    const forwardedProto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
-    const host = String(req.headers['x-forwarded-host'] || req.get('host') || '').split(',')[0].trim();
-    const origin = req.headers.origin
-      ? String(req.headers.origin)
-      : (host ? `${forwardedProto}://${host}` : '');
-    const invitePath = `/admin/invite?token=${encodeURIComponent(rawToken)}`;
-    const inviteUrl = origin ? `${origin}${invitePath}` : invitePath;
-
-    const newInvitation: StoredAdminInvitation = {
-      id: inviteId,
-      inviteMode: isOneClick ? 'one_click' : 'verified',
-      inviteeName,
-      inviteeEmail,
-      inviteePhone,
-      role: requestedRole,
-      status: 'Pending',
-      tokenHash,
-      tokenPreview: `${rawToken.slice(0, 8)}...${rawToken.slice(-6)}`,
-      inviteUrl,
-      verificationCode,
-      verificationCodeHash,
-      createdById: admin.id || 'adm-owner-crmedia',
-      createdByName: admin.name || 'Administrator',
-      createdByEmail: admin.email || AUTHORIZED_ADMIN_EMAIL,
-      createdAt: new Date().toISOString(),
-      expiresAt: expiresAtDate.toISOString(),
-      notes
-    };
-
-    db.adminInvitations = db.adminInvitations || [];
-    db.adminInvitations.unshift(newInvitation);
-    if (db.adminInvitations.length > 200) {
-      const pending = db.adminInvitations.filter(i => i.status === 'Pending');
-      const nonPending = db.adminInvitations.filter(i => i.status !== 'Pending').slice(0, Math.max(0, 200 - pending.length));
-      db.adminInvitations = [...pending, ...nonPending];
-    }
-
-    saveDbToDisk('admin_invitation_created', { invitation: sanitizeInvitationForOwner(newInvitation) });
-    await Promise.race([
-      saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations),
-      new Promise(resolve => setTimeout(resolve, 1500))
-    ]).catch(() => {});
-
-    try {
-      logAudit(
-        { name: admin.name || 'Administrator', role: admin.role || 'owner' },
-        'ADMIN_INVITATION_CREATED',
-        `Generated single-use ${isOneClick ? 'one-click ' : ''}admin invitation (${newInvitation.id})`,
-        'admin_invitation',
-        newInvitation.id
-      );
-    } catch {}
-
-    return res.status(201).json({
-      invitation: sanitizeInvitationForOwner(newInvitation),
-      inviteUrl,
-      invitePath,
-      ...(verificationCode ? { verificationCode } : {})
-    });
-  } catch (err: any) {
-    console.error('[Admin Invitation Create] Error:', err?.message || err);
-    return res.status(500).json({ error: err?.message || 'Unable to generate admin invitation link. Please try again.' });
-  }
-});
-
-// 3. Authorized admin revokes an active invitation
-app.post('/api/admin/invitations/:id/revoke', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser as AdminUser;
-  syncExpiredInvitations();
-
-  const inv = (db.adminInvitations || []).find(i => i.id === req.params.id);
-  if (!inv) {
-    return res.status(404).json({ error: 'Invitation not found.' });
-  }
-  if (inv.status === 'Accepted') {
-    return res.status(400).json({ error: 'Invitation has already been accepted. Deactivate or remove the admin account instead.' });
-  }
-  if (inv.status === 'Revoked') {
-    return res.json({ message: 'Invitation is already revoked.', invitation: sanitizeInvitationForOwner(inv) });
-  }
-
-  inv.status = 'Revoked';
-  inv.revokedAt = new Date().toISOString();
-  inv.revokedBy = admin.email;
-  inv.inviteUrl = undefined;
-  inv.verificationCode = undefined;
-
-  saveDbToDisk('admin_invitation_revoked', { invitation: sanitizeInvitationForOwner(inv) });
-  await saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations);
-
-  logAudit(
-    admin,
-    'ADMIN_INVITATION_REVOKED',
-    `Revoked admin invitation ${inv.id}`,
-    'admin_invitation',
-    inv.id
-  );
-
-  res.json({
-    message: 'Invitation revoked and link invalidated immediately.',
-    invitation: sanitizeInvitationForOwner(inv)
-  });
-});
-
-// 4. Authorized admin deletes an invitation record
-app.delete('/api/admin/invitations/:id', requireAdminAuth, requireRole(['owner', 'administrator']), async (req: Request, res: Response) => {
-  const admin = (req as any).adminUser as AdminUser;
-  db.adminInvitations = db.adminInvitations || [];
-  const idx = db.adminInvitations.findIndex(i => i.id === req.params.id);
-  if (idx === -1) {
-    return res.status(404).json({ error: 'Invitation not found.' });
-  }
-  const [removed] = db.adminInvitations.splice(idx, 1);
-
-  saveDbToDisk('admin_invitation_deleted', { id: removed.id });
-  await saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations);
-
-  logAudit(
-    admin,
-    'ADMIN_INVITATION_DELETED',
-    `Deleted admin invitation record ${removed.id}`,
-    'admin_invitation',
-    removed.id
-  );
-
-  res.json({ message: 'Invitation record deleted.', id: removed.id });
-});
-
-// 5. Public read-only token validation endpoint (for /admin/invite?token=...)
-app.get('/api/admin/invitations/verify', (req: Request, res: Response) => {
-  syncExpiredInvitations();
-  const rawToken = String(req.query.token || '').trim();
-  if (!rawToken) {
-    return res.status(400).json({ valid: false, status: 'Invalid', error: 'Invitation token is missing.' });
-  }
-
-  const inv = findInvitationByRawToken(rawToken);
-  if (!inv) {
-    return res.status(404).json({ valid: false, status: 'Invalid', error: 'Invitation link is invalid or does not exist.' });
-  }
-
-  if (inv.status === 'Revoked') {
-    return res.status(410).json({ valid: false, status: 'Revoked', error: 'This invitation link has been revoked.' });
-  }
-  if (inv.status === 'Accepted') {
-    return res.status(410).json({ valid: false, status: 'Accepted', error: 'This invitation link has already been used and is no longer valid.' });
-  }
-  if (inv.status === 'Expired' || Date.now() >= new Date(inv.expiresAt).getTime()) {
-    if (inv.status !== 'Expired') {
-      inv.status = 'Expired';
-      inv.inviteUrl = undefined;
-      inv.verificationCode = undefined;
-      saveDbToDisk('admin_invitations_updated');
-      saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations);
-    }
-    return res.status(410).json({ valid: false, status: 'Expired', error: 'This invitation link has expired and is no longer valid.' });
-  }
-
-  const mode = inv.inviteMode || (inv.inviteeEmail ? 'verified' : 'one_click');
-
-  return res.json({
-    valid: true,
-    status: 'Pending',
-    mode,
-    invitation: {
-      id: inv.id,
-      inviteeName: inv.inviteeName,
-      maskedEmail: inv.inviteeEmail ? maskEmailForVerification(inv.inviteeEmail) : '',
-      role: inv.role,
-      expiresAt: inv.expiresAt,
-      createdAt: inv.createdAt,
-      createdByName: inv.createdByName
-    }
-  });
-});
-
-// 6. Secure single-use acceptance endpoint for invited admin access
-app.post('/api/admin/invitations/accept', async (req: Request, res: Response) => {
-  syncExpiredInvitations();
-
-  const rawToken = String(req.body?.token || '').trim();
-  if (!rawToken) {
-    return res.status(400).json({ error: 'Invitation token is required.' });
-  }
-
-  const inv = findInvitationByRawToken(rawToken);
-  if (!inv) {
-    return res.status(404).json({ error: 'Invalid invitation link.' });
-  }
-  if (inv.status === 'Revoked') {
-    return res.status(410).json({ error: 'This invitation link has been revoked and is no longer valid.' });
-  }
-  if (inv.status === 'Accepted') {
-    return res.status(410).json({ error: 'This invitation link has already been used and is single-use only.' });
-  }
-  if (inv.status === 'Expired' || Date.now() >= new Date(inv.expiresAt).getTime()) {
-    inv.status = 'Expired';
-    inv.inviteUrl = undefined;
-    inv.verificationCode = undefined;
-    saveDbToDisk('admin_invitations_updated');
-    await saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations);
-    return res.status(410).json({ error: 'This invitation link has expired.' });
-  }
-
-  const mode = inv.inviteMode || (inv.inviteeEmail ? 'verified' : 'one_click');
-  const nowIso = new Date().toISOString();
-  const newAdminId = `adm-inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-
-  if (mode === 'one_click') {
-    // Atomic single-use transition BEFORE async I/O so link becomes invalid immediately
-    const randomSuffix = crypto.randomBytes(4).toString('hex');
-    const generatedUsername = `admin_${randomSuffix}`;
-    const generatedEmail = `${generatedUsername}@admin.contactreachmarket.local`;
-    const internalSecretHash = hashBuyerPassword(crypto.randomBytes(24).toString('hex'));
-
-    inv.status = 'Accepted';
-    inv.acceptedAt = nowIso;
-    inv.acceptedUserId = newAdminId;
-    inv.acceptedUsername = generatedUsername;
-    inv.inviteUrl = undefined;
-    inv.verificationCode = undefined;
-
-    const newAdmin: AdminUser = {
-      id: newAdminId,
-      name: 'Administrator',
-      username: generatedUsername,
-      email: generatedEmail,
-      role: inv.role || 'administrator',
-      active: true,
-      verified: true,
-      invitedBy: inv.createdByEmail,
-      invitationId: inv.id,
-      lastLogin: nowIso
-    };
-
-    db.adminCredentials = db.adminCredentials || {};
-    db.adminCredentials[newAdmin.id] = {
-      id: newAdmin.id,
-      email: newAdmin.email,
-      username: generatedUsername,
-      passwordHash: internalSecretHash,
-      verifiedAt: nowIso,
-      invitationId: inv.id
-    };
-
-    db.adminUsers.push(newAdmin);
-
-    const { token, expiresAt } = createSignedAdminToken(newAdmin);
-    db.adminTokens.set(token, {
-      user: { ...newAdmin },
-      expiresAt
-    });
-
-    saveDbToDisk('admin_invitation_accepted', { user: newAdmin, invitation: sanitizeInvitationForOwner(inv) });
-    await Promise.all([
-      saveToSupabaseAsync('adminUsers', newAdmin.id, newAdmin),
-      saveToSupabaseAsync('adminCredentials', 'admin_credentials', db.adminCredentials),
-      saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations)
-    ]);
-
-    logAudit(
-      { name: newAdmin.name, role: newAdmin.role },
-      'ADMIN_INVITATION_ACCEPTED',
-      `One-click admin invitation ${inv.id} accepted and invalidated immediately`,
-      'admin_user',
-      newAdmin.id
-    );
-
-    return res.status(201).json({
-      success: true,
-      token,
-      admin: newAdmin,
-      expiresAt,
-      redirectTo: '/admin'
-    });
-  }
-
-  // Verified invitation flow (with email & 6-digit verification code)
-  const emailInput = String(req.body?.email || '').trim().toLowerCase();
-  const verificationCodeInput = String(req.body?.verificationCode || '').trim();
-  const nameInput = String(req.body?.name || '').trim();
-  const usernameInput = String(req.body?.username || '').trim().replace(/^@/, '');
-  const phoneInput = req.body?.phone ? String(req.body.phone).trim() : undefined;
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
-
-  const lockKey = inv.id;
-  const attemptRec = inviteVerificationAttempts.get(lockKey);
-  if (attemptRec?.lockedUntil && Date.now() < attemptRec.lockedUntil) {
-    return res.status(429).json({ error: 'Too many failed verification attempts. Please try again later or request a new invitation.' });
-  }
-
-  if (!emailInput || emailInput !== inv.inviteeEmail.toLowerCase().trim()) {
-    const nextAttempts = (attemptRec?.attempts || 0) + 1;
-    inviteVerificationAttempts.set(lockKey, {
-      attempts: nextAttempts,
-      lockedUntil: nextAttempts >= 5 ? Date.now() + 15 * 60 * 1000 : undefined
-    });
-    return res.status(403).json({ error: 'Verification failed: email address does not match the invited recipient.' });
-  }
-
-  if (!verificationCodeInput || !inv.verificationCodeHash) {
-    return res.status(400).json({ error: 'The 6-digit verification code provided by the main administrator is required.' });
-  }
-  const inputCodeHashBuf = Buffer.from(hashVerificationCode(verificationCodeInput), 'hex');
-  const expectedCodeHashBuf = Buffer.from(inv.verificationCodeHash, 'hex');
-  const codeValid =
-    inputCodeHashBuf.length === expectedCodeHashBuf.length &&
-    crypto.timingSafeEqual(inputCodeHashBuf, expectedCodeHashBuf);
-
-  if (!codeValid) {
-    const nextAttempts = (attemptRec?.attempts || 0) + 1;
-    inviteVerificationAttempts.set(lockKey, {
-      attempts: nextAttempts,
-      lockedUntil: nextAttempts >= 5 ? Date.now() + 15 * 60 * 1000 : undefined
-    });
-    return res.status(403).json({ error: 'Invalid verification code. Please check the 6-digit code shared by the main administrator.' });
-  }
-
-  if (!/^[a-zA-Z0-9._-]{3,32}$/.test(usernameInput)) {
-    return res.status(400).json({ error: 'Username must be 3–32 characters using letters, numbers, dots, underscores, or hyphens.' });
-  }
-  const lowerUsername = usernameInput.toLowerCase();
-  if (['crmedia', 'crm', 'admin'].includes(lowerUsername) || db.adminUsers.some(u => (u.username || '').toLowerCase() === lowerUsername)) {
-    return res.status(409).json({ error: 'This administrator username is already taken. Please choose another.' });
-  }
-
-  if (password.length < 8 || password.length > 128) {
-    return res.status(400).json({ error: 'Password must be between 8 and 128 characters.' });
-  }
-  if (!/[a-zA-Z]/.test(password) || !/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(password)) {
-    return res.status(400).json({ error: 'Password must include both letters and at least one number or special character.' });
-  }
-
-  if (db.adminUsers.some(u => u.email.toLowerCase().trim() === inv.inviteeEmail.toLowerCase().trim() && u.active !== false)) {
-    return res.status(409).json({ error: 'An active administrator account already exists for this email address.' });
-  }
-
-  const passwordHash = hashBuyerPassword(password);
-
-  inv.status = 'Accepted';
-  inv.acceptedAt = nowIso;
-  inv.acceptedUserId = newAdminId;
-  inv.acceptedUsername = usernameInput;
-  inv.inviteUrl = undefined;
-  inv.verificationCode = undefined;
-  inviteVerificationAttempts.delete(lockKey);
-
-  const newAdmin: AdminUser = {
-    id: newAdminId,
-    name: nameInput.length >= 2 ? nameInput : inv.inviteeName,
-    username: usernameInput,
-    email: inv.inviteeEmail,
-    role: inv.role,
-    active: true,
-    phone: phoneInput || inv.inviteePhone || undefined,
-    verified: true,
-    invitedBy: inv.createdByEmail,
-    invitationId: inv.id,
-    lastLogin: nowIso
-  };
-
-  db.adminCredentials = db.adminCredentials || {};
-  db.adminCredentials[newAdmin.id] = {
-    id: newAdmin.id,
-    email: newAdmin.email,
-    username: usernameInput,
-    passwordHash,
-    verifiedAt: nowIso,
-    invitationId: inv.id
-  };
-
-  db.adminUsers.push(newAdmin);
-
-  const { token, expiresAt } = createSignedAdminToken(newAdmin);
-  db.adminTokens.set(token, {
-    user: { ...newAdmin },
-    expiresAt
-  });
-
-  saveDbToDisk('admin_invitation_accepted', { user: newAdmin, invitation: sanitizeInvitationForOwner(inv) });
-  await Promise.all([
-    saveToSupabaseAsync('adminUsers', newAdmin.id, newAdmin),
-    saveToSupabaseAsync('adminCredentials', 'admin_credentials', db.adminCredentials),
-    saveToSupabaseAsync('adminInvitations', 'admin_invitations', db.adminInvitations)
-  ]);
-
-  logAudit(
-    { name: newAdmin.name, role: newAdmin.role },
-    'ADMIN_INVITATION_ACCEPTED',
-    `Verified invited admin ${newAdmin.name} (${newAdmin.email}, username=${usernameInput}, role=${newAdmin.role}) accepted invitation ${inv.id}`,
-    'admin_user',
-    newAdmin.id
-  );
-
-  createAdminNotification({
-    category: 'system',
-    title: 'New Admin Verified & Joined',
-    message: `${newAdmin.name} (${newAdmin.email}) completed verification and activated their ${newAdmin.role.replace('_', ' ')} account.`,
-    senderName: newAdmin.name,
-    senderEmail: newAdmin.email,
-    actionTab: 'team',
-    entityId: newAdmin.id
-  });
-
-  return res.status(201).json({
-    success: true,
-    token,
-    admin: newAdmin,
-    expiresAt,
-    redirectTo: '/admin'
-  });
-});
+app.get('/api/admin/invitations', requireAdminAuth, handleDisabledInvitations);
+app.post(['/api/admin/invitations', '/api/admin/invitations/generate'], requireAdminAuth, handleDisabledInvitations);
+app.post('/api/admin/invitations/:id/revoke', requireAdminAuth, handleDisabledInvitations);
+app.delete('/api/admin/invitations/:id', requireAdminAuth, handleDisabledInvitations);
+app.get('/api/admin/invitations/verify', handleDisabledInvitations);
+app.post('/api/admin/invitations/accept', handleDisabledInvitations);
 
 // -------------------------------------------------------------
 // ADMIN SETTINGS UPDATE & MAINTENANCE MODE

@@ -65,7 +65,11 @@ import {
   saveSmsNotificationToSupabase,
   syncAllDataToSupabase,
   testSupabaseConnection,
-  logoutSupabase
+  loginWithSupabasePassword,
+  getSupabaseSession,
+  logoutSupabase,
+  supabase,
+  AUTHORIZED_ADMIN_EMAIL
 } from './supabase.ts';
 import { logoutUser } from './googleDrive.ts';
 
@@ -124,43 +128,17 @@ const getSupplierPayoutsFromFirestore = getSupplierPayoutsFromSupabase;
 const saveSupplierPayoutToFirestore = async (p: any) => { await saveSupplierPayoutToSupabase(p); };
 const deleteSupplierPayoutFromFirestore = async (id: string) => deleteSupplierPayoutFromSupabase(id);
 
-const AUTHORIZED_ADMIN_USERNAME = 'crmedia';
-const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
 const TOKEN_KEY = 'crm_admin_token';
 const ADMIN_USER_KEY = 'crm_admin_user';
 const SESSION_FLAG_KEY = 'crm_admin_session_active';
 
-const AUTHORIZED_ADMIN_USERNAMES = ['crmedia', 'crm', 'admin'];
-const AUTHORIZED_ADMIN_EMAILS = [
-  'contactreachmedialimited@gmail.com'
-];
-const AUTHORIZED_ADMIN_ROLES = [
-  'owner',
-  'administrator',
-  'admin',
-  'product_manager',
-  'shop_manager',
-  'order_manager',
-  'customer_support'
-];
-
 export function isAuthorizedAdminUser(user: any): boolean {
   if (!user || typeof user !== 'object') return false;
   if (user.active === false) return false;
-  const username = String(user.username || '').toLowerCase().trim().replace(/^@/, '');
   const role = String(user.role || '').toLowerCase().trim();
+  if (role === 'customer' || role === 'buyer') return false;
   const email = String(user.email || '').toLowerCase().trim();
-  const id = String(user.id || '').toLowerCase().trim();
-
-  return (
-    AUTHORIZED_ADMIN_USERNAMES.includes(username) ||
-    AUTHORIZED_ADMIN_EMAILS.includes(email) ||
-    AUTHORIZED_ADMIN_ROLES.includes(role) ||
-    id.startsWith('adm-') ||
-    username === AUTHORIZED_ADMIN_USERNAME ||
-    email === AUTHORIZED_ADMIN_EMAIL ||
-    role === 'owner'
-  );
+  return email === AUTHORIZED_ADMIN_EMAIL;
 }
 
 const ADMIN_COOKIE_NAME = 'crm_admin_token';
@@ -241,19 +219,16 @@ export function setAdminToken(token: string, user?: any) {
     removeAdminToken();
     throw new Error('Invalid authentication token.');
   }
-  if (user && !isAuthorizedAdminUser(user)) {
+  if (!user || !isAuthorizedAdminUser(user)) {
     removeAdminToken();
     throw new Error('Access denied: Unauthorized administrator account.');
   }
-  const userToSave: AdminUser = (user && isAuthorizedAdminUser(user)) ? user : {
-    id: 'adm-owner-crmedia',
-    name: 'Administrator',
-    username: AUTHORIZED_ADMIN_USERNAME,
+  const userToSave: AdminUser = {
+    ...user,
     email: AUTHORIZED_ADMIN_EMAIL,
     role: 'owner',
-    active: true,
-    phone: '0780022600',
-    lastLogin: new Date().toISOString()
+    active: user.active !== false,
+    lastLogin: user.lastLogin || new Date().toISOString()
   };
 
   inMemoryAdminToken = cleanToken;
@@ -285,24 +260,9 @@ export function getStoredAdminUser(): AdminUser | null {
     if (inMemoryAdminUser && isAuthorizedAdminUser(inMemoryAdminUser) && inMemoryAdminUser.active !== false) {
       return inMemoryAdminUser;
     }
-    // Maintain user profile when a verified token is present in localStorage/cookie
-    const fallbackUser: AdminUser = {
-      id: 'adm-owner-crmedia',
-      name: 'Administrator',
-      username: AUTHORIZED_ADMIN_USERNAME,
-      email: AUTHORIZED_ADMIN_EMAIL,
-      role: 'owner',
-      active: true,
-      phone: '0780022600',
-      lastLogin: new Date().toISOString()
-    };
-    inMemoryAdminUser = fallbackUser;
-    try {
-      localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(fallbackUser));
-    } catch {}
-    return fallbackUser;
+    return null;
   } catch {
-    return inMemoryAdminUser;
+    return inMemoryAdminUser && isAuthorizedAdminUser(inMemoryAdminUser) ? inMemoryAdminUser : null;
   }
 }
 
@@ -1514,14 +1474,24 @@ export const api = {
   // ADMIN AUTHENTICATION
   // -----------------------------------------------------------
 
-  async adminLogin(usernameOrEmail: string, password: string): Promise<{ token: string; admin: any }> {
-    const cleanIdentifier = String(usernameOrEmail || '').trim();
+  async adminLogin(email: string, password: string): Promise<{ token: string; admin: any }> {
+    const cleanEmail = String(email || '').trim().toLowerCase();
     const rawPass = typeof password === 'string' ? password : String(password || '');
 
-    if (!cleanIdentifier || !rawPass) {
-      throw new Error('Please enter your administrator username and password.');
+    if (!cleanEmail || !cleanEmail.includes('@') || !rawPass) {
+      throw new Error('Please enter a valid administrator email address and password.');
     }
 
+    if (cleanEmail !== AUTHORIZED_ADMIN_EMAIL) {
+      removeAdminToken();
+      await logoutSupabase().catch(() => {});
+      throw new Error('Access denied: This account is not authorized to access the admin dashboard.');
+    }
+
+    // 1. Verify credentials with Supabase Authentication & Supabase admin_users DB
+    const sbAuth = await loginWithSupabasePassword(cleanEmail, rawPass);
+
+    // 2. Verify with backend session manager and Supabase database
     const endpoints = ['/api/auth/login', '/api/admin/login'];
     let lastError: Error | null = null;
 
@@ -1536,9 +1506,9 @@ export const api = {
           credentials: 'same-origin',
           cache: 'no-store',
           body: JSON.stringify({
-            username: cleanIdentifier,
-            email: cleanIdentifier,
-            password: rawPass
+            email: cleanEmail,
+            password: rawPass,
+            accessToken: sbAuth.token
           })
         });
         const parsed = await safeParseResponse<{ token: string; admin: any; error?: string }>(res);
@@ -1546,17 +1516,23 @@ export const api = {
         if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
           if (!isAuthorizedAdminUser(parsed.json.admin)) {
             removeAdminToken();
+            await logoutSupabase().catch(() => {});
             throw new Error('Access denied: Unauthorized administrator account.');
           }
           setAdminToken(parsed.json.token, parsed.json.admin);
           return { token: parsed.json.token, admin: parsed.json.admin };
         }
 
+        if (res.status === 401 || res.status === 403) {
+          removeAdminToken();
+          await logoutSupabase().catch(() => {});
+          throw new Error(parsed.json?.error || 'Invalid administrator email or password.');
+        }
+
         if (parsed.isJson && parsed.json?.error) {
           throw new Error(parsed.json.error);
         }
 
-        // Retry once if gateway/server returned a transient non-JSON or 5xx response during startup
         if ((!parsed.isJson || res.status >= 500) && attempt < endpoints.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 400));
           continue;
@@ -1588,28 +1564,39 @@ export const api = {
 
   async adminLoginWithSupabaseToken(_accessToken: string): Promise<{ token: string; admin: any }> {
     removeAdminToken();
-    throw new Error('Google Sign-In is disabled for administrators. Please sign in with your username and password.');
+    throw new Error('Alternative admin sign-in methods are disabled. Please sign in with your authorized email and password.');
   },
 
   async adminGoogleLogin(_userOrToken: any): Promise<{ token: string; admin: any }> {
     removeAdminToken();
-    throw new Error('Google Sign-In is disabled for administrators. Please sign in with your username and password.');
+    throw new Error('Google Sign-In is disabled for administrators. Please sign in with your authorized email and password.');
   },
 
   async adminFirebaseLogin(_user: any): Promise<{ token: string; admin: any }> {
     removeAdminToken();
-    throw new Error('Google Sign-In is disabled for administrators. Please sign in with your username and password.');
+    throw new Error('Alternative admin sign-in methods are disabled. Please sign in with your authorized email and password.');
   },
 
-  async adminSupabaseLogin(username: string, pass: string): Promise<{ token: string; admin: any }> {
-    return this.adminLogin(username, pass);
+  async adminSupabaseLogin(email: string, pass: string): Promise<{ token: string; admin: any }> {
+    return this.adminLogin(email, pass);
   },
 
   async adminCheckAuth(): Promise<boolean> {
-    const token = getAdminToken();
-    if (!token) return false;
-
+    let token = getAdminToken();
     const storedUser = getStoredAdminUser();
+    const sbSession = await getSupabaseSession();
+
+    if (sbSession?.user?.email && sbSession.user.email.toLowerCase().trim() !== AUTHORIZED_ADMIN_EMAIL) {
+      removeAdminToken();
+      await logoutSupabase().catch(() => {});
+      return false;
+    }
+
+    if (!token && sbSession?.access_token) {
+      token = sbSession.access_token;
+    }
+
+    if (!token) return false;
 
     try {
       const res = await fetch('/api/auth/me', {
@@ -1617,28 +1604,52 @@ export const api = {
         cache: 'no-store'
       });
       const parsed = await safeParseResponse<any>(res);
-      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.username || parsed.json?.email)) {
+      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.email)) {
         if (!isAuthorizedAdminUser(parsed.json)) {
-          // Explicitly unauthorized account returned from server
           removeAdminToken();
+          await logoutSupabase().catch(() => {});
           return false;
         }
-        // Refresh stored admin user profile & persistent backup cookie
         setAdminToken(token, parsed.json);
         return true;
       }
 
-      // ONLY invalidate if server explicitly returned 401 Unauthorized or 403 Forbidden
       if (res.status === 401 || res.status === 403) {
+        // Attempt Supabase session refresh once before invalidating if a Supabase refresh token exists
+        if (sbSession?.refresh_token) {
+          try {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            const refreshedToken = refreshed?.session?.access_token;
+            const refreshedEmail = String(refreshed?.user?.email || '').toLowerCase().trim();
+            if (refreshedToken && refreshedEmail === AUTHORIZED_ADMIN_EMAIL) {
+              const retryRes = await fetch('/api/auth/me', {
+                headers: { Authorization: `Bearer ${refreshedToken}` },
+                cache: 'no-store'
+              });
+              const retryParsed = await safeParseResponse<any>(retryRes);
+              if (retryRes.ok && retryParsed.isJson && isAuthorizedAdminUser(retryParsed.json)) {
+                setAdminToken(refreshedToken, retryParsed.json);
+                return true;
+              }
+            }
+          } catch {}
+        }
         removeAdminToken();
+        await logoutSupabase().catch(() => {});
         return false;
       }
 
-      // If server returned 5xx, HTML error, or temporary network issue, KEEP the session alive!
-      return Boolean(storedUser && isAuthorizedAdminUser(storedUser) && storedUser.active !== false);
+      // Preserve active session on transient 5xx or temporary network issue
+      return Boolean(
+        (storedUser && isAuthorizedAdminUser(storedUser) && storedUser.active !== false) ||
+        (sbSession?.user?.email && sbSession.user.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL)
+      );
     } catch {
-      // In case of transient offline or fetch failure, DO NOT wipe token; preserve active admin session
-      return Boolean(storedUser && isAuthorizedAdminUser(storedUser) && storedUser.active !== false);
+      // Preserve active session on transient offline or fetch failure
+      return Boolean(
+        (storedUser && isAuthorizedAdminUser(storedUser) && storedUser.active !== false) ||
+        (sbSession?.user?.email && sbSession.user.email.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL)
+      );
     }
   },
 
@@ -4194,154 +4205,47 @@ export const api = {
   // -----------------------------------------------------------
 
   async adminGetInvitations(): Promise<AdminInvitation[]> {
-    const res = await fetch('/api/admin/invitations', {
-      headers: getAuthHeaders(),
-      cache: 'no-store'
-    });
-    const parsed = await safeParseResponse<AdminInvitation[]>(res);
-    if (!res.ok || !parsed.isJson || !Array.isArray(parsed.json)) {
-      throw new Error((parsed.json as any)?.error || 'Failed to fetch admin invitations');
-    }
-    return parsed.json;
+    return [];
   },
 
-  async adminCreateInvitation(payload: {
-    oneClick?: boolean;
-    inviteeName?: string;
-    inviteeEmail?: string;
-    inviteePhone?: string;
-    role?: AdminRole;
-    expiresAt?: string;
-    expiresInHours?: number;
-    notes?: string;
-  } = { oneClick: true }): Promise<{
+  async adminCreateInvitation(_payload: any = {}): Promise<{
     invitation: AdminInvitation;
     inviteUrl: string;
     invitePath: string;
     verificationCode?: string;
   }> {
-    const endpoints = ['/api/admin/invitations', '/api/admin/invitations/generate'];
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt < endpoints.length; attempt++) {
-      try {
-        const res = await fetch(endpoints[attempt], {
-          method: 'POST',
-          headers: {
-            ...getAuthHeaders(),
-            Accept: 'application/json'
-          },
-          credentials: 'same-origin',
-          cache: 'no-store',
-          body: JSON.stringify(payload || { oneClick: true })
-        });
-        const parsed = await safeParseResponse<any>(res);
-
-        if (res.ok && parsed.isJson && parsed.json && (parsed.json.inviteUrl || parsed.json.invitePath)) {
-          return parsed.json;
-        }
-
-        if (parsed.isJson && parsed.json?.error) {
-          throw new Error(parsed.json.error);
-        }
-
-        if ((!parsed.isJson || res.status >= 500) && attempt < endpoints.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 350));
-          continue;
-        }
-
-        throw new Error(parsed.json?.error || parsed.errorMessage || `Failed to generate admin invitation link (HTTP ${res.status})`);
-      } catch (err: any) {
-        const msg = String(err?.message || '');
-        const isTransient = msg.includes('Failed to fetch') || msg.includes('NetworkError') || err?.name === 'TypeError';
-        if (isTransient && attempt < endpoints.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 350));
-          continue;
-        }
-        lastError = err instanceof Error ? err : new Error(msg || 'Failed to generate admin invitation link');
-        break;
-      }
-    }
-
-    throw lastError || new Error('Failed to generate admin invitation link');
+    throw new Error('Administrator invitations are disabled. Only the authorized administrator account can sign in.');
   },
 
-  async adminRevokeInvitation(id: string): Promise<{ message: string; invitation: AdminInvitation }> {
-    const res = await fetch(`/api/admin/invitations/${encodeURIComponent(id)}/revoke`, {
-      method: 'POST',
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json) {
-      throw new Error(parsed.json?.error || 'Failed to revoke invitation');
-    }
-    return parsed.json;
+  async adminRevokeInvitation(_id: string): Promise<{ message: string; invitation: AdminInvitation }> {
+    throw new Error('Administrator invitations are disabled.');
   },
 
   async adminDeleteInvitation(id: string): Promise<{ message: string; id: string }> {
-    const res = await fetch(`/api/admin/invitations/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json) {
-      throw new Error(parsed.json?.error || 'Failed to delete invitation');
-    }
-    return parsed.json;
+    return { message: 'Administrator invitations are disabled.', id };
   },
 
-  async verifyAdminInvitationToken(token: string): Promise<{
+  async verifyAdminInvitationToken(_token: string): Promise<{
     valid: boolean;
     status: string;
     mode?: 'one_click' | 'verified';
     error?: string;
-    invitation?: {
-      id: string;
-      inviteeName: string;
-      maskedEmail: string;
-      role: AdminRole;
-      expiresAt: string;
-      createdAt: string;
-      createdByName: string;
-    };
   }> {
-    const res = await fetch(`/api/admin/invitations/verify?token=${encodeURIComponent(token)}`, {
-      cache: 'no-store'
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (parsed.isJson && parsed.json) {
-      return parsed.json;
-    }
-    throw new Error('Unable to verify invitation link.');
+    return {
+      valid: false,
+      status: 'Disabled',
+      error: 'Administrator invitations are disabled. Please sign in with the authorized administrator email and password.'
+    };
   },
 
-  async acceptAdminInvitation(payload: {
-    token: string;
-    email?: string;
-    verificationCode?: string;
-    name?: string;
-    username?: string;
-    phone?: string;
-    password?: string;
-  }): Promise<{
+  async acceptAdminInvitation(_payload: any): Promise<{
     success: boolean;
     token: string;
     admin: AdminUser;
     expiresAt: number;
     redirectTo?: string;
   }> {
-    const res = await fetch('/api/admin/invitations/accept', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-      body: JSON.stringify(payload)
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (res.ok && parsed.isJson && parsed.json?.token && parsed.json?.admin) {
-      setAdminToken(parsed.json.token, parsed.json.admin);
-      return parsed.json;
-    }
-    throw new Error(parsed.json?.error || 'Failed to verify and accept administrator invitation.');
+    throw new Error('Administrator invitations are disabled. Please sign in with the authorized administrator email and password.');
   },
 
   async getHealthCheck(): Promise<any> {

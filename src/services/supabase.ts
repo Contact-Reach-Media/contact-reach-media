@@ -46,60 +46,70 @@ export interface SupabaseAuthResult {
   token?: string;
 }
 
+export const AUTHORIZED_ADMIN_EMAIL = 'contactreachmedialimited@gmail.com';
+
 /**
- * Sign in or sign up with Supabase using email and password
+ * Sign in with Supabase Authentication using email and password.
+ * Strictly restricted to the single authorized administrator email (contactreachmedialimited@gmail.com).
  */
 export async function loginWithSupabasePassword(email: string, password: string): Promise<SupabaseAuthResult> {
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    throw new Error('Please enter a valid administrator email address and password.');
+  }
+  if (cleanEmail !== AUTHORIZED_ADMIN_EMAIL) {
+    throw new Error('Access denied: This account is not authorized to access the admin dashboard.');
+  }
 
-  let { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: cleanEmail,
     password: password
   });
 
-  if (error && (
-    error.message.includes('Invalid login credentials') ||
-    error.message.includes('user_not_found') ||
-    error.message.includes('Email not confirmed')
-  )) {
-    try {
-      const signupRes = await supabase.auth.signUp({
-        email: cleanEmail,
-        password: password,
-        options: {
-          data: {
-            role: 'owner',
-            name: 'ContactReach Administrator'
-          }
-        }
-      });
-      if (signupRes.data?.user) {
-        data = signupRes.data as any;
-        error = null;
-      }
-    } catch {
-      // ignore
-    }
+  if (error || !data?.user || !data?.session?.access_token) {
+    throw new Error('Invalid administrator email or password.');
   }
 
-  if (error && !data?.user) {
-    throw new Error(error.message || 'Supabase authentication failed');
+  const verifiedEmail = String(data.user.email || '').trim().toLowerCase();
+  if (verifiedEmail !== AUTHORIZED_ADMIN_EMAIL) {
+    await supabase.auth.signOut().catch(() => {});
+    throw new Error('Access denied: This account is not authorized to access the admin dashboard.');
+  }
+
+  // Verify against Supabase admin_users database table
+  const { data: adminRow, error: adminDbError } = await supabase
+    .from('admin_users')
+    .select('id, name, email, phone, role, active')
+    .ilike('email', AUTHORIZED_ADMIN_EMAIL)
+    .maybeSingle();
+
+  if (!adminDbError && adminRow && adminRow.active === false) {
+    await supabase.auth.signOut().catch(() => {});
+    throw new Error('Access denied: Administrator account is deactivated.');
   }
 
   return {
     user: data.user,
     session: data.session,
-    token: data.session?.access_token
+    token: data.session.access_token
   };
 }
 
 /**
- * Get current Supabase session
+ * Get current Supabase session (only valid if belonging to authorized admin email)
  */
 export async function getSupabaseSession() {
   try {
     const { data } = await supabase.auth.getSession();
-    return data.session;
+    const session = data?.session || null;
+    if (session?.user?.email) {
+      const email = String(session.user.email).trim().toLowerCase();
+      if (email !== AUTHORIZED_ADMIN_EMAIL) {
+        await supabase.auth.signOut().catch(() => {});
+        return null;
+      }
+    }
+    return session;
   } catch {
     return null;
   }

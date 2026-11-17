@@ -9,9 +9,8 @@ import {
   KeyRound, Lock, Image as ImageIcon, MessageCircle, Wrench, Power,
   Star, ArrowLeft, ArrowRight, Camera, Zap, Cloud, CloudUpload, Globe, Sliders, SlidersHorizontal,
   Youtube, FileSpreadsheet, BookOpen, HelpCircle, CheckSquare, Square, Info, Sparkles,
-  Database, Bell, MessageSquare, Volume2, QrCode, Share2
+  Database, Bell, MessageSquare, Volume2
 } from 'lucide-react';
-import QRCode from 'qrcode';
 import {
   Product, Order, PaymentConfirmation, PaymentTransaction, SmsNotification, AppSettings, OrderStatus, OrderDeliveryStatus, Category,
   PaymentStatus, PaymentMethod, ProductStatus, VendorShop, AdminMessage, AdminNotification,
@@ -235,10 +234,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
 
-  // Security Verification & Profile Sync: refresh currentUser and logout only if explicitly inactive
+  // Security Verification & Profile Sync: refresh currentUser and logout if unauthorized or inactive
   useEffect(() => {
     const user = getStoredAdminUser();
-    if (user && user.active === false) {
+    if (user && (!isAuthorizedAdminUser(user) || user.active === false)) {
       onLogout();
       return;
     }
@@ -249,7 +248,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         .then((valid) => {
           if (valid) {
             const refreshed = getStoredAdminUser();
-            if (refreshed) setCurrentUser(refreshed);
+            if (refreshed && isAuthorizedAdminUser(refreshed)) {
+              setCurrentUser(refreshed);
+            } else {
+              onLogout();
+            }
+          } else {
+            onLogout();
           }
         })
         .catch(() => {});
@@ -606,11 +611,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [notifPanelOpen]);
-  const [generatingInviteLink, setGeneratingInviteLink] = useState(false);
-  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
-  const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
-  const [inviteQrDataUrl, setInviteQrDataUrl] = useState<string | null>(null);
-  const [inviteQrCopied, setInviteQrCopied] = useState(false);
   const [disbursePayoutModal, setDisbursePayoutModal] = useState<any | null>(null);
   const [disburseRefInput, setDisburseRefInput] = useState('');
   const [disburseLoading, setDisburseLoading] = useState(false);
@@ -8201,205 +8201,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {/* TAB 12B: TEAM & ROLES MANAGEMENT + ADMIN INVITATION SYSTEM */}
+          {/* TAB 12B: AUTHORIZED ADMINISTRATOR & SUPABASE ACCESS POLICY */}
           {activeTab === 'team' && (
             <div className="space-y-6 max-w-5xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-xl font-black text-slate-900 tracking-tight">Administrative Team & Role Permissions</h1>
-                  <p className="text-xs text-slate-500">Manage authorized admin accounts and role permissions.</p>
+                  <h1 className="text-xl font-black text-slate-900 tracking-tight">Administrative Access & Role Permissions</h1>
+                  <p className="text-xs text-slate-500">Single-admin access enforced via Supabase Authentication and the Supabase admin_users table.</p>
                 </div>
-                {(currentUser?.role === 'owner' || currentUser?.role === 'administrator') && (
-                  <button
-                    type="button"
-                    disabled={generatingInviteLink}
-                    onClick={async () => {
-                      if (generatingInviteLink) return;
-                      setGeneratingInviteLink(true);
-                      try {
-                        const res = await api.adminCreateInvitation({ oneClick: true });
-                        const fullUrl = res.invitePath
-                          ? `${window.location.origin}${res.invitePath}`
-                          : res.inviteUrl;
-                        try {
-                          const qrUrl = await QRCode.toDataURL(fullUrl, {
-                            width: 440,
-                            margin: 2,
-                            errorCorrectionLevel: 'M',
-                            color: {
-                              dark: '#0F172A',
-                              light: '#FFFFFF'
-                            }
-                          });
-                          setGeneratedInviteUrl(fullUrl);
-                          setInviteQrDataUrl(qrUrl);
-                        } catch {
-                          setGeneratedInviteUrl(fullUrl);
-                          setInviteQrDataUrl(null);
-                        }
-                        let copied = false;
-                        try {
-                          if (navigator.clipboard && navigator.clipboard.writeText) {
-                            await navigator.clipboard.writeText(fullUrl);
-                            copied = true;
-                          }
-                        } catch {}
-                        if (!copied) {
-                          try {
-                            const ta = document.createElement('textarea');
-                            ta.value = fullUrl;
-                            ta.setAttribute('readonly', '');
-                            ta.style.position = 'fixed';
-                            ta.style.opacity = '0';
-                            document.body.appendChild(ta);
-                            ta.select();
-                            copied = document.execCommand('copy');
-                            document.body.removeChild(ta);
-                          } catch {}
-                        }
-                        setInviteLinkCopied(true);
-                        setTimeout(() => setInviteLinkCopied(false), 2500);
-                        showToast(
-                          copied
-                            ? 'Single-use admin invitation link copied & QR code ready!'
-                            : 'Single-use admin invitation link & QR code generated!'
-                        );
-                      } catch (err: any) {
-                        showToast(err.message || 'Failed to generate invitation link', 'error');
-                      } finally {
-                        setGeneratingInviteLink(false);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6000] hover:bg-[#e05500] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto disabled:opacity-60 whitespace-nowrap shrink-0"
-                  >
-                    {inviteLinkCopied ? <Check className="w-4 h-4" /> : <QrCode className="w-4 h-4" />}
-                    <span>
-                      {generatingInviteLink
-                        ? 'Generating...'
-                        : inviteLinkCopied
-                        ? 'Link Copied!'
-                        : 'Generate & Copy Link'}
-                    </span>
-                  </button>
-                )}
+                <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold self-start sm:self-auto">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Email & Password Auth Only</span>
+                </div>
               </div>
-
-              {inviteQrDataUrl && generatedInviteUrl && (currentUser?.role === 'owner' || currentUser?.role === 'administrator') && (
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6">
-                  <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-                    <div className="shrink-0 bg-white p-2 rounded-xl border border-slate-200">
-                      <img
-                        src={inviteQrDataUrl}
-                        alt="Single-use admin invitation QR code"
-                        className="w-44 h-44 block rounded-lg"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-3 text-center sm:text-left">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <h2 className="text-base font-bold text-slate-900">
-                            Scan Invitation QR Code
-                          </h2>
-                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs text-slate-500">
-                            <span>Single-use link</span>
-                            <span aria-hidden="true">·</span>
-                            <span>Invalid immediately after acceptance</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          aria-label="Hide invitation QR code"
-                          onClick={() => {
-                            setInviteQrDataUrl(null);
-                            setGeneratedInviteUrl(null);
-                            setInviteQrCopied(false);
-                          }}
-                          className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                        Point a phone camera at this QR code to open the admin invitation link directly, or share it using the actions below.
-                      </p>
-                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            let copied = false;
-                            try {
-                              if (navigator.clipboard && navigator.clipboard.writeText) {
-                                await navigator.clipboard.writeText(generatedInviteUrl);
-                                copied = true;
-                              }
-                            } catch {}
-                            if (!copied) {
-                              try {
-                                const ta = document.createElement('textarea');
-                                ta.value = generatedInviteUrl;
-                                ta.setAttribute('readonly', '');
-                                ta.style.position = 'fixed';
-                                ta.style.opacity = '0';
-                                document.body.appendChild(ta);
-                                ta.select();
-                                copied = document.execCommand('copy');
-                                document.body.removeChild(ta);
-                              } catch {}
-                            }
-                            if (copied) {
-                              setInviteQrCopied(true);
-                              setTimeout(() => setInviteQrCopied(false), 2000);
-                              showToast('Invitation link copied to clipboard!');
-                            }
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                        >
-                          {inviteQrCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{inviteQrCopied ? 'Copied!' : 'Copy Link'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = inviteQrDataUrl;
-                            link.download = 'admin-invitation-qr.png';
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Download QR</span>
-                        </button>
-                        {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                await navigator.share({
-                                  title: 'Admin Dashboard Invitation',
-                                  text: 'Single-use admin invitation link',
-                                  url: generatedInviteUrl
-                                });
-                              } catch {}
-                            }}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                            <span>Share</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Active Admin Team Table */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider">Authorized Admin Accounts ({adminUsers.length})</h2>
+                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider">Authorized Admin Account ({adminUsers.filter(u => isAuthorizedAdminUser(u)).length})</h2>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -8414,7 +8233,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
-                      {(Array.isArray(adminUsers) ? adminUsers : []).filter(Boolean).map(u => {
+                      {(Array.isArray(adminUsers) ? adminUsers : []).filter(u => isAuthorizedAdminUser(u)).map(u => {
                         const rowEmail = (u.email || '').toLowerCase();
                         const selfEmail = (currentUser?.email || '').toLowerCase();
                         const isSelf = Boolean((currentUser?.id && u.id === currentUser.id) || (rowEmail && selfEmail && rowEmail === selfEmail));
