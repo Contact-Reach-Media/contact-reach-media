@@ -20,6 +20,7 @@ import type {
   AdminUser
 } from '../types.ts';
 import { toCategorySlug } from '../data/categoryStructure.ts';
+import { buildOrderItemWithSnapshot } from '../utils/productSnapshot.ts';
 
 // -------------------------------------------------------------
 // SUPABASE PROJECT CONFIGURATION
@@ -967,26 +968,74 @@ export async function syncAllShopsToSupabase(shops: VendorShop[] = []): Promise<
 // 4. ORDERS CRUD & SYNC
 // -------------------------------------------------------------
 export function mapSupabaseRowToOrder(o: any): Order {
+  const snapshotsArr: any[] = Array.isArray(o.product_snapshots) ? o.product_snapshots : [];
+  const linkedOrderItems: any[] = Array.isArray(o.order_items) ? o.order_items : [];
+  const rawItems: any[] = Array.isArray(o.items) && o.items.length > 0 ? o.items : linkedOrderItems;
+
+  const mappedItems = rawItems.map((it: any, idx: number) => {
+    const snap = (it.productSnapshot && typeof it.productSnapshot === 'object')
+      ? it.productSnapshot
+      : (it.product_snapshot && typeof it.product_snapshot === 'object')
+      ? it.product_snapshot
+      : (snapshotsArr[idx] && typeof snapshotsArr[idx] === 'object' ? snapshotsArr[idx] : undefined);
+
+    if (it.product_name !== undefined && it.productName === undefined) {
+      // Mapped from relational order_items row
+      return {
+        productId: it.product_id ? String(it.product_id) : (snap?.productId || ''),
+        name: it.product_name || snap?.productName || 'Product',
+        productName: it.product_name || snap?.productName || 'Product',
+        sku: it.sku || snap?.sku || undefined,
+        brand: it.brand || snap?.brand || undefined,
+        price: Number(it.unit_price_rwf ?? it.unit_price ?? snap?.price) || 0,
+        originalPrice: it.original_price !== undefined ? Number(it.original_price) : snap?.originalPrice,
+        discountPercent: it.discount_percent !== undefined ? Number(it.discount_percent) : snap?.discountPercent,
+        discountPrice: it.discount_price !== undefined && it.discount_price !== null ? Number(it.discount_price) : snap?.discountPrice,
+        discountAmount: it.discount_amount !== undefined ? Number(it.discount_amount) : snap?.discountAmount,
+        quantity: Number(it.qty ?? it.quantity ?? snap?.quantity) || 1,
+        unit: it.unit || snap?.unit || undefined,
+        minOrderQuantity: it.min_order_quantity !== undefined ? Number(it.min_order_quantity) : snap?.minOrderQuantity,
+        shippingCost: it.shipping_cost !== undefined ? Number(it.shipping_cost) : snap?.shippingCost,
+        unitShippingCost: snap?.unitShippingCost,
+        imageUrl: it.image_url || snap?.imageUrl || '/logo.png',
+        images: Array.isArray(it.images) ? it.images : snap?.images,
+        description: it.description ?? snap?.description,
+        size: it.selected_size || snap?.size,
+        color: it.selected_color || snap?.color,
+        storage: it.storage || snap?.storage,
+        selectedStorage: it.selected_storage || snap?.selectedStorage,
+        sizes: Array.isArray(it.available_sizes) ? it.available_sizes : snap?.sizes,
+        colors: Array.isArray(it.available_colors) ? it.available_colors : snap?.colors,
+        storageOptions: snap?.storageOptions,
+        variation: it.variation ?? snap?.selectedVariation,
+        variations: snap?.variations,
+        category: it.category || snap?.category,
+        categoryName: snap?.categoryName || it.category,
+        subcategory: it.subcategory || snap?.subcategory,
+        subCategoryName: snap?.subCategoryName || it.subcategory,
+        shopId: it.shop_id || snap?.shopId,
+        shopName: it.shop_name || snap?.shopName,
+        supplierName: snap?.supplierName || it.shop_name,
+        capturedAt: snap?.capturedAt,
+        productSnapshot: snap
+      };
+    }
+
+    return snap && !it.productSnapshot ? { ...it, productSnapshot: snap } : it;
+  });
+
   return {
     id: String(o.id),
     orderNumber: o.order_no || o.order_number || '',
     customerName: o.customer_name || 'Customer',
     customerPhone: o.phone || o.customer_phone || '',
     customerEmail: o.email || o.customer_email || undefined,
-    deliveryType: 'delivery',
+    deliveryType: (o.delivery_type as any) || 'delivery',
     deliveryLocation: o.delivery_location || o.zone || o.delivery_district || o.delivery_city || 'Kigali',
     deliveryAddress: o.delivery_address || o.address || 'Kigali, Rwanda',
     deliveryNotes: o.delivery_notes || o.instructions || undefined,
-    items: Array.isArray(o.items) && o.items.length > 0
-      ? o.items
-      : (Array.isArray(o.order_items) && o.order_items.length > 0 ? o.order_items.map((it: any) => ({
-          productId: it.product_id ? String(it.product_id) : undefined,
-          name: it.product_name,
-          productName: it.product_name,
-          price: Number(it.unit_price_rwf ?? it.unit_price) || 0,
-          quantity: Number(it.qty ?? it.quantity) || 1,
-          imageUrl: it.image_url || '/logo.png'
-        })) : []),
+    items: mappedItems,
+    productSnapshots: snapshotsArr.length > 0 ? snapshotsArr : mappedItems.map((i: any) => i.productSnapshot).filter(Boolean),
     subtotal: Number(o.subtotal ?? o.total_amount ?? o.subtotal_rwf ?? o.total_rwf) || 0,
     deliveryFee: Number(o.delivery_fee ?? o.delivery_fee_rwf) || 0,
     shippingCost: Number(o.shipping_cost) || 0,
@@ -1000,6 +1049,8 @@ export function mapSupabaseRowToOrder(o: any): Order {
     paymentMethod: o.payment_method || 'MTN Mobile Money',
     receiverName: o.receiver_name || 'Ruth',
     receiverDetails: o.receiver_details || '0780022600',
+    shopName: o.shop_name || undefined,
+    supplierName: o.supplier_name || undefined,
     paymentStatus: o.payment_status || 'Pending Payment',
     deliveryStatus: o.delivery_status || 'Pending',
     status: o.status || o.order_status || 'New',
@@ -1008,6 +1059,7 @@ export function mapSupabaseRowToOrder(o: any): Order {
     trackingToken: o.tracking_token || undefined,
     trackingCarrier: o.tracking_carrier || undefined,
     statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
+    paymentConfirmation: o.payment_confirmation || undefined,
     createdAt: o.created_at || new Date().toISOString(),
     updatedAt: o.updated_at || undefined
   };
@@ -1028,8 +1080,44 @@ export async function getOrdersFromSupabase(): Promise<Order[]> {
   }
 }
 
+export async function findOrderFromSupabaseByRef(orderRef: string): Promise<Order | null> {
+  try {
+    const clean = String(orderRef || '').trim();
+    if (!clean) return null;
+    const { data: byNum } = await supabase
+      .from('orders')
+      .select('*')
+      .ilike('order_number', clean)
+      .limit(1)
+      .maybeSingle();
+    if (byNum) return mapSupabaseRowToOrder(byNum);
+
+    const { data: byId } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', clean)
+      .limit(1)
+      .maybeSingle();
+    if (byId) return mapSupabaseRowToOrder(byId);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveOrderToSupabase(order: any): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
+    const rawItems = Array.isArray(order.items) ? order.items : [];
+    const normalizedItems = rawItems.map((it: any) =>
+      it?.productSnapshot ? it : buildOrderItemWithSnapshot({
+        itemInput: it,
+        quantity: Number(it?.quantity) || 1
+      })
+    );
+    const productSnapshots = Array.isArray(order.productSnapshots) && order.productSnapshots.length > 0
+      ? order.productSnapshots
+      : normalizedItems.map((it: any) => it.productSnapshot).filter(Boolean);
+
     const orderRecord: Record<string, any> = {
       id: String(order.id || `ord-${Date.now()}`),
       order_number: String(order.orderNumber || order.order_number),
@@ -1045,7 +1133,8 @@ export async function saveOrderToSupabase(order: any): Promise<{ success: boolea
       delivery_location: order.deliveryLocation || 'Kigali Area',
       delivery_address: order.deliveryAddress || 'Kigali, Rwanda',
       delivery_notes: order.deliveryNotes || null,
-      items: Array.isArray(order.items) ? order.items : [],
+      items: normalizedItems,
+      product_snapshots: productSnapshots,
       subtotal: Math.round(Number(order.subtotal || order.totalAmount) || 0),
       delivery_fee: Math.round(Number(order.deliveryFee) || 0),
       shipping_cost: Math.round(Number(order.shippingCost) || 0),
@@ -1094,6 +1183,74 @@ export async function saveOrderToSupabase(order: any): Promise<{ success: boolea
       updated_at: new Date().toISOString()
     };
 
+    const persistOrderItemsSnapshots = async (savedOrderId: string) => {
+      if (!normalizedItems.length) return;
+      for (let idx = 0; idx < normalizedItems.length; idx++) {
+        const it: any = normalizedItems[idx];
+        const snap: any = it.productSnapshot || it;
+        const itemId = `${savedOrderId}-item-${idx}`;
+        const fullItemRow: Record<string, any> = {
+          id: itemId,
+          order_id: savedOrderId,
+          product_id: it.productId || null,
+          product_name: it.productName || snap.productName || 'Marketplace Product',
+          quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
+          unit_price: Math.round(Number(it.price ?? snap.price) || 0),
+          line_total: Math.round((Number(it.price ?? snap.price) || 0) * Math.max(1, Number(it.quantity) || 1)),
+          variation: it.variation || snap.selectedVariation || {},
+          sku: it.sku || snap.sku || null,
+          brand: it.brand || snap.brand || null,
+          image_url: it.imageUrl || snap.imageUrl || null,
+          images: Array.isArray(it.images) ? it.images : (Array.isArray(snap.images) ? snap.images : []),
+          description: it.description ?? snap.description ?? null,
+          original_price: Math.round(Number(it.originalPrice ?? snap.originalPrice ?? it.price) || 0),
+          discount_percent: Number(it.discountPercent ?? snap.discountPercent) || 0,
+          discount_price: it.discountPrice !== undefined && it.discountPrice !== null ? Math.round(Number(it.discountPrice)) : null,
+          discount_amount: Math.round(Number(it.discountAmount ?? snap.discountAmount) || 0),
+          min_order_quantity: Math.max(1, Math.floor(Number(it.minOrderQuantity ?? snap.minOrderQuantity) || 1)),
+          shipping_cost: Math.round(Number(it.shippingCost ?? snap.shippingCost) || 0),
+          selected_size: it.size || snap.size || null,
+          selected_color: it.color || snap.color || null,
+          selected_storage: it.selectedStorage || snap.selectedStorage || null,
+          available_sizes: Array.isArray(it.sizes) ? it.sizes : (Array.isArray(snap.sizes) ? snap.sizes : []),
+          available_colors: Array.isArray(it.colors) ? it.colors : (Array.isArray(snap.colors) ? snap.colors : []),
+          storage: it.storage || snap.storage || null,
+          category: it.category || snap.category || null,
+          subcategory: it.subcategory || snap.subcategory || null,
+          shop_id: it.shopId || snap.shopId || null,
+          shop_name: it.shopName || snap.shopName || it.supplierName || null,
+          unit: it.unit || snap.unit || 'Piece',
+          product_snapshot: snap,
+          created_at: orderRecord.created_at
+        };
+
+        let { error: itemErr } = await supabase.from('order_items').upsert(fullItemRow, { onConflict: 'id' });
+        if (itemErr && (itemErr.code === '23503' || String(itemErr.message || '').includes('fk_order_items_product'))) {
+          fullItemRow.product_id = null;
+          const retryFk = await supabase.from('order_items').upsert(fullItemRow, { onConflict: 'id' });
+          itemErr = retryFk.error;
+        }
+        if (itemErr && (itemErr.code === 'PGRST204' || itemErr.code === '42703' || /column .* does not exist/i.test(itemErr.message || ''))) {
+          const coreItemRow: Record<string, any> = {
+            id: itemId,
+            order_id: savedOrderId,
+            product_id: fullItemRow.product_id,
+            product_name: fullItemRow.product_name,
+            quantity: fullItemRow.quantity,
+            unit_price: fullItemRow.unit_price,
+            line_total: fullItemRow.line_total,
+            variation: fullItemRow.variation,
+            created_at: fullItemRow.created_at
+          };
+          const retryCore = await supabase.from('order_items').upsert(coreItemRow, { onConflict: 'id' });
+          if (retryCore.error && (retryCore.error.code === '23503')) {
+            coreItemRow.product_id = null;
+            await supabase.from('order_items').upsert(coreItemRow, { onConflict: 'id' });
+          }
+        }
+      }
+    };
+
     // Safe upsert: check existing record by id or order_number first to avoid orders_pkey constraint conflict
     const queryParts: string[] = [];
     if (orderRecord.id) queryParts.push(`id.eq.${orderRecord.id}`);
@@ -1115,39 +1272,59 @@ export async function saveOrderToSupabase(order: any): Promise<{ success: boolea
       if (existingOrder.order_number) {
         orderRecord.order_number = existingOrder.order_number;
       }
-      const { data: updatedOrder, error: updateErr } = await supabase
+      let { data: updatedOrder, error: updateErr } = await supabase
         .from('orders')
         .update(orderRecord)
         .eq('id', existingOrder.id)
         .select();
 
+      if (updateErr && (updateErr.code === 'PGRST204' || updateErr.code === '42703' || /product_snapshots|column .* does not exist/i.test(updateErr.message || ''))) {
+        const { product_snapshots: _ps, ...withoutSnapshotsCol } = orderRecord;
+        const retry = await supabase.from('orders').update(withoutSnapshotsCol).eq('id', existingOrder.id).select();
+        updatedOrder = retry.data;
+        updateErr = retry.error;
+      }
+
       if (updateErr) {
         console.error('[Supabase Save Order] Error:', updateErr.message);
         return { success: false, error: updateErr.message };
       }
+      await persistOrderItemsSnapshots(existingOrder.id).catch(() => {});
       return { success: true, data: updatedOrder?.[0] };
     } else {
-      const { data: insertedOrder, error: insertErr } = await supabase
+      let { data: insertedOrder, error: insertErr } = await supabase
         .from('orders')
         .insert(orderRecord)
         .select();
 
+      if (insertErr && (insertErr.code === 'PGRST204' || insertErr.code === '42703' || /product_snapshots|column .* does not exist/i.test(insertErr.message || ''))) {
+        const { product_snapshots: _ps, ...withoutSnapshotsCol } = orderRecord;
+        const retry = await supabase.from('orders').insert(withoutSnapshotsCol).select();
+        insertedOrder = retry.data;
+        insertErr = retry.error;
+      }
+
       if (insertErr) {
         if (insertErr.code === '23505' && queryParts.length > 0) {
+          const { product_snapshots: _ps, ...withoutSnapshotsCol } = orderRecord;
           const { data: fallbackOrder, error: fbErr } = await supabase
             .from('orders')
-            .update(orderRecord)
+            .update(withoutSnapshotsCol)
             .or(queryParts.join(','))
             .select();
           if (fbErr) {
             console.error('[Supabase Save Order] Error:', fbErr.message);
             return { success: false, error: fbErr.message };
           }
+          if (fallbackOrder?.[0]?.id) {
+            await persistOrderItemsSnapshots(String(fallbackOrder[0].id)).catch(() => {});
+          }
           return { success: true, data: fallbackOrder?.[0] };
         }
         console.error('[Supabase Save Order] Error:', insertErr.message);
         return { success: false, error: insertErr.message };
       }
+      await persistOrderItemsSnapshots(String(insertedOrder?.[0]?.id || orderRecord.id)).catch(() => {});
       return { success: true, data: insertedOrder?.[0] };
     }
   } catch (err: any) {
@@ -1217,9 +1394,16 @@ export async function getPaymentsFromSupabase(): Promise<PaymentConfirmation[]> 
 
 export async function savePaymentToSupabase(p: PaymentConfirmation): Promise<{ success: boolean; error?: string }> {
   try {
+    let resolvedOrderId: string | null = p.orderId || null;
+    if ((!resolvedOrderId || resolvedOrderId === p.orderNumber) && p.orderNumber) {
+      const matchedOrder = await findOrderFromSupabaseByRef(p.orderNumber);
+      if (matchedOrder?.id) resolvedOrderId = matchedOrder.id;
+      else if (resolvedOrderId === p.orderNumber) resolvedOrderId = null;
+    }
+
     const row: Record<string, any> = {
       id: p.id,
-      order_id: p.orderId || null,
+      order_id: resolvedOrderId,
       order_number: p.orderNumber || null,
       customer_name: p.customerName || 'Customer',
       customer_phone: p.paymentPhone || '',
@@ -1240,15 +1424,23 @@ export async function savePaymentToSupabase(p: PaymentConfirmation): Promise<{ s
       admin_notes: p.adminNotes || null,
       flagged_suspicious: Boolean(p.flaggedSuspicious),
       is_duplicate_txn: Boolean(p.isDuplicateTxn),
+      duplicate_order_numbers: Array.isArray(p.duplicateOrderNumbers) ? p.duplicateOrderNumbers : [],
       suspicious_reason: p.suspiciousReason || null,
       verified_directly: Boolean(p.verifiedDirectly),
+      telecom_verified: Boolean(p.telecomVerified),
+      telecom_reference: p.telecomReference || null,
       customer_notified: Boolean(p.customerNotified),
       notification_message: p.notificationMessage || null,
       submitted_at: p.submittedAt || new Date().toISOString(),
       created_at: p.submittedAt || new Date().toISOString()
     };
 
-    const { error } = await supabase.from('payments').upsert(row, { onConflict: 'id' });
+    let { error } = await supabase.from('payments').upsert(row, { onConflict: 'id' });
+    if (error && (error.code === '23503' || String(error.message || '').includes('fk_payments_order'))) {
+      row.order_id = null;
+      const retry = await supabase.from('payments').upsert(row, { onConflict: 'id' });
+      error = retry.error;
+    }
     if (error) {
       console.warn('[Supabase] Save payment error:', error.message);
       return { success: false, error: error.message };
@@ -1291,15 +1483,19 @@ export function mapSupabaseRowToPaymentTransaction(t: any): PaymentTransaction {
     paymentMethod: t.payment_method || 'MTN Mobile Money',
     provider: t.provider || 'MTN Mobile Money',
     status: t.status || 'Pending',
-    providerTransactionId: meta.providerTransactionId || undefined,
-    financialTransactionId: meta.financialTransactionId || undefined,
+    providerTransactionId: t.provider_transaction_id || meta.providerTransactionId || undefined,
+    financialTransactionId: t.financial_transaction_id || meta.financialTransactionId || undefined,
     idempotencyKey: t.idempotency_key || undefined,
     checkoutUrl: t.checkout_url || undefined,
-    failureReason: meta.failureReason || undefined,
-    verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
-    verifiedAt: meta.verifiedAt || undefined,
-    telecomStatus: meta.telecomStatus || undefined,
-    signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
+    failureReason: t.failure_reason || meta.failureReason || undefined,
+    verifiedDirectly: t.verified_directly !== undefined && t.verified_directly !== null
+      ? Boolean(t.verified_directly)
+      : (meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined),
+    verifiedAt: t.verified_at || meta.verifiedAt || undefined,
+    telecomStatus: t.telecom_status || meta.telecomStatus || undefined,
+    signatureVerified: t.signature_verified !== undefined && t.signature_verified !== null
+      ? Boolean(t.signature_verified)
+      : (meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined),
     metadata: meta,
     createdAt: t.created_at || new Date().toISOString(),
     updatedAt: t.updated_at || t.created_at || new Date().toISOString()
@@ -1321,6 +1517,13 @@ export async function getPaymentTransactionsFromSupabase(): Promise<PaymentTrans
 
 export async function savePaymentTransactionToSupabase(t: PaymentTransaction): Promise<{ success: boolean; error?: string }> {
   try {
+    let resolvedOrderId: string | null = t.orderId || null;
+    if ((!resolvedOrderId || resolvedOrderId === t.orderNumber) && t.orderNumber) {
+      const matchedOrder = await findOrderFromSupabaseByRef(t.orderNumber);
+      if (matchedOrder?.id) resolvedOrderId = matchedOrder.id;
+      else if (resolvedOrderId === t.orderNumber) resolvedOrderId = null;
+    }
+
     const combinedMeta: Record<string, any> = {
       ...(t.metadata || {}),
       providerTransactionId: t.providerTransactionId || t.metadata?.providerTransactionId || undefined,
@@ -1334,7 +1537,7 @@ export async function savePaymentTransactionToSupabase(t: PaymentTransaction): P
 
     const row: Record<string, any> = {
       id: t.id,
-      order_id: t.orderId || null,
+      order_id: resolvedOrderId,
       order_number: t.orderNumber || null,
       idempotency_key: t.idempotencyKey || null,
       payment_method: t.paymentMethod || 'MTN Mobile Money',
@@ -1345,12 +1548,29 @@ export async function savePaymentTransactionToSupabase(t: PaymentTransaction): P
       customer_email: t.customerEmail || null,
       checkout_url: t.checkoutUrl || null,
       status: t.status || 'Pending',
+      provider_transaction_id: t.providerTransactionId || combinedMeta.providerTransactionId || null,
+      financial_transaction_id: t.financialTransactionId || combinedMeta.financialTransactionId || null,
+      failure_reason: t.failureReason || null,
+      verified_directly: Boolean(t.verifiedDirectly),
+      verified_at: t.verifiedAt || null,
+      telecom_status: t.telecomStatus || null,
+      signature_verified: Boolean(t.signatureVerified),
       metadata: combinedMeta,
       created_at: t.createdAt || new Date().toISOString(),
       updated_at: t.updatedAt || new Date().toISOString()
     };
 
-    const { error } = await supabase.from('payment_transactions').upsert(row, { onConflict: 'id' });
+    let { error } = await supabase.from('payment_transactions').upsert(row, { onConflict: 'id' });
+    if (error && (error.code === '23503' || String(error.message || '').includes('fk_payment_transactions_order'))) {
+      row.order_id = null;
+      const retry = await supabase.from('payment_transactions').upsert(row, { onConflict: 'id' });
+      error = retry.error;
+    }
+    if (error && error.code === '23505' && row.idempotency_key) {
+      row.idempotency_key = `${row.idempotency_key}-${Date.now()}`;
+      const retry = await supabase.from('payment_transactions').upsert(row, { onConflict: 'id' });
+      error = retry.error;
+    }
     if (error) {
       console.warn('[Supabase] Save payment_transaction error:', error.message);
       return { success: false, error: error.message };
@@ -1412,9 +1632,10 @@ export async function getSmsNotificationsFromSupabase(): Promise<SmsNotification
         if (!results.has(String(m.id))) {
           results.set(String(m.id), {
             id: String(m.id),
-            direction: m.sender === 'admin' || m.sender === 'system' ? 'outbound' : 'incoming',
+            direction: m.sender === 'admin' || m.sender === 'system' ? 'outgoing' : 'incoming',
             senderPhone: m.phone || m.sender_phone || '',
             senderName: m.name || m.sender_name || undefined,
+            recipientPhone: m.sender === 'admin' || m.sender === 'system' ? (m.phone || m.sender_phone || '') : undefined,
             provider: String(m.message || '').toLowerCase().includes('airtel') ? 'Airtel Money' : 'MTN Mobile Money',
             message: m.message || '',
             orderNumber: m.order_number || undefined,
@@ -1435,24 +1656,28 @@ export async function saveSmsNotificationToSupabase(sms: SmsNotification): Promi
   let saved = false;
   let lastErr: string | undefined;
   try {
+    const dir = sms.direction === 'outbound' ? 'outbound' : (sms.direction === 'outgoing' ? 'outgoing' : 'incoming');
     const { error } = await supabase.from('sms_notifications').upsert({
       id: sms.id,
-      direction: sms.direction || 'incoming',
+      direction: dir,
       sender_phone: sms.senderPhone || '',
       sender_name: sms.senderName || null,
-      recipient_phone: sms.recipientPhone || null,
+      recipient_phone: sms.recipientPhone || '',
       provider: sms.provider || 'MTN Mobile Money',
       message: sms.message || '',
       parsed_transaction_id: sms.parsedTransactionId || null,
-      parsed_amount: sms.parsedAmount !== undefined ? Math.round(Number(sms.parsedAmount)) : null,
+      parsed_amount: sms.parsedAmount !== undefined && Number.isFinite(Number(sms.parsedAmount)) ? Math.round(Number(sms.parsedAmount)) : null,
       order_number: sms.orderNumber || null,
       payment_id: sms.paymentId || null,
-      status: sms.status || 'received',
+      status: sms.status || (dir === 'incoming' ? 'received' : 'sent'),
       metadata: sms.metadata || {},
       created_at: sms.createdAt || new Date().toISOString()
     }, { onConflict: 'id' });
     if (!error) saved = true;
-    else lastErr = error.message;
+    else {
+      lastErr = error.message;
+      console.warn('[Supabase] Save sms_notification error:', error.message);
+    }
   } catch (err: any) {
     lastErr = err?.message;
   }

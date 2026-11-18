@@ -29,18 +29,40 @@ export const CANONICAL_PRODUCT_IMAGES: { match: RegExp; url: string }[] = [
 ];
 
 export function getProductImageDueToProduct(
-  item?: { productName?: string; name?: string; imageUrl?: string; image?: string; productId?: string },
+  item?: {
+    productName?: string;
+    name?: string;
+    imageUrl?: string;
+    image?: string;
+    images?: string[];
+    productId?: string;
+    productSnapshot?: { imageUrl?: string; images?: string[]; productName?: string };
+    capturedAt?: string;
+  },
   catalogProducts?: Array<{ id: string; name: string; imageUrl?: string; images?: string[] }>
 ): string {
   if (!item) {
     return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
   }
 
-  const name = (item.productName || item.name || '').trim();
-  const currentUrl = (item.imageUrl || item.image || '').trim();
+  const snapImg = (item.productSnapshot?.imageUrl || item.productSnapshot?.images?.[0] || '').trim();
+  const snapIsValid = Boolean(snapImg && !snapImg.endsWith('/logo.png') && snapImg !== 'logo.png');
+  const name = (item.productSnapshot?.productName || item.productName || item.name || '').trim();
+  const currentUrl = (snapIsValid ? snapImg : (item.imageUrl || item.image || item.images?.[0] || '')).trim();
   const isGenericLogo = !currentUrl || currentUrl === '/logo.png' || currentUrl === 'logo.png' || currentUrl.endsWith('/logo.png');
 
-  // 1. If catalogProducts provided, prioritize the original uploaded image in the admin panel
+  // Check if currentUrl is obviously mismatched (e.g. headphone with sneaker image or honey image)
+  const isMismatched =
+    (name.toLowerCase().includes('headphone') && (currentUrl.includes('sneaker') || currentUrl.includes('photo-1590658268037'))) ||
+    (name.toLowerCase().includes('speaker') && currentUrl.includes('sneaker')) ||
+    (name.toLowerCase().includes('watch') && (currentUrl.includes('sneaker') || currentUrl.includes('honey')));
+
+  // 1. Always preserve valid non-logo snapshotted/item image when present (so later catalog edits/deletes never alter placed orders)
+  if ((item.productSnapshot || item.capturedAt) && currentUrl && !isGenericLogo && !isMismatched) {
+    return currentUrl;
+  }
+
+  // 2. If catalogProducts provided (for legacy items missing snapshot), try live catalog lookup
   if (catalogProducts && catalogProducts.length > 0) {
     const catalogMatch = catalogProducts.find(p =>
       (item.productId && p.id === item.productId) ||
@@ -54,18 +76,12 @@ export function getProductImageDueToProduct(
     }
   }
 
-  // Check if currentUrl is obviously mismatched (e.g. headphone with sneaker image or honey image)
-  const isMismatched =
-    (name.toLowerCase().includes('headphone') && (currentUrl.includes('sneaker') || currentUrl.includes('photo-1590658268037'))) ||
-    (name.toLowerCase().includes('speaker') && currentUrl.includes('sneaker')) ||
-    (name.toLowerCase().includes('watch') && (currentUrl.includes('sneaker') || currentUrl.includes('honey')));
-
-  // 2. If currentUrl is valid, non-logo, non-mismatched, use it
+  // 3. If currentUrl is valid, non-logo, non-mismatched, use it
   if (currentUrl && !isGenericLogo && !isMismatched) {
     return currentUrl;
   }
 
-  // 3. Fallback to product-matched canonical image based on product name keywords
+  // 4. Fallback to product-matched canonical image based on product name keywords
   for (const entry of CANONICAL_PRODUCT_IMAGES) {
     if (entry.match.test(name)) {
       return entry.url;
@@ -76,10 +92,21 @@ export function getProductImageDueToProduct(
 }
 
 export function getProductNameDueToProduct(
-  item?: { productName?: string; name?: string; productId?: string },
+  item?: {
+    productName?: string;
+    name?: string;
+    productId?: string;
+    productSnapshot?: { productName?: string };
+    capturedAt?: string;
+  },
   catalogProducts?: Array<{ id: string; name: string }>
 ): string {
   if (!item) return 'Product';
+  const snapName = (item.productSnapshot?.productName || '').trim();
+  if (snapName) return snapName;
+  if ((item.productSnapshot || item.capturedAt) && (item.productName || item.name)) {
+    return (item.productName || item.name)!.trim();
+  }
   if (catalogProducts && catalogProducts.length > 0) {
     const catalogMatch = catalogProducts.find(p =>
       (item.productId && p.id === item.productId) ||

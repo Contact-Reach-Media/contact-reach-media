@@ -259,24 +259,92 @@ export interface CartItem {
   variation?: Record<string, any> | string;
 }
 
+export interface OrderItemProductSnapshot {
+  productId: string;
+  productName: string;
+  sku?: string;
+  brand?: string;
+  imageUrl: string;
+  images?: string[];
+  description?: string;
+  price: number;
+  originalPrice?: number;
+  costPrice?: number;
+  discountPercent?: number;
+  discountPrice?: number;
+  discountAmount?: number;
+  quantity: number;
+  unit?: string;
+  minOrderQuantity?: number;
+  shippingCost?: number;
+  unitShippingCost?: number;
+  size?: string;
+  color?: string;
+  storage?: string;
+  selectedStorage?: string;
+  sizes?: string[];
+  colors?: string[];
+  storageOptions?: string[];
+  variations?: ProductVariation[];
+  selectedVariation?: string | Record<string, any>;
+  category?: string;
+  categoryName?: string;
+  subcategory?: string;
+  subCategoryName?: string;
+  shopId?: string;
+  shopName?: string;
+  supplierName?: string;
+  specifications?: string;
+  packagingInfo?: string;
+  attributes?: Record<string, string> | { label: string; value: string }[];
+  capturedAt?: string;
+}
+
 export interface OrderItem {
   productId: string;
   productName: string;
+  name?: string;
   price: number;
+  originalPrice?: number;
   costPrice?: number;
+  discountPercent?: number;
+  discountPrice?: number;
+  discountAmount?: number;
   supplierName?: string;
   quantity: number;
+  unit?: string;
+  minOrderQuantity?: number;
   imageUrl: string;
+  images?: string[];
+  description?: string;
+  brand?: string;
   variation?: string | Record<string, any>;
   sku?: string;
+  shopId?: string;
   shopName?: string;
   size?: string;
   color?: string;
+  storage?: string;
+  selectedStorage?: string;
+  sizes?: string[];
+  colors?: string[];
+  storageOptions?: string[];
+  variations?: ProductVariation[];
+  category?: string;
+  categoryName?: string;
+  subcategory?: string;
+  subCategoryName?: string;
+  specifications?: string;
+  packagingInfo?: string;
+  attributes?: Record<string, string> | { label: string; value: string }[];
   aliExpressUrl?: string;
   supplierVariant?: string;
   supplierSku?: string;
   isOutOfStock?: boolean;
   shippingCost?: number;
+  unitShippingCost?: number;
+  capturedAt?: string;
+  productSnapshot?: OrderItemProductSnapshot;
 }
 
 export interface Order {
@@ -292,6 +360,7 @@ export interface Order {
   deliveryAddress: string;
   deliveryNotes?: string;
   items: OrderItem[];
+  productSnapshots?: OrderItemProductSnapshot[];
   subtotal: number;
   discountAmount?: number;
   couponCode?: string;

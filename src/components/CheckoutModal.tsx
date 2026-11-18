@@ -18,6 +18,8 @@ import {
   validateCartMinimums
 } from '../utils/shippingCalculator.ts';
 import { copyTextToClipboard } from '../utils/clipboard.ts';
+import { buildOrderItemWithSnapshot } from '../utils/productSnapshot.ts';
+import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -291,14 +293,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryLocation: selectedLocationName,
         deliveryAddress: deliveryAddress.trim(),
         deliveryNotes: deliveryNotes.trim() || undefined,
-        items: cart.map(item => ({
-          productId: item.product.id,
-          productName: item.product.name,
-          name: item.product.name,
-          price: getEffectiveUnitPrice(item.product, item.quantity),
+        items: cart.map(item => buildOrderItemWithSnapshot({
+          product: item.product,
+          itemInput: {
+            productId: item.product.id,
+            quantity: item.quantity,
+            variation: item.variation || item.selectedVariation,
+            imageUrl: getProductImageDueToProduct(item.product)
+          },
           quantity: item.quantity,
-          imageUrl: item.product.imageUrl || '/logo.png',
-          variation: item.variation || item.selectedVariation
+          unitPriceOverride: getEffectiveUnitPrice(item.product, item.quantity),
+          resolvedImageUrl: getProductImageDueToProduct(item.product)
         })),
         shippingCost,
         paymentMethod,

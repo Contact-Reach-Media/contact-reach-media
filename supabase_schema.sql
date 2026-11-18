@@ -561,9 +561,12 @@ CREATE TABLE IF NOT EXISTS public.orders (
   alibaba_shipping_method TEXT,
   status_history JSONB DEFAULT '[]'::jsonb,
   payment_confirmation JSONB,
+  product_snapshots JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS product_snapshots JSONB DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS public.order_items (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -574,11 +577,57 @@ CREATE TABLE IF NOT EXISTS public.order_items (
   unit_price NUMERIC NOT NULL DEFAULT 0,
   line_total NUMERIC DEFAULT 0,
   variation JSONB DEFAULT '{}'::jsonb,
+  sku TEXT,
+  brand TEXT,
+  image_url TEXT,
+  images JSONB DEFAULT '[]'::jsonb,
+  description TEXT,
+  original_price NUMERIC DEFAULT 0,
+  discount_percent NUMERIC DEFAULT 0,
+  discount_price NUMERIC,
+  discount_amount NUMERIC DEFAULT 0,
+  min_order_quantity INTEGER DEFAULT 1,
+  shipping_cost NUMERIC DEFAULT 0,
+  selected_size TEXT,
+  selected_color TEXT,
+  selected_storage TEXT,
+  available_sizes JSONB DEFAULT '[]'::jsonb,
+  available_colors JSONB DEFAULT '[]'::jsonb,
+  storage TEXT,
+  category TEXT,
+  subcategory TEXT,
+  shop_id TEXT,
+  shop_name TEXT,
+  unit TEXT DEFAULT 'Piece',
+  product_snapshot JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS line_total NUMERIC DEFAULT 0;
 ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS sku TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS brand TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS original_price NUMERIC DEFAULT 0;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS discount_percent NUMERIC DEFAULT 0;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS discount_price NUMERIC;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS discount_amount NUMERIC DEFAULT 0;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS min_order_quantity INTEGER DEFAULT 1;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC DEFAULT 0;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS selected_size TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS selected_color TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS selected_storage TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS available_sizes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS available_colors JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS storage TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS shop_id TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS shop_name TEXT;
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT 'Piece';
+ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS product_snapshot JSONB DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS public.deliveries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

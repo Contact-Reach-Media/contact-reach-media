@@ -44,6 +44,7 @@ import {
 import { compressImageFile } from '../utils/imageCompress.ts';
 import { calculateProductShippingUnitCost } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct, getProductNameDueToProduct } from '../utils/productImages.ts';
+import { normalizeSnapshotImages } from '../utils/productSnapshot.ts';
 import { AdminCategoriesManager } from './AdminCategoriesManager.tsx';
 import { AdminSidebar } from './AdminSidebar.tsx';
 import { ProductDescriptionEditor } from './ProductDescriptionEditor.tsx';
@@ -2131,12 +2132,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 if (prev.some(t => t.id === tx.id)) return prev.map(t => t.id === tx.id ? tx : t);
                 return [tx, ...prev];
               });
+              if (payload.smsNotification) {
+                const initSms: SmsNotification = payload.smsNotification;
+                setSmsNotifications(prev => prev.some(s => s.id === initSms.id) ? prev.map(s => s.id === initSms.id ? initSms : s) : [initSms, ...prev]);
+              }
             } else if (eventType === 'payment_submitted' && payload?.payment) {
               const newPay: PaymentConfirmation = payload.payment;
               setPayments(prev => {
-                if (prev.some(p => p.id === newPay.id)) return prev;
+                if (prev.some(p => p.id === newPay.id)) return prev.map(p => p.id === newPay.id ? newPay : p);
                 return [newPay, ...prev];
               });
+              if (payload.smsNotification) {
+                const paySms: SmsNotification = payload.smsNotification;
+                setSmsNotifications(prev => prev.some(s => s.id === paySms.id) ? prev.map(s => s.id === paySms.id ? paySms : s) : [paySms, ...prev]);
+              }
               if (payload.order) {
                 setOrders(prev => prev.map(o => (o.id === payload.order.id || o.orderNumber === payload.order.orderNumber) ? payload.order : o));
               }
@@ -2183,7 +2192,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               showToast(`🗑️ ${payload.orderIds.length} orders deleted by admin`);
             } else if (eventType === 'payment_verified' && payload?.payment) {
               const updatedPay: PaymentConfirmation = payload.payment;
-              setPayments(prev => prev.map(p => p.id === updatedPay.id ? updatedPay : p));
+              setPayments(prev => {
+                if (prev.some(p => p.id === updatedPay.id)) return prev.map(p => p.id === updatedPay.id ? updatedPay : p);
+                return [updatedPay, ...prev];
+              });
+              if (payload.transaction) {
+                const updatedTx: PaymentTransaction = payload.transaction;
+                setPaymentTransactions(prev => {
+                  if (prev.some(t => t.id === updatedTx.id)) return prev.map(t => t.id === updatedTx.id ? updatedTx : t);
+                  return [updatedTx, ...prev];
+                });
+              }
+              if (payload.smsNotification) {
+                const verSms: SmsNotification = payload.smsNotification;
+                setSmsNotifications(prev => prev.some(s => s.id === verSms.id) ? prev.map(s => s.id === verSms.id ? verSms : s) : [verSms, ...prev]);
+              }
               if (payload.order) {
                 setOrders(prev => prev.map(o => (o.id === payload.order.id || o.orderNumber === payload.order.orderNumber) ? payload.order : o));
               }
@@ -2431,6 +2454,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         } else if (tbl === 'sms_notifications') {
           const { eventType, new: newRecord, old: oldRecord } = payload;
           if ((eventType === 'INSERT' || eventType === 'UPDATE') && newRecord) {
+            const rawMeta = (newRecord.metadata && typeof newRecord.metadata === 'object') ? newRecord.metadata : undefined;
             const mappedSms: SmsNotification = {
               id: String(newRecord.id),
               direction: (newRecord.direction || 'incoming') as SmsNotification['direction'],
@@ -2440,7 +2464,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               message: String(newRecord.message || ''),
               provider: String(newRecord.provider || 'ContactReach'),
               status: String(newRecord.status || 'sent') as SmsNotification['status'],
+              parsedTransactionId: newRecord.parsed_transaction_id || newRecord.parsedTransactionId || undefined,
+              parsedAmount: (newRecord.parsed_amount !== null && newRecord.parsed_amount !== undefined) ? Number(newRecord.parsed_amount) : undefined,
               orderNumber: newRecord.order_number || newRecord.orderNumber || undefined,
+              paymentId: newRecord.payment_id || newRecord.paymentId || undefined,
+              metadata: rawMeta,
               createdAt: String(newRecord.created_at || newRecord.createdAt || new Date().toISOString()),
             };
             setSmsNotifications(prev => {
@@ -6065,10 +6093,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </td>
 
                               {/* 2. Product Name & Image */}
-                              <td className="py-3 px-3 min-w-[200px] max-w-[280px]">
+                              <td className="py-3 px-3 min-w-[220px] max-w-[300px]">
                                 {(() => {
                                   const resolvedImg = getProductImageDueToProduct(primaryItem, products);
                                   const resolvedName = getProductNameDueToProduct(primaryItem, products);
+                                  const snap = primaryItem?.productSnapshot || ord.productSnapshots?.[0];
+                                  const itemSku = snap?.sku || primaryItem?.sku;
+                                  const itemBrand = snap?.brand || primaryItem?.brand;
+                                  const itemSize = snap?.size || primaryItem?.size || (typeof primaryItem?.variation === 'object' ? (primaryItem.variation?.Size || primaryItem.variation?.size) : undefined);
+                                  const itemColor = snap?.color || primaryItem?.color || (typeof primaryItem?.variation === 'object' ? (primaryItem.variation?.Color || primaryItem.variation?.color) : undefined);
+                                  const itemStorage = snap?.selectedStorage || primaryItem?.selectedStorage || snap?.storage || primaryItem?.storage;
                                   return (
                                     <div className="flex items-center gap-2.5">
                                       <img
@@ -6086,8 +6120,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                         <p className="font-bold text-slate-800 truncate" title={resolvedName}>
                                           {resolvedName}
                                         </p>
-                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
-                                          <span>Qty: {primaryItem?.quantity || 1}</span>
+                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5 flex-wrap">
+                                          <span className="font-semibold text-slate-700">Qty: {primaryItem?.quantity || 1}</span>
+                                          {itemSku && <span className="font-mono text-slate-500">· {itemSku}</span>}
+                                          {itemBrand && <span>· {itemBrand}</span>}
+                                          {(itemSize || itemColor || itemStorage) && (
+                                            <span className="text-slate-600 font-medium">
+                                              · {[itemSize, itemColor, itemStorage].filter(Boolean).join(' / ')}
+                                            </span>
+                                          )}
                                           {remainingItemsCount > 0 && (
                                             <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200">
                                               +{remainingItemsCount} more
@@ -6442,17 +6483,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 </td>
                                 <td className="py-3 px-3 font-mono text-blue-700 text-[11px]">{tx.providerTransactionId || tx.financialTransactionId || 'Awaiting Ref'}</td>
                                 <td className="py-3 px-3">
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                    tx.status === 'Successful'
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : tx.status === 'Refunded'
-                                      ? 'bg-purple-100 text-purple-800'
-                                      : tx.status === 'Failed' || tx.status === 'Cancelled'
-                                      ? 'bg-rose-100 text-rose-800'
-                                      : 'bg-amber-100 text-amber-800'
-                                  }`}>
-                                    {tx.status}
-                                  </span>
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                      tx.status === 'Successful'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : tx.status === 'Refunded'
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : tx.status === 'Failed' || tx.status === 'Cancelled'
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {tx.status}
+                                    </span>
+                                    {tx.verifiedDirectly && (
+                                      <span className="text-[10px] font-bold text-emerald-700">
+                                        Telecom Verified
+                                      </span>
+                                    )}
+                                    {tx.telecomStatus && tx.telecomStatus !== tx.status && (
+                                      <span className="text-[10px] text-slate-500 font-mono">
+                                        {tx.telecomStatus}
+                                      </span>
+                                    )}
+                                    {tx.failureReason && (
+                                      <span className="text-[10px] text-rose-600 max-w-[180px] truncate" title={tx.failureReason}>
+                                        {tx.failureReason}
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
                                   {tx.createdAt ? new Date(tx.createdAt).toLocaleString() : '—'}
@@ -6545,32 +6603,67 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             No SMS notifications logged yet. Send one on the left or receive telecom SMS via gateway.
                           </div>
                         ) : (
-                          safeSms.map((sms) => (
-                            <div key={sms.id} className="p-4 hover:bg-slate-50/70 space-y-1.5 text-xs">
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-black text-slate-900">{sms.recipientPhone}</span>
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                                    {sms.provider}
-                                  </span>
-                                  {sms.orderNumber && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-orange-50 text-[#FF6000]">
-                                      #{sms.orderNumber}
+                          safeSms.map((sms) => {
+                            const isIncoming = sms.direction === 'incoming';
+                            const primaryPhone = isIncoming
+                              ? (sms.senderPhone || sms.recipientPhone || 'Unknown')
+                              : (sms.recipientPhone || sms.senderPhone || 'Unknown');
+                            return (
+                              <div key={sms.id} className="p-4 hover:bg-slate-50/70 space-y-1.5 text-xs">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                      isIncoming ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {isIncoming ? 'Incoming' : 'Outgoing'}
                                     </span>
-                                  )}
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                    sms.status === 'received' || sms.direction === 'incoming' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
-                                  }`}>
-                                    {sms.status}
+                                    <span className="font-mono font-black text-slate-900">
+                                      {primaryPhone}
+                                      {sms.senderName ? ` (${sms.senderName})` : ''}
+                                    </span>
+                                    {sms.senderPhone && sms.recipientPhone && sms.senderPhone !== sms.recipientPhone && (
+                                      <span className="text-[10px] font-mono text-slate-500">
+                                        {sms.senderPhone} → {sms.recipientPhone}
+                                      </span>
+                                    )}
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                                      {sms.provider || 'ContactReach'}
+                                    </span>
+                                    {sms.orderNumber && (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-orange-50 text-[#FF6000]">
+                                        #{sms.orderNumber}
+                                      </span>
+                                    )}
+                                    {sms.parsedTransactionId && (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-50 text-blue-700">
+                                        Txn: {sms.parsedTransactionId}
+                                      </span>
+                                    )}
+                                    {typeof sms.parsedAmount === 'number' && sms.parsedAmount > 0 && (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700">
+                                        {sms.parsedAmount.toLocaleString()} RWF
+                                      </span>
+                                    )}
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                      sms.status === 'matched_payment' || sms.status === 'matched' || sms.status === 'verified'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : sms.status === 'received' || isIncoming
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : sms.status === 'failed'
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : 'bg-emerald-100 text-emerald-800'
+                                    }`}>
+                                      {sms.status}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono text-[10px] text-slate-400">
+                                    {sms.createdAt ? new Date(sms.createdAt).toLocaleString() : '—'}
                                   </span>
                                 </div>
-                                <span className="font-mono text-[10px] text-slate-400">
-                                  {new Date(sms.createdAt).toLocaleString()}
-                                </span>
+                                <p className="text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100 break-words">{sms.message}</p>
                               </div>
-                              <p className="text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100">{sms.message}</p>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -10600,13 +10693,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             />
                             <div className="min-w-0">
                               <p className="font-bold text-slate-800 text-xs truncate max-w-xs">{resolvedName}</p>
-                              {(item.size || item.color || item.shopName) && (
-                                <p className="text-[10px] text-slate-400 font-mono">
-                                  {item.shopName ? `${item.shopName} · ` : ''}
-                                  {item.size ? `Size: ${item.size} ` : ''}
-                                  {item.color ? `Color: ${item.color}` : ''}
-                                </p>
-                              )}
+                              <p className="text-[10px] text-slate-500 font-mono">
+                                {[
+                                  (item.productSnapshot?.sku || item.sku) ? `SKU: ${item.productSnapshot?.sku || item.sku}` : '',
+                                  (item.productSnapshot?.brand || item.brand) ? `Brand: ${item.productSnapshot?.brand || item.brand}` : '',
+                                  (item.productSnapshot?.shopName || item.shopName) ? `Shop: ${item.productSnapshot?.shopName || item.shopName}` : '',
+                                  (item.productSnapshot?.size || item.size) ? `Size: ${item.productSnapshot?.size || item.size}` : '',
+                                  (item.productSnapshot?.color || item.color) ? `Color: ${item.productSnapshot?.color || item.color}` : '',
+                                  (item.productSnapshot?.selectedStorage || item.selectedStorage || item.productSnapshot?.storage || item.storage) ? `Storage: ${item.productSnapshot?.selectedStorage || item.selectedStorage || item.productSnapshot?.storage || item.storage}` : ''
+                                ].filter(Boolean).join(' · ')}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -12323,50 +12419,250 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <div className="overflow-y-auto flex-1 pr-1 py-4 space-y-6">
-              {/* Ordered Items List */}
-              <div className="space-y-2">
+              {/* Ordered Items List (Complete Product Snapshots) */}
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
-                    Ordered Line-Items ({selectedOrderModal.items?.length || 0})
+                    Ordered Product Details &amp; Snapshots ({selectedOrderModal.items?.length || 0})
                   </h4>
                   <span className="text-xs font-bold text-slate-700">
                     Subtotal: {(selectedOrderModal.subtotal || selectedOrderModal.totalAmount).toLocaleString()} FRW
                   </span>
                 </div>
-                <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 bg-slate-50/50 overflow-hidden">
+                <div className="space-y-3">
                   {(selectedOrderModal.items || []).map((item, idx) => {
-                    const resolvedImg = getProductImageDueToProduct(item, products);
-                    const resolvedName = getProductNameDueToProduct(item, products);
+                    const snap = item.productSnapshot || selectedOrderModal.productSnapshots?.[idx];
+                    const hasSnapshot = Boolean(snap || item.capturedAt);
+                    const legacyCatalogProd = !hasSnapshot
+                      ? products.find(p => (item.productId && p.id === item.productId) || (p.name && item.productName && p.name.trim().toLowerCase() === item.productName.trim().toLowerCase()))
+                      : undefined;
+
+                    const resolvedImg = getProductImageDueToProduct(item, hasSnapshot ? undefined : products);
+                    const resolvedName = snap?.productName || item.productName || item.name || legacyCatalogProd?.name || 'Product';
+                    const galleryImgs = normalizeSnapshotImages(
+                      resolvedImg,
+                      [
+                        ...(Array.isArray(snap?.images) ? snap.images : []),
+                        ...(Array.isArray(item.images) ? item.images : []),
+                        ...(!hasSnapshot && Array.isArray(legacyCatalogProd?.images) ? legacyCatalogProd.images : [])
+                      ]
+                    );
+
+                    const sku = snap?.sku || item.sku || legacyCatalogProd?.sku;
+                    const brand = snap?.brand || item.brand || legacyCatalogProd?.brand;
+                    const description = snap?.description ?? item.description ?? legacyCatalogProd?.description ?? '';
+                    const unitPrice = Number(snap?.price ?? item.price) || 0;
+                    const originalPrice = Math.max(unitPrice, Number(snap?.originalPrice ?? item.originalPrice ?? legacyCatalogProd?.price ?? unitPrice) || unitPrice);
+                    const discountPct = Number(snap?.discountPercent ?? item.discountPercent ?? (originalPrice > unitPrice && originalPrice > 0 ? Math.round(((originalPrice - unitPrice) / originalPrice) * 100) : 0)) || 0;
+                    const discountAmt = Number(snap?.discountAmount ?? item.discountAmount ?? Math.max(0, (originalPrice - unitPrice) * item.quantity)) || 0;
+                    const moq = Math.max(1, Number(snap?.minOrderQuantity ?? item.minOrderQuantity ?? legacyCatalogProd?.minOrderQuantity ?? 1) || 1);
+                    const unitLabel = snap?.unit || item.unit || legacyCatalogProd?.unit || 'Piece';
+                    const lineShipping = Number(snap?.shippingCost ?? item.shippingCost ?? ((snap?.unitShippingCost ?? item.unitShippingCost ?? 0) * item.quantity)) || 0;
+                    const unitShipping = Number(snap?.unitShippingCost ?? item.unitShippingCost ?? (lineShipping > 0 && item.quantity > 0 ? Math.round(lineShipping / item.quantity) : 0)) || 0;
+
+                    const variationObj = (typeof item.variation === 'object' && item.variation)
+                      ? item.variation
+                      : (typeof snap?.selectedVariation === 'object' && snap.selectedVariation)
+                      ? snap.selectedVariation
+                      : {};
+
+                    const selectedSize = snap?.size || item.size || variationObj.Size || variationObj.size;
+                    const selectedColor = snap?.color || item.color || variationObj.Color || variationObj.color;
+                    const selectedStorage = snap?.selectedStorage || item.selectedStorage || snap?.storage || item.storage || variationObj.Storage || variationObj.storage || legacyCatalogProd?.storage;
+
+                    const availableSizes = Array.isArray(snap?.sizes) && snap.sizes.length > 0
+                      ? snap.sizes
+                      : (Array.isArray(item.sizes) ? item.sizes : []);
+                    const availableColors = Array.isArray(snap?.colors) && snap.colors.length > 0
+                      ? snap.colors
+                      : (Array.isArray(item.colors) ? item.colors : []);
+                    const availableStorage = Array.isArray(snap?.storageOptions) && snap.storageOptions.length > 0
+                      ? snap.storageOptions
+                      : (Array.isArray(item.storageOptions) ? item.storageOptions : (selectedStorage ? [selectedStorage] : []));
+
+                    const categoryLabel = snap?.categoryName || item.categoryName || snap?.category || item.category || legacyCatalogProd?.categoryName || legacyCatalogProd?.category;
+                    const subcategoryLabel = snap?.subCategoryName || item.subCategoryName || snap?.subcategory || item.subcategory || legacyCatalogProd?.subCategoryName || legacyCatalogProd?.subcategory;
+                    const shopLabel = snap?.shopName || item.shopName || snap?.supplierName || item.supplierName || legacyCatalogProd?.shopName;
+                    const extraVariations = Object.entries(variationObj).filter(
+                      ([k, v]) => !/^(size|taille|colou?r|ibara|storage|capacity|memory|rom|ram)$/i.test(k) && v !== undefined && v !== null && String(v).trim() !== ''
+                    );
+                    const variationText = typeof item.variation === 'string' ? item.variation : (typeof snap?.selectedVariation === 'string' ? snap.selectedVariation : '');
+
                     return (
-                      <div key={idx} className="p-3 flex items-center justify-between gap-3 text-xs bg-white">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <img
-                            src={resolvedImg}
-                            alt={resolvedName}
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = getProductImageDueToProduct(item);
-                            }}
-                            className="w-11 h-11 object-cover rounded-xl border border-slate-200 shrink-0 bg-slate-50 shadow-2xs"
-                          />
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-900 truncate" title={resolvedName}>{resolvedName}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">
-                              {item.shopName ? `Shop: ${item.shopName} · ` : ''}
-                              Unit: {item.price.toLocaleString()} FRW
-                              {item.size ? ` · Size: ${item.size}` : ''}
-                              {item.color ? ` · Color: ${item.color}` : ''}
-                            </p>
+                      <div key={idx} className="border border-slate-200 rounded-2xl bg-white p-4 space-y-3.5 shadow-2xs">
+                        {/* Header row: Primary image, Name, Qty & Line Price */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <a
+                              href={resolvedImg}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open full product image"
+                              className="shrink-0 block"
+                            >
+                              <img
+                                src={resolvedImg}
+                                alt={resolvedName}
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = getProductImageDueToProduct(item);
+                                }}
+                                className="w-16 h-16 object-cover rounded-xl border border-slate-200 bg-slate-50 shadow-2xs hover:opacity-90 transition-opacity"
+                              />
+                            </a>
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-black text-slate-900 text-sm leading-snug">{resolvedName}</p>
+                                {hasSnapshot && (
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase tracking-wide">
+                                    Snapshot Preserved
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500">
+                                <span>Unit Price: <strong className="text-slate-900 font-mono">{unitPrice.toLocaleString()} FRW</strong></span>
+                                {originalPrice > unitPrice && (
+                                  <span className="line-through text-slate-400 font-mono">{originalPrice.toLocaleString()} FRW</span>
+                                )}
+                                {(discountPct > 0 || discountAmt > 0) && (
+                                  <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold text-[10px]">
+                                    {discountPct > 0 ? `${discountPct}% OFF` : 'Discount'}
+                                    {discountAmt > 0 ? ` (-${discountAmt.toLocaleString()} FRW)` : ''}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="font-mono font-black text-slate-900 text-xs block">
+                              Qty: {item.quantity} {unitLabel}
+                            </span>
+                            <span className="font-mono font-black text-[#FF6000] text-sm block mt-0.5">
+                              {(unitPrice * item.quantity).toLocaleString()} FRW
+                            </span>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="font-mono font-bold text-slate-900 block">
-                            Qty: {item.quantity}
-                          </span>
-                          <span className="font-mono font-bold text-[#FF6000] text-[11px]">
-                            {(item.price * item.quantity).toLocaleString()} FRW
-                          </span>
+
+                        {/* Product Gallery Images (when multiple snapshots saved) */}
+                        {galleryImgs.length > 1 && (
+                          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 shrink-0">Images ({galleryImgs.length}):</span>
+                            {galleryImgs.map((gImg, gIdx) => (
+                              <a
+                                key={gIdx}
+                                href={gImg}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="shrink-0 block rounded-lg overflow-hidden border border-slate-200 hover:border-[#FF6000] transition-colors"
+                                title={`View image ${gIdx + 1}`}
+                              >
+                                <img
+                                  src={gImg}
+                                  alt={`${resolvedName} #${gIdx + 1}`}
+                                  referrerPolicy="no-referrer"
+                                  className="w-10 h-10 object-cover bg-slate-50"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Complete Product Snapshot Specification Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 text-[11px]">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">SKU</span>
+                            <span className="font-mono font-bold text-slate-800 break-all">{sku || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Brand</span>
+                            <span className="font-semibold text-slate-800">{brand || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Shop / Store</span>
+                            <span className="font-semibold text-slate-800">{shopLabel || 'ContactReach Market'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Category &amp; Subcategory</span>
+                            <span className="font-semibold text-slate-800">
+                              {[categoryLabel, subcategoryLabel].filter(Boolean).join(' › ') || '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">MOQ</span>
+                            <span className="font-mono font-bold text-slate-800">
+                              {moq} {unitLabel}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Shipping Cost</span>
+                            <span className="font-mono font-bold text-slate-800">
+                              {lineShipping > 0
+                                ? `${lineShipping.toLocaleString()} FRW${unitShipping > 0 ? ` (${unitShipping.toLocaleString()}/u)` : ''}`
+                                : '0 FRW'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Sizes</span>
+                            <span className="font-semibold text-slate-800">
+                              {selectedSize ? <strong className="text-[#FF6000]">{selectedSize}</strong> : '—'}
+                              {availableSizes.length > 0 && (
+                                <span className="text-[10px] text-slate-500 block">Options: {availableSizes.join(', ')}</span>
+                              )}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Colors</span>
+                            <span className="font-semibold text-slate-800">
+                              {selectedColor ? <strong className="text-[#FF6000]">{selectedColor}</strong> : '—'}
+                              {availableColors.length > 0 && (
+                                <span className="text-[10px] text-slate-500 block">Options: {availableColors.join(', ')}</span>
+                              )}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Storage</span>
+                            <span className="font-semibold text-slate-800">
+                              {selectedStorage ? <strong className="text-[#FF6000]">{selectedStorage}</strong> : '—'}
+                              {availableStorage.length > 1 && (
+                                <span className="text-[10px] text-slate-500 block">Options: {availableStorage.join(', ')}</span>
+                              )}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Regular Price / Discount</span>
+                            <span className="font-mono font-semibold text-slate-800">
+                              {originalPrice.toLocaleString()} FRW{discountPct > 0 ? ` (-${discountPct}%)` : ''}
+                            </span>
+                          </div>
+                          {(extraVariations.length > 0 || variationText) && (
+                            <div className="col-span-2">
+                              <span className="text-[10px] font-bold uppercase text-slate-400 block">Other Selected Options</span>
+                              <span className="font-semibold text-slate-800">
+                                {variationText || extraVariations.map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                              </span>
+                            </div>
+                          )}
                         </div>
+
+                        {/* Product Description Snapshot */}
+                        {(description || snap?.specifications || item.specifications) && (
+                          <div className="bg-slate-50/60 border border-slate-200/70 rounded-xl p-3 space-y-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                              Product Description (Snapshot at Purchase)
+                            </span>
+                            {description && (
+                              <div className="max-h-36 overflow-y-auto pr-1 text-xs text-slate-700">
+                                <FormattedProductDescription content={description} compact />
+                              </div>
+                            )}
+                            {(snap?.specifications || item.specifications) && (
+                              <p className="text-[11px] text-slate-600 pt-1 border-t border-slate-200/70">
+                                <strong className="text-slate-700">Specs:</strong> {snap?.specifications || item.specifications}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

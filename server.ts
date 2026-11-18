@@ -49,6 +49,7 @@ import {
   PaymentMethodConfig, ProductReview, ProductVariation,
   GoogleSheetSyncConfig, PaymentTransaction, SmsNotification
 } from './src/types.ts';
+import { buildOrderItemWithSnapshot } from './src/utils/productSnapshot.ts';
 
 // Universal category normalizer mapping arbitrary labels, subcategories & legacy IDs to the 13 canonical categories
 export function normalizeCategoryId(rawCategory?: string, name?: string): string {
@@ -336,7 +337,7 @@ const CANONICAL_PRODUCT_IMAGES: { match: RegExp; url: string }[] = [
 ];
 
 function resolveProductImageDueToProduct(
-  item?: { productName?: string; name?: string; imageUrl?: string; image?: string; productId?: string },
+  item?: { productName?: string; name?: string; imageUrl?: string; image?: string; productId?: string; productSnapshot?: any; capturedAt?: string },
   catalogProducts?: Product[]
 ): string {
   if (!item) {
@@ -344,8 +345,14 @@ function resolveProductImageDueToProduct(
   }
 
   const name = (item.productName || item.name || '').trim();
-  const currentUrl = (item.imageUrl || item.image || '').trim();
+  const snapUrl = (item.productSnapshot?.imageUrl || (Array.isArray(item.productSnapshot?.images) ? item.productSnapshot.images[0] : '') || '').trim();
+  const currentUrl = (snapUrl || item.imageUrl || item.image || '').trim();
   const isGenericLogo = !currentUrl || currentUrl === '/logo.png' || currentUrl === 'logo.png' || currentUrl.endsWith('/logo.png');
+  const hasSnapshot = Boolean(item.productSnapshot || item.capturedAt);
+  if (hasSnapshot && currentUrl && !isGenericLogo) {
+    return currentUrl;
+  }
+
   const isMismatched =
     (name.toLowerCase().includes('headphone') && (currentUrl.includes('sneaker') || currentUrl.includes('photo-1590658268037'))) ||
     (name.toLowerCase().includes('speaker') && currentUrl.includes('sneaker')) ||
@@ -850,7 +857,9 @@ function loadDbFromDisk() {
             ? '2328354'
             : (o.receiverDetails === '078002260' || o.receiverDetails === '23283542600' ? '0780022600' : o.receiverDetails),
           items: Array.isArray(o.items) ? o.items.map((it: any) => {
-            const properImg = resolveProductImageDueToProduct(it, db.products);
+            const hasSnapshot = Boolean(it?.productSnapshot || it?.capturedAt);
+            const snapImg = it?.productSnapshot?.imageUrl || it?.imageUrl;
+            const properImg = hasSnapshot && snapImg ? snapImg : resolveProductImageDueToProduct(it, db.products);
             return {
               ...it,
               imageUrl: properImg,
@@ -1066,6 +1075,11 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
   if (!data) return;
   try {
     if (entityType === 'orders' || entityType === 'order') {
+      const rawItems = Array.isArray(data.items) ? data.items : [];
+      const productSnapshots = Array.isArray(data.productSnapshots) && data.productSnapshots.length > 0
+        ? data.productSnapshots
+        : rawItems.map((it: any) => it?.productSnapshot).filter(Boolean);
+
       const orderRow: Record<string, any> = {
         id: String(data.id || `ord-${Date.now()}`),
         order_number: String(data.orderNumber || data.order_number),
@@ -1081,7 +1095,8 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         delivery_location: data.deliveryLocation || 'Kigali Area',
         delivery_address: data.deliveryAddress || 'Kigali, Rwanda',
         delivery_notes: data.deliveryNotes || null,
-        items: Array.isArray(data.items) ? data.items : [],
+        items: rawItems,
+        ...(productSnapshots.length > 0 ? { product_snapshots: productSnapshots } : {}),
         subtotal: Math.round(Number(data.subtotal || data.totalAmount) || 0),
         delivery_fee: Math.round(Number(data.deliveryFee) || 0),
         shipping_cost: Math.round(Number(data.shippingCost) || 0),
@@ -1129,7 +1144,82 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         created_at: data.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      // Safe upsert: check existing record by id or order_number first to prevent orders_pkey or orders_order_number_key duplicate violations
+
+      const persistOrderItemsSnapshots = async (savedOrderId: string) => {
+        if (!rawItems.length || !rawItems.some((it: any) => it?.productSnapshot || it?.capturedAt)) return;
+        for (let idx = 0; idx < rawItems.length; idx++) {
+          const it: any = rawItems[idx];
+          const snap: any = it.productSnapshot || it;
+          const itemId = `${savedOrderId}-item-${idx}`;
+          const fullItemRow: Record<string, any> = {
+            id: itemId,
+            order_id: savedOrderId,
+            product_id: it.productId || null,
+            product_name: it.productName || snap.productName || 'Marketplace Product',
+            quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
+            unit_price: Math.round(Number(it.price ?? snap.price) || 0),
+            line_total: Math.round((Number(it.price ?? snap.price) || 0) * Math.max(1, Number(it.quantity) || 1)),
+            variation: it.variation || snap.selectedVariation || {},
+            sku: it.sku || snap.sku || null,
+            brand: it.brand || snap.brand || null,
+            image_url: it.imageUrl || snap.imageUrl || null,
+            images: Array.isArray(it.images) ? it.images : (Array.isArray(snap.images) ? snap.images : []),
+            description: it.description ?? snap.description ?? null,
+            original_price: Math.round(Number(it.originalPrice ?? snap.originalPrice ?? it.price) || 0),
+            discount_percent: Number(it.discountPercent ?? snap.discountPercent) || 0,
+            discount_price: it.discountPrice !== undefined && it.discountPrice !== null ? Math.round(Number(it.discountPrice)) : null,
+            discount_amount: Math.round(Number(it.discountAmount ?? snap.discountAmount) || 0),
+            min_order_quantity: Math.max(1, Math.floor(Number(it.minOrderQuantity ?? snap.minOrderQuantity) || 1)),
+            shipping_cost: Math.round(Number(it.shippingCost ?? snap.shippingCost) || 0),
+            selected_size: it.size || snap.size || null,
+            selected_color: it.color || snap.color || null,
+            selected_storage: it.selectedStorage || snap.selectedStorage || null,
+            available_sizes: Array.isArray(it.sizes) ? it.sizes : (Array.isArray(snap.sizes) ? snap.sizes : []),
+            available_colors: Array.isArray(it.colors) ? it.colors : (Array.isArray(snap.colors) ? snap.colors : []),
+            storage: it.storage || snap.storage || null,
+            category: it.category || snap.category || null,
+            subcategory: it.subcategory || snap.subcategory || null,
+            shop_id: it.shopId || snap.shopId || null,
+            shop_name: it.shopName || snap.shopName || it.supplierName || null,
+            unit: it.unit || snap.unit || 'Piece',
+            product_snapshot: snap,
+            created_at: orderRow.created_at
+          };
+
+          let { error: itemErr } = await runSupabaseWithRetry(() =>
+            supabase.from('order_items').upsert(fullItemRow, { onConflict: 'id' })
+          );
+          if (itemErr && (itemErr.code === '23503' || String(itemErr.message || '').includes('fk_order_items_product'))) {
+            fullItemRow.product_id = null;
+            const retryFk = await runSupabaseWithRetry(() =>
+              supabase.from('order_items').upsert(fullItemRow, { onConflict: 'id' })
+            );
+            itemErr = retryFk.error;
+          }
+          if (itemErr && (itemErr.code === 'PGRST204' || itemErr.code === '42703' || /column .* does not exist/i.test(itemErr.message || ''))) {
+            const coreItemRow: Record<string, any> = {
+              id: itemId,
+              order_id: savedOrderId,
+              product_id: fullItemRow.product_id,
+              product_name: fullItemRow.product_name,
+              quantity: fullItemRow.quantity,
+              unit_price: fullItemRow.unit_price,
+              line_total: fullItemRow.line_total,
+              variation: fullItemRow.variation,
+              created_at: fullItemRow.created_at
+            };
+            const retryCore = await runSupabaseWithRetry(() =>
+              supabase.from('order_items').upsert(coreItemRow, { onConflict: 'id' })
+            );
+            if (retryCore.error && retryCore.error.code === '23503') {
+              coreItemRow.product_id = null;
+              await supabase.from('order_items').upsert(coreItemRow, { onConflict: 'id' });
+            }
+          }
+        }
+      };
+
+      // Safe upsert: check existing record by id or order_number first to avoid orders_pkey or orders_order_number_key duplicate violations
       const queryParts: string[] = [];
       if (orderRow.id) queryParts.push(`id.eq.${orderRow.id}`);
       if (orderRow.order_number) queryParts.push(`order_number.eq.${orderRow.order_number}`);
@@ -1152,39 +1242,56 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         if (existingOrder.order_number) {
           orderRow.order_number = existingOrder.order_number;
         }
-        const { error: ordErr } = await runSupabaseWithRetry(() =>
+        let { error: ordErr } = await runSupabaseWithRetry(() =>
           supabase
             .from('orders')
             .update(orderRow)
             .eq('id', existingOrder!.id)
         );
+        if (ordErr && (ordErr.code === 'PGRST204' || ordErr.code === '42703' || /product_snapshots|column .* does not exist/i.test(ordErr.message || ''))) {
+          const { product_snapshots: _ps, ...withoutSnapCol } = orderRow;
+          const retry = await runSupabaseWithRetry(() =>
+            supabase.from('orders').update(withoutSnapCol).eq('id', existingOrder!.id)
+          );
+          ordErr = retry.error;
+        }
         if (ordErr) {
           console.error('[Supabase Order Sync] Error:', ordErr.message);
         } else {
+          await persistOrderItemsSnapshots(existingOrder.id).catch(() => {});
           console.log(`[Supabase] Live synchronized order #${orderRow.order_number} to Supabase.`);
         }
       } else {
-        const { error: ordErr } = await runSupabaseWithRetry(() =>
+        let { error: ordErr } = await runSupabaseWithRetry(() =>
           supabase.from('orders').insert(orderRow)
         );
+        if (ordErr && (ordErr.code === 'PGRST204' || ordErr.code === '42703' || /product_snapshots|column .* does not exist/i.test(ordErr.message || ''))) {
+          const { product_snapshots: _ps, ...withoutSnapCol } = orderRow;
+          const retry = await runSupabaseWithRetry(() =>
+            supabase.from('orders').insert(withoutSnapCol)
+          );
+          ordErr = retry.error;
+        }
         if (ordErr) {
           if (ordErr.code === '23505' && queryParts.length > 0) {
-            // Concurrency fallback: update matching row
+            const { product_snapshots: _ps, ...withoutSnapCol } = orderRow;
             const { error: fbErr } = await runSupabaseWithRetry(() =>
               supabase
                 .from('orders')
-                .update(orderRow)
+                .update(withoutSnapCol)
                 .or(queryParts.join(','))
             );
             if (fbErr) {
               console.error('[Supabase Order Sync] Error:', fbErr.message);
             } else {
+              await persistOrderItemsSnapshots(orderRow.id).catch(() => {});
               console.log(`[Supabase] Live synchronized order #${orderRow.order_number} to Supabase.`);
             }
           } else {
             console.error('[Supabase Order Sync] Error:', ordErr.message);
           }
         } else {
+          await persistOrderItemsSnapshots(orderRow.id).catch(() => {});
           console.log(`[Supabase] Live synchronized order #${orderRow.order_number} to Supabase.`);
         }
       }
@@ -1398,9 +1505,21 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         }, { onConflict: 'id' })
       );
     } else if (entityType === 'paymentConfirmations' || entityType === 'payments' || entityType === 'payment') {
+      let resolvedOrderId: string | null = data.orderId || null;
+      if ((!resolvedOrderId || resolvedOrderId === data.orderNumber) && data.orderNumber) {
+        const { data: ordMatch } = await supabase
+          .from('orders')
+          .select('id')
+          .ilike('order_number', String(data.orderNumber).trim())
+          .limit(1)
+          .maybeSingle();
+        if (ordMatch?.id) resolvedOrderId = String(ordMatch.id);
+        else if (resolvedOrderId === data.orderNumber) resolvedOrderId = null;
+      }
+
       const payRow: Record<string, any> = {
         id: String(data.id || `conf-${Date.now()}`),
-        order_id: data.orderId || null,
+        order_id: resolvedOrderId,
         order_number: data.orderNumber || null,
         payment_method: data.paymentMethod || 'MTN Mobile Money',
         amount: Math.round(Number(data.amount ?? data.amountPaid) || 0),
@@ -1421,23 +1540,56 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         admin_notes: data.adminNotes || data.notes || null,
         flagged_suspicious: Boolean(data.flaggedSuspicious),
         is_duplicate_txn: Boolean(data.isDuplicateTxn),
+        duplicate_order_numbers: Array.isArray(data.duplicateOrderNumbers) ? data.duplicateOrderNumbers : [],
         suspicious_reason: data.suspiciousReason || null,
         verified_directly: Boolean(data.verifiedDirectly),
+        telecom_verified: Boolean(data.telecomVerified),
+        telecom_reference: data.telecomReference || null,
         customer_notified: Boolean(data.customerNotified),
         notification_message: data.notificationMessage || null,
         submitted_at: data.submittedAt || new Date().toISOString(),
         created_at: data.submittedAt || data.createdAt || new Date().toISOString()
       };
-      const { error: payErr } = await runSupabaseWithRetry(() =>
+      let { error: payErr } = await runSupabaseWithRetry(() =>
         supabase.from('payments').upsert(payRow, { onConflict: 'id' })
       );
+      if (payErr && (payErr.code === '23503' || String(payErr.message || '').includes('fk_payments_order'))) {
+        payRow.order_id = null;
+        const retry = await runSupabaseWithRetry(() =>
+          supabase.from('payments').upsert(payRow, { onConflict: 'id' })
+        );
+        payErr = retry.error;
+      }
       if (payErr) {
         console.error('[Supabase Payment Sync] Error:', payErr.message);
       }
     } else if (entityType === 'paymentTransactions' || entityType === 'payment_transactions' || entityType === 'transaction') {
+      let resolvedOrderId: string | null = data.orderId || null;
+      if ((!resolvedOrderId || resolvedOrderId === data.orderNumber) && data.orderNumber) {
+        const { data: ordMatch } = await supabase
+          .from('orders')
+          .select('id')
+          .ilike('order_number', String(data.orderNumber).trim())
+          .limit(1)
+          .maybeSingle();
+        if (ordMatch?.id) resolvedOrderId = String(ordMatch.id);
+        else if (resolvedOrderId === data.orderNumber) resolvedOrderId = null;
+      }
+
+      const combinedMeta = {
+        ...(data.metadata || {}),
+        providerTransactionId: data.providerTransactionId || data.metadata?.providerTransactionId || undefined,
+        financialTransactionId: data.financialTransactionId || data.metadata?.financialTransactionId || undefined,
+        failureReason: data.failureReason || undefined,
+        verifiedDirectly: data.verifiedDirectly,
+        verifiedAt: data.verifiedAt || undefined,
+        telecomStatus: data.telecomStatus || undefined,
+        signatureVerified: data.signatureVerified
+      };
+
       const txnRow: Record<string, any> = {
         id: String(data.id),
-        order_id: data.orderId || null,
+        order_id: resolvedOrderId,
         order_number: data.orderNumber || null,
         idempotency_key: data.idempotencyKey || null,
         payment_method: data.paymentMethod || 'MTN Mobile Money',
@@ -1448,40 +1600,55 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         customer_email: data.customerEmail || null,
         checkout_url: data.checkoutUrl || null,
         status: data.status || 'Pending',
-        metadata: {
-          ...(data.metadata || {}),
-          providerTransactionId: data.providerTransactionId || data.metadata?.providerTransactionId || undefined,
-          financialTransactionId: data.financialTransactionId || data.metadata?.financialTransactionId || undefined,
-          failureReason: data.failureReason || undefined,
-          verifiedDirectly: data.verifiedDirectly,
-          verifiedAt: data.verifiedAt || undefined,
-          telecomStatus: data.telecomStatus || undefined,
-          signatureVerified: data.signatureVerified
-        },
+        provider_transaction_id: data.providerTransactionId || combinedMeta.providerTransactionId || null,
+        financial_transaction_id: data.financialTransactionId || combinedMeta.financialTransactionId || null,
+        failure_reason: data.failureReason || null,
+        verified_directly: Boolean(data.verifiedDirectly),
+        verified_at: data.verifiedAt || null,
+        telecom_status: data.telecomStatus || null,
+        signature_verified: Boolean(data.signatureVerified),
+        metadata: combinedMeta,
         created_at: data.createdAt || new Date().toISOString(),
         updated_at: data.updatedAt || new Date().toISOString()
       };
-      const { error: txnErr } = await runSupabaseWithRetry(() =>
+      let { error: txnErr } = await runSupabaseWithRetry(() =>
         supabase.from('payment_transactions').upsert(txnRow, { onConflict: 'id' })
       );
+      if (txnErr && (txnErr.code === '23503' || String(txnErr.message || '').includes('fk_payment_transactions_order'))) {
+        txnRow.order_id = null;
+        const retry = await runSupabaseWithRetry(() =>
+          supabase.from('payment_transactions').upsert(txnRow, { onConflict: 'id' })
+        );
+        txnErr = retry.error;
+      }
+      if (txnErr && txnErr.code === '23505' && txnRow.idempotency_key) {
+        txnRow.idempotency_key = `${txnRow.idempotency_key}-${Date.now()}`;
+        const retry = await runSupabaseWithRetry(() =>
+          supabase.from('payment_transactions').upsert(txnRow, { onConflict: 'id' })
+        );
+        txnErr = retry.error;
+      }
       if (txnErr) {
         console.error('[Supabase PaymentTransaction Sync] Error:', txnErr.message);
       }
     } else if (entityType === 'smsNotifications' || entityType === 'sms_notifications') {
+      const dir = data.direction === 'outbound' ? 'outbound' : (data.direction === 'outgoing' ? 'outgoing' : 'incoming');
       const { error: smsErr } = await runSupabaseWithRetry(() =>
         supabase.from('sms_notifications').upsert({
           id: String(data.id),
-          direction: data.direction || 'incoming',
+          direction: dir,
           sender_phone: data.senderPhone || '',
           sender_name: data.senderName || null,
-          recipient_phone: data.recipientPhone || null,
+          recipient_phone: data.recipientPhone || '',
           provider: data.provider || 'MTN Mobile Money',
           message: data.message || '',
           parsed_transaction_id: data.parsedTransactionId || null,
-          parsed_amount: data.parsedAmount !== undefined ? Math.round(Number(data.parsedAmount)) : null,
+          parsed_amount: data.parsedAmount !== undefined && Number.isFinite(Number(data.parsedAmount))
+            ? Math.round(Number(data.parsedAmount))
+            : null,
           order_number: data.orderNumber || null,
           payment_id: data.paymentId || null,
-          status: data.status || 'received',
+          status: data.status || (dir === 'incoming' ? 'received' : 'sent'),
           metadata: data.metadata || {},
           created_at: data.createdAt || new Date().toISOString()
         }, { onConflict: 'id' })
@@ -2168,43 +2335,7 @@ export async function loadAllDataFromSupabase() {
       for (const o of ords) {
         remoteOrderIds.add(String(o.id));
         const linkedItems = orderItemsByOrderId.get(String(o.id));
-        const mappedOrd: Order = {
-          id: String(o.id),
-          orderNumber: o.order_number,
-          userId: o.user_id || undefined,
-          customerName: o.customer_name,
-          customerPhone: o.customer_phone,
-          customerEmail: o.customer_email || undefined,
-          deliveryType: (o.delivery_type as any) || 'delivery',
-          deliveryLocation: o.delivery_location || o.delivery_district || o.delivery_city || 'Kigali',
-          deliveryAddress: o.delivery_address || 'Kigali, Rwanda',
-          deliveryNotes: o.delivery_notes || undefined,
-          subtotal: Number(o.subtotal) || 0,
-          deliveryFee: Number(o.delivery_fee) || 0,
-          shippingCost: Number(o.shipping_cost) || 0,
-          discountAmount: Number(o.discount_amount) || 0,
-          totalAmount: Number(o.total_amount) || 0,
-          paymentMethod: o.payment_method || 'MTN Mobile Money',
-          paymentStatus: o.payment_status || 'Pending Payment',
-          receiverName: o.receiver_name || 'Ruth',
-          receiverDetails: o.receiver_details || '0780022600',
-          stockDeducted: Boolean(o.stock_deducted),
-          statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
-          status: o.status || o.order_status || 'New',
-          deliveryStatus: o.delivery_status || 'Pending',
-          trackingNumber: o.tracking_number || undefined,
-          trackingToken: o.tracking_token || undefined,
-          paymentConfirmation: o.payment_confirmation || undefined,
-          items: Array.isArray(linkedItems) && linkedItems.length > 0 ? linkedItems.map((it: any) => ({
-            productId: it.product_id ? String(it.product_id) : '',
-            productName: it.product_name,
-            price: Number(it.unit_price) || 0,
-            quantity: Number(it.quantity) || 1,
-            imageUrl: resolveProductImageDueToProduct({ productName: it.product_name, productId: it.product_id }, db.products)
-          })) : (Array.isArray(o.items) ? o.items : []),
-          createdAt: o.created_at || new Date().toISOString(),
-          updatedAt: o.updated_at || undefined
-        };
+        const mappedOrd = mapSupabaseOrderRowToServerOrder(o, linkedItems);
         orderMap.set(mappedOrd.id, mappedOrd);
       }
       db.orders = Array.from(orderMap.values()).sort(
@@ -2274,15 +2405,19 @@ export async function loadAllDataFromSupabase() {
           paymentMethod: t.payment_method || 'MTN Mobile Money',
           provider: t.provider || 'MTN Mobile Money',
           status: t.status || 'Pending',
-          providerTransactionId: meta.providerTransactionId || undefined,
-          financialTransactionId: meta.financialTransactionId || undefined,
+          providerTransactionId: t.provider_transaction_id || meta.providerTransactionId || undefined,
+          financialTransactionId: t.financial_transaction_id || meta.financialTransactionId || undefined,
           idempotencyKey: t.idempotency_key || undefined,
           checkoutUrl: t.checkout_url || undefined,
-          failureReason: meta.failureReason || undefined,
-          verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
-          verifiedAt: meta.verifiedAt || undefined,
-          telecomStatus: meta.telecomStatus || undefined,
-          signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
+          failureReason: t.failure_reason || meta.failureReason || undefined,
+          verifiedDirectly: t.verified_directly !== undefined && t.verified_directly !== null
+            ? Boolean(t.verified_directly)
+            : (meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined),
+          verifiedAt: t.verified_at || meta.verifiedAt || undefined,
+          telecomStatus: t.telecom_status || meta.telecomStatus || undefined,
+          signatureVerified: t.signature_verified !== undefined && t.signature_verified !== null
+            ? Boolean(t.signature_verified)
+            : (meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined),
           metadata: meta,
           createdAt: t.created_at || new Date().toISOString(),
           updatedAt: t.updated_at || t.created_at || new Date().toISOString()
@@ -3860,16 +3995,33 @@ app.post('/api/orders', async (req: Request, res: Response) => {
               id: String(sbProd.id),
               name: sbProd.name,
               sku: sbProd.sku || undefined,
+              brand: sbProd.brand || undefined,
               description: sbProd.description || '',
               price: Number(sbProd.price) || 0,
               costPrice: sbProd.cost_price !== null && sbProd.cost_price !== undefined ? Number(sbProd.cost_price) : undefined,
               shippingCost: (sbProd.shipping_cost !== null && sbProd.shipping_cost !== undefined && Number(sbProd.shipping_cost) > 0) ? Number(sbProd.shipping_cost) : undefined,
               discountPercent: Number(sbProd.discount_percent) || 0,
-              discountPrice: sbProd.discount_price !== null ? Number(sbProd.discount_price) : undefined,
+              discountPrice: sbProd.discount_price !== null && sbProd.discount_price !== undefined ? Number(sbProd.discount_price) : undefined,
               category: sbProd.category || 'clothing',
+              categoryName: sbProd.category_name || undefined,
+              subcategory: sbProd.subcategory || undefined,
+              subCategoryName: sbProd.sub_category_name || undefined,
+              shopId: sbProd.shop_id || undefined,
+              shopName: sbProd.shop_name || undefined,
+              supplierName: sbProd.supplier_name || sbProd.alibaba_supplier_name || sbProd.shop_name || undefined,
+              receiverName: sbProd.receiver_name || undefined,
+              receiverPhone: sbProd.receiver_phone || undefined,
+              merchantCode: sbProd.merchant_code || undefined,
+              unit: sbProd.unit || undefined,
+              storage: sbProd.storage || undefined,
+              specifications: sbProd.specifications || undefined,
+              packagingInfo: sbProd.packaging_info || undefined,
+              variations: Array.isArray(sbProd.variations) ? sbProd.variations : [],
+              attributes: sbProd.attributes || undefined,
               stock: Math.max(0, Number(sbProd.stock_quantity ?? sbProd.stock ?? 10)),
               minOrderQuantity: Math.max(1, Math.floor(Number(sbProd.min_order_quantity) || 1)),
               imageUrl: sbProd.image_url || '/logo.png',
+              images: Array.isArray(sbProd.images) ? sbProd.images : (sbProd.image_url ? [sbProd.image_url] : []),
               status: sbProd.status || 'Available',
               createdAt: sbProd.created_at || new Date().toISOString()
             };
@@ -3881,16 +4033,34 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       // If still not found, construct a valid product from cart item metadata so the customer's order always succeeds
       if (!product) {
         const itemTitle = (item as any).productName || (item as any).name || (item as any).title || 'Marketplace Item';
-        const itemPrice = Math.max(0, Number((item as any).price) || 15000);
+        const itemPrice = Math.max(0, Number((item as any).originalPrice ?? (item as any).price) || 15000);
         product = {
           id: targetPId,
           name: itemTitle,
+          sku: (item as any).sku || undefined,
+          brand: (item as any).brand || undefined,
           price: itemPrice,
-          description: '',
-          category: 'clothing',
+          discountPercent: Number((item as any).discountPercent) || 0,
+          discountPrice: (item as any).discountPrice !== undefined ? Number((item as any).discountPrice) : undefined,
+          description: (item as any).description || '',
+          category: (item as any).category || 'clothing',
+          categoryName: (item as any).categoryName || undefined,
+          subcategory: (item as any).subcategory || undefined,
+          subCategoryName: (item as any).subCategoryName || undefined,
+          shopId: (item as any).shopId || undefined,
+          shopName: (item as any).shopName || undefined,
+          supplierName: (item as any).supplierName || (item as any).shopName || undefined,
+          unit: (item as any).unit || undefined,
+          storage: (item as any).storage || undefined,
+          variations: Array.isArray((item as any).variations) ? (item as any).variations : undefined,
+          attributes: (item as any).attributes || undefined,
+          specifications: (item as any).specifications || undefined,
+          packagingInfo: (item as any).packagingInfo || undefined,
           stock: 999,
           minOrderQuantity: Math.max(1, Math.floor(Number((item as any).minOrderQuantity) || 1)),
           imageUrl: (item as any).imageUrl || '/logo.png',
+          images: Array.isArray((item as any).images) ? (item as any).images : undefined,
+          shippingCost: (item as any).unitShippingCost !== undefined ? Number((item as any).unitShippingCost) : undefined,
           status: 'Available',
           createdAt: new Date().toISOString()
         };
@@ -3961,22 +4131,17 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     if (product.merchantCode) primaryMerchantCode = product.merchantCode;
 
     const verifiedImg = resolveProductImageDueToProduct({ productName: product.name, productId: product.id, imageUrl: product.imageUrl }, db.products);
-    verifiedItems.push({
-      productId: product.id,
-      productName: product.name,
-      price: unitPrice,
-      quantity: qty,
-      imageUrl: verifiedImg,
-      variation: item.variation || undefined,
-      sku: product.sku,
-      supplierName: product.supplierName || product.shopName || undefined,
-      shopName: product.shopName || undefined,
-      aliExpressUrl: product.aliExpressUrl || product.supplierProductUrl || undefined,
-      supplierVariant: product.supplierVariant || undefined,
-      supplierSku: product.supplierSku || undefined,
-      isOutOfStock,
-      shippingCost: itemShippingCost
-    });
+    verifiedItems.push(
+      buildOrderItemWithSnapshot({
+        product,
+        itemInput: item,
+        quantity: qty,
+        unitPriceOverride: unitPrice,
+        unitShippingOverride: unitShipping,
+        resolvedImageUrl: verifiedImg,
+        isOutOfStock
+      })
+    );
   }
 
   // Enforce storewide minimum order amount if configured by admin
@@ -4073,6 +4238,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       deliveryAddress: isPickup ? (db.settings.pickupAddress || 'Fair View Plaza, Kigali, Rwanda') : (deliveryAddress || 'Kigali'),
       deliveryNotes: deliveryNotes?.trim(),
       items: verifiedItems,
+      productSnapshots: verifiedItems.map(i => i.productSnapshot!).filter(Boolean),
       subtotal: calculatedSubtotal,
       discountAmount: discountAmount > 0 ? discountAmount : undefined,
       couponCode: appliedCouponCode,
@@ -4161,7 +4327,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     saveToFirestoreAsync('messages', orderWelcomeMsg.id, orderWelcomeMsg);
 
   saveDbToDisk('order_created', { order: newOrder, customer });
-  saveToFirestoreAsync('orders', newOrder.id, newOrder);
+  await saveToSupabaseAsync('orders', newOrder.id, newOrder);
   saveToFirestoreAsync('customers', customer.id, customer);
   createAdminNotification({
     category: 'order',
@@ -4299,6 +4465,16 @@ app.get('/api/orders/:orderNumber', async (req: Request, res: Response) => {
       deliveryLocation: order.deliveryLocation,
       deliveryAddress: order.deliveryAddress,
       items: (order.items || []).map((it: any) => {
+        const hasSnapshot = Boolean(it?.productSnapshot || it?.capturedAt);
+        if (hasSnapshot) {
+          const snapImg = it?.productSnapshot?.imageUrl || it?.imageUrl || resolveProductImageDueToProduct(it, db.products);
+          return {
+            ...it,
+            productName: it?.productSnapshot?.productName || it.productName,
+            imageUrl: snapImg,
+            image: snapImg
+          };
+        }
         const match = db.products.find(p =>
           (it.productId && p.id === it.productId) ||
           (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
@@ -4342,6 +4518,16 @@ app.get('/api/orders/:orderNumber', async (req: Request, res: Response) => {
   const resolvedAdminOrder = {
     ...order,
     items: (order.items || []).map((it: any) => {
+      const hasSnapshot = Boolean(it?.productSnapshot || it?.capturedAt);
+      if (hasSnapshot) {
+        const snapImg = it?.productSnapshot?.imageUrl || it?.imageUrl || resolveProductImageDueToProduct(it, db.products);
+        return {
+          ...it,
+          productName: it?.productSnapshot?.productName || it.productName,
+          imageUrl: snapImg,
+          image: snapImg
+        };
+      }
       const match = db.products.find(p =>
         (it.productId && p.id === it.productId) ||
         (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
@@ -4367,6 +4553,16 @@ app.get('/api/orders/:orderNumber/invoice', (req: Request, res: Response) => {
   const resolvedInvoiceOrder = {
     ...order,
     items: (order.items || []).map((it: any) => {
+      const hasSnapshot = Boolean(it?.productSnapshot || it?.capturedAt);
+      if (hasSnapshot) {
+        const snapImg = it?.productSnapshot?.imageUrl || it?.imageUrl || resolveProductImageDueToProduct(it, db.products);
+        return {
+          ...it,
+          productName: it?.productSnapshot?.productName || it.productName,
+          imageUrl: snapImg,
+          image: snapImg
+        };
+      }
       const match = db.products.find(p =>
         (it.productId && p.id === it.productId) ||
         (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
@@ -4395,15 +4591,275 @@ app.get('/api/orders/:orderNumber/invoice', (req: Request, res: Response) => {
   });
 });
 
+// Helper: Map Supabase order row + cache & lookup by orderNumber or id
+function mapSupabaseOrderRowToServerOrder(o: any, linkedItems?: any[]): Order {
+  const snapshotsArr: any[] = Array.isArray(o.product_snapshots) ? o.product_snapshots : [];
+  const rawOrderItems: any[] = Array.isArray(o.items) ? o.items : [];
+  const mappedItems = rawOrderItems.length > 0
+    ? rawOrderItems.map((it: any, idx: number) => {
+        const linkedSnap = (linkedItems?.[idx]?.product_snapshot && typeof linkedItems[idx].product_snapshot === 'object')
+          ? linkedItems[idx].product_snapshot
+          : undefined;
+        const snap = (it.productSnapshot && typeof it.productSnapshot === 'object')
+          ? it.productSnapshot
+          : (snapshotsArr[idx] && typeof snapshotsArr[idx] === 'object' ? snapshotsArr[idx] : linkedSnap);
+        return snap && !it.productSnapshot ? { ...it, productSnapshot: snap } : it;
+      })
+    : (Array.isArray(linkedItems) ? linkedItems.map((it: any) => {
+        const snap = (it.product_snapshot && typeof it.product_snapshot === 'object') ? it.product_snapshot : undefined;
+        return {
+          productId: it.product_id ? String(it.product_id) : (snap?.productId || ''),
+          productName: it.product_name || snap?.productName || 'Product',
+          sku: it.sku || snap?.sku || undefined,
+          brand: it.brand || snap?.brand || undefined,
+          price: Number(it.unit_price ?? snap?.price) || 0,
+          originalPrice: it.original_price !== undefined ? Number(it.original_price) : snap?.originalPrice,
+          discountPercent: it.discount_percent !== undefined ? Number(it.discount_percent) : snap?.discountPercent,
+          discountPrice: it.discount_price !== undefined && it.discount_price !== null ? Number(it.discount_price) : snap?.discountPrice,
+          discountAmount: it.discount_amount !== undefined ? Number(it.discount_amount) : snap?.discountAmount,
+          quantity: Number(it.quantity ?? snap?.quantity) || 1,
+          unit: it.unit || snap?.unit || undefined,
+          minOrderQuantity: it.min_order_quantity !== undefined ? Number(it.min_order_quantity) : snap?.minOrderQuantity,
+          shippingCost: it.shipping_cost !== undefined ? Number(it.shipping_cost) : snap?.shippingCost,
+          unitShippingCost: snap?.unitShippingCost,
+          imageUrl: it.image_url || snap?.imageUrl || resolveProductImageDueToProduct({ productName: it.product_name, productId: it.product_id }, db.products),
+          images: Array.isArray(it.images) ? it.images : snap?.images,
+          description: it.description ?? snap?.description,
+          size: it.selected_size || snap?.size,
+          color: it.selected_color || snap?.color,
+          storage: it.storage || snap?.storage,
+          selectedStorage: it.selected_storage || snap?.selectedStorage,
+          sizes: Array.isArray(it.available_sizes) ? it.available_sizes : snap?.sizes,
+          colors: Array.isArray(it.available_colors) ? it.available_colors : snap?.colors,
+          storageOptions: snap?.storageOptions,
+          variation: it.variation ?? snap?.selectedVariation,
+          variations: snap?.variations,
+          category: it.category || snap?.category,
+          categoryName: snap?.categoryName || it.category,
+          subcategory: it.subcategory || snap?.subcategory,
+          subCategoryName: snap?.subCategoryName || it.subcategory,
+          shopId: it.shop_id || snap?.shopId,
+          shopName: it.shop_name || snap?.shopName,
+          supplierName: snap?.supplierName || it.shop_name,
+          capturedAt: snap?.capturedAt,
+          productSnapshot: snap
+        };
+      }) : []);
+
+  return {
+    id: String(o.id),
+    orderNumber: o.order_number || '',
+    userId: o.user_id || undefined,
+    customerName: o.customer_name || 'Customer',
+    customerPhone: o.customer_phone || '',
+    customerEmail: o.customer_email || undefined,
+    deliveryType: (o.delivery_type as any) || 'delivery',
+    deliveryLocation: o.delivery_location || o.delivery_district || o.delivery_city || 'Kigali',
+    deliveryAddress: o.delivery_address || 'Kigali, Rwanda',
+    deliveryNotes: o.delivery_notes || undefined,
+    subtotal: Number(o.subtotal) || 0,
+    deliveryFee: Number(o.delivery_fee) || 0,
+    shippingCost: Number(o.shipping_cost) || 0,
+    discountAmount: Number(o.discount_amount) || 0,
+    couponCode: o.coupon_code || undefined,
+    totalAmount: Number(o.total_amount) || 0,
+    commissionRate: Number(o.commission_rate) || 10,
+    commissionEarned: Number(o.commission_earned) || 0,
+    supplierPayoutAmount: Number(o.supplier_payout_amount) || 0,
+    supplierPayoutStatus: o.supplier_payout_status || 'Pending',
+    supplierFulfillmentStatus: o.supplier_fulfillment_status || 'Pending',
+    paymentMethod: o.payment_method || 'MTN Mobile Money',
+    paymentStatus: o.payment_status || 'Pending Payment',
+    receiverName: o.receiver_name || 'Ruth',
+    receiverDetails: o.receiver_details || '0780022600',
+    shopName: o.shop_name || undefined,
+    supplierName: o.supplier_name || undefined,
+    stockDeducted: Boolean(o.stock_deducted),
+    statusHistory: Array.isArray(o.status_history) ? o.status_history : [],
+    status: o.status || o.order_status || 'New',
+    deliveryStatus: o.delivery_status || 'Pending',
+    trackingNumber: o.tracking_number || undefined,
+    trackingCarrier: o.tracking_carrier || undefined,
+    trackingUrl: o.tracking_url || undefined,
+    trackingAddedAt: o.tracking_added_at || undefined,
+    trackingToken: o.tracking_token || undefined,
+    paymentConfirmation: o.payment_confirmation || undefined,
+    items: mappedItems,
+    productSnapshots: snapshotsArr.length > 0 ? snapshotsArr : mappedItems.map((i: any) => i.productSnapshot).filter(Boolean),
+    createdAt: o.created_at || new Date().toISOString(),
+    updatedAt: o.updated_at || undefined
+  };
+}
+
+async function findOrLoadOrder(orderRef?: string): Promise<Order | undefined> {
+  const clean = String(orderRef || '').trim();
+  if (!clean) return undefined;
+  const upper = clean.toUpperCase();
+  let found = db.orders.find(o => o.orderNumber.toUpperCase() === upper || o.id === clean);
+  if (found) return found;
+
+  try {
+    let { data: sbOrd } = await supabase
+      .from('orders')
+      .select('*')
+      .ilike('order_number', clean)
+      .limit(1)
+      .maybeSingle();
+
+    if (!sbOrd) {
+      const { data: byId } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', clean)
+        .limit(1)
+        .maybeSingle();
+      sbOrd = byId;
+    }
+
+    if (sbOrd) {
+      const { data: itemRows } = await supabase
+        .from('order_items')
+        .select('*')
+        .eq('order_id', String(sbOrd.id));
+      const mapped = mapSupabaseOrderRowToServerOrder(sbOrd, Array.isArray(itemRows) ? itemRows : undefined);
+      const idx = db.orders.findIndex(o => o.id === mapped.id || o.orderNumber.toUpperCase() === mapped.orderNumber.toUpperCase());
+      if (idx === -1) db.orders.unshift(mapped);
+      else db.orders[idx] = mapped;
+      return mapped;
+    }
+  } catch (err: any) {
+    console.warn('[Supabase] Order lookup fallback notice:', err?.message || err);
+  }
+  return undefined;
+}
+
+async function findOrLoadPaymentConfirmation(idOrOrderRef: string): Promise<PaymentConfirmation | undefined> {
+  const clean = String(idOrOrderRef || '').trim();
+  if (!clean) return undefined;
+  let found = db.paymentConfirmations.find(c => c.id === clean || c.orderNumber.toUpperCase() === clean.toUpperCase());
+  if (found) return found;
+
+  try {
+    let { data: p } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('id', clean)
+      .limit(1)
+      .maybeSingle();
+    if (!p) {
+      const { data: byOrd } = await supabase
+        .from('payments')
+        .select('*')
+        .ilike('order_number', clean)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      p = byOrd;
+    }
+    if (p) {
+      const mapped: PaymentConfirmation = {
+        id: String(p.id),
+        orderId: p.order_id || '',
+        orderNumber: p.order_number || '',
+        customerName: p.customer_name || p.sender_name || 'Customer',
+        paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
+        amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
+        paymentMethod: p.payment_method || 'MTN Mobile Money',
+        transactionId: p.transaction_id || '',
+        screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
+        confirmationMessage: p.confirmation_message || undefined,
+        verificationStatus: p.verification_status || 'Pending Verification',
+        verifiedAt: p.verified_at || undefined,
+        verifiedBy: p.verified_by || undefined,
+        adminNotes: p.admin_notes || p.notes || undefined,
+        flaggedSuspicious: Boolean(p.flagged_suspicious),
+        isDuplicateTxn: Boolean(p.is_duplicate_txn),
+        duplicateOrderNumbers: Array.isArray(p.duplicate_order_numbers) ? p.duplicate_order_numbers : undefined,
+        suspiciousReason: p.suspicious_reason || undefined,
+        verifiedDirectly: Boolean(p.verified_directly),
+        telecomVerified: Boolean(p.telecom_verified),
+        telecomReference: p.telecom_reference || undefined,
+        customerNotified: Boolean(p.customer_notified),
+        notificationMessage: p.notification_message || undefined,
+        submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
+      };
+      const idx = db.paymentConfirmations.findIndex(c => c.id === mapped.id);
+      if (idx === -1) db.paymentConfirmations.unshift(mapped);
+      else db.paymentConfirmations[idx] = mapped;
+      return mapped;
+    }
+  } catch {}
+  return undefined;
+}
+
+async function findOrLoadPaymentTransaction(idOrRefOrOrder: string): Promise<PaymentTransaction | undefined> {
+  const clean = String(idOrRefOrOrder || '').trim();
+  if (!clean) return undefined;
+  db.paymentTransactions = db.paymentTransactions || [];
+  let found = db.paymentTransactions.find(t =>
+    t.id === clean ||
+    t.providerTransactionId === clean ||
+    t.financialTransactionId === clean ||
+    t.orderNumber.toUpperCase() === clean.toUpperCase()
+  );
+  if (found) return found;
+
+  try {
+    const { data: rows } = await supabase
+      .from('payment_transactions')
+      .select('*')
+      .or(`id.eq.${clean},order_number.ilike.${clean},provider_transaction_id.eq.${clean}`)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const t = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    if (t) {
+      const meta = (t.metadata && typeof t.metadata === 'object') ? t.metadata : {};
+      const mapped: PaymentTransaction = {
+        id: String(t.id),
+        orderId: t.order_id || '',
+        orderNumber: t.order_number || '',
+        customerPhone: t.customer_phone || '',
+        customerEmail: t.customer_email || undefined,
+        amount: Number(t.amount) || 0,
+        currency: t.currency || 'RWF',
+        paymentMethod: t.payment_method || 'MTN Mobile Money',
+        provider: t.provider || 'MTN Mobile Money',
+        status: t.status || 'Pending',
+        providerTransactionId: t.provider_transaction_id || meta.providerTransactionId || undefined,
+        financialTransactionId: t.financial_transaction_id || meta.financialTransactionId || undefined,
+        idempotencyKey: t.idempotency_key || undefined,
+        checkoutUrl: t.checkout_url || undefined,
+        failureReason: t.failure_reason || meta.failureReason || undefined,
+        verifiedDirectly: t.verified_directly !== undefined && t.verified_directly !== null
+          ? Boolean(t.verified_directly)
+          : (meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined),
+        verifiedAt: t.verified_at || meta.verifiedAt || undefined,
+        telecomStatus: t.telecom_status || meta.telecomStatus || undefined,
+        signatureVerified: t.signature_verified !== undefined && t.signature_verified !== null
+          ? Boolean(t.signature_verified)
+          : (meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined),
+        metadata: meta,
+        createdAt: t.created_at || new Date().toISOString(),
+        updatedAt: t.updated_at || t.created_at || new Date().toISOString()
+      };
+      const idx = db.paymentTransactions.findIndex(x => x.id === mapped.id);
+      if (idx === -1) db.paymentTransactions.unshift(mapped);
+      else db.paymentTransactions[idx] = mapped;
+      return mapped;
+    }
+  } catch {}
+  return undefined;
+}
+
 // Switch / Update Payment Method on Existing Order (prevents creating duplicate orders)
-app.patch('/api/orders/:orderNumber/payment-method', (req: Request, res: Response) => {
+app.patch('/api/orders/:orderNumber/payment-method', async (req: Request, res: Response) => {
   const orderNumber = req.params.orderNumber.trim().toUpperCase();
   const { paymentMethod } = req.body;
   if (!paymentMethod) {
     return res.status(400).json({ error: 'paymentMethod is required.' });
   }
 
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+  const order = await findOrLoadOrder(orderNumber);
   if (!order) {
     return res.status(404).json({ error: `Order #${orderNumber} not found.` });
   }
@@ -4430,7 +4886,7 @@ app.patch('/api/orders/:orderNumber/payment-method', (req: Request, res: Respons
   });
 
   saveDbToDisk('order_status_updated', { order });
-  saveToFirestoreAsync('orders', order.id, order);
+  await saveToSupabaseAsync('orders', order.id, order);
 
   res.json({
     message: 'Payment method updated successfully.',
@@ -4439,7 +4895,7 @@ app.patch('/api/orders/:orderNumber/payment-method', (req: Request, res: Respons
 });
 
 // Payment Confirmation Submission
-app.post('/api/payments/confirm', (req: Request, res: Response) => {
+app.post('/api/payments/confirm', async (req: Request, res: Response) => {
   const { orderNumber, customerName, paymentPhone, paymentMethod, amountPaid, transactionId, screenshotUrl, confirmationMessage } = req.body;
 
   // Validation: Must have orderNumber, paymentPhone, amountPaid, AND at least one of (transactionId, confirmationMessage, screenshotUrl)
@@ -4452,7 +4908,7 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
 
   // If transactionId wasn't manually typed, try extracting from confirmationMessage or generate valid ID
   if (!finalTxnId && cleanMessage) {
-    const txnMatch = cleanMessage.match(/(?:TxId|Transaction ID|Txn ID|Ref|Reference|ID|Id)[:\s]*([A-Za-z0-9_-]+)/i);
+    const txnMatch = cleanMessage.match(/(?:TxId|Financial Transaction Id|Transaction ID|Txn ID|Ref|Reference|ID|Id)[:\s]*([A-Za-z0-9_-]+)/i);
     if (txnMatch && txnMatch[1]) {
       finalTxnId = txnMatch[1].slice(0, 64);
     } else {
@@ -4468,7 +4924,7 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
     });
   }
 
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase());
+  const order = await findOrLoadOrder(orderNumber);
   if (!order) {
     return res.status(404).json({ error: `Order reference ${orderNumber} not found.` });
   }
@@ -4486,7 +4942,7 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
     : undefined;
 
   // Check if confirmation already exists for this order to prevent duplicates upon resubmission
-  let confirmation = db.paymentConfirmations.find(c => c.orderNumber.toUpperCase() === order.orderNumber.toUpperCase());
+  let confirmation = await findOrLoadPaymentConfirmation(order.orderNumber);
 
   if (confirmation) {
     confirmation.customerName = customerName || confirmation.customerName || order.customerName;
@@ -4533,9 +4989,36 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
     note: `Payment confirmation submitted. Txn ID: ${confirmation.transactionId}, Phone: ${paymentPhone}${cleanMessage ? ' (SMS pasted)' : ''}${screenshotUrl ? ' (Screenshot attached)' : ''}${isDuplicateTxn ? ' [WARNING: Duplicate Txn ID detected]' : ''}. Pending verification.`
   });
 
-  saveDbToDisk('payment_submitted', { payment: confirmation, order });
-  saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
-  saveToFirestoreAsync('orders', order.id, order);
+  // Persist customer-submitted confirmation SMS (or mobile money proof summary) to sms_notifications so Admin can view full SMS log
+  let loggedSms: SmsNotification | undefined;
+  if (cleanMessage || /MTN|Airtel|Mobile Money|Merchant Code/i.test(String(confirmation.paymentMethod || ''))) {
+    const providerLabel = String(confirmation.paymentMethod || '').includes('Airtel') ? 'Airtel Money' : 'MTN Mobile Money';
+    loggedSms = {
+      id: `sms-proof-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+      direction: 'incoming',
+      senderPhone: confirmation.paymentPhone,
+      senderName: confirmation.customerName,
+      recipientPhone: order.receiverDetails || db.settings.paymentNumber || '0780022600',
+      provider: providerLabel,
+      message: cleanMessage || `Payment proof submitted for Order #${order.orderNumber} (${Number(confirmation.amountPaid || 0).toLocaleString()} RWF, Ref: ${confirmation.transactionId}).`,
+      parsedTransactionId: confirmation.transactionId,
+      parsedAmount: Number(confirmation.amountPaid) || order.totalAmount,
+      orderNumber: order.orderNumber,
+      paymentId: confirmation.id,
+      status: 'matched_payment',
+      createdAt: new Date().toISOString(),
+      metadata: { source: 'payment_confirm', hasScreenshot: Boolean(screenshotUrl), isDuplicateTxn }
+    };
+    db.smsNotifications = db.smsNotifications || [];
+    db.smsNotifications.unshift(loggedSms);
+  }
+
+  saveDbToDisk('payment_submitted', { payment: confirmation, order, smsNotification: loggedSms });
+  await saveToSupabaseAsync('orders', order.id, order);
+  await saveToSupabaseAsync('paymentConfirmations', confirmation.id, confirmation);
+  if (loggedSms) {
+    await saveToSupabaseAsync('smsNotifications', loggedSms.id, loggedSms);
+  }
   createAdminNotification({
     category: 'payment',
     title: `Payment Proof Submitted (#${order.orderNumber})`,
@@ -4553,7 +5036,8 @@ app.post('/api/payments/confirm', (req: Request, res: Response) => {
       ? 'Payment submitted. Note: this transaction ID matches a previously submitted order and is flagged for manual audit.'
       : 'Payment confirmation submitted successfully. Our team will verify and approve promptly.',
     confirmation,
-    order
+    order,
+    smsNotification: loggedSms
   });
 });
 
@@ -4821,10 +5305,30 @@ export function applyVerifiedPaymentSuccess(
     note: `Payment verified directly via ${verificationSource}. Provider Ref: ${finalRef}. Amount: ${order.totalAmount.toLocaleString()} RWF.`
   });
 
-  saveDbToDisk('payment_verified', { order, payment: conf, transaction: txn });
-  saveToFirestoreAsync('orders', order.id, order);
-  if (conf) saveToFirestoreAsync('paymentConfirmations', conf.id, conf);
-  if (txn) saveToFirestoreAsync('paymentTransactions', txn.id, txn);
+  const gatewaySms: SmsNotification = {
+    id: `sms-gw-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    direction: 'outgoing',
+    senderPhone: db.settings.paymentNumber || '0780022600',
+    senderName: 'ContactReach Telecom Gateway',
+    recipientPhone: order.customerPhone || txn?.customerPhone || '',
+    provider: txn?.provider || (String(order.paymentMethod || '').includes('Airtel') ? 'Airtel Money' : 'MTN Mobile Money'),
+    message: `Payment of ${order.totalAmount.toLocaleString()} RWF verified (${verificationSource}) for Order #${order.orderNumber}. Ref: ${finalRef}.`,
+    parsedTransactionId: finalRef,
+    parsedAmount: order.totalAmount,
+    orderNumber: order.orderNumber,
+    paymentId: conf?.id,
+    status: 'verified',
+    createdAt: new Date().toISOString(),
+    metadata: { verificationSource, transactionId: txn?.id }
+  };
+  db.smsNotifications = db.smsNotifications || [];
+  db.smsNotifications.unshift(gatewaySms);
+
+  saveDbToDisk('payment_verified', { order, payment: conf, transaction: txn, smsNotification: gatewaySms });
+  saveToSupabaseAsync('orders', order.id, order);
+  if (conf) saveToSupabaseAsync('paymentConfirmations', conf.id, conf);
+  if (txn) saveToSupabaseAsync('paymentTransactions', txn.id, txn);
+  saveToSupabaseAsync('smsNotifications', gatewaySms.id, gatewaySms);
 
   return {
     success: true,
@@ -4847,7 +5351,7 @@ app.post('/api/payments/initiate', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Order reference number is required.' });
   }
 
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === String(orderNumber).trim().toUpperCase());
+  const order = await findOrLoadOrder(orderNumber);
   if (!order) {
     return res.status(404).json({ error: `Order #${orderNumber} not found.` });
   }
@@ -5017,9 +5521,28 @@ app.post('/api/payments/initiate', async (req: Request, res: Response) => {
     note: `Payment push prompt dispatched to ${cleanPhone} via ${provider} (${dispatchMode}). Ref: ${providerRef}, amount: ${order.totalAmount.toLocaleString()} RWF.`
   });
 
-  saveDbToDisk('payment_initiated', { transaction, order });
-  saveToFirestoreAsync('orders', order.id, order);
-  saveToFirestoreAsync('paymentTransactions', transaction.id, transaction);
+  const initSms: SmsNotification = {
+    id: `sms-init-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    direction: 'outgoing',
+    senderPhone: db.settings.paymentNumber || '0780022600',
+    senderName: 'ContactReach Telecom Gateway',
+    recipientPhone: cleanPhone || order.customerPhone || '',
+    provider,
+    message: `Payment prompt sent for Order #${order.orderNumber}: ${order.totalAmount.toLocaleString()} RWF via ${provider} (${dispatchMode}). Ref: ${providerRef}.`,
+    parsedTransactionId: providerRef,
+    parsedAmount: order.totalAmount,
+    orderNumber: order.orderNumber,
+    status: 'sent',
+    createdAt: new Date().toISOString(),
+    metadata: { transactionId: txnId, dispatchMode }
+  };
+  db.smsNotifications = db.smsNotifications || [];
+  db.smsNotifications.unshift(initSms);
+
+  saveDbToDisk('payment_initiated', { transaction, order, smsNotification: initSms });
+  await saveToSupabaseAsync('orders', order.id, order);
+  await saveToSupabaseAsync('paymentTransactions', transaction.id, transaction);
+  await saveToSupabaseAsync('smsNotifications', initSms.id, initSms);
 
   res.status(201).json({
     success: true,
@@ -5032,6 +5555,8 @@ app.post('/api/payments/initiate', async (req: Request, res: Response) => {
     status: 'Pending',
     dispatchMode,
     checkoutUrl: transaction.checkoutUrl,
+    transaction,
+    smsNotification: initSms,
     message: provider === 'Bank Card'
       ? 'Card payment session initialized. Please complete tokenized card authentication.'
       : `Payment push prompt dispatched to Rwandan mobile number ${cleanPhone}. Please approve the payment prompt on your phone by entering your Mobile Money PIN.`
@@ -5043,7 +5568,7 @@ app.post('/api/payments/verify/:orderNumber', async (req: Request, res: Response
   const orderNumber = req.params.orderNumber.trim().toUpperCase();
   const { transactionReference, token } = req.body;
 
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber);
+  const order = await findOrLoadOrder(orderNumber);
   if (!order) {
     return res.status(404).json({ error: `Order #${orderNumber} not found.` });
   }
@@ -5062,7 +5587,7 @@ app.post('/api/payments/verify/:orderNumber', async (req: Request, res: Response
   }
 
   db.paymentTransactions = db.paymentTransactions || [];
-  let txn = db.paymentTransactions.find(t => t.orderNumber === order.orderNumber);
+  let txn = await findOrLoadPaymentTransaction(order.orderNumber);
 
   // Reference to verify
   const targetRef = String(transactionReference || txn?.providerTransactionId || txn?.financialTransactionId || '').trim();
@@ -5220,10 +5745,9 @@ app.post('/api/payments/webhook/mtn', async (req: Request, res: Response) => {
   }
 
   // Locate order
-  const order = db.orders.find(o =>
-    (req.body?.externalId && o.orderNumber.toUpperCase() === String(req.body.externalId).trim().toUpperCase()) ||
-    (o.paymentConfirmation && o.paymentConfirmation.transactionId === refId)
-  );
+  let order = req.body?.externalId
+    ? await findOrLoadOrder(String(req.body.externalId))
+    : db.orders.find(o => o.paymentConfirmation && o.paymentConfirmation.transactionId === refId);
 
   if (!order) {
     return res.status(404).json({ error: 'Order not found for MTN callback.' });
@@ -5246,7 +5770,7 @@ app.post('/api/payments/webhook/mtn', async (req: Request, res: Response) => {
   }
 
   db.paymentTransactions = db.paymentTransactions || [];
-  const txn = db.paymentTransactions.find(t => t.orderNumber === order.orderNumber || t.providerTransactionId === refId);
+  const txn = await findOrLoadPaymentTransaction(refId) || await findOrLoadPaymentTransaction(order.orderNumber);
 
   if (status === 'SUCCESSFUL' || status === 'SUCCESS') {
     applyVerifiedPaymentSuccess(order, txn, financialTransactionId || refId, 'MTN MoMo Webhook');
@@ -5255,11 +5779,11 @@ app.post('/api/payments/webhook/mtn', async (req: Request, res: Response) => {
     if (txn) {
       txn.status = 'Failed';
       txn.updatedAt = new Date().toISOString();
-      saveToFirestoreAsync('paymentTransactions', txn.id, txn);
+      await saveToSupabaseAsync('paymentTransactions', txn.id, txn);
     }
     order.paymentStatus = 'Failed';
     saveDbToDisk('order_status_updated', { order, transaction: txn });
-    saveToFirestoreAsync('orders', order.id, order);
+    await saveToSupabaseAsync('orders', order.id, order);
     return res.status(200).json({ success: true, orderNumber: order.orderNumber, paymentStatus: 'Failed' });
   }
 
@@ -5279,7 +5803,7 @@ app.post('/api/payments/webhook/airtel', async (req: Request, res: Response) => 
     return res.status(400).json({ error: 'Missing order reference in Airtel callback.' });
   }
 
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === String(orderRef).trim().toUpperCase());
+  const order = await findOrLoadOrder(String(orderRef));
   if (!order) {
     return res.status(404).json({ error: `Order #${orderRef} not found.` });
   }
@@ -5299,7 +5823,7 @@ app.post('/api/payments/webhook/airtel', async (req: Request, res: Response) => 
   }
 
   db.paymentTransactions = db.paymentTransactions || [];
-  const txn = db.paymentTransactions.find(t => t.orderNumber === order.orderNumber);
+  const txn = await findOrLoadPaymentTransaction(order.orderNumber);
 
   if (status === 'SUCCESS' || status === 'SUCCESSFUL') {
     applyVerifiedPaymentSuccess(order, txn, airtelId, 'Airtel Money Rwanda Webhook');
@@ -5308,11 +5832,11 @@ app.post('/api/payments/webhook/airtel', async (req: Request, res: Response) => 
     if (txn) {
       txn.status = 'Failed';
       txn.updatedAt = new Date().toISOString();
-      saveToFirestoreAsync('paymentTransactions', txn.id, txn);
+      await saveToSupabaseAsync('paymentTransactions', txn.id, txn);
     }
     order.paymentStatus = 'Failed';
     saveDbToDisk('order_status_updated', { order, transaction: txn });
-    saveToFirestoreAsync('orders', order.id, order);
+    await saveToSupabaseAsync('orders', order.id, order);
     return res.status(200).json({ success: true, orderNumber: order.orderNumber, paymentStatus: 'Failed' });
   }
 
@@ -5337,7 +5861,7 @@ app.post('/api/payments/webhook', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Webhook event type and orderNumber are required.' });
   }
 
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === String(orderNumber).trim().toUpperCase());
+  const order = await findOrLoadOrder(String(orderNumber));
   if (!order) {
     return res.status(404).json({ error: `Order #${orderNumber} not found.` });
   }
@@ -5360,7 +5884,8 @@ app.post('/api/payments/webhook', async (req: Request, res: Response) => {
   }
 
   db.paymentTransactions = db.paymentTransactions || [];
-  const txn = db.paymentTransactions.find(t => t.id === transactionId || t.orderNumber === order.orderNumber);
+  const txn = (transactionId ? await findOrLoadPaymentTransaction(String(transactionId)) : undefined)
+    || await findOrLoadPaymentTransaction(order.orderNumber);
 
   switch (event) {
     case 'charge.completed':
@@ -5444,8 +5969,8 @@ app.post('/api/payments/webhook', async (req: Request, res: Response) => {
   }
 
   saveDbToDisk('order_status_updated', { order, transaction: txn });
-  saveToFirestoreAsync('orders', order.id, order);
-  if (txn) saveToFirestoreAsync('paymentTransactions', txn.id, txn);
+  await saveToSupabaseAsync('orders', order.id, order);
+  if (txn) await saveToSupabaseAsync('paymentTransactions', txn.id, txn);
 
   res.status(200).json({
     success: true,
@@ -5457,10 +5982,10 @@ app.post('/api/payments/webhook', async (req: Request, res: Response) => {
 });
 
 // 6. Verified payment status query with order ownership token protection
-app.get('/api/payments/status/:orderNumber', (req: Request, res: Response) => {
+app.get('/api/payments/status/:orderNumber', async (req: Request, res: Response) => {
   const { token } = req.query;
   const orderNumber = req.params.orderNumber;
-  const order = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase());
+  const order = await findOrLoadOrder(orderNumber);
 
   if (!order) {
     return res.status(404).json({ error: `Order #${orderNumber} not found.` });
@@ -5690,7 +6215,7 @@ app.post('/api/messages', async (req: Request, res: Response) => {
 });
 
 // Real-Time Incoming SMS Gateway / Forwarder / Webhook
-app.post('/api/sms/incoming', (req: Request, res: Response) => {
+app.post('/api/sms/incoming', async (req: Request, res: Response) => {
   const { from, phone, text, message, sender, timestamp, orderNumber, provider } = req.body;
   const rawText = (text || message || '').trim();
   const rawPhone = (phone || from || sender || '').trim();
@@ -5708,13 +6233,28 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
   const parsedAmount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : undefined;
   const detectedProvider = provider || (rawText.toLowerCase().includes('airtel') ? 'Airtel Money' : 'MTN Mobile Money');
 
-  // If matched to an order or contains payment info, link order & payment confirmation
+  // If matched to an order or contains payment info, link order & payment confirmation (checking Supabase too)
   let matchedOrder: Order | undefined;
   if (orderNumber) {
-    matchedOrder = db.orders.find(o => o.orderNumber.toUpperCase() === orderNumber.trim().toUpperCase());
+    matchedOrder = await findOrLoadOrder(orderNumber);
   } else if (rawPhone) {
     const cleanPhone = rawPhone.replace(/\D/g, '');
     matchedOrder = db.orders.find(o => o.customerPhone.replace(/\D/g, '').endsWith(cleanPhone) || cleanPhone.endsWith(o.customerPhone.replace(/\D/g, '')));
+    if (!matchedOrder && cleanPhone.length >= 9) {
+      try {
+        const { data: sbOrd } = await supabase
+          .from('orders')
+          .select('*')
+          .ilike('customer_phone', `%${cleanPhone.slice(-9)}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (sbOrd) {
+          matchedOrder = mapSupabaseOrderRowToServerOrder(sbOrd);
+          db.orders.unshift(matchedOrder);
+        }
+      } catch {}
+    }
   }
 
   // Create message record in db.messages
@@ -5739,7 +6279,7 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
   };
 
   db.messages.unshift(newMessage);
-  saveToFirestoreAsync('messages', newMessage.id, newMessage);
+  await saveToSupabaseAsync('messages', newMessage.id, newMessage);
 
   let confirmation: PaymentConfirmation | undefined;
   if (matchedOrder && isPaymentSms) {
@@ -5759,8 +6299,8 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
     db.paymentConfirmations.unshift(confirmation);
     matchedOrder.paymentConfirmation = confirmation;
     matchedOrder.paymentStatus = 'Pending Verification';
-    saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
-    saveToFirestoreAsync('orders', matchedOrder.id, matchedOrder);
+    await saveToSupabaseAsync('orders', matchedOrder.id, matchedOrder);
+    await saveToSupabaseAsync('paymentConfirmations', confirmation.id, confirmation);
   }
 
   const smsNotif: SmsNotification = {
@@ -5768,6 +6308,7 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
     direction: 'incoming',
     senderPhone: rawPhone,
     senderName: sender || matchedOrder?.customerName || undefined,
+    recipientPhone: db.settings.paymentNumber || '0780022600',
     provider: detectedProvider,
     message: rawText,
     parsedTransactionId: parsedTxnId,
@@ -5780,7 +6321,7 @@ app.post('/api/sms/incoming', (req: Request, res: Response) => {
   };
   db.smsNotifications = db.smsNotifications || [];
   db.smsNotifications.unshift(smsNotif);
-  saveToFirestoreAsync('smsNotifications', smsNotif.id, smsNotif);
+  await saveToSupabaseAsync('smsNotifications', smsNotif.id, smsNotif);
 
   saveDbToDisk('sms_received', {
     message: newMessage,
@@ -9736,6 +10277,15 @@ app.get('/api/admin/orders', requireAdminAuth, (req: Request, res: Response) => 
   const resolvedResults = results.map(o => ({
     ...o,
     items: (o.items || []).map((it: any) => {
+      const hasSnapshot = Boolean(it?.productSnapshot || it?.capturedAt);
+      if (hasSnapshot) {
+        const snapImg = it?.productSnapshot?.imageUrl || it?.imageUrl;
+        return {
+          ...it,
+          imageUrl: snapImg || resolveProductImageDueToProduct(it),
+          image: snapImg || resolveProductImageDueToProduct(it)
+        };
+      }
       const match = db.products.find(p =>
         (it.productId && p.id === it.productId) ||
         (p.name && it.productName && p.name.trim().toLowerCase() === it.productName.trim().toLowerCase())
@@ -10182,10 +10732,56 @@ app.get('/api/admin/payments', requireAdminAuth, async (req: Request, res: Respo
 app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const deletedSet = new Set((db.deletedRecordIds || []).map(String));
-    const [{ data: sbTxns }, { data: sbSms }] = await Promise.all([
+    const [{ data: sbPays }, { data: sbTxns }, { data: sbSms }] = await Promise.all([
+      supabase.from('payments').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('sms_notifications').select('*').order('created_at', { ascending: false }).limit(200)
     ]);
+
+    if (Array.isArray(sbPays) && sbPays.length > 0) {
+      const payMap = new Map<string, PaymentConfirmation>(db.paymentConfirmations.map(p => [String(p.id), p]));
+      for (const p of sbPays) {
+        const payId = String(p.id);
+        if (deletedSet.has(payId)) continue;
+        const mappedPay: PaymentConfirmation = {
+          id: payId,
+          orderId: p.order_id || '',
+          orderNumber: p.order_number || '',
+          customerName: p.customer_name || p.sender_name || 'Customer',
+          paymentPhone: p.payment_phone || p.customer_phone || p.sender_phone || '',
+          amountPaid: Number(p.amount_paid) || Number(p.amount) || 0,
+          paymentMethod: p.payment_method || 'MTN Mobile Money',
+          transactionId: p.transaction_id || '',
+          screenshotUrl: p.screenshot_url || p.payment_proof_url || undefined,
+          confirmationMessage: p.confirmation_message || undefined,
+          verificationStatus: p.verification_status || 'Pending Verification',
+          verifiedAt: p.verified_at || undefined,
+          verifiedBy: p.verified_by || undefined,
+          adminNotes: p.admin_notes || p.notes || undefined,
+          flaggedSuspicious: Boolean(p.flagged_suspicious),
+          isDuplicateTxn: Boolean(p.is_duplicate_txn),
+          duplicateOrderNumbers: Array.isArray(p.duplicate_order_numbers) ? p.duplicate_order_numbers : undefined,
+          suspiciousReason: p.suspicious_reason || undefined,
+          verifiedDirectly: Boolean(p.verified_directly),
+          telecomVerified: Boolean(p.telecom_verified),
+          telecomReference: p.telecom_reference || undefined,
+          customerNotified: Boolean(p.customer_notified),
+          notificationMessage: p.notification_message || undefined,
+          submittedAt: p.submitted_at || p.created_at || new Date().toISOString()
+        };
+        const existing = payMap.get(payId);
+        if (!existing) payMap.set(payId, mappedPay);
+        else {
+          const sbVerAt = mappedPay.verifiedAt ? Date.parse(mappedPay.verifiedAt) || 0 : 0;
+          const locVerAt = existing.verifiedAt ? Date.parse(existing.verifiedAt) || 0 : 0;
+          if (sbVerAt >= locVerAt) payMap.set(payId, { ...existing, ...mappedPay });
+        }
+      }
+      db.paymentConfirmations = Array.from(payMap.values()).sort(
+        (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+      );
+    }
+
     if (Array.isArray(sbTxns) && sbTxns.length > 0) {
       db.paymentTransactions = db.paymentTransactions || [];
       const txnMap = new Map<string, PaymentTransaction>(db.paymentTransactions.map(t => [String(t.id), t]));
@@ -10204,21 +10800,25 @@ app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Reques
           paymentMethod: t.payment_method || 'MTN Mobile Money',
           provider: t.provider || 'MTN Mobile Money',
           status: t.status || 'Pending',
-          providerTransactionId: meta.providerTransactionId || undefined,
-          financialTransactionId: meta.financialTransactionId || undefined,
+          providerTransactionId: t.provider_transaction_id || meta.providerTransactionId || undefined,
+          financialTransactionId: t.financial_transaction_id || meta.financialTransactionId || undefined,
           idempotencyKey: t.idempotency_key || undefined,
           checkoutUrl: t.checkout_url || undefined,
-          failureReason: meta.failureReason || undefined,
-          verifiedDirectly: meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined,
-          verifiedAt: meta.verifiedAt || undefined,
-          telecomStatus: meta.telecomStatus || undefined,
-          signatureVerified: meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined,
+          failureReason: t.failure_reason || meta.failureReason || undefined,
+          verifiedDirectly: t.verified_directly !== undefined && t.verified_directly !== null
+            ? Boolean(t.verified_directly)
+            : (meta.verifiedDirectly !== undefined ? Boolean(meta.verifiedDirectly) : undefined),
+          verifiedAt: t.verified_at || meta.verifiedAt || undefined,
+          telecomStatus: t.telecom_status || meta.telecomStatus || undefined,
+          signatureVerified: t.signature_verified !== undefined && t.signature_verified !== null
+            ? Boolean(t.signature_verified)
+            : (meta.signatureVerified !== undefined ? Boolean(meta.signatureVerified) : undefined),
           metadata: meta,
           createdAt: t.created_at || new Date().toISOString(),
           updatedAt: t.updated_at || t.created_at || new Date().toISOString()
         };
         const existing = txnMap.get(tId);
-        if (!existing || Date.parse(sbTxn.updatedAt || sbTxn.createdAt) > Date.parse(existing.updatedAt || existing.createdAt)) {
+        if (!existing || Date.parse(sbTxn.updatedAt || sbTxn.createdAt) >= Date.parse(existing.updatedAt || existing.createdAt)) {
           txnMap.set(tId, existing ? { ...existing, ...sbTxn } : sbTxn);
         }
       }
@@ -10226,30 +10826,29 @@ app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Reques
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     }
+
     if (Array.isArray(sbSms) && sbSms.length > 0) {
       db.smsNotifications = db.smsNotifications || [];
       const smsMap = new Map<string, SmsNotification>(db.smsNotifications.map(s => [String(s.id), s]));
       for (const s of sbSms) {
         const sId = String(s.id);
         if (deletedSet.has(sId)) continue;
-        if (!smsMap.has(sId)) {
-          smsMap.set(sId, {
-            id: sId,
-            direction: s.direction || 'incoming',
-            senderPhone: s.sender_phone || '',
-            senderName: s.sender_name || undefined,
-            recipientPhone: s.recipient_phone || undefined,
-            provider: s.provider || 'MTN Mobile Money',
-            message: s.message || '',
-            parsedTransactionId: s.parsed_transaction_id || undefined,
-            parsedAmount: s.parsed_amount !== null && s.parsed_amount !== undefined ? Number(s.parsed_amount) : undefined,
-            orderNumber: s.order_number || undefined,
-            paymentId: s.payment_id || undefined,
-            status: s.status || 'received',
-            createdAt: s.created_at || new Date().toISOString(),
-            metadata: s.metadata || undefined
-          });
-        }
+        smsMap.set(sId, {
+          id: sId,
+          direction: s.direction || 'incoming',
+          senderPhone: s.sender_phone || '',
+          senderName: s.sender_name || undefined,
+          recipientPhone: s.recipient_phone || undefined,
+          provider: s.provider || 'MTN Mobile Money',
+          message: s.message || '',
+          parsedTransactionId: s.parsed_transaction_id || undefined,
+          parsedAmount: s.parsed_amount !== null && s.parsed_amount !== undefined ? Number(s.parsed_amount) : undefined,
+          orderNumber: s.order_number || undefined,
+          paymentId: s.payment_id || undefined,
+          status: s.status || 'received',
+          createdAt: s.created_at || new Date().toISOString(),
+          metadata: s.metadata || undefined
+        });
       }
       db.smsNotifications = Array.from(smsMap.values()).sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -10264,7 +10863,7 @@ app.get('/api/admin/payment-transactions', requireAdminAuth, async (_req: Reques
   });
 });
 
-app.post('/api/admin/sms-notifications/send', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager', 'customer_support']), (req: Request, res: Response) => {
+app.post('/api/admin/sms-notifications/send', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager', 'customer_support']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { phone, recipientName, message, orderNumber, paymentId, provider } = req.body;
 
@@ -10293,7 +10892,7 @@ app.post('/api/admin/sms-notifications/send', requireAdminAuth, requireRole(['ow
 
   db.smsNotifications = db.smsNotifications || [];
   db.smsNotifications.unshift(smsNotif);
-  saveToFirestoreAsync('smsNotifications', smsNotif.id, smsNotif);
+  await saveToSupabaseAsync('smsNotifications', smsNotif.id, smsNotif);
 
   // Also deliver to customer inbox/chat so buyer sees the notification immediately without refresh
   const inboxMsg: AdminMessage = {
@@ -10316,7 +10915,7 @@ app.post('/api/admin/sms-notifications/send', requireAdminAuth, requireRole(['ow
     metadata: { direction: 'outgoing', smsId: smsNotif.id }
   };
   db.messages.unshift(inboxMsg);
-  saveToFirestoreAsync('messages', inboxMsg.id, inboxMsg);
+  await saveToSupabaseAsync('messages', inboxMsg.id, inboxMsg);
 
   saveDbToDisk('sms_sent', { smsNotification: smsNotif, message: inboxMsg });
   logAudit(admin, 'SMS_NOTIFICATION_SENT', `Sent SMS notification to ${cleanPhone}${orderNumber ? ` (Order #${orderNumber})` : ''}`, 'sms', smsNotif.id);
@@ -10328,14 +10927,15 @@ app.post('/api/admin/sms-notifications/send', requireAdminAuth, requireRole(['ow
   });
 });
 
-app.post('/api/admin/payments/:id/verify', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), (req: Request, res: Response) => {
+app.post('/api/admin/payments/:id/verify', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
   const { action, adminNotes } = req.body;
-  const confirmation = db.paymentConfirmations.find(c => c.id === req.params.id);
+  const confirmation = await findOrLoadPaymentConfirmation(req.params.id);
 
   if (!confirmation) return res.status(404).json({ error: 'Payment confirmation record not found' });
 
-  const order = db.orders.find(o => o.id === confirmation.orderId || o.orderNumber === confirmation.orderNumber);
+  const order = await findOrLoadOrder(confirmation.orderNumber || confirmation.orderId);
+  const linkedTxn = await findOrLoadPaymentTransaction(confirmation.orderNumber);
 
   if (action === 'approve') {
     confirmation.verificationStatus = 'Verified/Paid';
@@ -10503,18 +11103,58 @@ app.post('/api/admin/payments/:id/verify', requireAdminAuth, requireRole(['owner
     return res.status(400).json({ error: 'Invalid action. Must be "approve", "reject", "under_verification", or "refund".' });
   }
 
-  saveDbToDisk('payment_verified', { payment: confirmation, order });
-  saveToFirestoreAsync('paymentConfirmations', confirmation.id, confirmation);
-  res.json({ message: `Payment status updated to ${confirmation.verificationStatus} successfully.`, confirmation, order });
+  if (linkedTxn) {
+    if (action === 'approve') {
+      linkedTxn.status = 'Successful';
+      linkedTxn.verifiedDirectly = true;
+      linkedTxn.verifiedAt = new Date().toISOString();
+      linkedTxn.telecomStatus = 'SUCCESSFUL';
+    } else if (action === 'reject') {
+      linkedTxn.status = 'Failed';
+      linkedTxn.failureReason = confirmation.adminNotes;
+    } else if (action === 'refund') {
+      linkedTxn.status = 'Refunded';
+    }
+    linkedTxn.updatedAt = new Date().toISOString();
+    await saveToSupabaseAsync('paymentTransactions', linkedTxn.id, linkedTxn);
+  }
+
+  let notifySms: SmsNotification | undefined;
+  if (confirmation.customerNotified && confirmation.notificationMessage) {
+    notifySms = {
+      id: `sms-ver-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+      direction: 'outgoing',
+      senderPhone: db.settings.paymentNumber || '0780022600',
+      senderName: admin?.name || 'ContactReach Admin',
+      recipientPhone: order?.customerPhone || confirmation.paymentPhone || '',
+      provider: String(confirmation.paymentMethod || '').includes('Airtel') ? 'Airtel Money' : 'MTN Mobile Money',
+      message: confirmation.notificationMessage,
+      parsedTransactionId: confirmation.transactionId,
+      parsedAmount: confirmation.amountPaid,
+      orderNumber: confirmation.orderNumber,
+      paymentId: confirmation.id,
+      status: action === 'approve' ? 'verified' : 'sent',
+      createdAt: new Date().toISOString(),
+      metadata: { action, verifiedBy: admin?.name }
+    };
+    db.smsNotifications = db.smsNotifications || [];
+    db.smsNotifications.unshift(notifySms);
+    await saveToSupabaseAsync('smsNotifications', notifySms.id, notifySms);
+  }
+
+  saveDbToDisk('payment_verified', { payment: confirmation, order, transaction: linkedTxn, smsNotification: notifySms });
+  if (order) await saveToSupabaseAsync('orders', order.id, order);
+  await saveToSupabaseAsync('paymentConfirmations', confirmation.id, confirmation);
+  res.json({ message: `Payment status updated to ${confirmation.verificationStatus} successfully.`, confirmation, order, transaction: linkedTxn, smsNotification: notifySms });
 });
 
 // Admin Telecom Re-verification with Official Provider API
 app.post('/api/admin/payments/:id/telecom-verify', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const confirmation = db.paymentConfirmations.find(c => c.id === req.params.id);
+  const confirmation = await findOrLoadPaymentConfirmation(req.params.id);
   if (!confirmation) return res.status(404).json({ error: 'Payment confirmation record not found' });
 
-  const order = db.orders.find(o => o.id === confirmation.orderId || o.orderNumber === confirmation.orderNumber);
+  const order = await findOrLoadOrder(confirmation.orderNumber || confirmation.orderId);
   if (!order) return res.status(404).json({ error: `Associated Order #${confirmation.orderNumber} not found` });
 
   // If already paid
@@ -10665,10 +11305,11 @@ app.post('/api/admin/payments/:id/telecom-verify', requireAdminAuth, requireRole
 
 app.delete('/api/admin/payments/:id', requireAdminAuth, requireRole(['owner', 'administrator', 'order_manager']), async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const idx = db.paymentConfirmations.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Payment record not found' });
+  const found = await findOrLoadPaymentConfirmation(req.params.id);
+  if (!found) return res.status(404).json({ error: 'Payment record not found' });
 
-  const removed = db.paymentConfirmations.splice(idx, 1)[0];
+  db.paymentConfirmations = db.paymentConfirmations.filter(p => p.id !== found.id);
+  const removed = found;
   db.deletedRecordIds = db.deletedRecordIds || [];
   if (!db.deletedRecordIds.includes(removed.id)) {
     db.deletedRecordIds.push(removed.id);

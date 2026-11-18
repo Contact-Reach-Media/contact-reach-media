@@ -13,6 +13,7 @@ import {
   validateCartMinimums
 } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
+import { buildOrderItemWithSnapshot } from '../utils/productSnapshot.ts';
 
 interface CheckoutPageProps {
   cart: CartItem[];
@@ -155,14 +156,17 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         deliveryLocation: selectedLocationName,
         deliveryAddress: deliveryAddress.trim(),
         deliveryNotes: deliveryNotes.trim() || undefined,
-        items: cart.map(item => ({
-          productId: item.product.id,
-          productName: item.product.name,
-          name: item.product.name,
-          price: getEffectiveUnitPrice(item.product, item.quantity),
+        items: cart.map(item => buildOrderItemWithSnapshot({
+          product: item.product,
+          itemInput: {
+            productId: item.product.id,
+            quantity: item.quantity,
+            variation: item.variation || item.selectedVariation,
+            imageUrl: getProductImageDueToProduct(item.product)
+          },
           quantity: item.quantity,
-          imageUrl: item.product.imageUrl || '/logo.png',
-          variation: item.variation || item.selectedVariation
+          unitPriceOverride: getEffectiveUnitPrice(item.product, item.quantity),
+          resolvedImageUrl: getProductImageDueToProduct(item.product)
         })),
         shippingCost,
         paymentMethod,
@@ -172,6 +176,16 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       const orderData = await api.createOrder(orderPayload);
       if (!orderData || !orderData.orderNumber) {
         throw new Error('Could not generate order reference. Please try again.');
+      }
+
+      if (['MTN Mobile Money', 'MTN Merchant Code', 'Airtel Money'].includes(paymentMethod)) {
+        api.initiatePayment({
+          orderNumber: orderData.orderNumber,
+          paymentMethod,
+          customerPhone: customerPhone.trim(),
+          customerEmail: customerEmail.trim() || undefined,
+          idempotencyKey: `init-${orderData.orderNumber}`
+        }).catch(() => {});
       }
 
       onOrderCreated(orderData);
