@@ -8191,7 +8191,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     return null;
   }
 
-  app.put('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), async (req: Request, res: Response) => {
+  const handleAdminUpdateProduct = async (req: Request, res: Response) => {
     const admin = (req as any).adminUser;
     let productIndex = db.products.findIndex(p => p.id === req.params.id);
     if (productIndex === -1) {
@@ -8393,7 +8393,11 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
   saveDbToDisk('product_updated', { product: updated });
   broadcastDatabaseEvent('product_updated', { product: updated });
   res.json(updated);
-});
+};
+
+app.put('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleAdminUpdateProduct);
+app.patch('/api/admin/products/:id', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleAdminUpdateProduct);
+app.post('/api/admin/products/:id/update', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleAdminUpdateProduct);
 
 // Single Product Status Update (Available, Out of Stock, Hidden, Archived)
 const handleUpdateProductStatus = async (req: Request, res: Response) => {
@@ -8466,9 +8470,9 @@ app.post('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole
 app.put('/api/admin/products/:id/toggle-publish', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleToggleProductPublish);
 
 // Update or Append Multiple Picture Links on a Product
-app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+const handleUpdateProductImages = async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const product = db.products.find(p => p.id === req.params.id);
+  const product = await findOrLoadProduct(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
 
   const { images, imageUrl, newImages } = req.body;
@@ -8500,11 +8504,16 @@ app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUC
   product.updatedAt = new Date().toISOString();
 
   logAudit(admin, 'PRODUCT_IMAGES_UPDATED', `Updated picture links for "${product.name}" (${updatedImages.length} pictures total)`, 'product', product.id);
-  saveDbToDisk();
-  saveToFirestoreAsync('products', product.id, product);
+  saveDbToDisk('product_updated', { product });
+  await saveToFirestoreAsync('products', product.id, product);
+  broadcastDatabaseEvent('product_updated', { product });
 
   res.json({ message: 'Product picture links updated successfully', product });
-});
+};
+
+app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductImages);
+app.post('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductImages);
+app.put('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductImages);
 
 // Update Product Cost & Selling Price (Admin Product Cost Control)
 const handleUpdateProductCostAndPrice = async (req: Request, res: Response) => {

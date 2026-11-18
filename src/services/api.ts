@@ -2346,6 +2346,7 @@ export const api = {
   // Products
   async adminAddProduct(product: Partial<Product>): Promise<Product> {
     const prod: Product = {
+      ...product,
       id: product.id || `prod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: product.name || 'New Product',
       sku: product.sku || `CRM-${Date.now().toString().slice(-4)}`,
@@ -2358,6 +2359,7 @@ export const api = {
       category: product.category || 'hair-beauty',
       subcategory: product.subcategory || '',
       stock: Number(product.stock) || 0,
+      minOrderQuantity: Math.max(1, Math.floor(Number(product.minOrderQuantity) || 1)),
       imageUrl: product.imageUrl || '/logo.png',
       images: product.images || [],
       videoUrl: product.videoUrl ? product.videoUrl.trim() : undefined,
@@ -2383,58 +2385,65 @@ export const api = {
       if (res.ok && parsed.isJson && parsed.json) {
         return parsed.json;
       }
-      if (parsed.isJson && (parsed.json as any)?.error) {
+      if (parsed.isJson && (parsed.json as any)?.error && (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 422)) {
         throw new Error((parsed.json as any).error);
       }
-      if (!res.ok) {
-        throw new Error(`Failed to save product (HTTP ${res.status})`);
-      }
     } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
+      const msg = String(err?.message || '');
+      if (msg && !msg.includes('API endpoint') && !msg.includes('fetch') && !msg.includes('NetworkError') && !msg.includes('Failed to fetch')) {
         throw err;
       }
     }
 
-    // Direct Supabase fallback when backend endpoint is unreachable
+    // Direct Supabase fallback when backend endpoint is unavailable or returns 404/405 (e.g. static deployment)
     const sbRes = await saveProductToSupabase(prod);
     if (!sbRes.success) {
       throw new Error(sbRes.error || 'Failed to save product in database.');
     }
 
-    return prod;
+    return (sbRes.data ? { ...prod, ...sbRes.data } : prod) as Product;
   },
 
   async adminUpdateProduct(id: string, product: Partial<Product>): Promise<Product> {
     const encodedId = encodeURIComponent(id);
-    try {
-      const res = await fetch(`/api/admin/products/${encodedId}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(product)
-      });
-      const parsed = await safeParseResponse<Product>(res);
-      if (res.ok && parsed.isJson && parsed.json) {
-        return parsed.json;
-      }
-      if (parsed.isJson && (parsed.json as any)?.error) {
-        throw new Error((parsed.json as any).error);
-      }
-      if (!res.ok) {
-        throw new Error(`Failed to save product changes (HTTP ${res.status})`);
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
-        throw err;
+    const headers = getAuthHeaders();
+    const attempts: Array<{ url: string; method: 'PUT' | 'POST' }> = [
+      { url: `/api/admin/products/${encodedId}`, method: 'PUT' },
+      { url: `/api/admin/products/${encodedId}/update`, method: 'POST' }
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const res = await fetch(attempt.url, {
+          method: attempt.method,
+          headers,
+          body: JSON.stringify(product)
+        });
+        const parsed = await safeParseResponse<Product>(res);
+        if (res.ok && parsed.isJson && parsed.json) {
+          return parsed.json;
+        }
+        // Fail fast only on explicit backend validation or authorization errors
+        if (parsed.isJson && (parsed.json as any)?.error && (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 422)) {
+          throw new Error((parsed.json as any).error);
+        }
+        // If blocked with 405 or not found (404 / static SPA fallback), continue to next transport / Supabase
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        if (msg && !msg.includes('API endpoint') && !msg.includes('fetch') && !msg.includes('NetworkError') && !msg.includes('Failed to fetch')) {
+          throw err;
+        }
       }
     }
 
+    // Direct Supabase fallback when Express API is unreachable or returns HTTP 404/405 in static/proxied mode
     const updated = { ...product, id } as Product;
     const sbRes = await saveProductToSupabase(updated);
     if (!sbRes.success) {
-      throw new Error(sbRes.error || 'Failed to save product price in database.');
+      throw new Error(sbRes.error || 'Failed to save product changes in database.');
     }
 
-    return (sbRes.data ? { ...updated, ...sbRes.data } : updated) as Product;
+    return (sbRes.data ? { ...updated, ...sbRes.data, id } : updated) as Product;
   },
 
   async adminUpdateProductImages(id: string, payload: { images?: string[]; newImages?: string[]; imageUrl?: string }): Promise<Product> {

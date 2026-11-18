@@ -500,6 +500,37 @@ export async function saveProductToSupabase(p: Partial<Product> & { id?: string 
       if (p.status !== undefined) {
         partialRow.status = p.status;
       }
+      if (p.category !== undefined) partialRow.category = p.category;
+      if ('mainCategoryId' in p) partialRow.main_category_id = p.mainCategoryId || null;
+      if ('categoryName' in p) partialRow.category_name = p.categoryName || null;
+      if ('subcategory' in p) partialRow.subcategory = p.subcategory || null;
+      if ('subCategoryId' in p) partialRow.sub_category_id = p.subCategoryId || null;
+      if ('subCategoryName' in p) partialRow.sub_category_name = p.subCategoryName || null;
+      if ('imageUrl' in p) partialRow.image_url = p.imageUrl || '';
+      if ('images' in p && Array.isArray(p.images)) {
+        partialRow.images = p.images;
+        if (!('imageUrl' in p) && p.images[0]) partialRow.image_url = p.images[0];
+      }
+      if (p.description !== undefined) partialRow.description = p.description;
+      if (p.unit !== undefined) partialRow.unit = p.unit;
+      if ('brand' in p) partialRow.brand = p.brand || null;
+      if ('specifications' in p) partialRow.specifications = p.specifications || null;
+      if ('packagingInfo' in p) partialRow.packaging_info = p.packagingInfo || null;
+      if ('storage' in p) partialRow.storage = p.storage || null;
+      if ('videoUrl' in p) partialRow.video_url = p.videoUrl || null;
+      if ('variations' in p) partialRow.variations = Array.isArray(p.variations) ? p.variations : [];
+      if (p.shopName !== undefined) partialRow.shop_name = p.shopName;
+      if ('shopId' in p) partialRow.shop_id = p.shopId || null;
+      if ('isFeatured' in p) {
+        partialRow.is_featured = Boolean(p.isFeatured);
+        partialRow.featured = Boolean(p.isFeatured);
+      }
+      if ('isNewArrival' in p) {
+        partialRow.is_new_arrival = Boolean(p.isNewArrival);
+        partialRow.is_new = Boolean(p.isNewArrival);
+      }
+      if ('isBestSeller' in p) partialRow.is_best_seller = Boolean(p.isBestSeller);
+
       let { data, error } = await supabase
         .from('products')
         .update(partialRow)
@@ -519,7 +550,7 @@ export async function saveProductToSupabase(p: Partial<Product> & { id?: string 
         console.error('[Supabase] Failed partial product update:', error);
         return { success: false, error: error.message };
       }
-      return { success: true, data: data?.[0] };
+      return { success: true, data: data?.[0] ? mapSupabaseRowToProduct(data[0]) : undefined };
     }
 
     const safePrice = Math.max(0, toSafeNum(p.price, 0));
@@ -628,7 +659,7 @@ export async function saveProductToSupabase(p: Partial<Product> & { id?: string 
       console.error('[Supabase] Failed to save product:', error);
       return { success: false, error: error.message };
     }
-    return { success: true, data: data?.[0] };
+    return { success: true, data: data?.[0] ? mapSupabaseRowToProduct(data[0]) : undefined };
   } catch (err: any) {
     console.error('[Supabase] Error saving product:', err);
     return { success: false, error: err?.message };
