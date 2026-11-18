@@ -247,7 +247,7 @@ export const ProductImageViewerModal: React.FC<ProductImageViewerModalProps> = (
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-md text-white select-none animate-fadeIn"
+      className="fixed inset-0 z-[90] flex flex-col bg-slate-950/95 text-white select-none animate-fadeIn"
       onMouseUp={handleMouseUp}
     >
       {/* Top Header Bar */}
@@ -406,11 +406,17 @@ export const ProductImageViewerModal: React.FC<ProductImageViewerModalProps> = (
             ref={imageRef}
             src={currentImage}
             alt={`${productName} view ${currentIndex + 1}`}
-            className="max-w-[90vw] max-h-[76vh] object-contain drop-shadow-2xl rounded-lg pointer-events-none"
+            className="w-auto h-auto max-w-[90vw] max-h-[76vh] object-contain drop-shadow-2xl rounded-lg pointer-events-none"
             referrerPolicy="no-referrer"
             onLoad={() => setImageLoaded(true)}
             onError={(e) => {
-              (e.target as HTMLImageElement).src = fallbackImage;
+              const el = e.currentTarget;
+              if (!el.dataset.fallbackApplied) {
+                el.dataset.fallbackApplied = '1';
+                el.src = safeFallback;
+              } else if (el.src !== `${window.location.origin}/logo.png`) {
+                el.src = '/logo.png';
+              }
             }}
           />
         </div>
@@ -448,7 +454,13 @@ export const ProductImageViewerModal: React.FC<ProductImageViewerModalProps> = (
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = safeFallback;
+                  const el = e.currentTarget;
+                  if (!el.dataset.fallbackApplied) {
+                    el.dataset.fallbackApplied = '1';
+                    el.src = safeFallback;
+                  } else if (el.src !== `${window.location.origin}/logo.png`) {
+                    el.src = '/logo.png';
+                  }
                 }}
               />
             </button>

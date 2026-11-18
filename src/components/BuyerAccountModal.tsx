@@ -332,7 +332,7 @@ export const BuyerAccountModal: React.FC<BuyerAccountModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/75 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl relative border border-slate-200 flex flex-col max-h-[92vh]">
         {/* Close Button */}
         <button

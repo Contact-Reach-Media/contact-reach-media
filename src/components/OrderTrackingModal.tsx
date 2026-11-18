@@ -174,7 +174,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
   const currentStepIdx = trackedOrder ? getStepIndex(trackedOrder.status) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-slate-100 flex flex-col">
         {/* Header */}
         <div className="p-5 sm:p-6 border-b border-slate-200 flex items-center justify-between">

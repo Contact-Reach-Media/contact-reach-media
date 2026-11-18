@@ -636,6 +636,50 @@ export const api = {
   getLocallyDeletedProductIds,
   markProductDeletedLocally,
 
+  // Combined Storefront Bootstrap (1 gzipped request instead of 4 separate round trips)
+  async getStorefrontBootstrap(): Promise<{
+    products: Product[];
+    categories: Category[];
+    shops: VendorShop[];
+    settings: AppSettings;
+  }> {
+    try {
+      const res = await fetch('/api/storefront/bootstrap');
+      const parsed = await safeParseResponse<{
+        products: Product[];
+        categories: Category[];
+        shops: VendorShop[];
+        settings: AppSettings;
+      }>(res);
+      if (res.ok && parsed.isJson && parsed.json && Array.isArray(parsed.json.products)) {
+        const deletedSet = new Set(getLocallyDeletedProductIds().map(d => d.toLowerCase()));
+        const seenIds = new Set<string>();
+        const cleanProducts = parsed.json.products
+          .filter(p => !deletedSet.has(String(p.id).toLowerCase()) && (!p.sku || !deletedSet.has(String(p.sku).toLowerCase())))
+          .filter(p => {
+            const idKey = String(p.id || '').toLowerCase().trim();
+            if (!idKey || seenIds.has(idKey)) return false;
+            seenIds.add(idKey);
+            return true;
+          });
+        return {
+          products: cleanProducts,
+          categories: Array.isArray(parsed.json.categories) && parsed.json.categories.length > 0 ? parsed.json.categories : initialCategories,
+          shops: Array.isArray(parsed.json.shops) ? parsed.json.shops : [],
+          settings: parsed.json.settings || initialSettings
+        };
+      }
+    } catch {}
+
+    const [products, categories, shops, settings] = await Promise.all([
+      this.getProducts().catch(() => []),
+      this.getCategories().catch(() => initialCategories),
+      this.getShops().catch(() => []),
+      this.getSettings().catch(() => initialSettings)
+    ]);
+    return { products, categories, shops, settings };
+  },
+
   // Public Settings
   async getSettings(): Promise<AppSettings> {
     try {
@@ -1789,6 +1833,23 @@ export const api = {
   // -----------------------------------------------------------
   // ADMIN DASHBOARD
   // -----------------------------------------------------------
+
+  async adminGetBootstrap(): Promise<any | null> {
+    try {
+      const res = await fetch('/api/admin/bootstrap', {
+        headers: getAuthHeaders(),
+        cache: 'no-store'
+      });
+      if (res.status === 401 || res.status === 403) {
+        return null;
+      }
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && parsed.json && typeof parsed.json === 'object' && Array.isArray(parsed.json.products)) {
+        return parsed.json;
+      }
+    } catch {}
+    return null;
+  },
 
   async adminGetStats(): Promise<any> {
     try {

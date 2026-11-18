@@ -311,6 +311,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const prevProblemsCountRef = useRef<number>(-1);
   const prevSuppliersCountRef = useRef<number>(-1);
   const isFetchingAllRef = useRef<boolean>(false);
+  const [visibleAdminProductsCount, setVisibleAdminProductsCount] = useState(40);
+  const [visibleAdminOrdersCount, setVisibleAdminOrdersCount] = useState(40);
 
   // Desktop Web Notification Dispatcher (shows OS popups even if admin is in another tab or minimized)
   const sendDesktopNotification = (title: string, body: string, data?: any) => {
@@ -1719,53 +1721,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
   };
 
-  // Load All Admin Data (supports silent background real-time updates)
+  // Load All Admin Data (1 gzipped bootstrap round trip with parallel fallback)
   const fetchAllData = async (silent: boolean = false) => {
     if (isFetchingAllRef.current) return;
     isFetchingAllRef.current = true;
     if (!silent) setLoading(true);
     try {
-      const [
-        fetchedStats,
-        fetchedOrders,
-        fetchedProducts,
-        fetchedCategories,
-        fetchedShops,
-        fetchedPayments,
-        fetchedMessages,
-        fetchedNotifications,
-        fetchedProblems,
-        fetchedCoupons,
-        fetchedInvLogs,
-        fetchedAuditLogs,
-        fetchedCustomers,
-        fetchedAdminUsers,
-        fetchedSupplierApps,
-        fetchedSupplierPayouts,
-        fetchedSettings,
-        fetchedDriveStatus,
-        fetchedTxnBundle
-      ] = await Promise.all([
-        api.adminGetStats().catch(() => null),
-        api.adminGetOrders().catch(() => []),
-        api.adminGetProducts().catch(() => []),
-        api.adminGetCategories().catch(() => []),
-        api.adminGetShops().catch(() => []),
-        api.adminGetPayments().catch(() => []),
-        api.adminGetMessages().catch(() => []),
-        api.adminGetNotifications().catch(() => []),
-        api.adminGetCustomerReports().catch(() => []),
-        api.adminGetCoupons().catch(() => []),
-        api.adminGetInventoryLogs().catch(() => []),
-        api.adminGetAuditLogs().catch(() => []),
-        api.adminGetCustomers().catch(() => []),
-        api.adminGetUsers().catch(() => []),
-        api.adminGetSupplierApplications().catch(() => []),
-        api.adminGetSupplierPayouts().catch(() => []),
-        api.getSettings().catch(() => null),
-        api.adminGetDriveBackupStatus().catch(() => null),
-        api.adminGetPaymentTransactions().catch(() => ({ transactions: [], smsNotifications: [] }))
-      ]);
+      const bootstrap = await api.adminGetBootstrap();
+      let fetchedStats: any = bootstrap?.stats ?? null;
+      let fetchedOrders: Order[] = Array.isArray(bootstrap?.orders) ? bootstrap.orders : [];
+      let fetchedProducts: Product[] = Array.isArray(bootstrap?.products) ? bootstrap.products : [];
+      let fetchedCategories: Category[] = Array.isArray(bootstrap?.categories) ? bootstrap.categories : [];
+      let fetchedShops: VendorShop[] = Array.isArray(bootstrap?.shops) ? bootstrap.shops : [];
+      let fetchedPayments: PaymentConfirmation[] = Array.isArray(bootstrap?.payments) ? bootstrap.payments : [];
+      let fetchedMessages: AdminMessage[] = Array.isArray(bootstrap?.messages) ? bootstrap.messages : [];
+      let fetchedNotifications: AdminNotification[] = Array.isArray(bootstrap?.notifications) ? bootstrap.notifications : [];
+      let fetchedProblems: CustomerProblemReport[] = Array.isArray(bootstrap?.problems) ? bootstrap.problems : [];
+      let fetchedCoupons: Coupon[] = Array.isArray(bootstrap?.coupons) ? bootstrap.coupons : [];
+      let fetchedInvLogs: InventoryLog[] = Array.isArray(bootstrap?.inventoryLogs) ? bootstrap.inventoryLogs : [];
+      let fetchedAuditLogs: AuditLog[] = Array.isArray(bootstrap?.auditLogs) ? bootstrap.auditLogs : [];
+      let fetchedCustomers: CustomerUser[] = Array.isArray(bootstrap?.customers) ? bootstrap.customers : [];
+      let fetchedAdminUsers: AdminUser[] = Array.isArray(bootstrap?.adminUsers) ? bootstrap.adminUsers : [];
+      let fetchedSupplierApps: any[] = Array.isArray(bootstrap?.supplierApplications) ? bootstrap.supplierApplications : [];
+      let fetchedSupplierPayouts: any[] = Array.isArray(bootstrap?.supplierPayouts) ? bootstrap.supplierPayouts : [];
+      let fetchedSettings: AppSettings | null = bootstrap?.settings ?? null;
+      let fetchedDriveStatus: any = bootstrap?.driveStatus ?? null;
+      let fetchedTxnBundle: any = bootstrap
+        ? {
+            transactions: Array.isArray(bootstrap.paymentTransactions) ? bootstrap.paymentTransactions : [],
+            smsNotifications: Array.isArray(bootstrap.smsNotifications) ? bootstrap.smsNotifications : []
+          }
+        : null;
+
+      if (!bootstrap) {
+        const [
+          fStats,
+          fOrders,
+          fProducts,
+          fCategories,
+          fShops,
+          fPayments,
+          fMessages,
+          fNotifications,
+          fProblems,
+          fCoupons,
+          fInvLogs,
+          fAuditLogs,
+          fCustomers,
+          fAdminUsers,
+          fSupplierApps,
+          fSupplierPayouts,
+          fSettings,
+          fDriveStatus,
+          fTxnBundle
+        ] = await Promise.all([
+          api.adminGetStats().catch(() => null),
+          api.adminGetOrders().catch(() => []),
+          api.adminGetProducts().catch(() => []),
+          api.adminGetCategories().catch(() => []),
+          api.adminGetShops().catch(() => []),
+          api.adminGetPayments().catch(() => []),
+          api.adminGetMessages().catch(() => []),
+          api.adminGetNotifications().catch(() => []),
+          api.adminGetCustomerReports().catch(() => []),
+          api.adminGetCoupons().catch(() => []),
+          api.adminGetInventoryLogs().catch(() => []),
+          api.adminGetAuditLogs().catch(() => []),
+          api.adminGetCustomers().catch(() => []),
+          api.adminGetUsers().catch(() => []),
+          api.adminGetSupplierApplications().catch(() => []),
+          api.adminGetSupplierPayouts().catch(() => []),
+          api.getSettings().catch(() => null),
+          api.adminGetDriveBackupStatus().catch(() => null),
+          api.adminGetPaymentTransactions().catch(() => ({ transactions: [], smsNotifications: [] }))
+        ]);
+        fetchedStats = fStats;
+        fetchedOrders = fOrders;
+        fetchedProducts = fProducts;
+        fetchedCategories = fCategories;
+        fetchedShops = fShops;
+        fetchedPayments = fPayments;
+        fetchedMessages = fMessages;
+        fetchedNotifications = fNotifications;
+        fetchedProblems = fProblems;
+        fetchedCoupons = fCoupons;
+        fetchedInvLogs = fInvLogs;
+        fetchedAuditLogs = fAuditLogs;
+        fetchedCustomers = fCustomers;
+        fetchedAdminUsers = fAdminUsers;
+        fetchedSupplierApps = fSupplierApps;
+        fetchedSupplierPayouts = fSupplierPayouts;
+        fetchedSettings = fSettings;
+        fetchedDriveStatus = fDriveStatus;
+        fetchedTxnBundle = fTxnBundle;
+      }
 
       if (fetchedStats) setStats(fetchedStats);
       if (fetchedOrders && Array.isArray(fetchedOrders)) {
@@ -1777,11 +1826,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             sendDesktopNotification('New Order Received', `${diff} new customer order(s) placed.`);
           }
           prevOrdersCountRef.current = fetchedOrders.length;
+          return fetchedOrders;
+        });
+        window.setTimeout(() => {
           try {
             localStorage.setItem('crm_admin_orders_cache', JSON.stringify(fetchedOrders));
           } catch {}
-          return fetchedOrders;
-        });
+        }, 50);
       }
       if (Array.isArray(fetchedProducts)) setProducts(fetchedProducts);
       if (Array.isArray(fetchedCategories)) setCategories(fetchedCategories);
@@ -2214,8 +2265,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }
           } catch {}
 
-          // Refresh live panels silently on real-time event for background reconciliation
-          fetchAllData(true);
+          // Coalesce background reconciliation to avoid hammering server on burst events
+          scheduleBackgroundSync();
         });
 
         eventSource.onerror = () => {
@@ -2446,14 +2497,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             setProblems(prev => prev.filter(r => r.id !== delId));
           }
         }
-        fetchAllData(true);
+        scheduleBackgroundSync();
       })
     );
 
-    // 2. Background fallback sync every 10 seconds (reliable multi-device heartbeat)
+    // 2. Visibility-aware background reconciliation heartbeat (45s when visible)
     const syncInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       fetchAllData(true);
-    }, 10000);
+    }, 45000);
 
     // Multi-Device Resilience: Immediately reconnect and sync on tab focus, device wake, or network restore
     const handleReSyncOnVisible = () => {
@@ -2461,9 +2513,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
           connectSSE();
         }
-        fetchAllData(true);
+        scheduleBackgroundSync(300);
       }
     };
+
+    let bgSyncTimer: ReturnType<typeof setTimeout> | null = null;
+    function scheduleBackgroundSync(delayMs: number = 5000) {
+      if (bgSyncTimer) clearTimeout(bgSyncTimer);
+      bgSyncTimer = setTimeout(() => {
+        bgSyncTimer = null;
+        if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+          fetchAllData(true);
+        }
+      }, delayMs);
+    }
 
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleReSyncOnVisible);
@@ -2474,6 +2537,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     return () => {
       isSubscribed = false;
+      if (bgSyncTimer) clearTimeout(bgSyncTimer);
       supabaseUnsubscribers.forEach(u => { try { u(); } catch {} });
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (eventSource) {
@@ -2489,6 +2553,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     };
   }, []);
+
+  // Reset progressive admin table slices when filters change
+  useEffect(() => {
+    setVisibleAdminProductsCount(40);
+  }, [productCatFilter, productShopFilter, productSearch]);
+
+  useEffect(() => {
+    setVisibleAdminOrdersCount(40);
+  }, [orderDeliveryFilter, orderStatusFilter, orderPaymentFilter, orderSupplierFilter, orderDateFilter, orderSearch]);
 
   const handleToggleMaintenance = async (newVal: boolean) => {
     if (!settings) return;
@@ -3584,7 +3657,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <div className="min-h-screen bg-slate-100 flex flex-col antialiased text-slate-800">
       {/* Toast Feedback */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2.5 animate-in slide-in-from-top-2 ${
+        <div className={`fixed top-4 right-4 z-[110] p-4 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2.5 animate-in slide-in-from-top-2 ${
           toast.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
         }`}>
           {toast.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />}
@@ -3594,7 +3667,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Floating Real-Time Push Notification Alert Banner (Orders & SMS) */}
       {liveAlert && (
-        <div className="fixed top-20 right-4 sm:right-8 z-50 max-w-md w-full p-4 rounded-2xl bg-[#0f172a] text-white border-2 border-[#FF6000] shadow-2xl animate-in slide-in-from-top-4 flex flex-col gap-2.5">
+        <div className="fixed top-20 right-4 sm:right-8 z-[110] max-w-md w-full p-4 rounded-2xl bg-[#0f172a] text-white border-2 border-[#FF6000] shadow-2xl animate-in slide-in-from-top-4 flex flex-col gap-2.5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-[#FF6000] flex items-center justify-center shrink-0 border border-orange-500/30">
@@ -4021,8 +4094,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           adminUsersCount={adminUsers.length}
         />
 
-        {/* Content Body Area */}
-        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden">
+        {/* Content Body Area (single page scroll context; use clip horizontally) */}
+        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 overflow-x-clip">
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
@@ -4663,7 +4736,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
                         </tr>
                       ) : (
-                        filteredProducts.map(p => {
+                        filteredProducts.slice(0, visibleAdminProductsCount).map(p => {
                           const isSelected = selectedProductIds.includes(p.id);
                           return (
                             <tr
@@ -4690,6 +4763,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <img
                                       src={p.imageUrl || getProductImageDueToProduct(p)}
                                       alt={p.name}
+                                      loading="lazy"
+                                      decoding="async"
                                       className="w-12 h-12 object-cover rounded-xl border border-slate-200"
                                     />
                                     <button
@@ -5016,6 +5091,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </tbody>
                   </table>
                 </div>
+                {filteredProducts.length > visibleAdminProductsCount && (
+                  <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-600 font-medium">
+                      Showing <strong>{Math.min(visibleAdminProductsCount, filteredProducts.length)}</strong> of <strong>{filteredProducts.length}</strong> products
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVisibleAdminProductsCount(prev => prev + 40)}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white font-bold cursor-pointer"
+                      >
+                        Show More (+40)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVisibleAdminProductsCount(filteredProducts.length)}
+                        className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold cursor-pointer"
+                      >
+                        Show All ({filteredProducts.length})
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -5912,7 +6010,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
                         </tr>
                       ) : (
-                        filteredOrders.map(ord => {
+                        filteredOrders.slice(0, visibleAdminOrdersCount).map(ord => {
                           const primaryItem = ord.items?.[0];
                           const remainingItemsCount = (ord.items?.length || 0) - 1;
                           const rawPhone = (ord.customerPhone || '').replace(/\D/g, '');
@@ -5976,6 +6074,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       <img
                                         src={resolvedImg}
                                         alt={resolvedName}
+                                        loading="lazy"
+                                        decoding="async"
                                         className="w-10 h-10 rounded-xl object-cover border border-slate-200 bg-white shrink-0 shadow-2xs"
                                         referrerPolicy="no-referrer"
                                         onError={(e) => {
@@ -6143,6 +6243,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </tbody>
                   </table>
                 </div>
+                {filteredOrders.length > visibleAdminOrdersCount && (
+                  <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-600 font-medium">
+                      Showing <strong>{Math.min(visibleAdminOrdersCount, filteredOrders.length)}</strong> of <strong>{filteredOrders.length}</strong> orders
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVisibleAdminOrdersCount(prev => prev + 40)}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white font-bold cursor-pointer"
+                      >
+                        Show More (+40)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVisibleAdminOrdersCount(filteredOrders.length)}
+                        className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold cursor-pointer"
+                      >
+                        Show All ({filteredOrders.length})
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -9305,7 +9428,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 1: PRODUCT ADD / EDIT */}
       {productModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-slate-200 flex flex-col">
             <div className="p-5 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
               <div className="flex items-center gap-2.5">
@@ -10258,7 +10381,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 2: ORDER STATUS & DISPATCH */}
       {orderStatusModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -10414,7 +10537,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 3: INVOICE PRINT VIEW */}
       {printableInvoiceOrder && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div className="flex items-center gap-3">
@@ -10544,7 +10667,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 4: STOCK ADJUSTMENT */}
       {stockModalProduct && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -10609,7 +10732,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 5: CATEGORY EDITOR */}
       {categoryModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-black text-base text-slate-900">
@@ -10771,7 +10894,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 6: SHOP EDITOR */}
       {shopModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-black text-base text-slate-900">
@@ -10872,7 +10995,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 7: PROBLEM RESOLUTION */}
       {selectedProblem && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -10951,7 +11074,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL 8: COUPON MODAL */}
       {couponModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-black text-base text-slate-900">Create Promo Coupon</h3>
@@ -11039,7 +11162,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Customer Detail Profile Modal */}
       {selectedCustomerDetail && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl relative border border-slate-200 space-y-5">
             <button
               onClick={() => setSelectedCustomerDetail(null)}
@@ -11238,7 +11361,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Admin Reset Buyer Password Modal */}
       {resetPinCustomer && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative border border-slate-200 space-y-4">
             <button
               onClick={() => setResetPinCustomer(null)}
@@ -11340,7 +11463,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Payment Proof Verification Modal */}
       {verifyModalPayment && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/75 flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-slate-200 flex flex-col">
             {/* Header */}
             <div className="p-5 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-xs z-10">
@@ -11589,7 +11712,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Supplier Payout Disbursement Modal */}
       {disbursePayoutModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/75 flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200">
             <div className="p-5 bg-[#121316] text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -11661,7 +11784,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {zoomScreenshot && zoomScreenshot.trim() && (
         <div
           onClick={() => setZoomScreenshot(null)}
-          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in"
+          className="fixed inset-0 z-[90] bg-slate-950/90 flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in"
         >
           <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl p-2" onClick={(e) => e.stopPropagation()}>
             <button
@@ -11684,7 +11807,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Maintenance Mode Screen Live Preview Modal */}
       {previewMaintenance && settings && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-2 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/90 flex flex-col items-center justify-center p-2 sm:p-6 animate-in fade-in">
           <div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-3.5 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between text-xs text-white px-5">
               <div className="flex items-center gap-2">
@@ -11725,7 +11848,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL: QUICK MANAGE PICTURE LINKS FOR A PRODUCT */}
       {manageImagesProduct && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-slate-200 flex flex-col text-xs">
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
@@ -11966,7 +12089,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* MODAL: GOOGLE DRIVE PRODUCT AUTO-FILL & CATALOG PICKER */}
       {driveFilesModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+        <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl relative border border-slate-200 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
@@ -12103,7 +12226,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Bulk Delete Products Confirmation Modal */}
       {showBulkDeleteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/65 z-[75] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95">
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
               <Trash2 className="w-6 h-6" />
@@ -12170,7 +12293,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Comprehensive Order View & Edit Modal */}
       {selectedOrderModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/65 z-[60] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 my-8 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-3">
@@ -12641,7 +12764,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Customer Edit Modal */}
       {editingCustomerModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/65 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <div className="flex items-center gap-2">
@@ -12789,7 +12912,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Universal Permanent Delete Confirmation Modal */}
       {deleteConfirmModal.isOpen && (
-        <div className="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[120] bg-slate-900/75 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-6 h-6" />
@@ -12831,7 +12954,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Generic In-App Admin Action Confirm Modal */}
       {adminConfirmModal && (
-        <div className="fixed inset-0 z-[125] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[125] bg-slate-900/75 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
             <h3 className="text-lg font-black text-slate-900 tracking-tight">
               {adminConfirmModal.title}
@@ -12875,7 +12998,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Generic In-App Admin Value Input Modal (Cost & Custom Shipping) */}
       {adminPromptModal && (
-        <div className="fixed inset-0 z-[125] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[125] bg-slate-900/75 flex items-center justify-center p-4">
           <form
             onSubmit={async (e) => {
               e.preventDefault();

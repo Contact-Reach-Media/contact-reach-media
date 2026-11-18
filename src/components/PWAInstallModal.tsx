@@ -38,7 +38,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({
   const isKinyarwanda = currentLang === 'rw';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] bg-slate-950/75 flex items-center justify-center p-4 animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 relative shadow-2xl border border-slate-100">
         <button
           onClick={onClose}

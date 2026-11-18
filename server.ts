@@ -6,6 +6,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 import crypto from 'crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -672,43 +673,91 @@ export function broadcastDatabaseEvent(eventType: string = 'database_change', pa
   }
 }
 
+// In-memory serialized/sanitized catalog response caches (invalidated on any DB write or Supabase hydration)
+let cachedPublicProductsList: Product[] | null = null;
+let cachedPublicCategoriesList: any[] | null = null;
+
+function invalidateCatalogResponseCaches() {
+  cachedPublicProductsList = null;
+  cachedPublicCategoriesList = null;
+}
+
+// Serialized non-blocking atomic disk persistence queue (keeps event loop responsive during traffic spikes)
+let diskWriteInFlight = false;
+let diskWritePendingPayload: string | null = null;
+
+function buildDbSnapshotPayload(): string {
+  const dataToSave = {
+    products: db.products,
+    cjPendingProducts: db.cjPendingProducts || [],
+    categories: db.categories,
+    shops: db.shops,
+    orders: db.orders,
+    paymentConfirmations: db.paymentConfirmations,
+    paymentMethodsConfig: db.paymentMethodsConfig,
+    messages: db.messages,
+    adminNotifications: (db.adminNotifications || []).slice(0, 500),
+    customerProblems: db.customerProblems,
+    coupons: db.coupons,
+    inventoryLogs: db.inventoryLogs,
+    auditLogs: db.auditLogs,
+    customers: db.customers,
+    adminUsers: db.adminUsers,
+    adminInvitations: db.adminInvitations || [],
+    adminCredentials: db.adminCredentials || {},
+    reviews: db.reviews,
+    supplierApplications: db.supplierApplications,
+    supplierPayouts: db.supplierPayouts,
+    paymentTransactions: db.paymentTransactions || [],
+    smsNotifications: db.smsNotifications || [],
+    settings: db.settings,
+    deletedRecordIds: db.deletedRecordIds || [],
+    adminTokens: Array.from(db.adminTokens.entries()),
+    revokedAdminTokens: Array.from(revokedTokens).slice(-500),
+    customerTokens: Array.from(db.customerTokens.entries()),
+    revokedBuyerTokens: Array.from(revokedBuyerTokens).slice(-500)
+  };
+  return JSON.stringify(dataToSave);
+}
+
+async function drainDiskWriteQueue() {
+  if (diskWriteInFlight) return;
+  diskWriteInFlight = true;
+  const tempFile = path.resolve('data/market_db.tmp.json');
+  try {
+    while (diskWritePendingPayload !== null) {
+      const serialized = diskWritePendingPayload;
+      diskWritePendingPayload = null;
+      await fs.promises.writeFile(tempFile, serialized, 'utf-8');
+      await fs.promises.rename(tempFile, DB_FILE);
+    }
+  } catch (err) {
+    console.error('Failed to persist DB to disk atomically:', err);
+  } finally {
+    diskWriteInFlight = false;
+    if (diskWritePendingPayload !== null) {
+      void drainDiskWriteQueue();
+    }
+  }
+}
+
+function flushDbToDiskSync() {
+  try {
+    const serialized = diskWritePendingPayload || buildDbSnapshotPayload();
+    diskWritePendingPayload = null;
+    const tempFile = path.resolve('data/market_db.tmp.json');
+    fs.writeFileSync(tempFile, serialized, 'utf-8');
+    fs.renameSync(tempFile, DB_FILE);
+  } catch (err) {
+    console.error('Failed to flush DB to disk synchronously:', err);
+  }
+}
+
 function saveDbToDisk(eventType: string = 'database_change', payload?: any) {
   try {
-
-    const dataToSave = {
-      products: db.products,
-      cjPendingProducts: db.cjPendingProducts || [],
-      categories: db.categories,
-      shops: db.shops,
-      orders: db.orders,
-      paymentConfirmations: db.paymentConfirmations,
-      paymentMethodsConfig: db.paymentMethodsConfig,
-      messages: db.messages,
-      adminNotifications: (db.adminNotifications || []).slice(0, 500),
-      customerProblems: db.customerProblems,
-      coupons: db.coupons,
-      inventoryLogs: db.inventoryLogs,
-      auditLogs: db.auditLogs,
-      customers: db.customers,
-      adminUsers: db.adminUsers,
-      adminInvitations: db.adminInvitations || [],
-      adminCredentials: db.adminCredentials || {},
-      reviews: db.reviews,
-      supplierApplications: db.supplierApplications,
-      supplierPayouts: db.supplierPayouts,
-      paymentTransactions: db.paymentTransactions || [],
-      smsNotifications: db.smsNotifications || [],
-      settings: db.settings,
-      deletedRecordIds: db.deletedRecordIds || [],
-      adminTokens: Array.from(db.adminTokens.entries()),
-      revokedAdminTokens: Array.from(revokedTokens).slice(-500),
-      customerTokens: Array.from(db.customerTokens.entries()),
-      revokedBuyerTokens: Array.from(revokedBuyerTokens).slice(-500)
-    };
-    // Atomic disk persistence: write to temp file then rename (compact JSON speeds up write 3-5x)
-    const tempFile = path.resolve('data/market_db.tmp.json');
-    fs.writeFileSync(tempFile, JSON.stringify(dataToSave), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
+    invalidateCatalogResponseCaches();
+    diskWritePendingPayload = buildDbSnapshotPayload();
+    void drainDiskWriteQueue();
 
     // Instant real-time push to connected authorized clients
     broadcastDatabaseEvent(eventType, payload);
@@ -1932,16 +1981,29 @@ export function mapSupabaseRowToServerProduct(p: any): Product {
   };
 }
 
-// Hydrate server in-memory database directly from Supabase for all modules
+// Hydrate server in-memory database directly from Supabase for all modules (concurrent batches for fast startup)
 export async function loadAllDataFromSupabase() {
   try {
     console.log('[Supabase] Hydrating all modules from Supabase PostgreSQL...');
 
-    // 1. Products
-    const { data: prods, error: prodErr } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Wave 1: Core catalog, settings & admin identity tables in parallel
+    const [
+      { data: prods, error: prodErr },
+      { data: cats, error: catErr },
+      { data: shps, error: shpErr },
+      { data: settData, error: settErr },
+      { data: tombData, error: tombErr },
+      { data: invSettData, error: invSettErr },
+      { data: suAdminData, error: suAdminErr }
+    ] = await Promise.all([
+      supabase.from('products').select('*').order('created_at', { ascending: false }),
+      supabase.from('categories').select('*').order('sort_order', { ascending: true }),
+      supabase.from('shops').select('*'),
+      supabase.from('app_settings').select('settings_data').eq('id', 'global').maybeSingle(),
+      supabase.from('deleted_tombstones').select('id'),
+      supabase.from('app_settings').select('settings_data').eq('id', 'admin_invitations').maybeSingle(),
+      supabase.from('admin_users').select('*').ilike('email', 'contactreachmedialimited@gmail.com')
+    ]);
 
     if (!prodErr && Array.isArray(prods)) {
       if (prods.length > 0) {
@@ -1960,8 +2022,6 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${prods.length} products from Supabase (active: ${db.products.length}).`);
     }
 
-    // 2. Categories
-    const { data: cats, error: catErr } = await supabase.from('categories').select('*').order('sort_order', { ascending: true });
     if (!catErr && Array.isArray(cats) && cats.length > 0) {
       db.categories = cats.map(c => ({
         id: c.id,
@@ -1980,8 +2040,6 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.categories.length} categories.`);
     }
 
-    // 3. Shops
-    const { data: shps, error: shpErr } = await supabase.from('shops').select('*');
     if (!shpErr && Array.isArray(shps)) {
       if (shps.length > 0) {
         db.shops = shps.map(s => ({
@@ -2006,7 +2064,49 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${shps.length} registered shops from Supabase (active: ${db.shops.length}).`);
     }
 
-    // 4. Orders with items (non-destructive merge + throttled backfill of missing local orders)
+    if (!settErr && settData?.settings_data) {
+      db.settings = {
+        ...db.settings,
+        ...(settData.settings_data as AppSettings)
+      };
+      console.log('[Supabase] Loaded store settings from Supabase.');
+    }
+
+    if (!tombErr && Array.isArray(tombData) && tombData.length > 0) {
+      const tombIds = tombData.map(d => String(d.id));
+      db.deletedRecordIds = Array.from(new Set([...(db.deletedRecordIds || []), ...tombIds]));
+    }
+
+    if (!invSettErr && Array.isArray(invSettData?.settings_data)) {
+      db.adminInvitations = invSettData.settings_data as StoredAdminInvitation[];
+      console.log(`[Supabase] Loaded ${db.adminInvitations.length} admin invitations.`);
+    }
+
+    db.adminCredentials = {};
+
+    if (!suAdminErr && Array.isArray(suAdminData) && suAdminData.length > 0) {
+      const a = suAdminData[0];
+      db.adminUsers = [
+        {
+          id: String(a.id || 'adm-owner-crmedia'),
+          name: a.name || 'Administrator',
+          email: 'contactreachmedialimited@gmail.com',
+          phone: a.phone || '0780022600',
+          role: 'owner' as AdminRole,
+          active: a.active !== false,
+          verified: true,
+          lastLogin: a.last_login || undefined
+        }
+      ];
+      console.log(`[Supabase] Verified authorized admin account: contactreachmedialimited@gmail.com (active=${a.active !== false}).`);
+    } else {
+      db.adminUsers = [...defaultAdminUsers];
+    }
+
+    // Invalidate cached storefront responses now that fresh products/categories loaded
+    invalidateCatalogResponseCaches();
+
+    // Wave 2: Orders, Payments, Customers, Messages, Notifications, Problems, Coupons, Logs & Suppliers in parallel
     const pendingBackfills: {
       orders: Order[];
       payments: PaymentConfirmation[];
@@ -2015,9 +2115,38 @@ export async function loadAllDataFromSupabase() {
       problems: CustomerProblemReport[];
     } = { orders: [], payments: [], txns: [], messages: [], problems: [] };
 
-    const [{ data: ords, error: ordErr }, { data: ordItemRows }] = await Promise.all([
+    const [
+      { data: ords, error: ordErr },
+      { data: ordItemRows },
+      { data: pays, error: payErr },
+      { data: txns, error: txnErr },
+      { data: smsRows, error: smsLoadErr },
+      { data: usrs, error: usrErr },
+      { data: custRows, error: custErr },
+      { data: msgs, error: msgErr },
+      { data: dedNotifs, error: dedNotifErr },
+      { data: probs, error: probErr },
+      { data: cpnData, error: cpnErr },
+      { data: invData, error: invErr },
+      { data: audData, error: audErr },
+      { data: suppData, error: suppErr },
+      { data: payoutData, error: payoutErr }
+    ] = await Promise.all([
       supabase.from('orders').select('*').order('created_at', { ascending: false }),
-      supabase.from('order_items').select('*')
+      supabase.from('order_items').select('*'),
+      supabase.from('payments').select('*').order('created_at', { ascending: false }),
+      supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }),
+      supabase.from('sms_notifications').select('*').order('created_at', { ascending: false }).limit(300),
+      supabase.from('users').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('*').order('created_at', { ascending: false }),
+      supabase.from('messages').select('*').order('created_at', { ascending: false }),
+      supabase.from('admin_notifications').select('*').order('created_at', { ascending: false }).limit(200),
+      supabase.from('customer_problems').select('*').order('created_at', { ascending: false }),
+      supabase.from('coupons').select('*').order('created_at', { ascending: false }),
+      supabase.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(200),
+      supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(250),
+      supabase.from('supplier_applications').select('*').order('created_at', { ascending: false }),
+      supabase.from('supplier_payouts').select('*').order('created_at', { ascending: false })
     ]);
 
     const orderItemsByOrderId = new Map<string, any[]>();
@@ -2084,12 +2213,6 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${ords.length} orders from Supabase (merged total: ${db.orders.length}).`);
       pendingBackfills.orders = db.orders.filter(o => !remoteOrderIds.has(String(o.id))).slice(0, 20);
     }
-
-    // 5. Payments & Payment Transactions (non-destructive merge + backfill missing records to Supabase)
-    const [{ data: pays, error: payErr }, { data: txns, error: txnErr }] = await Promise.all([
-      supabase.from('payments').select('*').order('created_at', { ascending: false }),
-      supabase.from('payment_transactions').select('*').order('created_at', { ascending: false })
-    ]);
 
     if (!payErr && Array.isArray(pays)) {
       const payMap = new Map<string, PaymentConfirmation>();
@@ -2171,47 +2294,34 @@ export async function loadAllDataFromSupabase() {
       pendingBackfills.txns = db.paymentTransactions.filter(t => !remoteTxnIds.has(String(t.id))).slice(0, 50);
     }
 
-    // 5b. SMS Notifications (Incoming & Outgoing Mobile Money SMS logs)
-    try {
-      const { data: smsRows, error: smsLoadErr } = await supabase
-        .from('sms_notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(300);
-      if (!smsLoadErr && Array.isArray(smsRows)) {
-        const smsMap = new Map<string, SmsNotification>(
-          (db.smsNotifications || []).map(s => [String(s.id), s])
-        );
-        for (const s of smsRows) {
-          smsMap.set(String(s.id), {
-            id: String(s.id),
-            direction: (s.direction || 'incoming') as 'incoming' | 'outgoing',
-            senderPhone: s.sender_phone || '',
-            senderName: s.sender_name || undefined,
-            recipientPhone: s.recipient_phone || undefined,
-            provider: s.provider || 'MTN Mobile Money',
-            message: s.message || '',
-            parsedTransactionId: s.parsed_transaction_id || undefined,
-            parsedAmount: s.parsed_amount !== null && s.parsed_amount !== undefined ? Number(s.parsed_amount) : undefined,
-            orderNumber: s.order_number || undefined,
-            paymentId: s.payment_id || undefined,
-            status: (s.status || 'received') as any,
-            createdAt: s.created_at || new Date().toISOString(),
-            metadata: s.metadata || undefined
-          });
-        }
-        db.smsNotifications = Array.from(smsMap.values()).sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        console.log(`[Supabase] Loaded ${db.smsNotifications.length} SMS notifications.`);
+    if (!smsLoadErr && Array.isArray(smsRows)) {
+      const smsMap = new Map<string, SmsNotification>(
+        (db.smsNotifications || []).map(s => [String(s.id), s])
+      );
+      for (const s of smsRows) {
+        smsMap.set(String(s.id), {
+          id: String(s.id),
+          direction: (s.direction || 'incoming') as 'incoming' | 'outgoing',
+          senderPhone: s.sender_phone || '',
+          senderName: s.sender_name || undefined,
+          recipientPhone: s.recipient_phone || undefined,
+          provider: s.provider || 'MTN Mobile Money',
+          message: s.message || '',
+          parsedTransactionId: s.parsed_transaction_id || undefined,
+          parsedAmount: s.parsed_amount !== null && s.parsed_amount !== undefined ? Number(s.parsed_amount) : undefined,
+          orderNumber: s.order_number || undefined,
+          paymentId: s.payment_id || undefined,
+          status: (s.status || 'received') as any,
+          createdAt: s.created_at || new Date().toISOString(),
+          metadata: s.metadata || undefined
+        });
       }
-    } catch {}
+      db.smsNotifications = Array.from(smsMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      console.log(`[Supabase] Loaded ${db.smsNotifications.length} SMS notifications.`);
+    }
 
-    // 6. Users / Customers (merge both Supabase `users` and `customers` preserving metadata.passwordHash)
-    const [{ data: usrs, error: usrErr }, { data: custRows, error: custErr }] = await Promise.all([
-      supabase.from('users').select('*').order('created_at', { ascending: false }),
-      supabase.from('customers').select('*').order('created_at', { ascending: false })
-    ]);
     const customerMap = new Map<string, CustomerUser>();
     for (const localCust of db.customers) {
       customerMap.set(String(localCust.id), localCust);
@@ -2266,8 +2376,6 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.customers.length} registered customers.`);
     }
 
-    // 7. Messages & Persistent Admin Notifications (merge with local)
-    const { data: msgs, error: msgErr } = await supabase.from('messages').select('*').order('created_at', { ascending: false });
     const loadedNotifs = new Map<string, AdminNotification>();
     for (const ln of db.adminNotifications || []) {
       loadedNotifs.set(String(ln.id), ln);
@@ -2340,35 +2448,27 @@ export async function loadAllDataFromSupabase() {
       pendingBackfills.messages = db.messages.filter(m => !remoteMsgIds.has(String(m.id))).slice(0, 100);
     }
 
-    // Also hydrate from dedicated admin_notifications table if present
-    try {
-      const { data: dedNotifs, error: dedNotifErr } = await supabase
-        .from('admin_notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
-      if (!dedNotifErr && Array.isArray(dedNotifs)) {
-        for (const row of dedNotifs) {
-          loadedNotifs.set(String(row.id), {
-            id: String(row.id),
-            category: (row.category || 'system') as AdminNotificationCategory,
-            title: row.title || 'Admin Notification',
-            message: row.message || '',
-            senderName: row.sender_name || undefined,
-            senderPhone: row.sender_phone || undefined,
-            senderEmail: row.sender_email || undefined,
-            orderNumber: row.order_number || undefined,
-            customerId: row.customer_id || undefined,
-            actionTab: row.action_tab || undefined,
-            entityId: row.entity_id || undefined,
-            isRead: Boolean(row.is_read),
-            readAt: row.read_at || undefined,
-            createdAt: row.created_at || new Date().toISOString(),
-            metadata: row.metadata || undefined
-          });
-        }
+    if (!dedNotifErr && Array.isArray(dedNotifs)) {
+      for (const row of dedNotifs) {
+        loadedNotifs.set(String(row.id), {
+          id: String(row.id),
+          category: (row.category || 'system') as AdminNotificationCategory,
+          title: row.title || 'Admin Notification',
+          message: row.message || '',
+          senderName: row.sender_name || undefined,
+          senderPhone: row.sender_phone || undefined,
+          senderEmail: row.sender_email || undefined,
+          orderNumber: row.order_number || undefined,
+          customerId: row.customer_id || undefined,
+          actionTab: row.action_tab || undefined,
+          entityId: row.entity_id || undefined,
+          isRead: Boolean(row.is_read),
+          readAt: row.read_at || undefined,
+          createdAt: row.created_at || new Date().toISOString(),
+          metadata: row.metadata || undefined
+        });
       }
-    } catch {}
+    }
 
     if (loadedNotifs.size > 0) {
       db.adminNotifications = Array.from(loadedNotifs.values()).sort(
@@ -2377,8 +2477,6 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.adminNotifications.length} admin notifications.`);
     }
 
-    // 8. Customer Problems / Issues (merge with local & deserialize privateNotes)
-    const { data: probs, error: probErr } = await supabase.from('customer_problems').select('*').order('created_at', { ascending: false });
     if (!probErr && Array.isArray(probs)) {
       const probMap = new Map<string, CustomerProblemReport>();
       for (const lp of db.customerProblems || []) {
@@ -2420,8 +2518,6 @@ export async function loadAllDataFromSupabase() {
       pendingBackfills.problems = db.customerProblems.filter(p => !remoteProbIds.has(String(p.id)));
     }
 
-    // 9. Coupons
-    const { data: cpnData, error: cpnErr } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
     if (!cpnErr && Array.isArray(cpnData) && cpnData.length > 0) {
       db.coupons = cpnData.map(c => ({
         id: c.id,
@@ -2438,8 +2534,6 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.coupons.length} coupons.`);
     }
 
-    // 10. Inventory Logs
-    const { data: invData, error: invErr } = await supabase.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(200);
     if (!invErr && Array.isArray(invData)) {
       db.inventoryLogs = invData.map(l => ({
         id: l.id,
@@ -2454,8 +2548,6 @@ export async function loadAllDataFromSupabase() {
       }));
     }
 
-    // 11. Audit Logs
-    const { data: audData, error: audErr } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(250);
     if (!audErr && Array.isArray(audData)) {
       db.auditLogs = audData.map(a => ({
         id: a.id,
@@ -2469,8 +2561,6 @@ export async function loadAllDataFromSupabase() {
       }));
     }
 
-    // 12. Supplier Applications
-    const { data: suppData, error: suppErr } = await supabase.from('supplier_applications').select('*').order('created_at', { ascending: false });
     if (!suppErr && Array.isArray(suppData)) {
       db.supplierApplications = suppData.map(s => ({
         id: s.id,
@@ -2490,8 +2580,6 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.supplierApplications.length} supplier applications.`);
     }
 
-    // 13. Supplier Payouts
-    const { data: payoutData, error: payoutErr } = await supabase.from('supplier_payouts').select('*').order('created_at', { ascending: false });
     if (!payoutErr && Array.isArray(payoutData)) {
       db.supplierPayouts = payoutData.map(p => ({
         id: p.id,
@@ -2512,62 +2600,7 @@ export async function loadAllDataFromSupabase() {
       console.log(`[Supabase] Loaded ${db.supplierPayouts.length} supplier payouts.`);
     }
 
-    // 14. Settings
-    const { data: settData, error: settErr } = await supabase.from('app_settings').select('settings_data').eq('id', 'global').maybeSingle();
-    if (!settErr && settData?.settings_data) {
-      db.settings = {
-        ...db.settings,
-        ...(settData.settings_data as AppSettings)
-      };
-      console.log('[Supabase] Loaded store settings from Supabase.');
-    }
-
-    // 15. Deleted Tombstones
-    const { data: tombData, error: tombErr } = await supabase.from('deleted_tombstones').select('id');
-    if (!tombErr && Array.isArray(tombData) && tombData.length > 0) {
-      const tombIds = tombData.map(d => String(d.id));
-      db.deletedRecordIds = Array.from(new Set([...(db.deletedRecordIds || []), ...tombIds]));
-    }
-
-    // 16. Admin Invitations & Credentials (persisted securely in app_settings store)
-    const { data: invSettData, error: invSettErr } = await supabase
-      .from('app_settings')
-      .select('settings_data')
-      .eq('id', 'admin_invitations')
-      .maybeSingle();
-    if (!invSettErr && Array.isArray(invSettData?.settings_data)) {
-      db.adminInvitations = invSettData.settings_data as StoredAdminInvitation[];
-      console.log(`[Supabase] Loaded ${db.adminInvitations.length} admin invitations.`);
-    }
-
-    db.adminCredentials = {};
-
-    // 17. Admin Users (Strictly single authorized administrator: contactreachmedialimited@gmail.com)
-    const { data: suAdminData, error: suAdminErr } = await supabase
-      .from('admin_users')
-      .select('*')
-      .ilike('email', 'contactreachmedialimited@gmail.com');
-    if (!suAdminErr && Array.isArray(suAdminData) && suAdminData.length > 0) {
-      const a = suAdminData[0];
-      db.adminUsers = [
-        {
-          id: String(a.id || 'adm-owner-crmedia'),
-          name: a.name || 'Administrator',
-          email: 'contactreachmedialimited@gmail.com',
-          phone: a.phone || '0780022600',
-          role: 'owner' as AdminRole,
-          active: a.active !== false,
-          verified: true,
-          lastLogin: a.last_login || undefined
-        }
-      ];
-      console.log(`[Supabase] Verified authorized admin account: contactreachmedialimited@gmail.com (active=${a.active !== false}).`);
-    } else {
-      db.adminUsers = [...defaultAdminUsers];
-    }
-
     // Sequentially backfill missing local records in small batches after startup hydration completes
-    // to avoid bursting simultaneous sockets on Node's HTTP pool (prevents TypeError: fetch failed).
     const hasBackfill =
       pendingBackfills.messages.length > 0 ||
       pendingBackfills.problems.length > 0 ||
@@ -2578,7 +2611,6 @@ export async function loadAllDataFromSupabase() {
     if (hasBackfill) {
       void (async () => {
         try {
-          // 1. Batch upsert missing messages (chunks of 15)
           for (let i = 0; i < pendingBackfills.messages.length; i += 15) {
             const chunk = pendingBackfills.messages.slice(i, i + 15).map(buildSupabaseMessageRow);
             const { error: batchErr } = await runSupabaseWithRetry(() =>
@@ -2588,18 +2620,15 @@ export async function loadAllDataFromSupabase() {
               console.warn('[Supabase Message Batch Backfill] Notice:', batchErr.message);
             }
           }
-          // 2. Backfill customer problems sequentially
           for (const prob of pendingBackfills.problems) {
             await saveToSupabaseAsync('customerProblems', prob.id, prob);
           }
-          // 3. Backfill payment confirmations & transactions sequentially
           for (const pay of pendingBackfills.payments) {
             await saveToSupabaseAsync('paymentConfirmations', pay.id, pay);
           }
           for (const txn of pendingBackfills.txns) {
             await saveToSupabaseAsync('paymentTransactions', txn.id, txn);
           }
-          // 4. Backfill missing orders with max concurrency 2
           for (let i = 0; i < pendingBackfills.orders.length; i += 2) {
             const slice = pendingBackfills.orders.slice(i, i + 2);
             await Promise.allSettled(slice.map(o => saveToSupabaseAsync('orders', o.id, o)));
@@ -2664,13 +2693,49 @@ function createAdminNotification(params: {
   return notif;
 }
 
-// JSON middleware
-// Security Headers Middleware
+// Security & Cache Headers Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (
+    req.method === 'GET' &&
+    /\.(?:png|jpe?g|webp|gif|svg|ico|woff2?|ttf)$/i.test(req.path) &&
+    !req.path.startsWith('/api')
+  ) {
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  }
+  next();
+});
+
+// Lightweight Gzip Response Compression for /api/* JSON payloads (cuts ~500KB catalog down to ~55KB over the wire)
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  if (
+    req.path.includes('stream') ||
+    req.path.includes('realtime') ||
+    !String(req.headers['accept-encoding'] || '').includes('gzip')
+  ) {
+    return next();
+  }
+  const origJson = res.json.bind(res);
+  res.json = function (body: any) {
+    if (res.headersSent) return origJson(body);
+    try {
+      const jsonStr = JSON.stringify(body);
+      if (jsonStr.length < 1536) {
+        return res.type('application/json').send(jsonStr);
+      }
+      const compressed = zlib.gzipSync(jsonStr, { level: 4 });
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Vary', 'Accept-Encoding');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Length', String(compressed.length));
+      return res.send(compressed);
+    } catch {
+      return origJson(body);
+    }
+  };
   next();
 });
 
@@ -3370,8 +3435,8 @@ app.post('/api/translate', async (req: Request, res: Response) => {
 // PUBLIC API: CATEGORIES
 // -------------------------------------------------------------
 
-app.get('/api/categories', (req: Request, res: Response) => {
-  // Update itemCount dynamically based on live products with normalized categories
+function buildPublicCategoriesList() {
+  if (cachedPublicCategoriesList) return cachedPublicCategoriesList;
   const activeCategories = db.categories
     .filter(c => c.isActive !== false && c.active !== false)
     .map(c => {
@@ -3386,7 +3451,53 @@ app.get('/api/categories', (req: Request, res: Response) => {
         itemCount: count
       };
     });
-  res.json(activeCategories);
+  cachedPublicCategoriesList = activeCategories;
+  return activeCategories;
+}
+
+function sanitizePublicProduct(p: Product): Product {
+  const isKnownMain = p.mainCategoryId && (
+    MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId) ||
+    db.categories.some(c => !c.parentId && c.id === p.mainCategoryId)
+  );
+  const canonicalCat = isKnownMain
+    ? p.mainCategoryId!
+    : normalizeCategoryId(p.category, p.name);
+  const effectiveMain = p.mainCategoryId || canonicalCat;
+  const rawSub = p.subCategoryId || p.subCategoryName || p.subcategory;
+  const resolvedSub = rawSub ? resolveSubCategoryRecord(rawSub, effectiveMain, db.categories) : null;
+  return {
+    ...p,
+    category: canonicalCat,
+    ...(resolvedSub ? {
+      subCategoryId: p.subCategoryId || resolvedSub.id,
+      subCategoryName: p.subCategoryName || resolvedSub.name,
+      subcategory: p.subcategory || resolvedSub.id
+    } : {})
+  };
+}
+
+function getCachedPublicProducts(): Product[] {
+  if (cachedPublicProductsList) return cachedPublicProductsList;
+  cachedPublicProductsList = db.products
+    .filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected')
+    .map(sanitizePublicProduct);
+  return cachedPublicProductsList;
+}
+
+// Combined Storefront Bootstrap Endpoint (1 round trip instead of 4 separate boot fetches)
+app.get('/api/storefront/bootstrap', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.json({
+    products: getCachedPublicProducts(),
+    categories: buildPublicCategoriesList(),
+    shops: db.shops.filter(s => s.isActive !== false),
+    settings: db.settings
+  });
+});
+
+app.get('/api/categories', (req: Request, res: Response) => {
+  res.json(buildPublicCategoriesList());
 });
 
 // Category Tree Endpoint (returns 13 Main Categories with nested subcategories & product counts)
@@ -3481,10 +3592,13 @@ app.get('/api/shops/:id', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 app.get('/api/products', (req: Request, res: Response) => {
-
-
   const { category, subcategory, mainCategoryId, subCategoryId, search, featured, shopId, shopName, minPrice, maxPrice, inStock, sort } = req.query;
-  let filtered = db.products.filter(p => p.status !== 'Hidden' && p.reviewStatus !== 'Pending Approval' && p.reviewStatus !== 'Rejected');
+  const isUnfiltered = !category && !subcategory && !mainCategoryId && !subCategoryId && !search && !featured && !shopId && !shopName && !minPrice && !maxPrice && !inStock && !sort;
+  if (isUnfiltered) {
+    return res.json(getCachedPublicProducts());
+  }
+
+  let filtered = getCachedPublicProducts();
 
   // Filter by main category
   const rawMainParam = (mainCategoryId && mainCategoryId !== 'all')
@@ -3546,39 +3660,21 @@ app.get('/api/products', (req: Request, res: Response) => {
     );
   }
 
-  // Sorting
-  if (sort === 'price-asc') {
-    filtered.sort((a, b) => a.price - b.price);
-  } else if (sort === 'price-desc') {
-    filtered.sort((a, b) => b.price - a.price);
-  } else if (sort === 'newest') {
-    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } else if (sort === 'popular') {
-    filtered.sort((a, b) => (b.reviewsCount || 0) - (a.reviewsCount || 0));
+  // Sorting (copy array before sorting to keep cache immutable)
+  if (sort) {
+    filtered = [...filtered];
+    if (sort === 'price-asc') {
+      filtered.sort((a, b) => a.price - b.price);
+    } else if (sort === 'price-desc') {
+      filtered.sort((a, b) => b.price - a.price);
+    } else if (sort === 'newest') {
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sort === 'popular') {
+      filtered.sort((a, b) => (b.reviewsCount || 0) - (a.reviewsCount || 0));
+    }
   }
 
-  const sanitized = filtered.map(p => {
-    const isKnownMain = p.mainCategoryId && (
-      MAIN_CATEGORY_DEFINITIONS.some(m => m.id === p.mainCategoryId) ||
-      db.categories.some(c => !c.parentId && c.id === p.mainCategoryId)
-    );
-    const canonicalCat = isKnownMain
-      ? p.mainCategoryId!
-      : normalizeCategoryId(p.category, p.name);
-    const effectiveMain = p.mainCategoryId || canonicalCat;
-    const rawSub = p.subCategoryId || p.subCategoryName || p.subcategory;
-    const resolvedSub = rawSub ? resolveSubCategoryRecord(rawSub, effectiveMain, db.categories) : null;
-    return {
-      ...p,
-      category: canonicalCat,
-      ...(resolvedSub ? {
-        subCategoryId: p.subCategoryId || resolvedSub.id,
-        subCategoryName: p.subCategoryName || resolvedSub.name,
-        subcategory: p.subcategory || resolvedSub.id
-      } : {})
-    };
-  });
-  res.json(sanitized);
+  res.json(filtered);
 });
 
 app.get('/api/products/:id', async (req: Request, res: Response) => {
@@ -7324,6 +7420,50 @@ app.post('/api/admin/test-alert', requireAdminAuth, (req: Request, res: Response
 
 app.get('/api/admin/stats', requireAdminAuth, (req: Request, res: Response) => {
   res.json(calculateCurrentStats());
+});
+
+// Batched Admin Bootstrap Endpoint (replaces 19 parallel polling HTTP requests with 1 gzipped round trip)
+app.get('/api/admin/bootstrap', requireAdminAuth, (_req: Request, res: Response) => {
+  const deletedSet = new Set((db.deletedRecordIds || []).map(String));
+  const cleanMessages = (db.messages || []).filter(
+    (m: any) => !deletedSet.has(String(m.id)) && String(m.sender || '').toLowerCase() !== 'admin_notification'
+  );
+  const driveStatus = db.settings.driveBackupStatus || {
+    status: 'idle',
+    fileName: 'ContactReach_Market_Products.json',
+    autoSyncEnabled: true,
+    connectedEmail: 'contactreachmedialimited@gmail.com',
+    accountEmail: 'contactreachmedialimited@gmail.com'
+  };
+  if (!driveStatus.connectedEmail) {
+    driveStatus.connectedEmail = 'contactreachmedialimited@gmail.com';
+    driveStatus.accountEmail = 'contactreachmedialimited@gmail.com';
+  }
+  const adminUsers = (db.adminUsers || []).filter(
+    u => u && String(u.email || '').toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL
+  );
+  res.json({
+    stats: calculateCurrentStats(),
+    orders: db.orders,
+    products: db.products,
+    categories: db.categories,
+    shops: db.shops,
+    payments: db.paymentConfirmations,
+    messages: cleanMessages,
+    notifications: (db.adminNotifications || []).filter((n: any) => !deletedSet.has(String(n.id))),
+    problems: (db.customerProblems || []).filter((p: any) => !deletedSet.has(String(p.id))),
+    coupons: db.coupons,
+    inventoryLogs: db.inventoryLogs,
+    auditLogs: db.auditLogs,
+    customers: db.customers,
+    adminUsers,
+    supplierApplications: db.supplierApplications || [],
+    supplierPayouts: db.supplierPayouts || [],
+    settings: db.settings,
+    driveStatus,
+    paymentTransactions: (db.paymentTransactions || []).filter((t: any) => !deletedSet.has(String(t.id))),
+    smsNotifications: (db.smsNotifications || []).filter((s: any) => !deletedSet.has(String(s.id)))
+  });
 });
 
 // Real-Time Database EventStream Listener (SSE) for Instant Multi-Device Order Sync
@@ -14268,6 +14408,7 @@ async function startServer() {
   });
 
   const gracefulShutdown = () => {
+    flushDbToDiskSync();
     server.close(() => {
       process.exit(0);
     });

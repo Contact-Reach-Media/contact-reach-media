@@ -102,6 +102,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     if (product) {
       setQuantity(getMinOrderQuantity(product));
       setSelectedImageIndex(0);
+      setIsImageViewerOpen(false);
       setAddedNotice(false);
 
       const initialVars: { [key: string]: string } = {};
@@ -250,15 +251,16 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
             {/* Left Column: Image Gallery (5 cols) */}
             <div className="lg:col-span-5 space-y-4">
-              <div className="flex flex-col-reverse sm:flex-row gap-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 items-stretch sm:items-start">
                 {/* Thumbnails */}
                 {galleryImages.length > 1 && (
-                  <div className="flex sm:flex-col gap-2 overflow-x-auto sm:overflow-y-auto max-h-[460px] pb-2 sm:pb-0 shrink-0">
+                  <div className="flex sm:flex-col gap-2 w-full sm:w-[72px] overflow-x-auto sm:overflow-x-visible sm:overflow-y-auto max-h-[460px] pb-2 sm:pb-0 shrink-0">
                     {galleryImages.map((img, idx) => (
                       <button
                         key={idx}
+                        type="button"
                         onClick={() => setSelectedImageIndex(idx)}
-                        className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                        className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer bg-white ${
                           selectedImageIndex === idx
                             ? 'border-orange-600 ring-2 ring-orange-200 shadow-xs'
                             : 'border-slate-200 hover:border-slate-300 opacity-80'
@@ -270,7 +272,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = getProductImageDueToProduct(product);
+                            const el = e.currentTarget;
+                            if (!el.dataset.fallbackApplied) {
+                              el.dataset.fallbackApplied = '1';
+                              el.src = getProductImageDueToProduct(product);
+                            } else if (el.src !== `${window.location.origin}/logo.png`) {
+                              el.src = '/logo.png';
+                            }
                           }}
                         />
                       </button>
@@ -281,16 +289,23 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 {/* Main Image */}
                 <div
                   onClick={() => setIsImageViewerOpen(true)}
-                  className="flex-1 relative aspect-square rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 shadow-inner group cursor-zoom-in"
+                  className="flex-1 min-w-0 w-full relative aspect-square min-h-[260px] sm:min-h-[320px] rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 shadow-inner group cursor-zoom-in"
                   title="Click or tap to zoom and inspect in full-screen viewer"
                 >
                   <img
+                    key={`${product.id}-${selectedImageIndex}`}
                     src={galleryImages[selectedImageIndex] || getProductImageDueToProduct(product)}
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = getProductImageDueToProduct(product);
+                      const el = e.currentTarget;
+                      if (!el.dataset.fallbackApplied) {
+                        el.dataset.fallbackApplied = '1';
+                        el.src = getProductImageDueToProduct(product);
+                      } else if (el.src !== `${window.location.origin}/logo.png`) {
+                        el.src = '/logo.png';
+                      }
                     }}
                   />
 

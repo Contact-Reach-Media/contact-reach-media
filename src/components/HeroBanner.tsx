@@ -136,13 +136,18 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         {/* ============================================================== */}
         <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#0284C7] via-[#0369A1] to-[#075985] text-white p-6 sm:p-8 min-h-[360px] flex flex-col justify-between shadow-md border border-sky-400/30 group">
           
-          {/* Subtle Background Radial Glow */}
-          <div className="absolute -top-24 -right-24 w-80 h-80 bg-sky-300/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-blue-900/40 rounded-full blur-3xl pointer-events-none" />
+          {/* Subtle Background Radial Glow (compositor-light radial gradient instead of blur-3xl) */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 92% 10%, rgba(125,211,252,0.22), transparent 45%), radial-gradient(circle at 8% 92%, rgba(30,58,138,0.45), transparent 50%)'
+            }}
+          />
 
           {/* Top Row: Pill Badge & Fast Dispatch */}
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md text-white text-[11px] font-extrabold px-3 py-1 rounded-full mb-3.5 shadow-2xs border border-white/20">
+            <div className="inline-flex items-center gap-1.5 bg-slate-900/30 text-white text-[11px] font-extrabold px-3 py-1 rounded-full mb-3.5 shadow-2xs border border-white/20">
               <Truck className="w-3.5 h-3.5 text-amber-300" />
               <span>Fast Delivery • Today in Kigali</span>
             </div>
@@ -158,7 +163,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           </div>
 
           {/* Interactive Simulated Live Tracking & Quick Pay Widget */}
-          <div className="relative z-10 mt-6 bg-slate-900/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/25 shadow-xl space-y-3">
+          <div className="relative z-10 mt-6 bg-slate-900/55 rounded-2xl p-4 sm:p-5 border border-white/25 shadow-xl space-y-3">
             {/* Order Reference Row */}
             <div className="flex items-center justify-between text-xs border-b border-white/15 pb-2.5">
               <div className="flex items-center gap-2">
@@ -247,14 +252,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <img
               src={currentSlide.image}
               alt={currentSlide.titleEn}
-              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+              decoding="async"
+              fetchPriority="high"
+              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/50 to-transparent" />
           </div>
 
           {/* Top Pill & Category Indicator */}
           <div className="relative z-10 max-w-sm">
-            <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md text-white text-[11px] font-extrabold px-3 py-1 rounded-full mb-3.5 shadow-2xs border border-white/20">
+            <div className="inline-flex items-center gap-1.5 bg-slate-900/35 text-white text-[11px] font-extrabold px-3 py-1 rounded-full mb-3.5 shadow-2xs border border-white/20">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
               <span>{currentLang === 'en' ? currentSlide.badgeEn : currentSlide.badgeRw}</span>
             </div>

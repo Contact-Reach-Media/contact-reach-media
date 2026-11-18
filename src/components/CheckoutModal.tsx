@@ -523,10 +523,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[75] overflow-y-auto bg-slate-900/65 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[94vh] overflow-y-auto shadow-2xl relative border border-slate-200 flex flex-col">
         {/* Unified Top Header with Stepper */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-xs z-20">
+        <div className="p-4 sm:p-5 border-b border-slate-200 sticky top-0 bg-white z-20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center p-1 shrink-0">

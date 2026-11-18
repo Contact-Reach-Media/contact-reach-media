@@ -154,7 +154,7 @@ export const BuyerAuthModal: React.FC<BuyerAuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[75] overflow-y-auto bg-slate-950/75 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl relative border border-slate-200 overflow-hidden grid grid-cols-1 md:grid-cols-2">
         {/* Close Button */}
         <button

@@ -90,7 +90,7 @@ export const CategoryMegaMenu: React.FC<CategoryMegaMenuProps> = ({
   const activeCategory = departments.find(c => c.id === activeMainId) || departments[0];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-20 px-2 sm:px-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] bg-black/65 flex items-start justify-center pt-16 sm:pt-20 px-2 sm:px-4 animate-in fade-in duration-150">
       <div
         ref={menuRef}
         className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"

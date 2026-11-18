@@ -25,7 +25,7 @@ interface ProductCardProps {
   exchangeRates?: Record<string, number>;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({
+export const ProductCard: React.FC<ProductCardProps> = React.memo(({
   product,
   onViewProduct,
   onAddToCart,
@@ -53,8 +53,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const minQty = getMinOrderQuantity(product);
 
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [hasHovered, setHasHovered] = useState(false);
 
   const cardImages = React.useMemo(() => {
+    if (!isViewerOpen) return [];
     const list = (product.images || []).filter(img => typeof img === 'string' && img.trim().length > 0);
     const mainImg = product.imageUrl || getProductImageDueToProduct(product);
     if (list.length > 0) {
@@ -62,12 +64,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       return list;
     }
     return [mainImg];
-  }, [product]);
+  }, [product, isViewerOpen]);
 
   return (
     <div
       onClick={() => onViewProduct(product)}
-      className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer relative hover:-translate-y-0.5 text-start"
+      onMouseEnter={() => { if (!hasHovered) setHasHovered(true); }}
+      className="product-card-perf group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md transition-[transform,box-shadow] duration-200 flex flex-col justify-between cursor-pointer relative hover:-translate-y-0.5 text-start"
     >
       {/* Floating Discount or Status Badge - Single sleek badge, not a crowded stack */}
       <div className="absolute top-2.5 start-2.5 z-10">
@@ -89,7 +92,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             e.stopPropagation();
             onToggleWishlist?.(product);
           }}
-          className={`w-7 h-7 rounded-full bg-white/90 backdrop-blur-xs border border-slate-200/90 flex items-center justify-center transition-all shadow-2xs hover:scale-110 cursor-pointer ${
+          className={`w-7 h-7 rounded-full bg-white/95 border border-slate-200/90 flex items-center justify-center transition-transform shadow-2xs hover:scale-110 cursor-pointer ${
             isWishlisted ? 'text-rose-500 border-rose-200' : 'text-slate-400 hover:text-rose-500'
           }`}
           title={t.wishlist}
@@ -104,20 +107,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <img
           src={product.imageUrl ? product.imageUrl : getProductImageDueToProduct(product)}
           alt={product.name}
+          loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
-          className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+          className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-200"
           onError={(e) => {
             (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80';
           }}
         />
 
-        {/* Secondary Angle Preview on Hover (if available) */}
-        {product.images && product.images[1] && product.images[1].trim() && product.images[1] !== product.imageUrl && (
+        {/* Secondary Angle Preview mounted lazily on hover */}
+        {hasHovered && product.images && product.images[1] && product.images[1].trim() && product.images[1] !== product.imageUrl && (
           <img
             src={product.images[1]}
             alt={`${product.name} alternate view`}
+            loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
-            className="absolute inset-0 w-full h-full object-cover object-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            className="absolute inset-0 w-full h-full object-cover object-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
@@ -131,7 +138,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             e.stopPropagation();
             setIsViewerOpen(true);
           }}
-          className="absolute bottom-2 right-2 z-10 w-7 h-7 rounded-full bg-slate-900/80 hover:bg-[#FF6000] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm hover:scale-110 cursor-pointer"
+          className="absolute bottom-2 right-2 z-10 w-7 h-7 rounded-full bg-slate-900/85 hover:bg-[#FF6000] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 cursor-pointer"
           title="Zoom and inspect product details"
           aria-label="Inspect image"
         >
@@ -139,7 +146,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </button>
 
         {(product.status === 'Out of Stock' || product.stock <= 0) && (
-          <div className="absolute inset-0 bg-white/85 backdrop-blur-2xs flex flex-col items-center justify-center p-2 text-center z-10">
+          <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center p-2 text-center z-10">
             <span className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
               {t.outOfStock}
             </span>
@@ -147,14 +154,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         )}
       </div>
 
-      {/* Full-Screen Image Viewer Modal */}
-      <ProductImageViewerModal
-        isOpen={isViewerOpen}
-        onClose={() => setIsViewerOpen(false)}
-        images={cardImages}
-        productName={product.name}
-        fallbackImage={getProductImageDueToProduct(product)}
-      />
+      {/* Full-Screen Image Viewer Modal - only mounted when opened */}
+      {isViewerOpen && (
+        <ProductImageViewerModal
+          isOpen={isViewerOpen}
+          onClose={() => setIsViewerOpen(false)}
+          images={cardImages}
+          productName={product.name}
+          fallbackImage={getProductImageDueToProduct(product)}
+        />
+      )}
 
       {/* Product Information - Compact, medium text, clear hierarchy */}
       <div className="p-3 flex flex-col justify-between flex-1">
@@ -222,4 +231,4 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </div>
     </div>
   );
-};
+});

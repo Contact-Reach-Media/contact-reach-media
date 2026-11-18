@@ -861,7 +861,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
 
       {/* MODAL: CREATE / EDIT CATEGORY */}
       {categoryModalMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/65 animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-black text-base text-slate-900">
@@ -975,7 +975,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
 
       {/* MODAL: MOVE SUBCATEGORY */}
       {moveModalCat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/65 animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-black text-base text-slate-900">
@@ -1034,7 +1034,7 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({
 
       {/* MODAL: DELETE CATEGORY WITH REASSIGNMENT PROTECTION */}
       {deleteModalCat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/65 animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center gap-3 text-rose-600 pb-3 border-b border-slate-100">
               <AlertTriangle className="w-6 h-6 shrink-0" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   ShoppingBag, Search, Sparkles, Truck, ShieldCheck, CreditCard,
   MessageCircle, Heart, Star, ChevronRight, ChevronLeft, ArrowRight,
@@ -185,13 +185,31 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(DEFAULT_EXCHANGE_RATES);
   const [activeView, setActiveView] = useState<string>(initialRoute.view);
 
-  // Core Data loaded dynamically from Supabase
-  const [products, setProducts] = useState<Product[]>([]);
+  // Core Data loaded dynamically from Supabase (hydrated synchronously from local cache for instant first paint)
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const cached = localStorage.getItem('crm_home_catalog_cache');
+      if (!cached) return [];
+      const parsed = JSON.parse(cached);
+      if (!Array.isArray(parsed)) return [];
+      const deletedSet = new Set(api.getLocallyDeletedProductIds().map((d: string) => d.toLowerCase().trim()));
+      return parsed.filter((p: Product) => {
+        if (!p || !p.id) return false;
+        if (p.status === 'Hidden' || p.status === 'Archived') return false;
+        if (deletedSet.has(String(p.id).toLowerCase().trim())) return false;
+        if (p.sku && deletedSet.has(String(p.sku).toLowerCase().trim())) return false;
+        return true;
+      });
+    } catch {
+      return [];
+    }
+  });
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [shops, setShops] = useState<VendorShop[]>([]);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
 
-  // Request permanent storage from browser and persist catalog to local storage
+  // Request permanent storage from browser and persist catalog asynchronously during idle time
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.storage && navigator.storage.persist) {
       navigator.storage.persist().catch(() => {});
@@ -199,11 +217,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    try {
-      if (products && products.length > 0) {
+    if (!products || products.length === 0) return;
+    const persistCatalog = () => {
+      try {
         localStorage.setItem('crm_home_catalog_cache', JSON.stringify(products.slice(0, 1000)));
-      }
-    } catch {}
+      } catch {}
+    };
+    const w = window as any;
+    if (typeof w.requestIdleCallback === 'function') {
+      const idleId = w.requestIdleCallback(persistCatalog, { timeout: 1500 });
+      return () => w.cancelIdleCallback?.(idleId);
+    }
+    const timer = window.setTimeout(persistCatalog, 150);
+    return () => window.clearTimeout(timer);
   }, [products]);
 
   // Cart & Wishlist with localStorage Persistence (excluding any permanently deleted products)
@@ -314,8 +340,10 @@ export default function App() {
   const [sellerPhone, setSellerPhone] = useState('');
   const [sellerSubmitting, setSellerSubmitting] = useState(false);
 
-  // Product quantity display limit for "Reba ibindi"
+  // Product quantity display limits for Home & progressive /shop catalog
   const [visibleRecommendedCount, setVisibleRecommendedCount] = useState(20);
+  const [visibleShopCount, setVisibleShopCount] = useState(36);
+  const shopSentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -482,7 +510,7 @@ export default function App() {
     }
 
     setActiveView(resolvedView);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
   };
 
   // Dedicated manual logout handler - ONLY manual logout ends admin session
@@ -506,20 +534,18 @@ export default function App() {
     }
   };
 
-  // Initial Data Fetch
+  // Initial Data Fetch (single batched storefront bootstrap + admin auth check)
   const refreshAllData = async () => {
     try {
-      const [fetchedProducts, fetchedCategories, fetchedSettings, fetchedShops, isAuth] = await Promise.all([
-        api.getProducts(),
-        api.getCategories(),
-        api.getSettings(),
-        api.getShops(),
+      const [bootstrap, isAuth] = await Promise.all([
+        api.getStorefrontBootstrap(),
         api.adminCheckAuth()
       ]);
+      const fetchedProducts = bootstrap.products;
       setProducts(fetchedProducts);
-      setCategories(fetchedCategories);
-      setSettings(fetchedSettings);
-      setShops(fetchedShops);
+      setCategories(bootstrap.categories);
+      setSettings(bootstrap.settings);
+      setShops(bootstrap.shops);
       const hasToken = Boolean(api.getAdminToken());
       const effectiveAuth = isAuth && hasToken;
       setIsAdminLoggedIn(effectiveAuth);
@@ -831,8 +857,9 @@ export default function App() {
       });
     } catch {}
 
-    // 3. Resilient 30s background sync heartbeat (fallback for networks blocking SSE)
+    // 3. Resilient 30s background sync heartbeat (skips when tab is hidden)
     const syncHeartbeat = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         const res = await fetch('/api/sync/status', { cache: 'no-store' });
         if (res.ok) {
@@ -1039,7 +1066,7 @@ export default function App() {
     setIsCheckoutOpen(true);
   };
 
-  const handleToggleWishlist = (product: Product) => {
+  const handleToggleWishlist = useCallback((product: Product) => {
     setWishlist(prev => {
       const exists = prev.includes(product.id);
       if (exists) {
@@ -1050,43 +1077,88 @@ export default function App() {
         return [...prev, product.id];
       }
     });
-  };
+  }, []);
+
+  // Stable refs so memoized ProductCards never re-render when cart/other state updates
+  const selectProductActionRef = useRef(handleSelectProduct);
+  selectProductActionRef.current = handleSelectProduct;
+  const addToCartActionRef = useRef(handleAddToCart);
+  addToCartActionRef.current = handleAddToCart;
+  const quickBuyActionRef = useRef(handleQuickBuy);
+  quickBuyActionRef.current = handleQuickBuy;
+
+  const handleCardView = useCallback((p: Product) => selectProductActionRef.current(p), []);
+  const handleCardAddToCart = useCallback((p: Product) => addToCartActionRef.current(p, 1), []);
+  const handleCardQuickBuy = useCallback((p: Product) => quickBuyActionRef.current(p, 1), []);
 
   const departmentTree = useMemo(
     () => resolveDepartmentDefinitions(categories, true),
     [categories]
   );
 
-  // Filtered & Sorted Products
-  const filteredProducts = products.filter(p => {
-    const matchCategory = doesProductMatchCategory(p, selectedCategory);
-    const matchSubCategory = doesProductMatchSubCategory(
-      p,
-      selectedSubCategory,
-      selectedCategory,
-      categories
-    );
-
+  // Filtered & Sorted Products (memoized to avoid re-scanning 250+ products on unrelated renders)
+  const filteredProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const matchSearch =
-      !q ||
-      (p.name || '').toLowerCase().includes(q) ||
-      (p.description || '').toLowerCase().includes(q) ||
-      (p.category || '').toLowerCase().includes(q) ||
-      (p.subCategoryName && p.subCategoryName.toLowerCase().includes(q)) ||
-      (p.subcategory && p.subcategory.toLowerCase().includes(q)) ||
-      (p.brand && p.brand.toLowerCase().includes(q)) ||
-      (p.sku && p.sku.toLowerCase().includes(q));
+    return products.filter(p => {
+      const matchCategory = doesProductMatchCategory(p, selectedCategory);
+      const matchSubCategory = doesProductMatchSubCategory(
+        p,
+        selectedSubCategory,
+        selectedCategory,
+        categories
+      );
 
-    return matchCategory && matchSubCategory && matchSearch;
-  });
+      const matchSearch =
+        !q ||
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q) ||
+        (p.subCategoryName && p.subCategoryName.toLowerCase().includes(q)) ||
+        (p.subcategory && p.subcategory.toLowerCase().includes(q)) ||
+        (p.brand && p.brand.toLowerCase().includes(q)) ||
+        (p.sku && p.sku.toLowerCase().includes(q));
 
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    if (sortBy === 'price-asc') return a.price - b.price;
-    if (sortBy === 'price-desc') return b.price - a.price;
-    if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
-  });
+      return matchCategory && matchSubCategory && matchSearch;
+    });
+  }, [products, selectedCategory, selectedSubCategory, categories, searchQuery]);
+
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      if (sortBy === 'price-asc') return a.price - b.price;
+      if (sortBy === 'price-desc') return b.price - a.price;
+      if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
+    });
+  }, [filteredProducts, sortBy]);
+
+  // Reset progressive shop batch size when navigating or changing filters
+  useEffect(() => {
+    setVisibleShopCount(36);
+  }, [activeView, selectedCategory, selectedSubCategory, searchQuery, sortBy]);
+
+  // Progressive infinite reveal for /shop grid
+  useEffect(() => {
+    if (activeView !== 'shop' || visibleShopCount >= sortedProducts.length) return;
+    const el = shopSentinelRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleShopCount(prev => Math.min(sortedProducts.length, prev + 36));
+        }
+      },
+      { rootMargin: '400px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [activeView, visibleShopCount, sortedProducts.length]);
+
+  const visibleShopProducts = useMemo(
+    () => sortedProducts.slice(0, visibleShopCount),
+    [sortedProducts, visibleShopCount]
+  );
+
+  const wishlistSet = useMemo(() => new Set(wishlist), [wishlist]);
 
   // Category Icons Map
   const categoryImages: Record<string, string> = {
@@ -1129,7 +1201,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-slate-800 font-sans antialiased selection:bg-orange-500 selection:text-white">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold py-2.5 px-5 rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] bg-slate-900 text-white text-xs font-semibold py-2.5 px-5 rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200">
           {toastMessage}
         </div>
       )}
@@ -1148,7 +1220,7 @@ export default function App() {
         <>
           {/* Admin Maintenance Alert Banner */}
           {isAdminLoggedIn && settings.isMaintenanceMode && (
-            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 font-medium px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm border-b border-amber-600 sticky top-0 z-40">
+            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 font-medium px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm border-b border-amber-600 relative z-[41]">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
                 <strong className="font-black uppercase text-[11px] bg-black/15 px-1.5 py-0.5 rounded shrink-0">
@@ -1690,22 +1762,38 @@ export default function App() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-              {sortedProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onViewProduct={(p) => handleSelectProduct(p)}
-                  onAddToCart={(p) => handleAddToCart(p, 1)}
-                  onQuickBuy={(p) => handleQuickBuy(p, 1)}
-                  isWishlisted={wishlist.includes(product.id)}
-                  onToggleWishlist={handleToggleWishlist}
-                  currentLang={currentLang}
-                  currentCurrency={currentCurrency}
-                  exchangeRates={exchangeRates}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                {visibleShopProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onViewProduct={handleCardView}
+                    onAddToCart={handleCardAddToCart}
+                    onQuickBuy={handleCardQuickBuy}
+                    isWishlisted={wishlistSet.has(product.id)}
+                    onToggleWishlist={handleToggleWishlist}
+                    currentLang={currentLang}
+                    currentCurrency={currentCurrency}
+                    exchangeRates={exchangeRates}
+                  />
+                ))}
+              </div>
+              {visibleShopCount < sortedProducts.length && (
+                <div ref={shopSentinelRef} className="mt-8 flex flex-col items-center gap-2">
+                  <p className="text-xs text-slate-500">
+                    Showing {visibleShopProducts.length} of {sortedProducts.length} products
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleShopCount(prev => Math.min(sortedProducts.length, prev + 36))}
+                    className="py-2.5 px-6 rounded-full bg-[#18191C] hover:bg-black text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
+                  >
+                    {t.showMore || (currentLang === 'en' ? 'Show More Products' : 'Reba ibindi bicuruzwa')}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : (
@@ -1828,10 +1916,10 @@ export default function App() {
                       <ProductCard
                         key={product.id}
                         product={product}
-                        onViewProduct={(p) => handleSelectProduct(p)}
-                        onAddToCart={(p) => handleAddToCart(p, 1)}
-                        onQuickBuy={(p) => handleQuickBuy(p, 1)}
-                        isWishlisted={wishlist.includes(product.id)}
+                        onViewProduct={handleCardView}
+                        onAddToCart={handleCardAddToCart}
+                        onQuickBuy={handleCardQuickBuy}
+                        isWishlisted={wishlistSet.has(product.id)}
                         onToggleWishlist={handleToggleWishlist}
                         currentLang={currentLang}
                         currentCurrency={currentCurrency}
@@ -1853,10 +1941,10 @@ export default function App() {
                       <ProductCard
                         key={product.id}
                         product={product}
-                        onViewProduct={(p) => handleSelectProduct(p)}
-                        onAddToCart={(p) => handleAddToCart(p, 1)}
-                        onQuickBuy={(p) => handleQuickBuy(p, 1)}
-                        isWishlisted={wishlist.includes(product.id)}
+                        onViewProduct={handleCardView}
+                        onAddToCart={handleCardAddToCart}
+                        onQuickBuy={handleCardQuickBuy}
+                        isWishlisted={wishlistSet.has(product.id)}
                         onToggleWishlist={handleToggleWishlist}
                         currentLang={currentLang}
                         currentCurrency={currentCurrency}
@@ -1967,7 +2055,7 @@ export default function App() {
 
       {/* FLOATING WHATSAPP SUPPORT TAB (Only for public storefront customers) */}
       {!(activeView === 'admin' && isAdminLoggedIn) && activeView !== 'admin-login' && activeView !== 'admin-invite' && activeView !== '404' && (
-        <div className="fixed bottom-6 right-0 z-40">
+        <div className="fixed bottom-6 right-0 z-30">
           <a
             href={`https://wa.me/${(settings?.whatsAppNumber || '+250780022600').replace(/\D/g, '')}?text=${encodeURIComponent(
               'Hello ContactReach Support, I would like assistance with products on ContactReach Market.'
@@ -2122,7 +2210,7 @@ export default function App() {
 
       {/* 8. Request a Product (SABA) Modal */}
       {isRequestProductOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-slate-900/65 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 relative">
             <button
               onClick={() => setIsRequestProductOpen(false)}
@@ -2210,7 +2298,7 @@ export default function App() {
 
       {/* 9. Seller Registration Modal (Gurisha kuri ContactReach) */}
       {isSellerModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-slate-900/65 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 relative">
             <button
               onClick={() => {

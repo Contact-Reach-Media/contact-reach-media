@@ -143,9 +143,13 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
           >
             {/* Luminous Sky-Blue Gradient Background matching reference */}
             <div className="absolute inset-0 bg-gradient-to-br from-[#18A2E8] via-[#1095DE] to-[#0A7EC2]">
-              {/* Radial glow effects */}
-              <div className="absolute -top-24 -left-24 w-96 h-96 bg-sky-200/30 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-sky-300/20 rounded-full blur-3xl pointer-events-none" />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle at 12% 10%, rgba(186,230,253,0.3), transparent 42%), radial-gradient(circle at 88% 85%, rgba(125,211,252,0.2), transparent 48%)'
+                }}
+              />
             </div>
 
             {/* Hand-Held Smartphone Graphic Container in Center */}
@@ -324,6 +328,8 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
               <img
                 src="/src/assets/images/hero_marketplace_shopper_1791966365592.jpg"
                 alt="ContactReach Market Shopper"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover object-right"
               />
             </div>
@@ -352,7 +358,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
                 </button>
                 <button
                   onClick={onNavigateHowToBuy}
-                  className="py-3 px-6 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs backdrop-blur-xs transition-colors cursor-pointer border border-white/20"
+                  className="py-3 px-6 rounded-full bg-slate-900/35 hover:bg-slate-900/50 text-white font-bold text-xs transition-colors cursor-pointer border border-white/25"
                 >
                   {translations[currentLang]?.howToBuy || 'How to Buy'}
                 </button>
@@ -472,7 +478,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
         {/* Carousel Navigation Arrow: Left (<) matching screenshot */}
         <button
           onClick={prevSlide}
-          className="absolute left-2 sm:left-4 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/20 hover:bg-white/40 active:scale-90 backdrop-blur-md border border-white/40 text-white flex items-center justify-center transition-all cursor-pointer shadow-md"
+          className="absolute left-2 sm:left-4 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-900/35 hover:bg-slate-900/55 active:scale-90 border border-white/40 text-white flex items-center justify-center transition-colors cursor-pointer shadow-md"
           aria-label="Previous Slide"
         >
           <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -481,7 +487,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({
         {/* Carousel Navigation Arrow: Right (>) matching screenshot */}
         <button
           onClick={nextSlide}
-          className="absolute right-2 sm:right-4 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/20 hover:bg-white/40 active:scale-90 backdrop-blur-md border border-white/40 text-white flex items-center justify-center transition-all cursor-pointer shadow-md"
+          className="absolute right-2 sm:right-4 z-40 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-900/35 hover:bg-slate-900/55 active:scale-90 border border-white/40 text-white flex items-center justify-center transition-colors cursor-pointer shadow-md"
           aria-label="Next Slide"
         >
           <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />

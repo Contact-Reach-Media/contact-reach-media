@@ -20,6 +20,7 @@ import {
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { FormattedProductDescription } from './FormattedProductDescription.tsx';
+import { ProductImageViewerModal } from './ProductImageViewerModal.tsx';
 import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface ProductModalProps {
@@ -118,16 +119,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   useEffect(() => {
     if (!product || galleryImages.length === 0) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isLightboxOpen) {
+        if (e.key === 'Escape') setIsLightboxOpen(false);
+        return;
+      }
       if (e.key === 'ArrowRight') {
         setSelectedImageIndex(prev => (prev < galleryImages.length - 1 ? prev + 1 : 0));
       } else if (e.key === 'ArrowLeft') {
         setSelectedImageIndex(prev => (prev > 0 ? prev - 1 : galleryImages.length - 1));
       } else if (e.key === 'Escape') {
-        if (isLightboxOpen) {
-          setIsLightboxOpen(false);
-        } else {
-          onClose();
-        }
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -331,10 +332,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const grossWeight = product.alibabaWeightKg;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 lg:p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/75 flex items-center justify-center p-2 sm:p-4 lg:p-6 animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[96vh] overflow-y-auto shadow-2xl relative border border-slate-200 flex flex-col">
         {/* Sticky Header with Breadcrumb & Share */}
-        <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md px-6 py-3.5 border-b border-slate-100 flex items-center justify-between gap-4">
+        <div className="sticky top-0 z-30 bg-white/98 px-6 py-3.5 border-b border-slate-100 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-xs text-slate-500 overflow-x-auto whitespace-nowrap">
             <span className="text-slate-400">ContactReach Market</span>
             <span>&gt;</span>
@@ -372,15 +373,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* LEFT COLUMN: Gallery with Vertical Thumbnails & Supplier Badge (5 cols) */}
             <div className="lg:col-span-5 space-y-4">
-              <div className="flex flex-col-reverse sm:flex-row gap-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 items-stretch sm:items-start">
                 {/* Vertical Thumbnails (Matching Image 1 & 3) */}
                 {galleryImages.length > 1 && (
-                  <div className="flex sm:flex-col gap-2 overflow-x-auto sm:overflow-y-auto max-h-[420px] pb-2 sm:pb-0 shrink-0">
+                  <div className="flex sm:flex-col gap-2 w-full sm:w-[72px] overflow-x-auto sm:overflow-x-visible sm:overflow-y-auto max-h-[420px] pb-2 sm:pb-0 shrink-0">
                     {galleryImages.map((img, idx) => (
                       <button
                         key={idx}
+                        type="button"
                         onClick={() => setSelectedImageIndex(idx)}
-                        className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                        className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer bg-white ${
                           selectedImageIndex === idx
                             ? 'border-[#f95700] ring-2 ring-orange-200 shadow-xs'
                             : 'border-slate-200 opacity-70 hover:opacity-100'
@@ -390,6 +392,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                           src={img || getProductImageDueToProduct(product)}
                           alt={`Thumbnail ${idx + 1}`}
                           className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const el = e.currentTarget;
+                            if (!el.dataset.fallbackApplied) {
+                              el.dataset.fallbackApplied = '1';
+                              el.src = getProductImageDueToProduct(product);
+                            } else if (el.src !== `${window.location.origin}/logo.png`) {
+                              el.src = '/logo.png';
+                            }
+                          }}
                         />
                       </button>
                     ))}
@@ -397,12 +409,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 )}
 
                 {/* Main Product Image */}
-                <div className="relative flex-1 rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 pt-[100%] shadow-inner group/img">
+                <div
+                  onClick={() => setIsLightboxOpen(true)}
+                  className="relative flex-1 min-w-0 w-full aspect-square min-h-[260px] sm:min-h-[320px] rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 shadow-inner group/img cursor-zoom-in"
+                >
                   <img
+                    key={`${product.id}-${selectedImageIndex}`}
                     src={galleryImages[selectedImageIndex] || getProductImageDueToProduct(product)}
                     alt={product.name}
-                    onClick={() => setIsLightboxOpen(true)}
-                    className="absolute inset-0 w-full h-full object-contain p-2 cursor-zoom-in transition-transform duration-300 group-hover/img:scale-105"
+                    className="w-full h-full object-contain p-2 transition-transform duration-300 group-hover/img:scale-105"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      if (!el.dataset.fallbackApplied) {
+                        el.dataset.fallbackApplied = '1';
+                        el.src = getProductImageDueToProduct(product);
+                      } else if (el.src !== `${window.location.origin}/logo.png`) {
+                        el.src = '/logo.png';
+                      }
+                    }}
                   />
 
                   {/* Navigation Arrows */}
@@ -432,7 +457,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                   )}
 
                   {/* Photo / Video Pill Tabs */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/90 backdrop-blur-xs px-2 py-1 rounded-full shadow-md text-[10px] font-bold text-slate-700">
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/95 px-2 py-1 rounded-full shadow-md text-[10px] font-bold text-slate-700">
                     <span className="px-2 py-0.5 rounded-full bg-[#f95700] text-white">Photos</span>
                     {product.videoUrl && isValidYouTubeUrl(product.videoUrl) && (
                       <span
@@ -1112,6 +1137,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Full-Screen Interactive Product Image Viewer */}
+      <ProductImageViewerModal
+        isOpen={isLightboxOpen}
+        onClose={() => setIsLightboxOpen(false)}
+        images={galleryImages}
+        initialIndex={selectedImageIndex}
+        productName={displayName || product.name}
+        fallbackImage={getProductImageDueToProduct(product)}
+      />
     </div>
   );
 };

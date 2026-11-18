@@ -10,10 +10,9 @@ const originalPlaceholderMap = new WeakMap<HTMLInputElement | HTMLTextAreaElemen
 const originalTitleMap = new WeakMap<HTMLElement, string>();
 
 let activeTargetLang = 'en';
+let hasTranslatedDom = false;
 let observer: MutationObserver | null = null;
-let isTranslating = false;
-let pendingNodes: Node[] = [];
-let pendingInputs: (HTMLInputElement | HTMLTextAreaElement)[] = [];
+const pendingAddedRoots = new Set<Node>();
 let debounceTimer: any = null;
 
 // Regex to skip purely numeric or code strings
@@ -127,6 +126,10 @@ async function processBatchTranslation(nodes: Text[], inputs: (HTMLInputElement 
   try {
     const translatedList = await batchTranslateWithGoogle(textPayloads, targetLang, 'en');
 
+    if (nodeMap.length > 0 || inputMap.length > 0) {
+      hasTranslatedDom = true;
+    }
+
     // Apply translations to Text nodes
     nodeMap.forEach(item => {
       const translated = translatedList[item.index];
@@ -155,6 +158,9 @@ async function processBatchTranslation(nodes: Text[], inputs: (HTMLInputElement 
  */
 export function restoreOriginalEnglish() {
   activeTargetLang = 'en';
+  if (!hasTranslatedDom || typeof document === 'undefined' || !document.body) {
+    return;
+  }
 
   // Walk through the whole document and restore
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
@@ -177,6 +183,7 @@ export function restoreOriginalEnglish() {
     }
     currentNode = walker.nextNode();
   }
+  hasTranslatedDom = false;
 }
 
 /**
@@ -218,14 +225,12 @@ export function startDOMTranslationObserver(targetLang: string) {
     if (activeTargetLang === 'en') return;
 
     let newNodesAdded = false;
-    const addedNodesList: Node[] = [];
-
     for (const m of mutations) {
       if (m.type === 'childList' && m.addedNodes.length > 0) {
         m.addedNodes.forEach(node => {
           if (node.nodeType === Node.ELEMENT_NODE && !shouldSkipElement(node)) {
             newNodesAdded = true;
-            addedNodesList.push(node);
+            pendingAddedRoots.add(node);
           }
         });
       }
@@ -234,15 +239,33 @@ export function startDOMTranslationObserver(targetLang: string) {
     if (newNodesAdded) {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        addedNodesList.forEach(root => {
+        const roots = Array.from(pendingAddedRoots);
+        pendingAddedRoots.clear();
+        const allNodes: Text[] = [];
+        const allInputs: (HTMLInputElement | HTMLTextAreaElement)[] = [];
+        const seenNodes = new Set<Text>();
+        const seenInputs = new Set<HTMLInputElement | HTMLTextAreaElement>();
+        roots.forEach(root => {
           if (root.isConnected) {
             const { nodes, inputs } = collectTranslatableNodes(root);
-            if (nodes.length > 0 || inputs.length > 0) {
-              processBatchTranslation(nodes, inputs, activeTargetLang);
-            }
+            nodes.forEach(n => {
+              if (!seenNodes.has(n)) {
+                seenNodes.add(n);
+                allNodes.push(n);
+              }
+            });
+            inputs.forEach(inp => {
+              if (!seenInputs.has(inp)) {
+                seenInputs.add(inp);
+                allInputs.push(inp);
+              }
+            });
           }
         });
-      }, 100);
+        if (allNodes.length > 0 || allInputs.length > 0) {
+          processBatchTranslation(allNodes, allInputs, activeTargetLang);
+        }
+      }, 120);
     }
   });
 

@@ -46,7 +46,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const estimatedTotal = breakdown.grandTotal;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
+    <div
+      data-drawer="true"
+      className="fixed inset-0 z-[60] overflow-hidden bg-slate-900/60 flex justify-end animate-in fade-in duration-150"
+    >
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between">
         {/* Drawer Header */}
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between">

@@ -411,7 +411,7 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
   const selectedCount = (previewSummary?.items || []).filter(i => i.selected).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 overflow-y-auto">
       <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
         
         {/* MODAL HEADER */}
@@ -1152,7 +1152,7 @@ export const ProductSpreadsheetModal: React.FC<ProductSpreadsheetModalProps> = (
 
         {/* In-App Confirmation Dialog for Google Sheet Export */}
         {confirmSheetExport && (
-          <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[120] bg-slate-900/65 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-orange-100 text-[#FF6000] flex items-center justify-center shrink-0">
