@@ -685,7 +685,25 @@ CREATE TABLE IF NOT EXISTS public.payments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS order_id TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS order_number TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS customer_name TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS payment_phone TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS sender_phone TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS sender_name TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS amount NUMERIC DEFAULT 0;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS amount_paid NUMERIC DEFAULT 0;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'MTN Mobile Money';
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS screenshot_url TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS confirmation_message TEXT;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS verification_status TEXT DEFAULT 'Pending Verification';
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS verified_by TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS admin_notes TEXT;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS customer_notified BOOLEAN DEFAULT false;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS notification_message TEXT;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS flagged_suspicious BOOLEAN DEFAULT false;
@@ -695,6 +713,8 @@ ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS suspicious_reason TEXT;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS verified_directly BOOLEAN DEFAULT false;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS telecom_verified BOOLEAN DEFAULT false;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS telecom_reference TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 CREATE TABLE IF NOT EXISTS public.payment_verifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -708,6 +728,14 @@ CREATE TABLE IF NOT EXISTS public.payment_verifications (
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.payment_verifications ADD COLUMN IF NOT EXISTS payment_id TEXT;
+ALTER TABLE public.payment_verifications ADD COLUMN IF NOT EXISTS verification_method TEXT DEFAULT 'manual';
+ALTER TABLE public.payment_verifications ADD COLUMN IF NOT EXISTS telecom_reference TEXT;
+ALTER TABLE public.payment_verifications ADD COLUMN IF NOT EXISTS amount_verified NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.payment_verifications ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Verified';
+ALTER TABLE public.payment_verifications ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.payment_verifications ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 CREATE TABLE IF NOT EXISTS public.payment_transactions (
   id TEXT PRIMARY KEY,
@@ -734,6 +762,17 @@ CREATE TABLE IF NOT EXISTS public.payment_transactions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS order_id TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS order_number TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'MTN Mobile Money';
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'MTN Mobile Money';
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS amount NUMERIC DEFAULT 0;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'RWF';
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS customer_email TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS checkout_url TEXT;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Pending';
 ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS provider_transaction_id TEXT;
 ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS financial_transaction_id TEXT;
 ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS failure_reason TEXT;
@@ -741,6 +780,9 @@ ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS verified_direct
 ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS telecom_status TEXT;
 ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS signature_verified BOOLEAN DEFAULT false;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.payment_transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 CREATE TABLE IF NOT EXISTS public.sms_notifications (
   id TEXT PRIMARY KEY,
@@ -758,6 +800,19 @@ CREATE TABLE IF NOT EXISTS public.sms_notifications (
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS direction TEXT DEFAULT 'incoming';
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS sender_phone TEXT DEFAULT '';
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS sender_name TEXT;
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS recipient_phone TEXT DEFAULT '';
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'MTN Mobile Money';
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS parsed_transaction_id TEXT;
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS parsed_amount NUMERIC;
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS order_number TEXT;
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS payment_id TEXT;
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'received';
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.sms_notifications ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 ALTER TABLE public.sms_notifications DROP CONSTRAINT IF EXISTS sms_notifications_direction_check;
 ALTER TABLE public.sms_notifications ADD CONSTRAINT sms_notifications_direction_check CHECK (direction IN ('incoming','outbound','outgoing'));
@@ -1286,13 +1341,17 @@ CREATE INDEX IF NOT EXISTS order_items_product_idx ON public.order_items(product
 CREATE INDEX IF NOT EXISTS payments_order_id_idx ON public.payments(order_id);
 CREATE INDEX IF NOT EXISTS payments_order_number_idx ON public.payments(order_number);
 CREATE INDEX IF NOT EXISTS payments_status_idx ON public.payments(verification_status);
+CREATE INDEX IF NOT EXISTS payments_created_idx ON public.payments(created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS payments_verified_txn_uq
   ON public.payments(LOWER(transaction_id))
   WHERE verification_status IN ('Verified/Paid', 'Approved', 'verified') AND transaction_id IS NOT NULL AND transaction_id != '';
 CREATE INDEX IF NOT EXISTS payment_txns_order_id_idx ON public.payment_transactions(order_id);
 CREATE INDEX IF NOT EXISTS payment_txns_order_number_idx ON public.payment_transactions(order_number);
+CREATE INDEX IF NOT EXISTS payment_txns_status_idx ON public.payment_transactions(status);
+CREATE INDEX IF NOT EXISTS payment_txns_created_idx ON public.payment_transactions(created_at DESC);
 CREATE INDEX IF NOT EXISTS sms_notifications_order_idx ON public.sms_notifications(order_number);
 CREATE INDEX IF NOT EXISTS sms_notifications_phone_idx ON public.sms_notifications(sender_phone);
+CREATE INDEX IF NOT EXISTS sms_notifications_created_idx ON public.sms_notifications(created_at DESC);
 CREATE INDEX IF NOT EXISTS messages_customer_id_idx ON public.messages(customer_id);
 CREATE INDEX IF NOT EXISTS messages_phone_idx ON public.messages(phone);
 CREATE INDEX IF NOT EXISTS messages_sender_idx ON public.messages(sender);
