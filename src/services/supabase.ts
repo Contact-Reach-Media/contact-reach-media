@@ -347,17 +347,24 @@ export async function testSupabaseConnection(): Promise<{
 // 1. PRODUCTS CRUD & SYNC
 // -------------------------------------------------------------
 export function mapSupabaseRowToProduct(row: any): Product {
+  const rawPrice = Number(row.price);
+  const rawPriceRwf = Number(row.price_rwf);
+  const resolvedPrice = (!isNaN(rawPrice) && (rawPrice > 0 || isNaN(rawPriceRwf) || rawPriceRwf <= 0))
+    ? Math.max(0, rawPrice)
+    : Math.max(0, rawPriceRwf || 0);
+  const resolvedDiscountPct = Number(row.discount_percent ?? row.discount_pct) || 0;
+
   return {
     id: String(row.id),
     name: row.name || 'Product',
     sku: row.sku || undefined,
     description: row.description || '',
-    price: Number(row.price_rwf ?? row.price) || 0,
+    price: resolvedPrice,
     costPrice: row.cost_price !== null && row.cost_price !== undefined ? Number(row.cost_price) : undefined,
     costOverriddenByAdmin: Boolean(row.cost_overridden_by_admin),
     commissionRate: row.commission_rate !== null && row.commission_rate !== undefined ? Number(row.commission_rate) : 10,
     profitMargin: row.profit_margin !== null && row.profit_margin !== undefined ? Number(row.profit_margin) : undefined,
-    discountPercent: Number(row.discount_pct ?? row.discount_percent) || 0,
+    discountPercent: resolvedDiscountPct,
     discountPrice: row.discount_price !== null && row.discount_price !== undefined ? Number(row.discount_price) : undefined,
     promoStartDate: row.promo_start_date || undefined,
     promoEndDate: row.promo_end_date || undefined,
@@ -367,7 +374,7 @@ export function mapSupabaseRowToProduct(row: any): Product {
     subCategoryId: row.sub_category_id || undefined,
     categoryName: row.category_name || undefined,
     subCategoryName: row.sub_category_name || undefined,
-    stock: Number(row.stock_quantity ?? row.stock ?? 0),
+    stock: Number(row.stock ?? row.stock_quantity ?? 0),
     imageUrl: row.image_url || (Array.isArray(row.images) && row.images[0]) || '',
     images: Array.isArray(row.images) ? row.images : (row.image_url ? [row.image_url] : []),
     videoUrl: row.video_url || undefined,
@@ -442,19 +449,83 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
   }
 }
 
-export async function saveProductToSupabase(p: Product): Promise<{ success: boolean; data?: any; error?: string }> {
+export async function saveProductToSupabase(p: Partial<Product> & { id?: string }): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
+    const toSafeNum = (v: any, fallback = 0): number => {
+      if (v === null || v === undefined || String(v).trim() === '') return fallback;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const toNullableNum = (v: any): number | null => {
+      if (v === null || v === undefined || String(v).trim() === '') return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    // Handle partial updates (e.g. direct price/cost fallback when product name wasn't included)
+    if (p.id && (!p.name || !String(p.name).trim())) {
+      const partialRow: Record<string, any> = {
+        updated_at: new Date().toISOString()
+      };
+      if (p.price !== undefined) {
+        const safePrice = Math.max(0, toSafeNum(p.price, 0));
+        partialRow.price = safePrice;
+        partialRow.price_rwf = safePrice;
+      }
+      if ('costPrice' in p) {
+        partialRow.cost_price = toNullableNum(p.costPrice);
+        if (partialRow.cost_price !== null) partialRow.cost_overridden_by_admin = true;
+      }
+      if ('discountPercent' in p) {
+        const safePct = Math.max(0, toSafeNum(p.discountPercent, 0));
+        partialRow.discount_percent = safePct;
+        partialRow.discount_pct = safePct;
+      }
+      if ('discountPrice' in p) {
+        partialRow.discount_price = toNullableNum(p.discountPrice);
+      }
+      if ('shippingCost' in p) {
+        const sc = toNullableNum(p.shippingCost);
+        partialRow.shipping_cost = sc !== null && sc > 0 ? sc : null;
+      }
+      if (p.stock !== undefined) {
+        const safeStock = Math.max(0, Math.round(toSafeNum(p.stock, 0)));
+        partialRow.stock = safeStock;
+        partialRow.stock_quantity = safeStock;
+      }
+      if (p.status !== undefined) {
+        partialRow.status = p.status;
+      }
+      const { data, error } = await supabase
+        .from('products')
+        .update(partialRow)
+        .eq('id', p.id)
+        .select();
+      if (error) {
+        console.error('[Supabase] Failed partial product update:', error);
+        return { success: false, error: error.message };
+      }
+      return { success: true, data: data?.[0] };
+    }
+
+    const safePrice = Math.max(0, toSafeNum(p.price, 0));
+    const safeStock = Math.max(0, Math.round(toSafeNum(p.stock, 0)));
+    const safeDiscPct = Math.max(0, toSafeNum(p.discountPercent, 0));
+    const safeShipping = toNullableNum(p.shippingCost);
+
     const row: Record<string, any> = {
-      name: p.name,
+      name: p.name || 'Product',
       sku: p.sku || null,
       description: p.description || '',
-      price: Math.max(0, Number(p.price) || 0),
-      cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
+      price: safePrice,
+      price_rwf: safePrice,
+      cost_price: toNullableNum(p.costPrice),
       cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
-      commission_rate: p.commissionRate !== undefined ? Number(p.commissionRate) : 10,
-      profit_margin: p.profitMargin !== undefined ? Number(p.profitMargin) : 0,
-      discount_percent: Number(p.discountPercent) || 0,
-      discount_price: p.discountPrice !== undefined ? Number(p.discountPrice) : null,
+      commission_rate: toSafeNum(p.commissionRate, 10),
+      profit_margin: toSafeNum(p.profitMargin, 0),
+      discount_percent: safeDiscPct,
+      discount_pct: safeDiscPct,
+      discount_price: toNullableNum(p.discountPrice),
       promo_start_date: p.promoStartDate || null,
       promo_end_date: p.promoEndDate || null,
       category: p.category || 'clothing',
@@ -463,7 +534,8 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
       sub_category_id: p.subCategoryId || null,
       category_name: p.categoryName || null,
       sub_category_name: p.subCategoryName || null,
-      stock: Math.max(0, Number(p.stock ?? 0)),
+      stock: safeStock,
+      stock_quantity: safeStock,
       image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
       images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
       video_url: p.videoUrl || null,
@@ -478,38 +550,40 @@ export async function saveProductToSupabase(p: Product): Promise<{ success: bool
       delivery_info: p.deliveryInfo || null,
       status: p.status || 'Available',
       is_featured: Boolean(p.isFeatured),
+      featured: Boolean(p.isFeatured),
       is_new_arrival: Boolean(p.isNewArrival),
+      is_new: Boolean(p.isNewArrival),
       is_best_seller: Boolean(p.isBestSeller),
       brand: p.brand || null,
       unit: p.unit || 'Piece',
-      shipping_cost: p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0 ? Math.max(0, Number(p.shippingCost)) : null,
+      shipping_cost: safeShipping !== null && safeShipping > 0 ? Math.max(0, safeShipping) : null,
       specifications: p.specifications || null,
       storage: p.storage || null,
       packaging_info: p.packagingInfo || null,
       attributes: Array.isArray(p.attributes) ? p.attributes : [],
       variations: Array.isArray(p.variations) ? p.variations : [],
-      rating: Number(p.rating) || 5.0,
-      reviews_count: Number(p.reviewsCount) || 0,
+      rating: toSafeNum(p.rating, 5.0),
+      reviews_count: Math.max(0, Math.round(toSafeNum(p.reviewsCount, 0))),
       source: p.source || 'local',
       review_status: (p as any).reviewStatus || 'Approved',
       alibaba_product_id: p.alibabaProductId || null,
       alibaba_item_url: p.alibabaItemUrl || null,
       alibaba_supplier_name: p.alibabaSupplierName || null,
       alibaba_supplier_location: p.alibabaSupplierLocation || null,
-      alibaba_moq: p.alibabaMoq ?? null,
-      alibaba_weight_kg: p.alibabaWeightKg ?? null,
+      alibaba_moq: toNullableNum(p.alibabaMoq),
+      alibaba_weight_kg: toNullableNum(p.alibabaWeightKg),
       alibaba_dimensions_cm: p.alibabaDimensionsCm || null,
-      alibaba_original_cost_usd: p.alibabaOriginalCostUsd ?? null,
-      alibaba_shipping_cost_usd: p.alibabaShippingCostUsd ?? null,
-      alibaba_shipping_cost_rwf: p.alibabaShippingCostRwf ?? null,
+      alibaba_original_cost_usd: toNullableNum(p.alibabaOriginalCostUsd),
+      alibaba_shipping_cost_usd: toNullableNum(p.alibabaShippingCostUsd),
+      alibaba_shipping_cost_rwf: toNullableNum(p.alibabaShippingCostRwf),
       alibaba_shipping_method: p.alibabaShippingMethod || null,
-      alibaba_lead_time_days: p.alibabaLeadTimeDays ?? null,
+      alibaba_lead_time_days: toNullableNum(p.alibabaLeadTimeDays),
       alibaba_trade_assurance: p.alibabaTradeAssurance ?? false,
       alibaba_verified_supplier: p.alibabaVerifiedSupplier ?? false,
       alibaba_last_sync_at: p.alibabaLastSyncAt || null,
       cj_product_id: p.cjProductId || null,
       cj_product_sku: p.cjProductSku || null,
-      cj_original_cost_usd: p.cjOriginalCostUsd ?? null,
+      cj_original_cost_usd: toNullableNum(p.cjOriginalCostUsd),
       cj_last_sync_at: p.cjLastSyncAt || null,
       ali_express_url: p.aliExpressUrl || null,
       supplier_variant: p.supplierVariant || null,
@@ -616,60 +690,70 @@ export async function syncAllProductsToSupabase(products: Product[] = []): Promi
   let count = 0;
   for (let i = 0; i < products.length; i += 50) {
     const chunk = products.slice(i, i + 50);
-    const rows = chunk.map(p => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku || null,
-      description: p.description || '',
-      price: Math.max(0, Number(p.price) || 0),
-      cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
-      cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
-      commission_rate: p.commissionRate !== undefined ? Number(p.commissionRate) : 10,
-      profit_margin: p.profitMargin !== undefined ? Number(p.profitMargin) : 0,
-      discount_percent: Number(p.discountPercent) || 0,
-      discount_price: p.discountPrice !== undefined ? Number(p.discountPrice) : null,
-      promo_start_date: p.promoStartDate || null,
-      promo_end_date: p.promoEndDate || null,
-      shipping_cost: p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0 ? Math.max(0, Number(p.shippingCost)) : null,
-      category: p.category || 'clothing',
-      subcategory: p.subcategory || null,
-      main_category_id: p.mainCategoryId || null,
-      sub_category_id: p.subCategoryId || null,
-      category_name: p.categoryName || null,
-      sub_category_name: p.subCategoryName || null,
-      stock: Math.max(0, Number(p.stock ?? 0)),
-      image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
-      images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
-      video_url: p.videoUrl || null,
-      youtube_url: p.youtubeUrl || null,
-      shop_name: p.shopName || 'ContactReach Market',
-      shop_id: p.shopId || null,
-      receiver_name: p.receiverName || null,
-      receiver_phone: p.receiverPhone || null,
-      payment_methods: Array.isArray(p.paymentMethods) ? p.paymentMethods : [],
-      merchant_code: p.merchantCode || null,
-      location: p.location || 'Kigali, Rwanda',
-      delivery_info: p.deliveryInfo || null,
-      status: p.status || 'Available',
-      is_featured: Boolean(p.isFeatured),
-      is_new_arrival: Boolean(p.isNewArrival),
-      is_best_seller: Boolean(p.isBestSeller),
-      brand: p.brand || null,
-      unit: p.unit || 'Piece',
-      specifications: p.specifications || null,
-      storage: p.storage || null,
-      packaging_info: p.packagingInfo || null,
-      attributes: Array.isArray(p.attributes) ? p.attributes : [],
-      variations: Array.isArray(p.variations) ? p.variations : [],
-      rating: Number(p.rating) || 5.0,
-      reviews_count: Number(p.reviewsCount) || 0,
-      source: p.source || 'local',
-      review_status: (p as any).reviewStatus || 'Approved',
-      alibaba_product_id: p.alibabaProductId || null,
-      cj_product_id: p.cjProductId || null,
-      created_at: p.createdAt || new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }));
+    const rows = chunk.map(p => {
+      const safePrice = Math.max(0, Number.isFinite(Number(p.price)) ? Number(p.price) : 0);
+      const safeStock = Math.max(0, Math.round(Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0));
+      const safeDiscPct = Math.max(0, Number.isFinite(Number(p.discountPercent)) ? Number(p.discountPercent) : 0);
+      return {
+        id: p.id,
+        name: p.name,
+        sku: p.sku || null,
+        description: p.description || '',
+        price: safePrice,
+        price_rwf: safePrice,
+        cost_price: (p.costPrice !== undefined && p.costPrice !== null && Number.isFinite(Number(p.costPrice))) ? Number(p.costPrice) : null,
+        cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
+        commission_rate: (p.commissionRate !== undefined && Number.isFinite(Number(p.commissionRate))) ? Number(p.commissionRate) : 10,
+        profit_margin: (p.profitMargin !== undefined && Number.isFinite(Number(p.profitMargin))) ? Number(p.profitMargin) : 0,
+        discount_percent: safeDiscPct,
+        discount_pct: safeDiscPct,
+        discount_price: (p.discountPrice !== undefined && p.discountPrice !== null && Number.isFinite(Number(p.discountPrice))) ? Number(p.discountPrice) : null,
+        promo_start_date: p.promoStartDate || null,
+        promo_end_date: p.promoEndDate || null,
+        shipping_cost: p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0 ? Math.max(0, Number(p.shippingCost)) : null,
+        category: p.category || 'clothing',
+        subcategory: p.subcategory || null,
+        main_category_id: p.mainCategoryId || null,
+        sub_category_id: p.subCategoryId || null,
+        category_name: p.categoryName || null,
+        sub_category_name: p.subCategoryName || null,
+        stock: safeStock,
+        stock_quantity: safeStock,
+        image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
+        images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
+        video_url: p.videoUrl || null,
+        youtube_url: p.youtubeUrl || null,
+        shop_name: p.shopName || 'ContactReach Market',
+        shop_id: p.shopId || null,
+        receiver_name: p.receiverName || null,
+        receiver_phone: p.receiverPhone || null,
+        payment_methods: Array.isArray(p.paymentMethods) ? p.paymentMethods : [],
+        merchant_code: p.merchantCode || null,
+        location: p.location || 'Kigali, Rwanda',
+        delivery_info: p.deliveryInfo || null,
+        status: p.status || 'Available',
+        is_featured: Boolean(p.isFeatured),
+        featured: Boolean(p.isFeatured),
+        is_new_arrival: Boolean(p.isNewArrival),
+        is_new: Boolean(p.isNewArrival),
+        is_best_seller: Boolean(p.isBestSeller),
+        brand: p.brand || null,
+        unit: p.unit || 'Piece',
+        specifications: p.specifications || null,
+        storage: p.storage || null,
+        packaging_info: p.packagingInfo || null,
+        attributes: Array.isArray(p.attributes) ? p.attributes : [],
+        variations: Array.isArray(p.variations) ? p.variations : [],
+        rating: Number.isFinite(Number(p.rating)) ? Number(p.rating) : 5.0,
+        reviews_count: Number.isFinite(Number(p.reviewsCount)) ? Number(p.reviewsCount) : 0,
+        source: p.source || 'local',
+        review_status: (p as any).reviewStatus || 'Approved',
+        alibaba_product_id: p.alibabaProductId || null,
+        cj_product_id: p.cjProductId || null,
+        created_at: p.createdAt || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
 
     try {
       const { error } = await supabase.from('products').upsert(rows, { onConflict: 'id' });

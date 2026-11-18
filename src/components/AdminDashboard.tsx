@@ -2791,6 +2791,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       imagesList.unshift(finalPrimaryImage);
     }
 
+    if (prodForm.price === '' || prodForm.price === null || prodForm.price === undefined || isNaN(Number(prodForm.price)) || Number(prodForm.price) < 0) {
+      showToast('Please enter a valid non-negative selling price in FRW.', 'error');
+      return;
+    }
+
     const finalPrice = Math.max(0, Number(prodForm.price));
     const numPercent = prodForm.discountPercent && Number(prodForm.discountPercent) > 0
       ? Math.min(99, Math.max(1, Math.round(Number(prodForm.discountPercent))))
@@ -3042,15 +3047,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (finalCost !== undefined) payload.costPrice = finalCost;
       if (finalPrice !== undefined) payload.price = finalPrice;
 
-      await api.adminUpdateProductCost(productId, payload);
-      showToast('Product cost and pricing updated successfully!');
+      const updatedProd = await api.adminUpdateProductCost(productId, payload);
+      if (updatedProd) {
+        setProducts(prev => prev.map(p => p.id === productId ? { ...p, ...updatedProd } : p));
+      }
+      showToast(finalPrice !== undefined ? 'Product price updated and saved to database!' : 'Product cost and pricing updated successfully!');
       setEditingCostProductId(null);
       setEditingCostPriceValue('');
       setEditingSellingPriceValue('');
-      fetchAllData();
+      fetchAllData(true);
       onRefreshPublicData();
     } catch (err: any) {
-      showToast(err.message || 'Failed to update product cost', 'error');
+      showToast(err.message || 'Failed to update product pricing', 'error');
     } finally {
       setSavingProductCostId(null);
     }
@@ -4789,6 +4797,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </td>
                               <td className="py-3 px-3">
                                 <span className="font-mono font-bold text-slate-900">{p.price.toLocaleString()} FRW</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAdminPromptValue(String(p.price ?? 0));
+                                    setAdminPromptError(null);
+                                    setAdminPromptModal({
+                                      title: `Edit Selling Price (FRW)`,
+                                      subtitle: `Enter new selling price for "${p.name}".`,
+                                      placeholder: 'e.g. 25000',
+                                      confirmLabel: 'Save Price',
+                                      onConfirm: (val) => {
+                                        const parsed = Number(val.trim());
+                                        if (!val.trim() || isNaN(parsed) || parsed < 0) {
+                                          setAdminPromptError('Please enter a valid non-negative number.');
+                                          return;
+                                        }
+                                        handleQuickUpdateProductCost(p.id, undefined, parsed);
+                                        setAdminPromptModal(null);
+                                      }
+                                    });
+                                  }}
+                                  className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-semibold cursor-pointer block mt-0.5"
+                                >
+                                  Edit Price
+                                </button>
                                 {p.costPrice && p.price > p.costPrice && (
                                   <div className="text-[10px] font-bold text-emerald-600 font-mono">
                                     +{Math.round(((p.price - p.costPrice) / p.price) * 100)}% margin

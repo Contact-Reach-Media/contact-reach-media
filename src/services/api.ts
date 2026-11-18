@@ -2333,55 +2333,60 @@ export const api = {
       });
       const parsed = await safeParseResponse<Product>(res);
       if (res.ok && parsed.isJson && parsed.json) {
-        saveProductToFirestore(parsed.json).catch(fsErr => {
-          // persistent local sync
-        });
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
         throw new Error((parsed.json as any).error);
       }
+      if (!res.ok) {
+        throw new Error(`Failed to save product (HTTP ${res.status})`);
+      }
     } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
         throw err;
       }
     }
 
-    // Direct Firestore fallback
-    saveProductToFirestore(prod).catch(fsErr => {
-      // persistent local sync
-    });
+    // Direct Supabase fallback when backend endpoint is unreachable
+    const sbRes = await saveProductToSupabase(prod);
+    if (!sbRes.success) {
+      throw new Error(sbRes.error || 'Failed to save product in database.');
+    }
 
     return prod;
   },
 
   async adminUpdateProduct(id: string, product: Partial<Product>): Promise<Product> {
+    const encodedId = encodeURIComponent(id);
     try {
-      const res = await fetch(`/api/admin/products/${id}`, {
+      const res = await fetch(`/api/admin/products/${encodedId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(product)
       });
       const parsed = await safeParseResponse<Product>(res);
       if (res.ok && parsed.isJson && parsed.json) {
-        saveProductToFirestore(parsed.json).catch(fsErr => {
-          // persistent local sync
-        });
         return parsed.json;
       }
       if (parsed.isJson && (parsed.json as any)?.error) {
         throw new Error((parsed.json as any).error);
       }
+      if (!res.ok) {
+        throw new Error(`Failed to save product changes (HTTP ${res.status})`);
+      }
     } catch (err: any) {
-      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch')) {
+      if (err.message && !err.message.includes('API endpoint') && !err.message.includes('fetch') && !err.message.includes('NetworkError')) {
         throw err;
       }
     }
 
     const updated = { ...product, id } as Product;
-    saveProductToFirestore(updated).catch(() => {});
+    const sbRes = await saveProductToSupabase(updated);
+    if (!sbRes.success) {
+      throw new Error(sbRes.error || 'Failed to save product price in database.');
+    }
 
-    return updated;
+    return (sbRes.data ? { ...updated, ...sbRes.data } : updated) as Product;
   },
 
   async adminUpdateProductImages(id: string, payload: { images?: string[]; newImages?: string[]; imageUrl?: string }): Promise<Product> {
@@ -4599,16 +4604,64 @@ export const api = {
     discountPercent?: number;
     shippingCost?: number;
   }): Promise<Product> {
-    const res = await fetch(`/api/admin/products/${id}/cost`, {
-      method: 'PATCH',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
-    });
-    const parsed = await safeParseResponse<any>(res);
-    if (!res.ok || !parsed.isJson || !parsed.json?.product) {
-      throw new Error(parsed.json?.error || 'Failed to update product cost');
+    const encodedId = encodeURIComponent(id);
+    const headers = getAuthHeaders();
+    let lastError = '';
+
+    for (const method of ['PATCH', 'POST'] as const) {
+      try {
+        const res = await fetch(`/api/admin/products/${encodedId}/cost`, {
+          method,
+          headers,
+          body: JSON.stringify(payload)
+        });
+        const parsed = await safeParseResponse<any>(res);
+        if (res.ok && parsed.isJson && parsed.json?.product) {
+          return parsed.json.product;
+        }
+        if (parsed.isJson && parsed.json?.error) {
+          lastError = parsed.json.error;
+          if (res.status === 400 || res.status === 401 || res.status === 403 || res.status >= 500) {
+            throw new Error(parsed.json.error);
+          }
+        }
+      } catch (err: any) {
+        if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('API endpoint')) {
+          throw err;
+        }
+      }
     }
-    return parsed.json.product;
+
+    // Fallback to PUT /api/admin/products/:id
+    try {
+      const res = await fetch(`/api/admin/products/${encodedId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      const parsed = await safeParseResponse<any>(res);
+      if (res.ok && parsed.isJson && (parsed.json?.id || parsed.json?.product?.id)) {
+        return parsed.json?.product || parsed.json;
+      }
+      if (parsed.isJson && parsed.json?.error) {
+        lastError = parsed.json.error;
+        if (res.status === 400 || res.status === 401 || res.status === 403 || res.status >= 500) {
+          throw new Error(parsed.json.error);
+        }
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('API endpoint')) {
+        throw err;
+      }
+    }
+
+    // Direct Supabase partial update fallback if backend is unreachable
+    const sbRes = await saveProductToSupabase({ id, ...payload } as Partial<Product> & { id: string });
+    if (sbRes.success && sbRes.data) {
+      return { ...sbRes.data, ...payload, id } as Product;
+    }
+
+    throw new Error(lastError || sbRes.error || 'Failed to update product price in database');
   },
 
   // CJ Dropshipping API

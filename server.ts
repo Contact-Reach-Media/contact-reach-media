@@ -1151,24 +1151,43 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         }
       }
     } else if (entityType === 'products' || entityType === 'product') {
+      const toSafeNum = (v: any, fallback = 0): number => {
+        if (v === null || v === undefined || String(v).trim() === '') return fallback;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : fallback;
+      };
+      const toNullableNum = (v: any): number | null => {
+        if (v === null || v === undefined || String(v).trim() === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      const safePrice = Math.max(0, toSafeNum(data.price, 0));
+      const safeStock = Math.max(0, Math.round(toSafeNum(data.stock, 0)));
+      const safeDiscountPct = Math.max(0, toSafeNum(data.discountPercent, 0));
+      const safeShippingCost = toNullableNum(data.shippingCost);
+
       const prodRow: Record<string, any> = {
         name: data.name,
         sku: data.sku || null,
         description: data.description || '',
-        price: Math.max(0, Number(data.price) || 0),
-        cost_price: data.costPrice !== undefined ? Number(data.costPrice) : null,
+        price: safePrice,
+        price_rwf: safePrice,
+        cost_price: toNullableNum(data.costPrice),
         cost_overridden_by_admin: Boolean(data.costOverriddenByAdmin),
-        commission_rate: data.commissionRate !== undefined ? Number(data.commissionRate) : 10,
-        profit_margin: data.profitMargin !== undefined ? Number(data.profitMargin) : 0,
-        discount_percent: Number(data.discountPercent) || 0,
-        discount_price: data.discountPrice !== undefined ? Number(data.discountPrice) : null,
+        commission_rate: toSafeNum(data.commissionRate, 10),
+        profit_margin: toSafeNum(data.profitMargin, 0),
+        discount_percent: safeDiscountPct,
+        discount_pct: safeDiscountPct,
+        discount_price: toNullableNum(data.discountPrice),
         category: data.category || 'clothing',
         subcategory: data.subcategory || null,
         main_category_id: data.mainCategoryId || null,
         sub_category_id: data.subCategoryId || null,
         category_name: data.categoryName || null,
         sub_category_name: data.subCategoryName || null,
-        stock: Math.max(0, Number(data.stock ?? 0)),
+        stock: safeStock,
+        stock_quantity: safeStock,
         image_url: data.imageUrl || (Array.isArray(data.images) && data.images[0]) || '',
         images: Array.isArray(data.images) ? data.images : (data.imageUrl ? [data.imageUrl] : []),
         video_url: data.videoUrl || null,
@@ -1183,11 +1202,13 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         delivery_info: data.deliveryInfo || null,
         status: data.status || 'Available',
         is_featured: Boolean(data.isFeatured),
+        featured: Boolean(data.isFeatured),
         is_new_arrival: Boolean(data.isNewArrival),
+        is_new: Boolean(data.isNewArrival),
         is_best_seller: Boolean(data.isBestSeller),
         brand: data.brand || null,
         unit: data.unit || 'Piece',
-        shipping_cost: (data.shippingCost !== undefined && data.shippingCost !== null && Number(data.shippingCost) > 0) ? Math.max(0, Number(data.shippingCost)) : null,
+        shipping_cost: (safeShippingCost !== null && safeShippingCost > 0) ? Math.max(0, safeShippingCost) : null,
         promo_start_date: data.promoStartDate || null,
         promo_end_date: data.promoEndDate || null,
         specifications: data.specifications || null,
@@ -1195,28 +1216,28 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         packaging_info: data.packagingInfo || null,
         attributes: Array.isArray(data.attributes) ? data.attributes : [],
         variations: Array.isArray(data.variations) ? data.variations : [],
-        rating: Number(data.rating) || 5.0,
-        reviews_count: Number(data.reviewsCount) || 0,
+        rating: toSafeNum(data.rating, 5.0),
+        reviews_count: Math.max(0, Math.round(toSafeNum(data.reviewsCount, 0))),
         source: data.source || 'local',
         review_status: (data as any).reviewStatus || 'Approved',
         alibaba_product_id: data.alibabaProductId || null,
         alibaba_item_url: data.alibabaItemUrl || null,
         alibaba_supplier_name: data.alibabaSupplierName || null,
         alibaba_supplier_location: data.alibabaSupplierLocation || null,
-        alibaba_moq: data.alibabaMoq ?? null,
-        alibaba_weight_kg: data.alibabaWeightKg ?? null,
+        alibaba_moq: toNullableNum(data.alibabaMoq),
+        alibaba_weight_kg: toNullableNum(data.alibabaWeightKg),
         alibaba_dimensions_cm: data.alibabaDimensionsCm || null,
-        alibaba_original_cost_usd: data.alibabaOriginalCostUsd ?? null,
-        alibaba_shipping_cost_usd: data.alibabaShippingCostUsd ?? null,
-        alibaba_shipping_cost_rwf: data.alibabaShippingCostRwf ?? null,
+        alibaba_original_cost_usd: toNullableNum(data.alibabaOriginalCostUsd),
+        alibaba_shipping_cost_usd: toNullableNum(data.alibabaShippingCostUsd),
+        alibaba_shipping_cost_rwf: toNullableNum(data.alibabaShippingCostRwf),
         alibaba_shipping_method: data.alibabaShippingMethod || null,
-        alibaba_lead_time_days: data.alibabaLeadTimeDays ?? null,
+        alibaba_lead_time_days: toNullableNum(data.alibabaLeadTimeDays),
         alibaba_trade_assurance: data.alibabaTradeAssurance ?? false,
         alibaba_verified_supplier: data.alibabaVerifiedSupplier ?? false,
         alibaba_last_sync_at: data.alibabaLastSyncAt || null,
         cj_product_id: data.cjProductId || null,
         cj_product_sku: data.cjProductSku || null,
-        cj_original_cost_usd: data.cjOriginalCostUsd ?? null,
+        cj_original_cost_usd: toNullableNum(data.cjOriginalCostUsd),
         cj_last_sync_at: data.cjLastSyncAt || null,
         ali_express_url: data.aliExpressUrl || null,
         supplier_variant: data.supplierVariant || null,
@@ -1233,13 +1254,45 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
       if (data.createdAt) {
         prodRow.created_at = data.createdAt;
       }
-      const { error: sbErr } = await runSupabaseWithRetry(() =>
+      let { error: sbErr } = await runSupabaseWithRetry(() =>
         supabase.from('products').upsert(prodRow, { onConflict: 'id' })
       );
+      if (sbErr && (sbErr.code === 'PGRST204' || /column .* does not exist/i.test(sbErr.message || ''))) {
+        const coreRow: Record<string, any> = {
+          id: prodRow.id,
+          name: prodRow.name,
+          sku: prodRow.sku,
+          description: prodRow.description,
+          price: prodRow.price,
+          price_rwf: prodRow.price_rwf,
+          cost_price: prodRow.cost_price,
+          cost_overridden_by_admin: prodRow.cost_overridden_by_admin,
+          discount_percent: prodRow.discount_percent,
+          discount_price: prodRow.discount_price,
+          shipping_cost: prodRow.shipping_cost,
+          category: prodRow.category,
+          subcategory: prodRow.subcategory,
+          stock: prodRow.stock,
+          stock_quantity: prodRow.stock_quantity,
+          image_url: prodRow.image_url,
+          images: prodRow.images,
+          shop_name: prodRow.shop_name,
+          shop_id: prodRow.shop_id,
+          status: prodRow.status,
+          updated_at: prodRow.updated_at
+        };
+        if (prodRow.created_at) coreRow.created_at = prodRow.created_at;
+        const retryRes = await runSupabaseWithRetry(() =>
+          supabase.from('products').upsert(coreRow, { onConflict: 'id' })
+        );
+        sbErr = retryRes.error;
+      }
       if (sbErr) {
-        console.warn('[Supabase] Product upsert notice:', sbErr.message);
+        console.error('[Supabase] Product upsert error:', sbErr.message);
+        return { success: false, error: sbErr.message };
       } else {
-        console.log(`[Supabase] Live synchronized product "${data.name}" (${data.id}) to Supabase.`);
+        console.log(`[Supabase] Live synchronized product "${data.name}" (${data.id}) at ${safePrice} RWF.`);
+        return { success: true };
       }
     } else if (entityType === 'categories' || entityType === 'category') {
       await runSupabaseWithRetry(() =>
@@ -1809,25 +1862,31 @@ export function mapSupabaseRowToServerProduct(p: any): Product {
     return isNaN(n) ? undefined : n;
   };
 
-  const stockNum = Math.max(0, Number(p.stock_quantity ?? p.stock ?? 0) || 0);
+  const stockNum = Math.max(0, Number(p.stock ?? p.stock_quantity ?? 0) || 0);
   const rawStatus = p.status || (p.visible === false ? 'Hidden' : (stockNum <= 0 ? 'Out of Stock' : 'Available'));
   const shippingOpt = toOptNum(p.shipping_cost);
   const commissionOpt = toOptNum(p.commission_rate);
   const parsedPaymentMethods = parseJsonArr(p.payment_methods);
   const parsedHistory = parseJsonArr(p.history);
+  const rawPrice = toOptNum(p.price);
+  const rawPriceRwf = toOptNum(p.price_rwf);
+  const resolvedPrice = (rawPrice !== undefined && (rawPrice > 0 || rawPriceRwf === undefined || rawPriceRwf <= 0))
+    ? Math.max(0, rawPrice)
+    : Math.max(0, rawPriceRwf ?? 0);
+  const resolvedDiscountPct = toOptNum(p.discount_percent) ?? toOptNum(p.discount_pct) ?? 0;
 
   return {
     id: String(p.id),
     name: p.name || 'Product',
     sku: p.sku || undefined,
     description: p.description || '',
-    price: Math.max(0, Number(p.price_rwf ?? p.price) || 0),
+    price: resolvedPrice,
     costPrice: toOptNum(p.cost_price),
     shippingCost: (shippingOpt !== undefined && shippingOpt > 0) ? shippingOpt : undefined,
     costOverriddenByAdmin: toBool(p.cost_overridden_by_admin),
     commissionRate: commissionOpt !== undefined ? commissionOpt : 10,
     profitMargin: toOptNum(p.profit_margin),
-    discountPercent: Number(p.discount_pct ?? p.discount_percent) || 0,
+    discountPercent: resolvedDiscountPct,
     discountPrice: toOptNum(p.discount_price),
     promoStartDate: p.promo_start_date ? String(p.promo_start_date).trim() : undefined,
     promoEndDate: p.promo_end_date ? String(p.promo_end_date).trim() : undefined,
@@ -7669,7 +7728,10 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     existingBySku.price = finalPrice;
     if (finalDiscountPercent !== undefined) existingBySku.discountPercent = finalDiscountPercent;
     if (finalDiscountPrice !== undefined) existingBySku.discountPrice = finalDiscountPrice;
-    if (req.body.costPrice !== undefined) existingBySku.costPrice = Number(req.body.costPrice);
+    if (req.body.costPrice !== undefined && req.body.costPrice !== '' && req.body.costPrice !== null && !isNaN(Number(req.body.costPrice))) {
+      existingBySku.costPrice = Math.max(0, Number(req.body.costPrice));
+      existingBySku.costOverriddenByAdmin = true;
+    }
     if (req.body.shippingCost !== undefined) {
       existingBySku.shippingCost = (req.body.shippingCost !== '' && req.body.shippingCost !== null && !isNaN(Number(req.body.shippingCost)))
         ? Math.max(0, Number(req.body.shippingCost))
@@ -7692,10 +7754,17 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     existingBySku.history = existingBySku.history || [];
     existingBySku.history.push({ timestamp: new Date().toISOString(), action: 'Updated via SKU match', user: admin.name });
     saveDbToDisk();
-    await saveToFirestoreAsync('products', existingBySku.id, existingBySku);
+    const skuSync = await saveToFirestoreAsync('products', existingBySku.id, existingBySku);
+    if (skuSync && skuSync.success === false) {
+      return res.status(500).json({ error: `Failed to save product price in database: ${skuSync.error || 'Database write error'}` });
+    }
     broadcastDatabaseEvent('product_updated', { product: existingBySku });
     return res.status(201).json(existingBySku);
   }
+
+  const parsedCreateCost = (req.body.costPrice !== undefined && req.body.costPrice !== '' && req.body.costPrice !== null && !isNaN(Number(req.body.costPrice)))
+    ? Math.max(0, Number(req.body.costPrice))
+    : undefined;
 
   const newProduct: Product = {
     id: `prod-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
@@ -7703,7 +7772,8 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     sku: targetSku,
     description: cleanDescription,
     price: finalPrice,
-    costPrice: req.body.costPrice !== undefined ? Number(req.body.costPrice) : undefined,
+    costPrice: parsedCreateCost,
+    costOverriddenByAdmin: parsedCreateCost !== undefined,
     shippingCost: (req.body.shippingCost !== undefined && req.body.shippingCost !== '' && req.body.shippingCost !== null && !isNaN(Number(req.body.shippingCost)))
       ? Math.max(0, Number(req.body.shippingCost))
       : undefined,
@@ -7743,6 +7813,11 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     history: [{ timestamp: new Date().toISOString(), action: 'Created', user: admin.name }]
   };
 
+    const createSync = await saveToFirestoreAsync('products', newProduct.id, newProduct);
+    if (createSync && createSync.success === false) {
+      return res.status(500).json({ error: `Failed to save product to database: ${createSync.error || 'Database write error'}` });
+    }
+
     db.products.unshift(newProduct);
 
     // Log stock intake
@@ -7762,7 +7837,6 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
 
     logAudit(admin, 'PRODUCT_CREATED', `Created product "${newProduct.name}" (SKU: ${newProduct.sku}) with stock ${stockNum}`, 'product', newProduct.id);
     saveDbToDisk();
-    await saveToFirestoreAsync('products', newProduct.id, newProduct);
     broadcastDatabaseEvent('product_created', { product: newProduct });
     res.status(201).json(newProduct);
   });
@@ -7890,18 +7964,23 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
         .or(`id.eq.${cleanId},sku.eq.${cleanId}`)
         .maybeSingle();
 
-      if (sbProd) {
-        const mapped: Product = {
+    if (sbProd) {
+      const sbRawPrice = Number(sbProd.price);
+      const sbRawPriceRwf = Number(sbProd.price_rwf);
+      const resolvedSbPrice = (!isNaN(sbRawPrice) && (sbRawPrice > 0 || isNaN(sbRawPriceRwf) || sbRawPriceRwf <= 0))
+        ? Math.max(0, sbRawPrice)
+        : Math.max(0, sbRawPriceRwf || 0);
+      const mapped: Product = {
           id: String(sbProd.id),
           name: sbProd.name || 'Product',
           sku: sbProd.sku || undefined,
           description: sbProd.description || '',
-          price: Number(sbProd.price) || 0,
+          price: resolvedSbPrice,
           costPrice: sbProd.cost_price !== null && sbProd.cost_price !== undefined ? Number(sbProd.cost_price) : undefined,
           shippingCost: (sbProd.shipping_cost !== null && sbProd.shipping_cost !== undefined && Number(sbProd.shipping_cost) > 0) ? Number(sbProd.shipping_cost) : undefined,
           costOverriddenByAdmin: Boolean(sbProd.cost_overridden_by_admin),
           commissionRate: sbProd.commission_rate !== null && sbProd.commission_rate !== undefined ? Number(sbProd.commission_rate) : 10,
-          discountPercent: Number(sbProd.discount_percent) || 0,
+          discountPercent: Number(sbProd.discount_percent ?? sbProd.discount_pct) || 0,
           discountPrice: sbProd.discount_price !== null && sbProd.discount_price !== undefined ? Number(sbProd.discount_price) : undefined,
           category: normalizeCategoryId(sbProd.category, sbProd.name),
           subcategory: sbProd.subcategory || undefined,
@@ -7909,7 +7988,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
           subCategoryId: sbProd.sub_category_id || undefined,
           categoryName: sbProd.category_name || undefined,
           subCategoryName: sbProd.sub_category_name || undefined,
-          stock: Number(sbProd.stock_quantity ?? sbProd.stock ?? 0),
+          stock: Number(sbProd.stock ?? sbProd.stock_quantity ?? 0),
           imageUrl: sbProd.image_url || '',
           images: Array.isArray(sbProd.images) ? sbProd.images : (sbProd.image_url ? [sbProd.image_url] : []),
           shopName: sbProd.shop_name || 'ContactReach Market',
@@ -7951,9 +8030,22 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     }
     if (productIndex === -1) return res.status(404).json({ error: 'Product not found' });
 
+    if (req.body.price !== undefined) {
+      if (req.body.price === '' || req.body.price === null || isNaN(Number(req.body.price)) || Number(req.body.price) < 0) {
+        return res.status(400).json({ error: 'A valid non-negative selling price in RWF is required.' });
+      }
+    }
+    if (req.body.costPrice !== undefined && req.body.costPrice !== '' && req.body.costPrice !== null) {
+      if (isNaN(Number(req.body.costPrice)) || Number(req.body.costPrice) < 0) {
+        return res.status(400).json({ error: 'Cost price must be a valid non-negative number.' });
+      }
+    }
+
     const existing = db.products[productIndex];
     const oldStock = existing.stock;
-    const newStock = req.body.stock !== undefined ? Math.max(0, parseInt(req.body.stock, 10)) : existing.stock;
+    const newStock = req.body.stock !== undefined && req.body.stock !== '' && !isNaN(Number(req.body.stock))
+      ? Math.max(0, parseInt(String(req.body.stock), 10))
+      : existing.stock;
 
     const requestedStatus = req.body.status !== undefined ? normalizeProductStatus(req.body.status) : null;
     let prodStatus: ProductStatus = requestedStatus || (req.body.status !== undefined ? req.body.status : existing.status);
@@ -7980,6 +8072,19 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
         const dp = Math.max(0, Number(req.body.discountPrice));
         finalDiscountPrice = dp;
         finalDiscountPercent = newPrice > 0 ? Math.round(((newPrice - dp) / newPrice) * 100) : undefined;
+      }
+    } else if (req.body.price !== undefined && finalDiscountPercent && finalDiscountPercent > 0) {
+      finalDiscountPrice = Math.max(0, Math.round(newPrice * (1 - finalDiscountPercent / 100)));
+    }
+
+    let finalCostPrice: number | undefined = existing.costPrice;
+    let finalCostOverridden = existing.costOverriddenByAdmin;
+    if (req.body.costPrice !== undefined) {
+      if (req.body.costPrice === '' || req.body.costPrice === null) {
+        finalCostPrice = undefined;
+      } else {
+        finalCostPrice = Math.max(0, Number(req.body.costPrice));
+        finalCostOverridden = true;
       }
     }
 
@@ -8035,10 +8140,22 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     }
 
     const resolvedCat = resolveProductCategoryFields(req.body, existing, req.body.name || existing.name);
+    const {
+      newShop: _ns,
+      shopLocation: _sl,
+      shopPhone: _sp,
+      shopCategory: _sc,
+      shopDescription: _sd,
+      newShopLocation: _nsl,
+      newShopPhone: _nsp,
+      newShopDescription: _nsd,
+      stockAdjustmentReason: _sar,
+      ...cleanBody
+    } = req.body || {};
 
     const updated: Product = {
       ...existing,
-      ...req.body,
+      ...cleanBody,
       category: resolvedCat.category,
       mainCategoryId: resolvedCat.mainCategoryId,
       categoryName: resolvedCat.categoryName,
@@ -8051,6 +8168,9 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
       shopName: updatedShopName,
       shopId: updatedShopId,
       price: newPrice,
+      costPrice: finalCostPrice,
+      costOverriddenByAdmin: finalCostOverridden,
+      profitMargin: finalCostPrice !== undefined ? ((finalDiscountPrice || newPrice) - finalCostPrice) : existing.profitMargin,
       shippingCost: finalShippingCost,
       discountPercent: finalDiscountPercent,
       discountPrice: finalDiscountPrice,
@@ -8059,9 +8179,14 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
       updatedAt: new Date().toISOString(),
       history: [
         ...(existing.history || []),
-        { timestamp: new Date().toISOString(), action: 'Updated details', user: admin.name }
+        { timestamp: new Date().toISOString(), action: `Updated details (Price: ${newPrice.toLocaleString()} FRW)`, user: admin.name }
       ]
     };
+
+  const syncResult = await saveToFirestoreAsync('products', updated.id, updated);
+  if (syncResult && syncResult.success === false) {
+    return res.status(500).json({ error: `Failed to save product price in database: ${syncResult.error || 'Database write error'}` });
+  }
 
   db.products[productIndex] = updated;
 
@@ -8080,9 +8205,8 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     });
   }
 
-  logAudit(admin, 'PRODUCT_UPDATED', `Updated product "${updated.name}"`, 'product', updated.id);
+  logAudit(admin, 'PRODUCT_UPDATED', `Updated product "${updated.name}" (Price: ${updated.price} FRW)`, 'product', updated.id);
   saveDbToDisk('product_updated', { product: updated });
-  await saveToFirestoreAsync('products', updated.id, updated);
   broadcastDatabaseEvent('product_updated', { product: updated });
   res.json(updated);
 });
@@ -8199,20 +8323,32 @@ app.patch('/api/admin/products/:id/images', requireAdminAuth, requireRole(PRODUC
 });
 
 // Update Product Cost & Selling Price (Admin Product Cost Control)
-app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
+const handleUpdateProductCostAndPrice = async (req: Request, res: Response) => {
   const admin = (req as any).adminUser;
-  const product = db.products.find(p => p.id === req.params.id);
+  const product = await findOrLoadProduct(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
 
-  const { costPrice, price, discountPrice, discountPercent, shippingCost } = req.body;
+  const { costPrice, price, discountPrice, discountPercent, shippingCost } = req.body || {};
 
-  if (costPrice !== undefined) {
-    product.costPrice = Math.max(0, Number(costPrice));
-    product.costOverriddenByAdmin = true; // Flag that admin customized the cost, preserving it during future automated CJ syncs
+  if (price !== undefined && price !== null && price !== '') {
+    if (isNaN(Number(price)) || Number(price) < 0) {
+      return res.status(400).json({ error: 'Selling price must be a valid non-negative number.' });
+    }
+    product.price = Math.max(0, Number(price));
+    if (product.discountPercent && product.discountPercent > 0 && discountPercent === undefined && discountPrice === undefined) {
+      product.discountPrice = Math.max(0, Math.round(product.price * (1 - product.discountPercent / 100)));
+    }
   }
 
-  if (price !== undefined && !isNaN(Number(price))) {
-    product.price = Math.max(0, Number(price));
+  if (costPrice !== undefined) {
+    if (costPrice === null || costPrice === '') {
+      product.costPrice = undefined;
+    } else if (isNaN(Number(costPrice)) || Number(costPrice) < 0) {
+      return res.status(400).json({ error: 'Cost price must be a valid non-negative number.' });
+    } else {
+      product.costPrice = Math.max(0, Number(costPrice));
+      product.costOverriddenByAdmin = true; // Flag that admin customized the cost, preserving it during future automated CJ syncs
+    }
   }
 
   if (shippingCost !== undefined) {
@@ -8244,15 +8380,24 @@ app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_
     user: admin.name
   });
 
+  const syncResult = await saveToFirestoreAsync('products', product.id, product);
+  if (syncResult && syncResult.success === false) {
+    return res.status(500).json({ error: `Failed to save product price in database: ${syncResult.error || 'Database write error'}` });
+  }
+
   logAudit(admin, 'PRODUCT_COST_UPDATED', `Admin updated cost/pricing for "${product.name}": Cost ${product.costPrice} FRW, Price ${product.price} FRW`, 'product', product.id);
-  saveDbToDisk();
-  saveToFirestoreAsync('products', product.id, product);
+  saveDbToDisk('product_updated', { product });
+  broadcastDatabaseEvent('product_updated', { product });
 
   res.json({
     message: 'Product cost and selling price updated successfully',
     product
   });
-});
+};
+
+app.patch('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductCostAndPrice);
+app.post('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductCostAndPrice);
+app.put('/api/admin/products/:id/cost', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), handleUpdateProductCostAndPrice);
 
 // Duplicate product
 app.post('/api/admin/products/:id/duplicate', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLES), (req: Request, res: Response) => {
@@ -13306,60 +13451,70 @@ app.post('/api/supabase/sync-all', requireAdminAuth, async (_req: Request, res: 
 
     // Sync products in batches of 50 with full metadata & hierarchy columns
     for (let i = 0; i < db.products.length; i += 50) {
-      const chunk = db.products.slice(i, i + 50).map(p => ({
-        id: p.id,
-        name: p.name,
-        sku: p.sku || null,
-        description: p.description || '',
-        price: Math.max(0, Number(p.price) || 0),
-        cost_price: p.costPrice !== undefined ? Number(p.costPrice) : null,
-        cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
-        commission_rate: p.commissionRate !== undefined ? Number(p.commissionRate) : 10,
-        profit_margin: p.profitMargin !== undefined ? Number(p.profitMargin) : 0,
-        discount_percent: Number(p.discountPercent) || 0,
-        discount_price: p.discountPrice !== undefined ? Number(p.discountPrice) : null,
-        promo_start_date: p.promoStartDate || null,
-        promo_end_date: p.promoEndDate || null,
-        category: p.category || 'clothing',
-        subcategory: p.subcategory || null,
-        main_category_id: p.mainCategoryId || null,
-        sub_category_id: p.subCategoryId || null,
-        category_name: p.categoryName || null,
-        sub_category_name: p.subCategoryName || null,
-        stock: Math.max(0, Number(p.stock ?? 0)),
-        image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
-        images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
-        video_url: p.videoUrl || null,
-        youtube_url: p.youtubeUrl || null,
-        shop_name: p.shopName || 'ContactReach Market',
-        shop_id: p.shopId || null,
-        receiver_name: p.receiverName || null,
-        receiver_phone: p.receiverPhone || null,
-        payment_methods: Array.isArray(p.paymentMethods) ? p.paymentMethods : [],
-        merchant_code: p.merchantCode || null,
-        location: p.location || 'Kigali, Rwanda',
-        delivery_info: p.deliveryInfo || null,
-        status: p.status || 'Available',
-        is_featured: Boolean(p.isFeatured),
-        is_new_arrival: Boolean(p.isNewArrival),
-        is_best_seller: Boolean(p.isBestSeller),
-        brand: p.brand || null,
-        unit: p.unit || 'Piece',
-        shipping_cost: (p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0) ? Math.max(0, Number(p.shippingCost)) : null,
-        specifications: p.specifications || null,
-        storage: p.storage || null,
-        packaging_info: p.packagingInfo || null,
-        attributes: Array.isArray(p.attributes) ? p.attributes : [],
-        variations: Array.isArray(p.variations) ? p.variations : [],
-        rating: Number(p.rating) || 5.0,
-        reviews_count: Number(p.reviewsCount) || 0,
-        source: p.source || 'local',
-        review_status: (p as any).reviewStatus || 'Approved',
-        alibaba_product_id: p.alibabaProductId || null,
-        cj_product_id: p.cjProductId || null,
-        created_at: p.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
+      const chunk = db.products.slice(i, i + 50).map(p => {
+        const safePrice = Math.max(0, Number.isFinite(Number(p.price)) ? Number(p.price) : 0);
+        const safeStock = Math.max(0, Math.round(Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0));
+        const safeDiscPct = Math.max(0, Number.isFinite(Number(p.discountPercent)) ? Number(p.discountPercent) : 0);
+        return {
+          id: p.id,
+          name: p.name,
+          sku: p.sku || null,
+          description: p.description || '',
+          price: safePrice,
+          price_rwf: safePrice,
+          cost_price: (p.costPrice !== undefined && p.costPrice !== null && Number.isFinite(Number(p.costPrice))) ? Number(p.costPrice) : null,
+          cost_overridden_by_admin: Boolean(p.costOverriddenByAdmin),
+          commission_rate: (p.commissionRate !== undefined && Number.isFinite(Number(p.commissionRate))) ? Number(p.commissionRate) : 10,
+          profit_margin: (p.profitMargin !== undefined && Number.isFinite(Number(p.profitMargin))) ? Number(p.profitMargin) : 0,
+          discount_percent: safeDiscPct,
+          discount_pct: safeDiscPct,
+          discount_price: (p.discountPrice !== undefined && p.discountPrice !== null && Number.isFinite(Number(p.discountPrice))) ? Number(p.discountPrice) : null,
+          promo_start_date: p.promoStartDate || null,
+          promo_end_date: p.promoEndDate || null,
+          category: p.category || 'clothing',
+          subcategory: p.subcategory || null,
+          main_category_id: p.mainCategoryId || null,
+          sub_category_id: p.subCategoryId || null,
+          category_name: p.categoryName || null,
+          sub_category_name: p.subCategoryName || null,
+          stock: safeStock,
+          stock_quantity: safeStock,
+          image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
+          images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
+          video_url: p.videoUrl || null,
+          youtube_url: p.youtubeUrl || null,
+          shop_name: p.shopName || 'ContactReach Market',
+          shop_id: p.shopId || null,
+          receiver_name: p.receiverName || null,
+          receiver_phone: p.receiverPhone || null,
+          payment_methods: Array.isArray(p.paymentMethods) ? p.paymentMethods : [],
+          merchant_code: p.merchantCode || null,
+          location: p.location || 'Kigali, Rwanda',
+          delivery_info: p.deliveryInfo || null,
+          status: p.status || 'Available',
+          is_featured: Boolean(p.isFeatured),
+          featured: Boolean(p.isFeatured),
+          is_new_arrival: Boolean(p.isNewArrival),
+          is_new: Boolean(p.isNewArrival),
+          is_best_seller: Boolean(p.isBestSeller),
+          brand: p.brand || null,
+          unit: p.unit || 'Piece',
+          shipping_cost: (p.shippingCost !== undefined && p.shippingCost !== null && Number(p.shippingCost) > 0) ? Math.max(0, Number(p.shippingCost)) : null,
+          specifications: p.specifications || null,
+          storage: p.storage || null,
+          packaging_info: p.packagingInfo || null,
+          attributes: Array.isArray(p.attributes) ? p.attributes : [],
+          variations: Array.isArray(p.variations) ? p.variations : [],
+          rating: Number.isFinite(Number(p.rating)) ? Number(p.rating) : 5.0,
+          reviews_count: Number.isFinite(Number(p.reviewsCount)) ? Number(p.reviewsCount) : 0,
+          source: p.source || 'local',
+          review_status: (p as any).reviewStatus || 'Approved',
+          alibaba_product_id: p.alibabaProductId || null,
+          cj_product_id: p.cjProductId || null,
+          created_at: p.createdAt || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      });
       const { error } = await supabase.from('products').upsert(chunk, { onConflict: 'id' });
       if (!error) syncedProducts += chunk.length;
       else syncErrors.push(`products: ${error.message}`);
