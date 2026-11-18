@@ -33,6 +33,7 @@ export const products = pgTable('products', {
   category: text('category').notNull().default('clothing'),
   subcategory: text('subcategory'),
   stock: integer('stock').notNull().default(0),
+  minOrderQuantity: integer('min_order_quantity').notNull().default(1),
   imageUrl: text('image_url'),
   images: jsonb('images').$type<string[]>().default([]),
   shopName: text('shop_name'),

@@ -769,6 +769,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     category: string;
     subcategory: string;
     stock: number | string;
+    minOrderQuantity: number | string;
     imageUrl: string;
     imagesText: string;
     shopName: string;
@@ -802,6 +803,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     category: 'hair-beauty',
     subcategory: '',
     stock: 25,
+    minOrderQuantity: 1,
     imageUrl: '',
     imagesText: '',
     shopName: 'ContactReach Market',
@@ -2662,6 +2664,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category: firstMainCat,
       subcategory: '',
       stock: 25,
+      minOrderQuantity: 1,
       imageUrl: '',
       imagesText: '',
       shopName: defaultShop,
@@ -2729,6 +2732,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category: resolvedMainCat,
       subcategory: resolvedSub?.id || rawSubValue,
       stock: p.stock,
+      minOrderQuantity: p.minOrderQuantity && p.minOrderQuantity > 1 ? p.minOrderQuantity : 1,
       imageUrl: p.imageUrl,
       imagesText: p.images ? p.images.join('\n') : '',
       shopName: p.shopName || 'ContactReach Market',
@@ -2793,6 +2797,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     if (prodForm.price === '' || prodForm.price === null || prodForm.price === undefined || isNaN(Number(prodForm.price)) || Number(prodForm.price) < 0) {
       showToast('Please enter a valid non-negative selling price in FRW.', 'error');
+      return;
+    }
+
+    const parsedMoq = Number(prodForm.minOrderQuantity);
+    if (prodForm.minOrderQuantity === '' || !Number.isFinite(parsedMoq) || parsedMoq < 1) {
+      showToast('Minimum buying quantity must be at least 1.', 'error');
       return;
     }
 
@@ -2870,6 +2880,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       subCategoryId: resolvedSub?.id || rawSubInput,
       subCategoryName: resolvedSub?.name || rawSubInput,
       stock: Math.max(0, parseInt(String(prodForm.stock), 10) || 0),
+      minOrderQuantity: Math.max(1, Math.floor(Number(prodForm.minOrderQuantity) || 1)),
       imageUrl: finalPrimaryImage,
       images: imagesList,
       shopName: targetShopName,
@@ -4051,11 +4062,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       onClick={async () => {
                         playNotificationChime('order');
-                        flashTitle('🔔 (1) TEST ORDER RECEIVED!');
+                        flashTitle('🔔 (1) REAL-TIME ORDER ALERT CHECK');
                         sendDesktopNotification(
-                          '🔔 Real-Time Order Received: #CRM-TEST-9921',
-                          'Test Order: Aline Mugabo placed an order for 39,500 RWF via MTN Mobile Money. Click to open.',
-                          { orderNumber: 'CRM-TEST-9921', url: '/?view=admin&tab=orders' }
+                          '🔔 Real-Time Order Alert Verified',
+                          'Live order push notifications and audio chimes are active across all open admin sessions.',
+                          { url: '/?view=admin&tab=orders' }
                         );
                         showToast('🔔 Testing Order fanfare chime & dispatching live event...');
                         try {
@@ -4889,6 +4900,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 >
                                   {p.stock} {p.unit || 'units'}
                                 </button>
+                                {(p.minOrderQuantity || 1) > 1 && (
+                                  <span className="mt-1 inline-block px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]">
+                                    Min Qty: {p.minOrderQuantity} {p.unit || 'pcs'}
+                                  </span>
+                                )}
                               </td>
                               <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                                 <select
@@ -8777,6 +8793,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300"
                     />
                   </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Storewide Minimum Order Subtotal (FRW)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={500}
+                      value={settings?.minOrderAmount ?? 0}
+                      onChange={(e) => setSettings(prev => prev ? { ...prev, minOrderAmount: Math.max(0, Number(e.target.value) || 0) } : null)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono"
+                    />
+                    <span className="text-[11px] text-slate-400 mt-1 block">
+                      Customers cannot checkout below this items subtotal. Set to 0 to allow any order total (per-product minimum quantities still apply).
+                    </span>
+                  </div>
                 </div>
 
                 <div className="pt-2">
@@ -9453,7 +9485,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Product Visibility / Status *</label>
                   <select
@@ -9466,6 +9498,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <option value="Out of Stock">Out of Stock</option>
                     <option value="Archived">Archived</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Minimum Buying Qty (MOQ) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    required
+                    value={prodForm.minOrderQuantity}
+                    onChange={(e) => setProdForm({ ...prodForm, minOrderQuantity: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-xs"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Customers cannot order fewer than this quantity (default: 1)
+                  </span>
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Unit Label</label>

@@ -50,6 +50,7 @@ export const initialSettings: AppSettings = {
     }
   ],
   "freeDeliveryThreshold": 50000,
+  "minOrderAmount": 0,
   "outsideKigaliNotice": "Locations outside the configured Kigali delivery areas: Additional delivery charges apply. Please contact our seller/support team on WhatsApp (+250 780 022 600) to confirm transport cost and delivery arrangements before completing your order.",
   "isMaintenanceMode": false,
   "maintenanceTitle": "We'll Be Back Soon",

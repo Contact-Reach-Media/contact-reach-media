@@ -236,19 +236,8 @@ const defaultPaymentMethods: PaymentMethodConfig[] = [
   }
 ];
 
-// Default Initial Coupons
-const defaultCoupons: Coupon[] = [
-  {
-    id: 'coup-welcome10',
-    code: 'WELCOME10',
-    discountType: 'percentage',
-    discountValue: 10,
-    minOrderAmount: 10000,
-    maxDiscount: 20000,
-    isActive: true,
-    timesUsed: 0
-  }
-];
+// Default Initial Coupons (Empty in production — admin creates coupons manually)
+const defaultCoupons: Coupon[] = [];
 
 // Default Initial Admin User (Strictly single authorized administrator account)
 const defaultAdminUsers: AdminUser[] = [
@@ -274,7 +263,7 @@ let db: MarketDatabase = {
   messages: [],
   adminNotifications: [],
   customerProblems: [],
-  coupons: [...defaultCoupons],
+  coupons: [],
   inventoryLogs: [],
   auditLogs: [],
   customers: [],
@@ -1188,6 +1177,7 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
         sub_category_name: data.subCategoryName || null,
         stock: safeStock,
         stock_quantity: safeStock,
+        min_order_quantity: Math.max(1, Math.floor(toSafeNum(data.minOrderQuantity, 1))),
         image_url: data.imageUrl || (Array.isArray(data.images) && data.images[0]) || '',
         images: Array.isArray(data.images) ? data.images : (data.imageUrl ? [data.imageUrl] : []),
         video_url: data.videoUrl || null,
@@ -1257,35 +1247,44 @@ async function saveToSupabaseAsync(entityType: string, arg2: any, arg3?: any) {
       let { error: sbErr } = await runSupabaseWithRetry(() =>
         supabase.from('products').upsert(prodRow, { onConflict: 'id' })
       );
-      if (sbErr && (sbErr.code === 'PGRST204' || /column .* does not exist/i.test(sbErr.message || ''))) {
-        const coreRow: Record<string, any> = {
-          id: prodRow.id,
-          name: prodRow.name,
-          sku: prodRow.sku,
-          description: prodRow.description,
-          price: prodRow.price,
-          price_rwf: prodRow.price_rwf,
-          cost_price: prodRow.cost_price,
-          cost_overridden_by_admin: prodRow.cost_overridden_by_admin,
-          discount_percent: prodRow.discount_percent,
-          discount_price: prodRow.discount_price,
-          shipping_cost: prodRow.shipping_cost,
-          category: prodRow.category,
-          subcategory: prodRow.subcategory,
-          stock: prodRow.stock,
-          stock_quantity: prodRow.stock_quantity,
-          image_url: prodRow.image_url,
-          images: prodRow.images,
-          shop_name: prodRow.shop_name,
-          shop_id: prodRow.shop_id,
-          status: prodRow.status,
-          updated_at: prodRow.updated_at
-        };
-        if (prodRow.created_at) coreRow.created_at = prodRow.created_at;
-        const retryRes = await runSupabaseWithRetry(() =>
-          supabase.from('products').upsert(coreRow, { onConflict: 'id' })
-        );
-        sbErr = retryRes.error;
+      if (sbErr && (sbErr.code === 'PGRST204' || sbErr.code === '42703' || /column .* does not exist|min_order_quantity/i.test(sbErr.message || ''))) {
+        if (/min_order_quantity/i.test(sbErr.message || '')) {
+          const { min_order_quantity: _moq, ...rowWithoutMoq } = prodRow;
+          const moqRetryRes = await runSupabaseWithRetry(() =>
+            supabase.from('products').upsert(rowWithoutMoq, { onConflict: 'id' })
+          );
+          sbErr = moqRetryRes.error;
+        }
+        if (sbErr && (sbErr.code === 'PGRST204' || sbErr.code === '42703' || /column .* does not exist/i.test(sbErr.message || ''))) {
+          const coreRow: Record<string, any> = {
+            id: prodRow.id,
+            name: prodRow.name,
+            sku: prodRow.sku,
+            description: prodRow.description,
+            price: prodRow.price,
+            price_rwf: prodRow.price_rwf,
+            cost_price: prodRow.cost_price,
+            cost_overridden_by_admin: prodRow.cost_overridden_by_admin,
+            discount_percent: prodRow.discount_percent,
+            discount_price: prodRow.discount_price,
+            shipping_cost: prodRow.shipping_cost,
+            category: prodRow.category,
+            subcategory: prodRow.subcategory,
+            stock: prodRow.stock,
+            stock_quantity: prodRow.stock_quantity,
+            image_url: prodRow.image_url,
+            images: prodRow.images,
+            shop_name: prodRow.shop_name,
+            shop_id: prodRow.shop_id,
+            status: prodRow.status,
+            updated_at: prodRow.updated_at
+          };
+          if (prodRow.created_at) coreRow.created_at = prodRow.created_at;
+          const retryRes = await runSupabaseWithRetry(() =>
+            supabase.from('products').upsert(coreRow, { onConflict: 'id' })
+          );
+          sbErr = retryRes.error;
+        }
       }
       if (sbErr) {
         console.error('[Supabase] Product upsert error:', sbErr.message);
@@ -1897,6 +1896,7 @@ export function mapSupabaseRowToServerProduct(p: any): Product {
     categoryName: resolvedHierarchy.categoryName,
     subCategoryName: resolvedHierarchy.subCategoryName,
     stock: stockNum,
+    minOrderQuantity: Math.max(1, Math.floor(toOptNum(p.min_order_quantity) ?? 1)),
     imageUrl: mainImage,
     images: parsedImages,
     videoUrl: p.video_url || undefined,
@@ -1945,7 +1945,17 @@ export async function loadAllDataFromSupabase() {
 
     if (!prodErr && Array.isArray(prods)) {
       if (prods.length > 0) {
-        db.products = prods.map(mapSupabaseRowToServerProduct);
+        const localProdMap = new Map(db.products.map(lp => [String(lp.id), lp]));
+        db.products = prods.map(p => {
+          const mapped = mapSupabaseRowToServerProduct(p);
+          if (p.min_order_quantity === undefined) {
+            const localExisting = localProdMap.get(String(mapped.id));
+            if (localExisting?.minOrderQuantity && localExisting.minOrderQuantity > 1) {
+              mapped.minOrderQuantity = localExisting.minOrderQuantity;
+            }
+          }
+          return mapped;
+        });
       }
       console.log(`[Supabase] Loaded ${prods.length} products from Supabase (active: ${db.products.length}).`);
     }
@@ -2426,11 +2436,6 @@ export async function loadAllDataFromSupabase() {
         isActive: c.is_active !== false
       }));
       console.log(`[Supabase] Loaded ${db.coupons.length} coupons.`);
-    } else if (db.coupons.length === 0) {
-      db.coupons = [...defaultCoupons];
-      for (const dCpn of defaultCoupons) {
-        saveToSupabaseAsync('coupons', dCpn.id, dCpn).catch(() => {});
-      }
     }
 
     // 10. Inventory Logs
@@ -3767,6 +3772,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
               discountPrice: sbProd.discount_price !== null ? Number(sbProd.discount_price) : undefined,
               category: sbProd.category || 'clothing',
               stock: Math.max(0, Number(sbProd.stock_quantity ?? sbProd.stock ?? 10)),
+              minOrderQuantity: Math.max(1, Math.floor(Number(sbProd.min_order_quantity) || 1)),
               imageUrl: sbProd.image_url || '/logo.png',
               status: sbProd.status || 'Available',
               createdAt: sbProd.created_at || new Date().toISOString()
@@ -3787,6 +3793,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
           description: '',
           category: 'clothing',
           stock: 999,
+          minOrderQuantity: Math.max(1, Math.floor(Number((item as any).minOrderQuantity) || 1)),
           imageUrl: (item as any).imageUrl || '/logo.png',
           status: 'Available',
           createdAt: new Date().toISOString()
@@ -3795,6 +3802,13 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       }
 
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const minQty = Math.max(1, Math.floor(Number(product.minOrderQuantity) || 1));
+
+      if (qty < minQty) {
+        return res.status(400).json({
+          error: `Minimum purchase quantity for "${product.name}" is ${minQty} ${product.unit || 'unit(s)'}.`
+        });
+      }
 
       // Check unreserved stock for inventory-managed items (prevent overselling)
       if (typeof product.stock === 'number' && product.stock > 0 && !product.source?.includes('cjdropshipping') && !product.source?.includes('alibaba')) {
@@ -3806,6 +3820,11 @@ app.post('/api/orders', async (req: Request, res: Response) => {
           }, 0);
 
         const availableStock = Math.max(0, product.stock - pendingReserved);
+        if (availableStock < minQty) {
+          return res.status(400).json({
+            error: `"${product.name}" requires a minimum order of ${minQty} ${product.unit || 'unit(s)'}, but only ${availableStock} in stock.`
+          });
+        }
         if (qty > availableStock) {
           return res.status(400).json({
             error: `Insufficient stock for "${product.name}". Only ${availableStock} unit(s) available.`
@@ -3861,6 +3880,14 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       supplierSku: product.supplierSku || undefined,
       isOutOfStock,
       shippingCost: itemShippingCost
+    });
+  }
+
+  // Enforce storewide minimum order amount if configured by admin
+  const storeMinAmount = Math.max(0, Number(db.settings?.minOrderAmount) || 0);
+  if (storeMinAmount > 0 && calculatedSubtotal < storeMinAmount) {
+    return res.status(400).json({
+      error: `Minimum order subtotal is ${storeMinAmount.toLocaleString()} FRW (current items subtotal: ${calculatedSubtotal.toLocaleString()} FRW).`
     });
   }
 
@@ -7240,38 +7267,38 @@ app.post('/api/admin/broadcast-update', requireAdminAuth, (req: Request, res: Re
   });
 });
 
-// Admin endpoint to trigger a real-time test alert for Order or SMS across connected administrator dashboards
+// Admin endpoint to trigger a real-time alert check across connected administrator dashboards
 app.post('/api/admin/test-alert', requireAdminAuth, (req: Request, res: Response) => {
   const { type = 'order' } = req.body;
   if (type === 'sms') {
     const sampleMsg: AdminMessage = {
-      id: `msg-test-${Date.now()}`,
-      name: 'Test Customer (0780022600)',
-      email: 'customer@contactreach.rw',
-      phone: '0780022600',
-      subject: 'Test SMS Alert',
-      message: 'Hello ContactReach Admin, this is a real-time SMS test notification to verify your alert sound & banner!',
+      id: `msg-check-${Date.now()}`,
+      name: 'System Notification Check',
+      email: db.settings?.email || 'support@contactreach.rw',
+      phone: db.settings?.paymentNumber || '0780022600',
+      subject: 'Real-Time SMS Alert Check',
+      message: 'Real-time SMS alert channel verified across administrator sessions.',
       createdAt: new Date().toISOString(),
       status: 'unread'
     };
     broadcastDatabaseEvent('sms_received', { message: sampleMsg });
-    return res.json({ success: true, message: 'Test SMS event broadcasted', data: sampleMsg });
+    return res.json({ success: true, message: 'Alert verification broadcasted', data: sampleMsg });
   } else {
     const sampleOrder: Order = {
-      id: `ord-test-${Date.now()}`,
-      orderNumber: `CRM-${Math.floor(10000 + Math.random() * 90000)}`,
-      customerName: 'Test Shopper',
-      customerPhone: '0780022600',
-      customerEmail: 'shopper@test.rw',
+      id: `ord-check-${Date.now()}`,
+      orderNumber: `CRM-CHK-${Math.floor(1000 + Math.random() * 9000)}`,
+      customerName: 'Real-Time Alert Verification',
+      customerPhone: db.settings?.paymentNumber || '0780022600',
+      customerEmail: db.settings?.email || 'support@contactreach.rw',
       deliveryType: 'delivery',
-      deliveryLocation: 'Kigali Area (Nyarugenge)',
+      deliveryLocation: 'Kigali',
       deliveryAddress: 'Fair View Plaza, Kigali',
-      subtotal: 35000,
-      deliveryFee: 1500,
-      totalAmount: 36500,
+      subtotal: 0,
+      deliveryFee: 0,
+      totalAmount: 0,
       paymentMethod: 'MTN Mobile Money',
-      receiverName: 'Ruth',
-      receiverDetails: '0780022600',
+      receiverName: db.settings?.receiverName || 'Ruth',
+      receiverDetails: db.settings?.paymentNumber || '0780022600',
       paymentStatus: 'Pending Payment',
       status: 'New',
       deliveryStatus: 'Pending',
@@ -7280,22 +7307,14 @@ app.post('/api/admin/test-alert', requireAdminAuth, (req: Request, res: Response
         {
           status: 'New',
           timestamp: new Date().toISOString(),
-          note: 'Real-time test order simulated.'
+          note: 'Real-time notification sound & banner check.'
         }
       ],
-      items: [
-        {
-          productId: 'prod-test',
-          productName: 'Sample Real-Time Test Item',
-          price: 35000,
-          quantity: 1,
-          imageUrl: '/logo.png'
-        }
-      ],
+      items: [],
       createdAt: new Date().toISOString()
     };
     broadcastDatabaseEvent('order_created', { order: sampleOrder });
-    return res.json({ success: true, message: 'Test Order event broadcasted', data: sampleOrder });
+    return res.json({ success: true, message: 'Order alert verification broadcasted', data: sampleOrder });
   }
 });
 
@@ -7648,6 +7667,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     category,
     subcategory,
     stock,
+    minOrderQuantity,
     imageUrl,
     images,
     videoUrl,
@@ -7673,6 +7693,13 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
   if (price === undefined || isNaN(Number(price)) || Number(price) < 0) {
     return res.status(400).json({ error: 'A valid price in RWF is required.' });
   }
+  if (minOrderQuantity !== undefined && minOrderQuantity !== '' && minOrderQuantity !== null) {
+    const parsedMoq = Number(minOrderQuantity);
+    if (!Number.isFinite(parsedMoq) || parsedMoq < 1) {
+      return res.status(400).json({ error: 'Minimum purchase quantity must be an integer of at least 1.' });
+    }
+  }
+  const minQty = Math.max(1, Math.floor(Number(minOrderQuantity) || 1));
   const cleanDescription = (description && typeof description === 'string' && description.trim())
     ? description.trim()
     : `${name.trim()} - High quality product available on ContactReach Market with express delivery across Rwanda.`;
@@ -7745,6 +7772,9 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     existingBySku.subCategoryId = existingResolved.subCategoryId;
     existingBySku.subCategoryName = existingResolved.subCategoryName;
     existingBySku.stock = stockNum;
+    if (minOrderQuantity !== undefined) {
+      existingBySku.minOrderQuantity = minQty;
+    }
     existingBySku.status = prodStatus;
     existingBySku.reviewStatus = 'Approved';
     if (cleanVideoUrl) existingBySku.videoUrl = cleanVideoUrl;
@@ -7786,6 +7816,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
     subCategoryId: resolvedHierarchy.subCategoryId,
     subCategoryName: resolvedHierarchy.subCategoryName,
     stock: stockNum,
+    minOrderQuantity: minQty,
     imageUrl: mainImage,
     images: finalImages,
     videoUrl: cleanVideoUrl,
@@ -7989,6 +8020,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
           categoryName: sbProd.category_name || undefined,
           subCategoryName: sbProd.sub_category_name || undefined,
           stock: Number(sbProd.stock ?? sbProd.stock_quantity ?? 0),
+          minOrderQuantity: Math.max(1, Math.floor(Number(sbProd.min_order_quantity) || 1)),
           imageUrl: sbProd.image_url || '',
           images: Array.isArray(sbProd.images) ? sbProd.images : (sbProd.image_url ? [sbProd.image_url] : []),
           shopName: sbProd.shop_name || 'ContactReach Market',
@@ -8040,12 +8072,23 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
         return res.status(400).json({ error: 'Cost price must be a valid non-negative number.' });
       }
     }
+    if (req.body.minOrderQuantity !== undefined && req.body.minOrderQuantity !== '' && req.body.minOrderQuantity !== null) {
+      const parsedMoq = Number(req.body.minOrderQuantity);
+      if (!Number.isFinite(parsedMoq) || parsedMoq < 1) {
+        return res.status(400).json({ error: 'Minimum purchase quantity must be an integer of at least 1.' });
+      }
+    }
 
     const existing = db.products[productIndex];
     const oldStock = existing.stock;
     const newStock = req.body.stock !== undefined && req.body.stock !== '' && !isNaN(Number(req.body.stock))
       ? Math.max(0, parseInt(String(req.body.stock), 10))
       : existing.stock;
+    const newMinOrderQty = req.body.minOrderQuantity !== undefined
+      ? (req.body.minOrderQuantity === '' || req.body.minOrderQuantity === null
+          ? 1
+          : Math.max(1, Math.floor(Number(req.body.minOrderQuantity) || 1)))
+      : Math.max(1, Math.floor(Number(existing.minOrderQuantity) || 1));
 
     const requestedStatus = req.body.status !== undefined ? normalizeProductStatus(req.body.status) : null;
     let prodStatus: ProductStatus = requestedStatus || (req.body.status !== undefined ? req.body.status : existing.status);
@@ -8175,6 +8218,7 @@ app.post('/api/admin/products', requireAdminAuth, requireRole(PRODUCT_ADMIN_ROLE
       discountPercent: finalDiscountPercent,
       discountPrice: finalDiscountPrice,
       stock: newStock,
+      minOrderQuantity: newMinOrderQty,
       status: prodStatus,
       updatedAt: new Date().toISOString(),
       history: [
@@ -8768,6 +8812,7 @@ app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUC
     const targetSku = String(item.sku || `CRM-${Date.now().toString().slice(-4)}${i}`).trim();
     const price = Math.max(0, parseInt(String(item.price || 0), 10));
     const stock = Math.max(0, parseInt(String(item.stock || 0), 10));
+    const minOrderQuantity = Math.max(1, parseInt(String(item.minOrderQuantity ?? 1), 10) || 1);
     const category = String(item.category || 'electronics').trim();
     const targetShop = String(item.shopName || 'ContactReach Market').trim();
 
@@ -8787,9 +8832,9 @@ app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUC
     // Primary image logic
     const rawImages: string[] = Array.isArray(item.images) && item.images.length > 0
       ? item.images.map((img: any) => String(img).trim()).filter(Boolean)
-      : (item.imageUrl ? [String(item.imageUrl).trim()] : ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80']);
-    const primaryImg = String(item.imageUrl || rawImages[0] || '').trim() || rawImages[0];
-    const finalImages = rawImages.includes(primaryImg) ? rawImages : [primaryImg, ...rawImages];
+      : (item.imageUrl ? [String(item.imageUrl).trim()] : []);
+    const primaryImg = String(item.imageUrl || rawImages[0] || '').trim() || rawImages[0] || '';
+    const finalImages = rawImages.includes(primaryImg) ? rawImages : (primaryImg ? [primaryImg, ...rawImages] : rawImages);
 
     // Check if product exists in database
     const existingIdx = db.products.findIndex(p =>
@@ -8807,12 +8852,14 @@ app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUC
 
       const existing = db.products[existingIdx];
       const oldStock = existing.stock;
-      const oldPrice = existing.price;
 
       existing.name = targetName;
       existing.sku = targetSku;
       existing.price = price;
       existing.stock = stock;
+      if (item.minOrderQuantity !== undefined) {
+        existing.minOrderQuantity = minOrderQuantity;
+      }
       existing.category = category;
       existing.shopName = shopName;
       existing.shopId = shopId;
@@ -8874,6 +8921,7 @@ app.post('/api/admin/products/bulk-import', requireAdminAuth, requireRole(PRODUC
         costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined,
         category,
         stock,
+        minOrderQuantity,
         imageUrl: primaryImg,
         images: finalImages,
         shopName,
@@ -11762,6 +11810,9 @@ app.put('/api/admin/settings', requireAdminAuth, requireRole(['owner', 'administ
     const currentCjConfig = db.settings.cjConfig || initialSettings.cjConfig;
     
     db.settings = { ...db.settings, ...req.body };
+    if (req.body.minOrderAmount !== undefined) {
+      db.settings.minOrderAmount = Math.max(0, Number(req.body.minOrderAmount) || 0);
+    }
     if (incomingCjConfig && typeof incomingCjConfig === 'object') {
       db.settings.cjConfig = {
         ...currentCjConfig,
@@ -12086,84 +12137,60 @@ app.post('/api/admin/cjdropshipping/sync-now', requireAdminAuth, async (req: Req
     const rate = Number(cjConfig.usdToRwfRate) || 1435;
     const markupPct = Number(cjConfig.defaultMarkupPercent) || 40;
 
-    const curatedCjItems = [
-      {
-        cjProductId: 'cj-sneakers-air-01',
-        sku: 'CJ-SNK-001',
-        name: 'CJ Breathable Mesh Lightweight Sports Sneakers',
-        description: 'Premium ultra-light breathable running sneakers with air-cushioned shock-absorption sole.',
-        costUsd: 8.5,
-        category: 'shoes',
-        imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80',
-        stock: 50
-      },
-      {
-        cjProductId: 'cj-tws-wireless-02',
-        sku: 'CJ-AUD-002',
-        name: 'CJ Pro Wireless Bluetooth Earbuds with Charging Case',
-        description: 'Hi-Fi stereo sound, touch control, IPX5 waterproof sports Bluetooth 5.3 earbuds.',
-        costUsd: 5.2,
-        category: 'electronics',
-        imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
-        stock: 120
-      },
-      {
-        cjProductId: 'cj-smartwatch-fit-03',
-        sku: 'CJ-WTC-003',
-        name: 'CJ Waterproof Touchscreen Fitness Smartwatch',
-        description: 'Real-time heart rate monitor, sleep tracking, pedometer, message push smartwatch.',
-        costUsd: 11.0,
-        category: 'watch-jewelry',
-        imageUrl: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
-        stock: 80
-      },
-      {
-        cjProductId: 'cj-leather-backpack-04',
-        sku: 'CJ-BAG-004',
-        name: 'CJ Vintage Waterproof Leather Laptop Backpack',
-        description: 'Multi-compartment business travel backpack with anti-theft pocket and USB charging port.',
-        costUsd: 14.5,
-        category: 'luggage-bags',
-        imageUrl: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=800&q=80',
-        stock: 45
-      }
-    ];
+    const incomingItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!cjConfig.apiKey && incomingItems.length === 0) {
+      return res.status(400).json({
+        error: 'CJdropshipping API key or live product feed items array is required.'
+      });
+    }
+    if (incomingItems.length === 0) {
+      return res.status(400).json({
+        error: 'Provide a live feed items array from the CJdropshipping importer to synchronize.'
+      });
+    }
 
     let uploadedCount = 0;
     let updatedCount = 0;
 
-    for (const item of curatedCjItems) {
+    for (const item of incomingItems) {
+      if (!item || !item.name) continue;
       if (isProductTombstoned({ sku: item.sku, cjProductId: item.cjProductId })) {
         continue;
       }
 
-      const calculatedCostRwf = Math.round(item.costUsd * rate);
-      const calculatedSellingPrice = Math.round(calculatedCostRwf * (1 + markupPct / 100));
+      const calculatedCostRwf = Math.round((Number(item.costUsd) || 0) * rate);
+      const calculatedSellingPrice = item.price
+        ? Math.max(0, Number(item.price))
+        : Math.round(calculatedCostRwf * (1 + markupPct / 100));
 
-      const existing = db.products.find(p => p.cjProductId === item.cjProductId || (p.sku && p.sku === item.sku));
+      const existing = db.products.find(p =>
+        (item.cjProductId && p.cjProductId === item.cjProductId) ||
+        (item.sku && p.sku === item.sku)
+      );
       if (existing) {
-        if (!existing.costOverriddenByAdmin) {
+        if (!existing.costOverriddenByAdmin && calculatedCostRwf > 0) {
           existing.costPrice = calculatedCostRwf;
           existing.price = calculatedSellingPrice;
         }
-        existing.stock = item.stock;
+        existing.stock = Math.max(0, Number(item.stock) || existing.stock || 0);
         existing.source = 'cjdropshipping';
-        existing.cjProductId = item.cjProductId;
+        if (item.cjProductId) existing.cjProductId = item.cjProductId;
         updatedCount++;
         saveToFirestoreAsync('products', existing.id, existing);
       } else {
         const newProd: Product = {
-          id: `prod-cj-${item.cjProductId}`,
-          name: item.name,
-          sku: item.sku,
-          description: item.description,
+          id: `prod-cj-${item.cjProductId || Date.now()}`,
+          name: String(item.name).trim(),
+          sku: item.sku || `CJ-${Date.now().toString().slice(-6)}`,
+          description: item.description || String(item.name).trim(),
           price: calculatedSellingPrice,
-          costPrice: calculatedCostRwf,
+          costPrice: calculatedCostRwf > 0 ? calculatedCostRwf : undefined,
           costOverriddenByAdmin: false,
-          category: normalizeCategoryId(item.category, item.name),
-          stock: item.stock,
-          imageUrl: item.imageUrl,
-          images: [item.imageUrl],
+          category: normalizeCategoryId(item.category || 'electronics', item.name),
+          stock: Math.max(0, Number(item.stock) || 0),
+          minOrderQuantity: Math.max(1, parseInt(String(item.minOrderQuantity ?? 1), 10) || 1),
+          imageUrl: item.imageUrl || '',
+          images: item.imageUrl ? [item.imageUrl] : [],
           source: 'cjdropshipping',
           cjProductId: item.cjProductId,
           shopName: 'CJ Dropshipping Official',

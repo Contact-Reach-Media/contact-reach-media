@@ -14,7 +14,8 @@ import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import {
   isProductOutOfStock,
   getProductSelectionBreakdown,
-  getEffectiveDiscountPercent
+  getEffectiveDiscountPercent,
+  getMinOrderQuantity
 } from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 import { useProductTranslation } from '../services/translation.ts';
@@ -99,7 +100,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
   useEffect(() => {
     if (product) {
-      setQuantity(1);
+      setQuantity(getMinOrderQuantity(product));
       setSelectedImageIndex(0);
       setAddedNotice(false);
 
@@ -135,7 +136,9 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
   const selectionBreakdown = getProductSelectionBreakdown(product, quantity, 1500, settings);
   const isOutOfStock = selectionBreakdown.isOutOfStock;
-  const maxAvailable = isOutOfStock ? 50 : Math.max(1, product.stock);
+  const minQty = getMinOrderQuantity(product);
+  const maxAvailable = isOutOfStock ? 9999 : Math.max(0, product.stock);
+  const insufficientForMin = !isOutOfStock && maxAvailable < minQty;
 
   const priceFormatted = formatCurrencyPrice(selectionBreakdown.unitPrice, currentCurrency, exchangeRates, { showBaseSecondary: true });
   const rawDiscountPct = getEffectiveDiscountPercent(product);
@@ -156,13 +159,15 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   };
 
   const handleAddToCartClick = () => {
-    onAddToCart(product, quantity, selectedVariations);
+    if (insufficientForMin || quantity < minQty) return;
+    onAddToCart(product, Math.max(minQty, quantity), selectedVariations);
     setAddedNotice(true);
     setTimeout(() => setAddedNotice(false), 3000);
   };
 
   const handleBuyNowClick = () => {
-    onBuyNow(product, quantity, selectedVariations);
+    if (insufficientForMin || quantity < minQty) return;
+    onBuyNow(product, Math.max(minQty, quantity), selectedVariations);
   };
 
   const handleSubmitReview = async (e: React.FormEvent) => {
@@ -492,15 +497,23 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
               {/* Quantity Selector */}
               <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Quantity
-                </label>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    Quantity
+                  </label>
+                  {minQty > 1 && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold">
+                      Min. order: {minQty} {product.unit || 'units'}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1 shadow-2xs">
                     <button
                       type="button"
-                      onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
-                      disabled={quantity <= 1}
+                      onClick={() => setQuantity(prev => Math.max(minQty, prev - 1))}
+                      disabled={quantity <= minQty}
+                      title={minQty > 1 ? `Minimum buying quantity: ${minQty}` : undefined}
                       className="p-1.5 rounded-lg hover:bg-white text-slate-700 disabled:opacity-30 cursor-pointer"
                     >
                       <Minus className="w-3.5 h-3.5" />
@@ -521,6 +534,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     {isOutOfStock ? 'Direct Supplier Order' : `${product.stock} units available in stock`}
                   </span>
                 </div>
+                {insufficientForMin && (
+                  <p className="text-xs font-bold text-rose-600 pt-1">
+                    Minimum order quantity is {minQty} {product.unit || 'units'}, but only {maxAvailable} left in stock.
+                  </p>
+                )}
               </div>
 
               {/* Action Buttons: BUY NOW & ADD TO CART */}
@@ -529,8 +547,9 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   {/* Buy Now (Primary - Direct to Checkout) */}
                   <button
                     type="button"
+                    disabled={insufficientForMin || quantity < minQty}
                     onClick={handleBuyNowClick}
-                    className="w-full py-3 px-5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3 px-5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                   >
                     <ShoppingBag className="w-4 h-4" />
                     <span>Buy Now</span>
@@ -539,8 +558,9 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   {/* Add to Cart */}
                   <button
                     type="button"
+                    disabled={insufficientForMin || quantity < minQty}
                     onClick={handleAddToCartClick}
-                    className="w-full py-3 px-5 rounded-2xl bg-slate-900 hover:bg-black text-white font-extrabold text-sm shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3 px-5 rounded-2xl bg-slate-900 hover:bg-black text-white font-extrabold text-sm shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add to Cart</span>

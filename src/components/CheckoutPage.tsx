@@ -7,7 +7,11 @@ import { CartItem, Order, PaymentMethod, AppSettings, CustomerUser } from '../ty
 import { Language, translations } from '../translations.ts';
 import { api } from '../services/api.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { calculateCartBreakdown, getEffectiveUnitPrice } from '../utils/shippingCalculator.ts';
+import {
+  calculateCartBreakdown,
+  getEffectiveUnitPrice,
+  validateCartMinimums
+} from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface CheckoutPageProps {
@@ -73,6 +77,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     });
   }, [cart, selectedLocationId, settings, appliedDiscount]);
 
+  const minValidation = useMemo(() => validateCartMinimums(cart, settings), [cart, settings]);
+
   const subtotal = cartBreakdown.subtotal;
   const isOutsideKigali = selectedLocationId === 'outside';
   const currentArea = settings.kigaliAreas?.find(a => a.id === selectedLocationId);
@@ -114,6 +120,16 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     const cleanPhone = customerPhone.replace(/\D/g, '');
     if (cleanPhone.length < 9) {
       setError('Please provide a valid Rwandan phone number (e.g. 0780000000).');
+      return;
+    }
+
+    if (!minValidation.isValid) {
+      if (minValidation.itemViolations.length > 0) {
+        const first = minValidation.itemViolations[0];
+        setError(`Minimum purchase quantity for "${first.productName}" is ${first.minQty} ${first.unit}.`);
+      } else if (minValidation.belowStoreMinimum) {
+        setError(`Minimum order subtotal is ${minValidation.minOrderAmount.toLocaleString()} FRW (current subtotal: ${minValidation.subtotal.toLocaleString()} FRW).`);
+      }
       return;
     }
 
@@ -515,7 +531,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                     type="text"
                     value={discountCode}
                     onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
-                    placeholder="Enter code (e.g. WELCOME10)"
+                    placeholder="Enter promotional code"
                     className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 font-mono uppercase text-xs focus:ring-2 focus:ring-orange-500"
                   />
                   <button
@@ -638,11 +654,30 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                   </div>
                 </div>
 
+                {!minValidation.isValid && (
+                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                      <span>Minimum Order Requirement</span>
+                    </div>
+                    {minValidation.itemViolations.map(v => (
+                      <p key={v.productId} className="text-[11px]">
+                        &bull; {v.productName}: min {v.minQty} {v.unit} (in cart: {v.currentQty})
+                      </p>
+                    ))}
+                    {minValidation.belowStoreMinimum && (
+                      <p className="text-[11px]">
+                        &bull; Minimum order subtotal is {minValidation.minOrderAmount.toLocaleString()} FRW. Add {(minValidation.minOrderAmount - minValidation.subtotal).toLocaleString()} FRW more.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Submit Order Button */}
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full py-3.5 px-5 bg-orange-600 hover:bg-orange-700 text-white font-black text-sm rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  disabled={loading || !minValidation.isValid}
+                  className="w-full py-3.5 px-5 bg-orange-600 hover:bg-orange-700 text-white font-black text-sm rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>{loading ? 'Processing Order...' : 'Place Order & Proceed to Payment'}</span>
                   <ChevronRight className="w-4 h-4" />

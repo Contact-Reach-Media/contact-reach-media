@@ -363,6 +363,7 @@ CREATE TABLE IF NOT EXISTS public.products (
   specifications TEXT,
   storage TEXT,
   packaging_info TEXT,
+  min_order_quantity INTEGER NOT NULL DEFAULT 1,
   attributes JSONB DEFAULT '[]'::jsonb,
   variations JSONB DEFAULT '[]'::jsonb,
   rating NUMERIC(3,2) DEFAULT 5.0,
@@ -401,6 +402,7 @@ CREATE TABLE IF NOT EXISTS public.products (
 );
 
 -- Safe column additions if products table already existed from an earlier minimal schema
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS min_order_quantity INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS promo_start_date TIMESTAMPTZ;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS promo_end_date TIMESTAMPTZ;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS cj_product_sku TEXT;

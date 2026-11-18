@@ -1,8 +1,13 @@
-import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Truck } from 'lucide-react';
+import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Truck, AlertCircle } from 'lucide-react';
 import { AppSettings, CartItem } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { calculateCartBreakdown, isProductOutOfStock } from '../utils/shippingCalculator.ts';
+import {
+  calculateCartBreakdown,
+  getMinOrderQuantity,
+  isProductOutOfStock,
+  validateCartMinimums
+} from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface CartDrawerProps {
@@ -34,6 +39,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const t = translations[currentLang] || translations.en;
   const breakdown = calculateCartBreakdown(cart, { settings });
+  const minValidation = validateCartMinimums(cart, settings);
   const subtotalFormat = formatCurrencyPrice(breakdown.subtotal, currentCurrency, exchangeRates, { showBaseSecondary: true });
   const subtotalWithShippingFormat = formatCurrencyPrice(breakdown.subtotalWithShipping, currentCurrency, exchangeRates);
   const estimatedDelivery = breakdown.deliveryFee;
@@ -134,21 +140,35 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </div>
 
                     {/* Quantity Stepper */}
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        onClick={() => onUpdateQuantity(product.id, -1)}
-                        className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 cursor-pointer"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="text-xs font-bold font-mono px-1">{quantity}</span>
-                      <button
-                        onClick={() => onUpdateQuantity(product.id, 1)}
-                        disabled={!isProductOutOfStock(product) && quantity >= product.stock}
-                        className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {(() => {
+                        const minQty = getMinOrderQuantity(product);
+                        return (
+                          <>
+                            <button
+                              onClick={() => onUpdateQuantity(product.id, -1)}
+                              disabled={quantity <= minQty}
+                              title={minQty > 1 ? `Minimum buying quantity: ${minQty}` : undefined}
+                              className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="text-xs font-bold font-mono px-1">{quantity}</span>
+                            <button
+                              onClick={() => onUpdateQuantity(product.id, 1)}
+                              disabled={!isProductOutOfStock(product) && quantity >= product.stock}
+                              className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                            {minQty > 1 && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-bold">
+                                Min: {minQty}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -234,12 +254,33 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               )}
             </div>
 
+            {!minValidation.isValid && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-semibold space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span>Minimum Order Requirement</span>
+                </div>
+                {minValidation.itemViolations.map(v => (
+                  <p key={v.productId}>
+                    &bull; {v.productName}: min {v.minQty} {v.unit} (in cart: {v.currentQty})
+                  </p>
+                ))}
+                {minValidation.belowStoreMinimum && (
+                  <p>
+                    &bull; Minimum order subtotal is {minValidation.minOrderAmount.toLocaleString()} FRW (add {(minValidation.minOrderAmount - minValidation.subtotal).toLocaleString()} FRW more).
+                  </p>
+                )}
+              </div>
+            )}
+
             <button
+              disabled={!minValidation.isValid}
               onClick={() => {
+                if (!minValidation.isValid) return;
                 onClose();
                 onProceedToCheckout();
               }}
-              className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-[#EA580C] hover:bg-[#D94F04] text-white shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-[#EA580C] hover:bg-[#D94F04] text-white shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
             >
               <span>{t.proceedToCheckout}</span>
               <ArrowRight className="w-4 h-4" />

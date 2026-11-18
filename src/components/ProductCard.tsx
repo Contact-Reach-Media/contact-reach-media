@@ -6,7 +6,8 @@ import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import {
   calculateProductShippingUnitCost,
   getEffectiveDiscountPercent,
-  getEffectiveUnitPrice
+  getEffectiveUnitPrice,
+  getMinOrderQuantity
 } from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
@@ -49,6 +50,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const totalWithShippingRwf = currentPriceRwf + shippingCost;
   const shippingFormat = formatCurrencyPrice(shippingCost, currentCurrency, exchangeRates);
   const totalFormat = formatCurrencyPrice(totalWithShippingRwf, currentCurrency, exchangeRates);
+  const minQty = getMinOrderQuantity(product);
 
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
@@ -193,6 +195,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <div className="text-slate-800 font-bold font-mono tabular-nums">
               Total: {totalFormat.primary}
             </div>
+            {minQty > 1 && (
+              <div className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                Min. order: {minQty} {product.unit || 'pcs'}
+              </div>
+            )}
           </div>
         </div>
 

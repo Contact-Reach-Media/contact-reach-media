@@ -159,6 +159,7 @@ export interface Product {
   categoryName?: string;
   subCategoryName?: string;
   stock: number;
+  minOrderQuantity?: number; // Minimum purchase quantity per order (default 1)
   imageUrl: string;
   images?: string[];
   videoUrl?: string; // YouTube video link or embed URL
@@ -431,6 +432,7 @@ export interface AppSettings {
   pickupAddress?: string;
   kigaliAreas: KigaliDeliveryArea[];
   freeDeliveryThreshold: number;
+  minOrderAmount?: number; // Storewide minimum order subtotal in RWF (0 = no minimum)
   outsideKigaliNotice: string;
   // Maintenance Mode Configuration
   isMaintenanceMode?: boolean;

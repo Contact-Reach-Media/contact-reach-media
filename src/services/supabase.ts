@@ -375,6 +375,7 @@ export function mapSupabaseRowToProduct(row: any): Product {
     categoryName: row.category_name || undefined,
     subCategoryName: row.sub_category_name || undefined,
     stock: Number(row.stock ?? row.stock_quantity ?? 0),
+    minOrderQuantity: Math.max(1, Math.floor(Number(row.min_order_quantity) || 1)),
     imageUrl: row.image_url || (Array.isArray(row.images) && row.images[0]) || '',
     images: Array.isArray(row.images) ? row.images : (row.image_url ? [row.image_url] : []),
     videoUrl: row.video_url || undefined,
@@ -493,14 +494,27 @@ export async function saveProductToSupabase(p: Partial<Product> & { id?: string 
         partialRow.stock = safeStock;
         partialRow.stock_quantity = safeStock;
       }
+      if ('minOrderQuantity' in p) {
+        partialRow.min_order_quantity = Math.max(1, Math.floor(toSafeNum(p.minOrderQuantity, 1)));
+      }
       if (p.status !== undefined) {
         partialRow.status = p.status;
       }
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('products')
         .update(partialRow)
         .eq('id', p.id)
         .select();
+      if (error && (error.code === 'PGRST204' || error.code === '42703' || /min_order_quantity|column .* does not exist/i.test(error.message || ''))) {
+        const { min_order_quantity: _moq, ...partialWithoutMoq } = partialRow;
+        const retryPartial = await supabase
+          .from('products')
+          .update(partialWithoutMoq)
+          .eq('id', p.id)
+          .select();
+        data = retryPartial.data;
+        error = retryPartial.error;
+      }
       if (error) {
         console.error('[Supabase] Failed partial product update:', error);
         return { success: false, error: error.message };
@@ -536,6 +550,7 @@ export async function saveProductToSupabase(p: Partial<Product> & { id?: string 
       sub_category_name: p.subCategoryName || null,
       stock: safeStock,
       stock_quantity: safeStock,
+      min_order_quantity: Math.max(1, Math.floor(toSafeNum(p.minOrderQuantity, 1))),
       image_url: p.imageUrl || (Array.isArray(p.images) && p.images[0]) || '',
       images: Array.isArray(p.images) ? p.images : (p.imageUrl ? [p.imageUrl] : []),
       video_url: p.videoUrl || null,
@@ -602,7 +617,13 @@ export async function saveProductToSupabase(p: Partial<Product> & { id?: string 
       row.created_at = p.createdAt;
     }
 
-    const { data, error } = await supabase.from('products').upsert(row, { onConflict: 'id' }).select();
+    let { data, error } = await supabase.from('products').upsert(row, { onConflict: 'id' }).select();
+    if (error && (error.code === 'PGRST204' || error.code === '42703' || /min_order_quantity|column .* does not exist/i.test(error.message || ''))) {
+      const { min_order_quantity: _moq, ...rowWithoutMoq } = row;
+      const retryRes = await supabase.from('products').upsert(rowWithoutMoq, { onConflict: 'id' }).select();
+      data = retryRes.data;
+      error = retryRes.error;
+    }
     if (error) {
       console.error('[Supabase] Failed to save product:', error);
       return { success: false, error: error.message };

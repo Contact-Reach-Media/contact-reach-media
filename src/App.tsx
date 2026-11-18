@@ -18,6 +18,7 @@ import {
   TranslationDictionary
 } from './translations.ts';
 import { CurrencyCode, DEFAULT_EXCHANGE_RATES, formatCurrencyPrice } from './utils/currency.ts';
+import { getMinOrderQuantity } from './utils/shippingCalculator.ts';
 import { initGoogleTranslateScript, setGoogleTranslateLanguage } from './services/googleTranslate.ts';
 import { startDOMTranslationObserver, restoreOriginalEnglish } from './services/domTranslator.ts';
 import { subscribeToSupabaseTable, mapSupabaseRowToProduct } from './services/supabase.ts';
@@ -559,7 +560,11 @@ export default function App() {
             const fresh = fetchedProducts.find(p => p.id === item.product.id);
             if (!fresh) return item;
             const freshStock = Math.max(0, fresh.stock || 0);
-            const clampedQty = Math.min(item.quantity || 1, freshStock);
+            const minQty = getMinOrderQuantity(fresh);
+            if (freshStock < minQty) {
+              return { ...item, product: fresh, quantity: 0 };
+            }
+            const clampedQty = Math.min(Math.max(item.quantity || minQty, minQty), freshStock);
             return {
               ...item,
               product: fresh,
@@ -926,18 +931,25 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isAdminLoggedIn, products]);
 
-  // Cart Actions with Verified Stock Clamping
+  // Cart Actions with Verified Stock & Minimum Buying Quantity Clamping
   const handleAddToCart = (product: Product, quantity = 1, variation?: { [key: string]: string }) => {
     const availableStock = Math.max(0, product.stock || 0);
+    const minQty = getMinOrderQuantity(product);
     if (availableStock <= 0 || product.status === 'Out of Stock') {
       showToast(currentLang === 'en' ? `"${product.name.slice(0, 24)}" is currently out of stock.` : `"${product.name.slice(0, 24)}" ntiri mu bubiko.`);
       return;
     }
+    if (availableStock < minQty) {
+      showToast(`Minimum purchase quantity for "${product.name.slice(0, 24)}" is ${minQty}, only ${availableStock} in stock.`);
+      return;
+    }
+
+    const effectiveRequestedQty = Math.max(quantity, minQty);
 
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
-        const potentialQty = existing.quantity + quantity;
+        const potentialQty = Math.max(existing.quantity + quantity, minQty);
         const clampedQty = Math.min(potentialQty, availableStock);
         if (potentialQty > availableStock) {
           showToast(`Only ${availableStock} units available in stock.`);
@@ -946,12 +958,16 @@ export default function App() {
         }
         return prev.map(item =>
           item.product.id === product.id
-            ? { ...item, quantity: clampedQty, selectedVariation: variation || item.selectedVariation }
+            ? { ...item, product, quantity: clampedQty, selectedVariation: variation || item.selectedVariation }
             : item
         );
       }
-      const initialQty = Math.min(quantity, availableStock);
-      showToast(`Added "${product.name.slice(0, 24)}..." to cart`);
+      const initialQty = Math.min(effectiveRequestedQty, availableStock);
+      showToast(
+        minQty > 1 && quantity < minQty
+          ? `Added minimum order of ${initialQty} ${product.unit || 'units'} for "${product.name.slice(0, 24)}..."`
+          : `Added "${product.name.slice(0, 24)}..." to cart`
+      );
       return [...prev, { product, quantity: initialQty, selectedVariation: variation }];
     });
   };
@@ -962,7 +978,12 @@ export default function App() {
         .map(item => {
           if (item.product.id === productId) {
             const maxStock = Math.max(0, item.product.stock || 0);
+            const minQty = getMinOrderQuantity(item.product);
             const newQty = item.quantity + delta;
+            if (minQty > 1 && newQty < minQty) {
+              showToast(`Minimum buying quantity is ${minQty} ${item.product.unit || 'units'}. Click the trash icon to remove.`);
+              return { ...item, quantity: Math.min(minQty, maxStock || minQty) };
+            }
             if (newQty <= 0) return null;
             if (newQty > maxStock) {
               showToast(`Maximum available stock reached (${maxStock} units).`);
@@ -999,11 +1020,16 @@ export default function App() {
 
   const handleQuickBuy = (product: Product, quantity = 1, variation?: { [key: string]: string }) => {
     const availableStock = Math.max(0, product.stock || 0);
+    const minQty = getMinOrderQuantity(product);
     if (availableStock <= 0 || product.status === 'Out of Stock') {
       showToast(currentLang === 'en' ? `"${product.name.slice(0, 24)}" is currently out of stock.` : `"${product.name.slice(0, 24)}" ntiri mu bubiko.`);
       return;
     }
-    const safeQty = Math.min(quantity, availableStock);
+    if (availableStock < minQty) {
+      showToast(`Minimum purchase quantity for "${product.name.slice(0, 24)}" is ${minQty}, only ${availableStock} in stock.`);
+      return;
+    }
+    const safeQty = Math.min(Math.max(quantity, minQty), availableStock);
     setCart([{ product, quantity: safeQty, selectedVariation: variation }]);
     setSelectedProduct(null);
     if (!buyerUser && !api.getBuyerToken()) {

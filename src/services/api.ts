@@ -1226,19 +1226,6 @@ export const api = {
       }
     }
 
-    // Fallback coupon validation (e.g., WELCOME10)
-    if (code.trim().toUpperCase() === 'WELCOME10') {
-      const discount = Math.min(10000, Math.round(subtotal * 0.1));
-      return {
-        valid: true,
-        code: 'WELCOME10',
-        discountAmount: discount,
-        discountType: 'percentage',
-        discountValue: 10,
-        message: `Coupon applied: ${discount.toLocaleString()} FRW discount!`
-      };
-    }
-
     throw new Error('Invalid or inactive promotional code.');
   },
 

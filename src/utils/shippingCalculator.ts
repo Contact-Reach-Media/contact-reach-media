@@ -284,3 +284,66 @@ export function calculateCartBreakdown(
     items
   };
 }
+
+/**
+ * Returns the canonical minimum purchase quantity (MOQ) for a product (>= 1).
+ */
+export function getMinOrderQuantity(product?: Product | null): number {
+  const raw = Number(product?.minOrderQuantity);
+  if (!Number.isFinite(raw) || raw < 1) return 1;
+  return Math.max(1, Math.floor(raw));
+}
+
+/**
+ * Returns the storewide minimum order subtotal in FRW (0 if disabled).
+ */
+export function getMinOrderAmount(settings?: Partial<AppSettings> | null): number {
+  const raw = Number(settings?.minOrderAmount);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.round(raw);
+}
+
+/**
+ * Validates cart items against each product's minOrderQuantity and storewide minOrderAmount.
+ */
+export function validateCartMinimums(
+  cart: CartItem[],
+  settings?: Partial<AppSettings> | null
+): {
+  isValid: boolean;
+  itemViolations: { productId: string; productName: string; currentQty: number; minQty: number; unit: string }[];
+  subtotal: number;
+  minOrderAmount: number;
+  belowStoreMinimum: boolean;
+} {
+  let subtotal = 0;
+  const itemViolations: { productId: string; productName: string; currentQty: number; minQty: number; unit: string }[] = [];
+
+  for (const item of cart) {
+    if (!item?.product) continue;
+    const qty = Math.max(0, Math.floor(Number(item.quantity) || 0));
+    const minQty = getMinOrderQuantity(item.product);
+    subtotal += getEffectiveUnitPrice(item.product, Math.max(1, qty)) * qty;
+    if (qty < minQty) {
+      itemViolations.push({
+        productId: item.product.id,
+        productName: item.product.name,
+        currentQty: qty,
+        minQty,
+        unit: item.product.unit || 'unit(s)'
+      });
+    }
+  }
+
+  const minOrderAmount = getMinOrderAmount(settings);
+  const belowStoreMinimum = minOrderAmount > 0 && subtotal < minOrderAmount;
+
+  return {
+    isValid: itemViolations.length === 0 && !belowStoreMinimum,
+    itemViolations,
+    subtotal,
+    minOrderAmount,
+    belowStoreMinimum
+  };
+}
+

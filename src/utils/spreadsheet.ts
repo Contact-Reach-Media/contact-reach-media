@@ -9,6 +9,7 @@ export interface SpreadsheetPreviewItem {
   oldPrice?: number;
   stock: number;
   oldStock?: number;
+  minOrderQuantity?: number;
   costPrice?: number;
   oldCostPrice?: number;
   discountPercent?: number;
@@ -50,6 +51,7 @@ export interface FieldMapping {
   priceCol: number | string;
   costPriceCol: number | string;
   stockCol: number | string;
+  minOrderQtyCol?: number | string;
   categoryCol: number | string;
   shopCol: number | string;
   discountCol: number | string;
@@ -80,6 +82,7 @@ export function exportProductsToExcel(
     'Promotional Price (RWF)': p.discountPrice || p.price,
     'Cost Price (RWF)': p.costPrice ?? '',
     'Stock Quantity': p.stock,
+    'Min Order Qty': Math.max(1, p.minOrderQuantity || 1),
     'Status': p.status || 'Available',
     'Supplier / Shop': p.shopName || 'ContactReach Market',
     'Primary Image URL': p.imageUrl || (p.images && p.images[0]) || '',
@@ -107,6 +110,7 @@ export function exportProductsToExcel(
     { wch: 22 }, // Promo Price
     { wch: 16 }, // Cost Price
     { wch: 14 }, // Stock
+    { wch: 14 }, // Min Order Qty
     { wch: 12 }, // Status
     { wch: 25 }, // Shop
     { wch: 40 }, // Image URL
@@ -146,6 +150,7 @@ export function exportProductsToCsv(
     'Discount Price (RWF)': p.discountPrice || p.price,
     'Cost Price (RWF)': p.costPrice ?? '',
     'Stock': p.stock,
+    'Min Order Qty': Math.max(1, p.minOrderQuantity || 1),
     'Status': p.status || 'Available',
     'Shop': p.shopName || 'ContactReach Market',
     'Image URL': p.imageUrl || '',
@@ -456,6 +461,7 @@ export function autoDetectFieldMapping(headers: string[]): FieldMapping {
     priceCol: findIdx(['pricerwf', 'pricefrw', 'unitprice', 'sellingprice', 'price', 'amount', 'costrwf', 'cost']),
     costPriceCol: findIdx(['costprice', 'wholesaleprice', 'purchaseprice', 'unitcost', 'cost']),
     stockCol: findIdx(['stockquantity', 'quantity', 'stock', 'qty', 'units', 'inventory', 'count']),
+    minOrderQtyCol: findIdx(['minorderqty', 'minorderquantity', 'minbuyingqty', 'minqty', 'moq']),
     categoryCol: findIdx(['categoryname', 'categoryslug', 'category', 'department', 'dept', 'type', 'group']),
     shopCol: findIdx(['shopname', 'suppliershop', 'supplier', 'shop', 'store', 'vendor', 'seller']),
     discountCol: findIdx(['discountpercent', 'discount', 'discountprice', 'promo', 'reduction', 'off']),
@@ -530,6 +536,9 @@ export function buildSpreadsheetPreview(
       ? parseNumberValue(getCell(mapping.costPriceCol))
       : undefined;
     const rawStock = parseNumberValue(getCell(mapping.stockCol), 20);
+    const rawMinOrderQty = mapping.minOrderQtyCol !== undefined
+      ? Math.max(1, Math.floor(parseNumberValue(getCell(mapping.minOrderQtyCol), 1)))
+      : undefined;
     const rawCategory = parseStringValue(getCell(mapping.categoryCol));
     const rawShop = parseStringValue(getCell(mapping.shopCol));
     const rawDiscount = parseNumberValue(getCell(mapping.discountCol), 0);
@@ -641,6 +650,7 @@ export function buildSpreadsheetPreview(
       oldPrice: matchedExisting?.price,
       stock: rawStock,
       oldStock: matchedExisting?.stock,
+      minOrderQuantity: rawMinOrderQty ?? matchedExisting?.minOrderQuantity ?? 1,
       costPrice: rawCostPrice ?? matchedExisting?.costPrice,
       oldCostPrice: matchedExisting?.costPrice,
       discountPercent: rawDiscount,
@@ -817,6 +827,7 @@ export async function writeProductsToGoogleSheet(
     'Promo Price (RWF)',
     'Cost Price (RWF)',
     'Stock',
+    'Min Order Qty',
     'Status',
     'Shop Name',
     'Image URL',
@@ -835,6 +846,7 @@ export async function writeProductsToGoogleSheet(
     p.discountPrice || p.price,
     p.costPrice ?? '',
     p.stock,
+    Math.max(1, p.minOrderQuantity || 1),
     p.status || 'Available',
     p.shopName || 'ContactReach Market',
     p.imageUrl || (p.images && p.images[0]) || '',
@@ -845,7 +857,7 @@ export async function writeProductsToGoogleSheet(
 
   const allValues = [headers, ...rows];
   const encodedTitle = encodeURIComponent(targetTab);
-  const range = `${encodedTitle}!A1:O${allValues.length + 5}`;
+  const range = `${encodedTitle}!A1:P${allValues.length + 5}`;
 
   const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',

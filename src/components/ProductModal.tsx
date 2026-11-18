@@ -14,7 +14,8 @@ import {
   isProductOutOfStock,
   getProductSelectionBreakdown,
   getEffectiveDiscountPercent,
-  getEffectiveUnitPrice
+  getEffectiveUnitPrice,
+  getMinOrderQuantity
 } from '../utils/shippingCalculator.ts';
 import { useProductTranslation } from '../services/translation.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
@@ -95,7 +96,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   // Synchronize state on product change
   useEffect(() => {
     if (product) {
-      setQuantity(1);
+      setQuantity(getMinOrderQuantity(product));
       setSelectedImageIndex(0);
       setIsLightboxOpen(false);
 
@@ -153,6 +154,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const activeUnitPrice = costBreakdown.unitPrice;
   const totalPrice = costBreakdown.productPriceTotal;
   const isOutOfStock = costBreakdown.isOutOfStock;
+  const minQty = getMinOrderQuantity(product);
+  const maxStock = isOutOfStock ? 9999 : Math.max(0, product.stock || 0);
+  const insufficientForMin = !isOutOfStock && maxStock < minQty;
 
   // Store's Hot Items (Matching Image 4)
   const storeHotItems = allProducts
@@ -516,14 +520,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                     ))}
-                    <span className="ml-1 font-bold text-slate-800">5.0</span>
-                    <span className="text-slate-400 ml-1">({reviews.length || 7} reviews)</span>
+                    <span className="ml-1 font-bold text-slate-800">{(product.rating || 5.0).toFixed(1)}</span>
+                    <span className="text-slate-400 ml-1">({reviews.length || product.reviewsCount || 0} reviews)</span>
                   </div>
                   <span>·</span>
-                  <span className="font-bold text-slate-700">1,221 sold</span>
+                  <span className="font-bold text-slate-700">
+                    {minQty > 1
+                      ? `Min. order: ${minQty} ${product.unit || 'units'}`
+                      : isOutOfStock
+                        ? 'Direct Supplier Order'
+                        : `${product.stock} in stock`}
+                  </span>
                   <span>·</span>
                   <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">
-                    #1 Most popular in {displayCategory}
+                    {displayCategory}
                   </span>
                   <span>·</span>
                   <span
@@ -629,34 +639,49 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               )}
 
               {/* Quantity Selector & Live Total */}
-              <div className="flex items-center gap-4 pt-1">
-                <span className="text-xs font-bold text-slate-700">Quantity:</span>
-                <div className="inline-flex items-center border border-slate-300 rounded-xl p-1 bg-white shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={quantity <= 1}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <span className="w-12 text-center font-black text-sm font-mono">{quantity}</span>
-                  <button
-                    type="button"
-                    onClick={() => setQuantity(quantity + 1)}
-                    disabled={!isOutOfStock && quantity >= (product.stock || 99)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-xs font-bold text-slate-700">Quantity:</span>
+                  <div className="inline-flex items-center border border-slate-300 rounded-xl p-1 bg-white shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(Math.max(minQty, quantity - 1))}
+                      disabled={quantity <= minQty}
+                      title={minQty > 1 ? `Minimum order: ${minQty} ${product.unit || 'units'}` : undefined}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="w-12 text-center font-black text-sm font-mono">{quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(Math.min(maxStock, quantity + 1))}
+                      disabled={!isOutOfStock && quantity >= maxStock}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {minQty > 1 && (
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold">
+                      Min. purchase: {minQty} {product.unit || 'units'}
+                    </span>
+                  )}
+
+                  <div className="text-xs font-mono">
+                    <span className="text-slate-400">Unit Price: </span>
+                    <span className="font-bold text-slate-800">
+                      {formatCurrencyPrice(costBreakdown.unitPrice, currentCurrency, exchangeRates).primary}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="text-xs font-mono">
-                  <span className="text-slate-400">Unit Price: </span>
-                  <span className="font-bold text-slate-800">
-                    {formatCurrencyPrice(costBreakdown.unitPrice, currentCurrency, exchangeRates).primary}
-                  </span>
-                </div>
+                {insufficientForMin && (
+                  <p className="text-xs font-bold text-rose-600">
+                    Minimum purchase is {minQty} {product.unit || 'units'}, but only {maxStock} currently in stock.
+                  </p>
+                )}
               </div>
 
               {/* DYNAMIC TOTAL PAYMENT BREAKDOWN CARD (Product Price + Delivery Fee + Shipping Cost) */}
@@ -773,8 +798,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               <div className="flex flex-col sm:flex-row items-stretch gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={() => onBuyNow(product, quantity, selectedVariations)}
-                  className="flex-1 py-3.5 px-6 rounded-2xl font-black text-sm bg-[#f95700] hover:bg-[#ea4e00] text-white shadow-md shadow-orange-500/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={insufficientForMin || quantity < minQty}
+                  onClick={() => onBuyNow(product, Math.max(minQty, quantity), selectedVariations)}
+                  className="flex-1 py-3.5 px-6 rounded-2xl font-black text-sm bg-[#f95700] hover:bg-[#ea4e00] text-white shadow-md shadow-orange-500/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                 >
                   <ShoppingBag className="w-4 h-4" />
                   <span>{isOutOfStock ? 'Order from Supplier' : 'Start order / Buy Now'}</span>
@@ -782,8 +808,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => onAddToCart(product, quantity, selectedVariations)}
-                  className="py-3.5 px-6 rounded-2xl font-bold text-sm bg-white hover:bg-slate-50 border-2 border-slate-300 text-slate-800 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={insufficientForMin || quantity < minQty}
+                  onClick={() => onAddToCart(product, Math.max(minQty, quantity), selectedVariations)}
+                  className="py-3.5 px-6 rounded-2xl font-bold text-sm bg-white hover:bg-slate-50 border-2 border-slate-300 text-slate-800 transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                 >
                   <span>{isOutOfStock ? 'Add to cart (Supplier Order)' : 'Add to cart'}</span>
                 </button>

@@ -12,7 +12,11 @@ import { subscribeToSupabaseTable } from '../services/supabase.ts';
 import { buildUssdCode, formatUssdTelUri, autoTriggerUssd, USSD_CONFIG } from '../utils/ussd.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
 import { compressImageFile } from '../utils/imageCompress.ts';
-import { calculateCartBreakdown, getEffectiveUnitPrice } from '../utils/shippingCalculator.ts';
+import {
+  calculateCartBreakdown,
+  getEffectiveUnitPrice,
+  validateCartMinimums
+} from '../utils/shippingCalculator.ts';
 import { copyTextToClipboard } from '../utils/clipboard.ts';
 
 interface CheckoutModalProps {
@@ -174,6 +178,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     });
   }, [cart, selectedLocationId, settings, appliedDiscount]);
 
+  const minValidation = useMemo(() => validateCartMinimums(cart, settings), [cart, settings]);
+
   if (!isOpen) return null;
 
   const subtotal = cartBreakdown.subtotal;
@@ -252,6 +258,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     if (cart.length === 0) {
       setError('Your shopping cart is empty.');
+      return;
+    }
+
+    if (!minValidation.isValid) {
+      if (minValidation.itemViolations.length > 0) {
+        const first = minValidation.itemViolations[0];
+        setError(`Minimum purchase quantity for "${first.productName}" is ${first.minQty} ${first.unit}.`);
+      } else if (minValidation.belowStoreMinimum) {
+        setError(`Minimum order subtotal is ${minValidation.minOrderAmount.toLocaleString()} FRW (current subtotal: ${minValidation.subtotal.toLocaleString()} FRW).`);
+      }
       return;
     }
 
@@ -891,7 +907,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       type="text"
                       value={discountCode}
                       onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
-                      placeholder="Promo Code (e.g. WELCOME10)"
+                      placeholder="Enter promo code"
                       className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-mono uppercase bg-white focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
@@ -983,6 +999,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
               </div>
 
+              {!minValidation.isValid && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                    <span>Minimum Order Requirement Not Met</span>
+                  </div>
+                  {minValidation.itemViolations.map(v => (
+                    <p key={v.productId} className="text-[11px]">
+                      &bull; {v.productName}: minimum purchase is {v.minQty} {v.unit} (in cart: {v.currentQty}).
+                    </p>
+                  ))}
+                  {minValidation.belowStoreMinimum && (
+                    <p className="text-[11px]">
+                      &bull; Storewide minimum order subtotal is {minValidation.minOrderAmount.toLocaleString()} FRW. Add {(minValidation.minOrderAmount - minValidation.subtotal).toLocaleString()} FRW more.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Direct Error Banner above submit button */}
               {error && (
                 <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 animate-in fade-in">
@@ -994,8 +1029,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base bg-[#FF5500] hover:bg-[#E54D00] text-white shadow-xl shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer transform active:scale-98 disabled:opacity-60"
+                disabled={loading || !minValidation.isValid}
+                className="w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base bg-[#FF5500] hover:bg-[#E54D00] text-white shadow-xl shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer transform active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {loading && (
                   <RefreshCw className="w-5 h-5 animate-spin text-white" />

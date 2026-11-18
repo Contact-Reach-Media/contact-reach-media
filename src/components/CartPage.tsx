@@ -1,12 +1,16 @@
 import React from 'react';
 import {
   ShoppingBag, Trash2, Plus, Minus, ArrowRight, ArrowLeft,
-  Truck, ShieldCheck, CheckCircle2, ChevronRight, Package
+  Truck, ShieldCheck, CheckCircle2, ChevronRight, Package, AlertCircle
 } from 'lucide-react';
 import { AppSettings, CartItem, Product } from '../types.ts';
 import { Language, translations } from '../translations.ts';
 import { CurrencyCode, formatCurrencyPrice } from '../utils/currency.ts';
-import { calculateCartBreakdown } from '../utils/shippingCalculator.ts';
+import {
+  calculateCartBreakdown,
+  getMinOrderQuantity,
+  validateCartMinimums
+} from '../utils/shippingCalculator.ts';
 import { getProductImageDueToProduct } from '../utils/productImages.ts';
 
 interface CartPageProps {
@@ -34,6 +38,7 @@ export const CartPage: React.FC<CartPageProps> = ({
 }) => {
   const t = translations[currentLang] || translations.en;
   const breakdown = calculateCartBreakdown(cart, { settings });
+  const minValidation = validateCartMinimums(cart, settings);
 
   const subtotalFormatted = formatCurrencyPrice(breakdown.subtotal, currentCurrency, exchangeRates, { showBaseSecondary: true });
   const subtotalWithShippingFormatted = formatCurrencyPrice(breakdown.subtotalWithShipping, currentCurrency, exchangeRates);
@@ -218,28 +223,41 @@ export const CartPage: React.FC<CartPageProps> = ({
                       {/* Quantity & Item Total */}
                       <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
                         {/* Quantity Controls */}
-                        <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1 shadow-2xs">
-                          <button
-                            type="button"
-                            onClick={() => onUpdateQuantity(bItem.product.id, -1)}
-                            className="p-1.5 rounded-lg hover:bg-white text-slate-600 cursor-pointer transition-colors"
-                            title="Decrease quantity"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="w-8 text-center font-mono font-bold text-xs text-slate-900">
-                            {bItem.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onUpdateQuantity(bItem.product.id, 1)}
-                            disabled={!bItem.isOutOfStock && bItem.quantity >= (bItem.product.stock || 50)}
-                            className="p-1.5 rounded-lg hover:bg-white text-slate-600 disabled:opacity-30 cursor-pointer transition-colors"
-                            title="Increase quantity"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {(() => {
+                          const minQty = getMinOrderQuantity(bItem.product);
+                          return (
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1 shadow-2xs">
+                                <button
+                                  type="button"
+                                  disabled={bItem.quantity <= minQty}
+                                  onClick={() => onUpdateQuantity(bItem.product.id, -1)}
+                                  className="p-1.5 rounded-lg hover:bg-white text-slate-600 disabled:opacity-30 cursor-pointer transition-colors"
+                                  title={minQty > 1 ? `Minimum buying quantity: ${minQty}` : 'Decrease quantity'}
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-8 text-center font-mono font-bold text-xs text-slate-900">
+                                  {bItem.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onUpdateQuantity(bItem.product.id, 1)}
+                                  disabled={!bItem.isOutOfStock && bItem.quantity >= (bItem.product.stock || 50)}
+                                  className="p-1.5 rounded-lg hover:bg-white text-slate-600 disabled:opacity-30 cursor-pointer transition-colors"
+                                  title="Increase quantity"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              {minQty > 1 && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                  Min: {minQty} {bItem.product.unit || 'pcs'}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Total Price (Product + Shipping) */}
                         <div className="text-right min-w-[100px]">
@@ -331,11 +349,31 @@ export const CartPage: React.FC<CartPageProps> = ({
                   </div>
                 </div>
 
+                {!minValidation.isValid && (
+                  <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Minimum Order Requirement</span>
+                    </div>
+                    {minValidation.itemViolations.map(v => (
+                      <p key={v.productId} className="text-[11px]">
+                        &bull; {v.productName}: min {v.minQty} {v.unit} (currently {v.currentQty})
+                      </p>
+                    ))}
+                    {minValidation.belowStoreMinimum && (
+                      <p className="text-[11px]">
+                        &bull; Minimum order subtotal is {minValidation.minOrderAmount.toLocaleString()} FRW (add {(minValidation.minOrderAmount - minValidation.subtotal).toLocaleString()} FRW more).
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Checkout CTA */}
                 <button
                   type="button"
-                  onClick={() => onNavigate('checkout')}
-                  className="w-full py-3.5 px-5 bg-orange-600 hover:bg-orange-700 text-white font-black text-sm rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={!minValidation.isValid}
+                  onClick={() => minValidation.isValid && onNavigate('checkout')}
+                  className="w-full py-3.5 px-5 bg-orange-600 hover:bg-orange-700 text-white font-black text-sm rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                 >
                   <span>Proceed to Checkout</span>
                   <ChevronRight className="w-4 h-4" />
